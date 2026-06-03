@@ -1,0 +1,900 @@
+Title: Learning from Fine-Grained Visual Discrepancies: Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization
+
+URL Source: https://arxiv.org/pdf/2605.31312v1
+
+Published Time: Mon, 01 Jun 2026 01:16:53 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Learning from Fine-Grained Visual Discrepancies: Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+Haolin Deng 1 2 3 Xin Zou 1 2 3 Zhiwei Jin 2 Chen Chen 2 Haonan Lu 2 Xuming Hu 1 3 
+
+## Abstract 
+
+Multimodal hallucination remains a persistent challenge for Vision-Language Models (VLMs). Standard textual Direct Preference Optimization (DPO) often fails to mitigate it due to a lack of explicit visual supervision. While existing works introduce visual preference DPO by contrasting original images against negative ones, they suffer from a theoretically inconsistent objective caused by partition function mismatches and rely on coarse-grained negatives that could enable short-cut learning. In this work, we propose In-Context Visual Contrastive Optimization (IC-VCO). By placing contrastive images within a shared multi-image context, IC-VCO ensures a mathemati-cally rigorous objective. We further introduce Visual Contrast Distillation (VCDist), an auxiliary reliability-gated regularizer that encourages con-sistency between multi-image contrastive training and single-image inference. Finally, we propose a contrastive sample editing strategy that generates hard negatives via precise semantic perturbations. Experiments on five benchmarks demonstrate IC-VCO’s best overall performance and the effective-ness of our sample editing strategy. Code and data are available at https://github.com/ OPPO-Mente-Lab/IC-VCO .
+
+## 1. Introduction 
+
+Large Vision-Language Models (LVLMs) have demon-strated unprecedented capabilities in bridging visual per-ception and linguistic reasoning, revolutionizing tasks from visual question answering to embodied agency (Liu et al., 
+
+> 1
+
+The Hong Kong University of Science and Technology (Guangzhou) 2OPPO AI Center 3The Hong Kong University of Science and Technology. Correspondence to: Haolin Deng 
+
+<hldeng028@gmail.com >, Xuming Hu <xuminghu@hkust-gz.edu.cn >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). 
+
+2023; Li et al., 2024; Bai et al., 2025b; Jin et al., 2025). To align these powerful models with human intent and miti-gate toxic or untruthful generations, Direct Preference Opti-mization (DPO) (Rafailov et al., 2023) and reinforcement learning (Stiennon et al., 2020; Schulman et al., 2017; Guo et al., 2025) have emerged as two standard post-training paradigms. DPO, in particular, is favored for its stability and efficiency, as it does not require additional reward model training and policy roll-out during the training process. Despite these advancements, LVLMs face a unique chal-lenge: Multimodal Hallucination (Bai et al., 2024; Guan et al., 2024; Zou et al., 2025). Unlike textual hallucinations which often arise from factual (Min et al., 2023) or attribu-tion errors (Deng et al., 2024), multimodal hallucinations frequently show a phenomenon called visual neglect (Wu et al., 2025b; Luo et al., 2025; Lu et al., 2022), where the model fails to ground its response in the provided visual input, relying instead on its language priors (Deletang et al., 2024). Standard DPO on textual preference treats the image merely as a static condition, so it often fails to effectively penalize the model for ignoring visual tokens. This limita-tion underscores the urgent need for optimization objectives that explicitly enforce visual grounding. A growing line of multimodal preference optimization meth-ods (Wang et al., 2024a; Xie et al., 2024; Yang et al., 2025; Wu et al., 2025b; Liu et al., 2025b) attempts to inject visual supervision into DPO-style training. One common approach is to construct visual preference pairs by fixing the textual re-sponse while contrasting a positive image against a negative one, and then optimize the standard DPO objective (Wang et al., 2024a; Yang et al., 2025; Wu et al., 2025b). The visual preference pairs can be constructed in a symmetri-cal way (Wu et al., 2025b). Specifically, given a standard image-response triplet (m, x, y ), where m, x, y denote the input image, textual prompt and correct response respec-tively, a contrastive counterpart (m′, x, y ′) is introduced. 
+
+m′ is curated to differ from m in specific details. Conse-quently, the faithful response y for m contradicts the visual content of m′ (and vice versa for y′). This setup allows for the formulation of two symmetrical preference relations: 
+
+r(m, x, y ) ≻ r(m′, x, y ) and r(m′, x, y ′) ≻ r(m, x, y ′),where r denotes the implicit DPO reward. While effec-1
+
+> arXiv:2605.31312v1 [cs.CV] 29 May 2026
+
+Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization Which teddy    
+
+> bear is for girls?
+> Input image 𝒎 and query
+
+𝒙 
+
+𝒙           
+
+> Policy Model
+> Chosen
+> Rejected
+> 𝒚
+> 𝒚 ′
+> 𝒓 𝒎 ,𝒙 ,𝒚 >𝒓 𝒎 ,𝒙 ,𝒚 ′
+> Problem : Lack of Visual
+> Supervision, i.e. ,
+> Image is Static Condition.
+> 𝒎
+> &
+
+𝒙                              
+
+> 𝒎 ′
+> &
+> Swap Visual Context
+> Problem :Theoretically Inconsistent Objective
+> (Partition Function Mismatch)
+> i.e. ,Z(𝒎 ,𝒙 )≠Z(𝒎 ′,𝒙 )
+> 𝒓 𝒎 ,𝒙 ,𝒚
+> >𝒓 (𝒎 ′,𝒙 ,𝒚 )
+> 𝒓 𝒎 ′,𝒙 ,𝒚 ′
+> >𝒓 (𝒎 ,𝒙 ,𝒚 ′)
+> 𝒙 →ෝ𝒙 ,ෝ𝒙 ′
+> ෝ𝒙 →{𝒎 ,𝒚 }
+> ෝ𝒙 ′→{𝒎 ′,𝒚 ′}
+> 𝒎 ,ෝ𝒙
+> &
+> 𝒎 ′,ෝ𝒙 ′
+> Advantage : Theory -Consistent Visual
+> Contrastive Optimization
+
+Standard DPO  In -Context VCO (Ours)                          
+
+> Anchor Prompt
+> Extension
+> 𝒓 𝒎 ,𝒎 ′,ෝ𝒙 ,𝒚 >𝒓 𝒎 ,𝒎 ′,ෝ𝒙 ,𝒚 ′
+> 𝒓 𝒎 ,𝒎 ′,ෝ𝒙 ′,𝒚 ′>𝒓 𝒎 ,𝒎 ′,ෝ𝒙 ′,𝒚
+> Visual Contrast
+> Distillation
+
+(a)  (b)  (c)                      
+
+> 𝒓 𝒎 ,𝒙 ,𝒚 >𝒓 𝒎 ,𝒙 ,𝒚 ′
+> 𝒓 𝒎 ′,𝒙 ,𝒚 ′>𝒓 𝒎 ′,𝒙 ,𝒚
+> (Contrastive Image)
+> Original Chosen
+> 𝒚 𝒚 ′
+> Contrastive Chosen
+> 𝒑 𝜽 (𝒚 >𝒚 ′)
+> 𝒑 𝜽 (𝒚 ′>𝒚 )
+
+Visual Preference DPO 
+
+Figure 1. Schematic comparison of preference optimization frameworks. (a) Standard DPO optimizes textual preferences ( y vs. 
+
+y′) while treating the image m merely as a static condition, lacking explicit supervision for visual grounding. (b) Visual Preference DPO attempts to introduce visual rejected samples by changing visual context, e.g. swapping the input images ( m vs. m′). However, this approach suffers from a theoretical inconsistency : the partition functions Z(m, x ) and Z(m′, x ) do not eliminate, leading to a non-rigorous optimization objective. (c) In-Context VCO (Ours) places both the original and contrastive images within a shared context [m, m ′] and applies an anchor prompt extension step to specify the target image for preference labels. This design ensures a 
+
+theoretically rigorous objective by sharing the partition function. A visual contrast distillation objective is introduced to calibrate the standard single-image DPO optimization with multi-image visual contrastive signals during simultaneous training. 
+
+tive for visual grounding, these approaches are limited by two theoretical and practical constraints: 
+
+❶ Theoretically Inconsistent Objective. While visual preference DPO methods effectively introduce con-trastive visual signals to optimize implicit rewards, their objective functions rest on a loose theoretical approximation. By altering the visual contexts of pref-erence pairs, the partition functions of the reference policy fail to cancel out. This results in a residual partition function ratio that persists as an intractable bias, rendering the optimization objective theoretically inconsistent with the original DPO formulation. 
+
+❷ Coarse-Grained Negatives. Recent works (Xie et al., 2024; Wu et al., 2025b; Liu et al., 2025b) typically construct contrastive images m′ via image retrieval or text-to-image synthesis. These images often exhibit dis-tinct stylistic differences or noticeable semantic gaps compared to the original inputs. Such substantial devi-ations result in obvious and widespread inconsistencies between the image and contrastive response, making the rejected samples (m, x, y ′) and (m′, x, y ) trivial negatives : the model can minimize the DPO loss easily by exploiting the coarse-grained discrepancies, rather than learning the fine-grained visual facts. In this work, we propose In-Context Visual Contrastive Optimization (IC-VCO) , a framework which restructures visual alignment by placing contrastive images within a shared multi-image context. By instructing the model to distinguish and respond based on specific targeted images within this context, we ensure that the partition functions of preference pairs remain identical, strictly adhering to the theoretical consistency of DPO. Since IC-VCO constructs preference supervision in a multi-image context, while stan-dard LVLM inference is performed with a single image, we further introduce Visual Contrast Distillation (VCDist) as an auxiliary consistency regularizer. VCDist uses the multi-image preference distribution as a soft reference to calibrate the single-image branch, encouraging the single-image pol-icy to remain compatible with the contrastive training signal, thereby reducing the train-inference context gap. To further address the challenge of trivial negatives preva-lent in existing methods, we introduce a Contrastive Sam-ple Editing strategy. Unlike previous approaches rely-ing on retrieval or global synthesis which often introduce coarse stylistic discrepancies that facilitate shortcut learn-ing, we employ a targeted editing pipeline. We perform precise, localized modifications on original images to gen-erate high-quality hard negatives. These samples maintain strict stylistic consistency with the original visual distri-bution while embodying specific semantic contradictions, thereby compelling the model to develop fine-grained visual grounding capabilities rather than exploiting low-level short-2Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+cuts. Comprehensive experiments on five diverse bench-marks demonstrate that IC-VCO provides a stronger multi-modal preference optimization objective than existing base-lines. The results also show that contrastive edited samples serve as broadly useful hard negatives, improving multiple preference-optimization methods beyond IC-VCO. 
+
+## 2. Preliminaries 
+
+2.1. Derivation of DPO Objective 
+
+DPO derives an analytical reward formulation from the generalized reinforcement learning objective: 
+
+r(x, y ) = β log πθ (y | x)
+
+πref (y | x) + β log Z(x), (1) 
+
+Z(x) = X
+
+> y
+
+πref (y | x) exp 
+
+ 1
+
+β r(x, y )
+
+
+
+, (2) 
+
+where Z(x) is a partition function dependent on the in-put context and reference policy. The value of Z(x) is intractable due to the implicit reward formulation. DPO assumes the reward model to be a Bradley-Terry model: 
+
+p(yw ≻ yl) = exp ( r(x, y w )) exp ( r(x, y w )) + exp ( r(x, y l)) = σ (r(x, y w ) − r(x, y l)) = σ[β(log πθ (yw | x)
+
+πref (yw | x) + log Z(x)) 
+
+− β(log πθ (yl | x)
+
+πref (yl | x) + log Z(x))] .
+
+(3) 
+
+Eq. 3 shows that the chosen reward and rejected reward share the same value Z(x), which can be eliminated. Thus, the DPO objective that tries to maximize the reward margin over preference pairs becomes: 
+
+LDPO = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+
+
+β log πθ (yw | x)
+
+πref (yw | x) − β log πθ (yl | x)
+
+πref (yl | x)
+
+
+
+. (4) 
+
+2.2. Visual Preference DPO 
+
+Given an image m, textual prompt x, and a response pair 
+
+(y, y ′), where r(m, x, y ) ≻ r(m, x, y ′), visual preference DPO (Wang et al., 2024a; Yang et al., 2025; Wu et al., 2025b) leverages a negative image m′ to optimize visual preference r(m, x, y ) ≻ r(m′, x, y ) with DPO loss: 
+
+LVisDPO = −E(m,m ′,x,y )∼D 
+
+
+
+log σ
+
+
+
+β log πθ (y | m, x )
+
+πref (y | m, x ) − β log πθ (y | m′, x )
+
+πref (y | m′, x )
+
+
+
+. (5) 
+
+If y′ is the chosen response of m′, an extra visual prefer-ence pair r(m′, x, y ′) ≻ r(m, x, y ′) can be leveraged for a symmetrical loss (Wu et al., 2025b): 
+
+L′ 
+
+> VisDPO
+
+= −E(m,m ′,x,y,y ′)∼D 
+
+
+
+log σ
+
+
+
+β log πθ (y′ | m′, x )
+
+πref (y′ | m′, x ) − β log πθ (y′ | m, x )
+
+πref (y′ | m, x )
+
+
+
+. (6) 
+
+The two losses can be jointly optimized. 
+
+Issue: Theoretically Inconsistent Objective. Given a visual preference pair r(m, x, y ) ≻ r(m′, x, y ), following Eq. 3 and 4, we can derive the theoretical objective: 
+
+L∗ 
+
+> VisDPO
+
+= − E(m,m ′,x,y,y ′)∼D 
+
+
+
+log σ
+
+
+
+β log πθ (y | m, x )
+
+πref (y | m, x )
+
+− β log πθ (y | m′, x )
+
+πref (y | m′, x ) + β log Z(m, x )
+
+Z(m′, x )
+
+
+
+.
+
+(7) 
+
+By generalizing Eq. 2, we can get: 
+
+log Z(m, x )
+
+Z(m′, x ) = log 
+
+P 
+
+> y
+
+πref (y | m, x ) exp 
+
+ 1 
+
+> β
+
+r(m, x, y )
+
+P 
+
+> y
+
+πref (y | m′, x ) exp 
+
+ 1 
+
+> β
+
+r(m′, x, y )
+
+ .
+
+(8) 
+
+Eq. 8 cannot be eliminated since πref (·| m, x ) and 
+
+πref (·| m′, x ) are different distributions. Eq. 5 and Eq. 6 essentially ignore this residual ratio, thereby optimizing a 
+
+biased proxy objective . This residual term acts as a uncon-trollable offset that shifts the implicit decision boundary arbitrarily for each training sample, ultimately restricting the optimization performance. 
+
+## 3. In-Context VCO 
+
+To address the theoretical inconsistency in Visual Prefer-ence DPO formulations, where distinct visual inputs lead to mismatched partition functions, we introduce a unified 
+
+In-Context Visual Contrastive Optimization (IC-VCO) 
+
+framework. Instead of processing images in isolation, we construct a shared multi-image context M that encapsulates both the original image m and the contrastive image m′. We define M as a sequence of images M = [ m, m ′], contain-ing both the original image m and the contrastive negative 
+
+m′, and feed them sequentially into the VLM. Given this multi-image context, the original textual prompt x becomes ambiguous because the model cannot implicitly discern which image to ground its response on. To resolve this, we introduce an anchor prompt extension strategy to direct the model’s attention to a specified target image within M .Let ˆx and ˆx′ denote the extended prompt targeting the orig-inal image m and contrastive image m′ respectively. In practice, we explicitly append a positional anchor instruc-tion to x which is one of “ respond based on the first image ”or “ respond based on the second image ” depending on the 3Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+image order in M . To eliminate position bias in optimiza-tion, the image order is randomized for each sample. Based on this, we construct two symmetrical preference pairs: 
+
+r(M, ˆx, y ) ≻ r(M, ˆx, y ′) and r(M, ˆx′, y ′) ≻ r(M, ˆx′, y ).The multi-image objective for r(M, ˆx, y ) ≻ r(M, ˆx, y ′) is: 
+
+pmulti = σ
+
+
+
+β log πθ (y | M, ˆx)
+
+πref (y | M, ˆx) − β log πθ (y′ | M, ˆx)
+
+πref (y′ | M, ˆx)
+
+
+
+,
+
+LMulti = −E(M, ˆx,y,y ′)∼D [log pmulti ] .
+
+(9) 
+
+Here pmulti is the chosen-response win probability under the shared context (M, ˆx). Since the chosen and rejected responses share the same condition, the partition function 
+
+Z(M, ˆx) cancels out, yielding a theory-consistent objective. Following prior multimodal preference optimization meth-ods (Wang et al., 2024a; Yang et al., 2025; Wu et al., 2025b; Liu et al., 2025b), we also use single-image DPO: 
+
+psingle = σ
+
+
+
+β log πθ (y | m, x )
+
+πref (y | m, x ) − β log πθ (y′ | m, x )
+
+πref (y′ | m, x )
+
+
+
+,
+
+LSingle = −E(m,x,y,y ′)∼D [log psingle ] .
+
+(10) 
+
+Visual Contrast Distillation (VCDist). IC-VCO con-structs visual preference in a multi-image context M ,whereas standard LVLM inference operates with a single im-age. To reduce the train-inference context gap, we introduce VCDist as an auxiliary consistency regularizer by using the multi-image preference distribution pmulti as a soft refer-ence to calibrate the single-image distribution psingle . This also encourages the single-image branch to absorb useful contrastive supervision from the multi-image context. To ensure rigorous alignment, we introduce a dual-gating mechanism that filters the distillation signal based on cor-rectness and relative confidence: a correctness gate filters out unreliable teacher signals ( i.e. , pmulti > 0.5), while a 
+
+confidence gate activates distillation only when the student’s confidence falls below the teacher’s ( i.e. , psingle < p multi ) to prevent reverse penalty. Furthermore, to stabilize the opti-mization, we apply a stop-gradient operation to the teacher’s logits. We formulate the VCDist objective as: 
+
+LVCDist = −E(M,m,x,y,y ′)∼D 
+
+h
+
+I pmulti > 0.5 ∧ psingle < sg (pmulti )
+
+·
+
+
+
+sg (pmulti ) log psingle + (1 − sg (pmulti )) log(1 − psingle )
+
+i 
+
+,
+
+(11) 
+
+where I(·) is the indicator function, and sg (·) denotes the stop-gradient operator. Following previous works (Wang et al., 2024a; Yang et al., 2025; Liu et al., 2025b), we also leverage anchor losses to restrain the optimization from decreasing the chosen like-lihoods compared to the reference policy. Since IC-VCO contains both single-image and multi-image branches, we define the corresponding anchor terms separately: 
+
+LSingleAnc = −E(m,x,y )∼D 
+
+
+
+log σ
+
+
+
+β log πθ (y | m, x )
+
+πref (y | m, x )
+
+ 
+
+,
+
+(12) 
+
+LMultiAnc = −E(M, ˆx,y )∼D 
+
+
+
+log σ
+
+
+
+β log πθ (y | M, ˆx)
+
+πref (y | M, ˆx)
+
+ 
+
+.
+
+(13) 
+
+The IC-VCO objective for the original image m is defined by averaging the single-image and multi-image branches: 
+
+LIC-VCO = 12
+
+
+
+λ1(LMulti + η1LMultiAnc )
+
+| {z }
+
+> multi-image branch
+
++ λ2(LSingle + η2LSingleAnc ) + γLVCDist 
+
+| {z }
+
+> single-image branch
+
+
+
+,
+
+(14) 
+
+where λ1, λ2, η1, η2, and γ are hyper-parameters. The anchor weights are coupled with corresponding preference branches, so that the LSingleAnc is scaled together with LSingle ,while LMultiAnc is scaled together with LMulti .
+
+Fine-grained Token-level Preference. To further im-prove the single-image policy’s sensitivity to fine-grained visual discrepancies, we introduce a token mask for the edited response pairs. Specifically, for response tokens that describe the edited visual evidence, we compute the single-image preference score only over the masked tokens. This token-level preference is applied to the single-image branch, while the multi-image branch still operates on the full re-sponse to preserve holistic visual reasoning. 
+
+Symmetrical Preference Optimization. Eq. 14 repre-sents the objective when taking m as target image, y as chosen response, and y′ as rejected response. Since the contrastive sample (m′, x, y ′) is symmetrically constructed, following prior works (Wu et al., 2025b; Liu et al., 2025b), we can define a symmetrical objective L′ 
+
+> IC-VCO
+
+by taking m′
+
+as the target image and y′ as the chosen response, similar to Eq. 6. The final objective can be expressed as: 
+
+LTotal = LIC-VCO + L′
+
+> IC-VCO
+
+. (15) 
+
+## 4. Contrastive Sample Editing 
+
+To fully activate the theoretical potential of IC-VCO, we prioritize strict distributional alignment to prevent shortcut learning (Geirhos et al., 2020). From a fine-grained causal perspective (Pearl, 2009; Sch ¨olkopf et al., 2021), we decom-pose the image generation factors into three components: the target semantic concept ctgt (the focus of the preference pair), the surrounding semantic context Cctx (other visual 4Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization Add a small metal spoon  on the table to the left of the              
+
+> plastic knife, maintaining natural spacing near the plate.
+> Original Synthetic Edited
+> Add a small green tree topper to the center -
+> front fruitcake piece so it stands upright.
+> Lighten the dark key -like object (e.g., to white or silver) to negate the Chosen
+> Response. This creates a subtle mismatch where the object exists.
+> Original Synthetic Edited
+> Remove one chair to make the total three. Specifically, remove the one
+> closest to the camera.
+> Original Synthetic Edited Original Synthetic Edited
+> Qwen -Image -Edit Qwen -Image -Edit
+> Qwen -Image -Edit Qwen -Image -Edit
+
+Figure 2. Qualitative comparison of contrastive images. Synthetic baselines (yellow) exhibit global stylistic shifts, acting as coarse-grained negatives prone to shortcut learning. In contrast, our Contrastive Editing (green) performs surgical, localized interventions while better preserving the visual context, yielding fine-grained hard negatives that compel rigorous visual discrimination. 
+
+entities), and environmental factors U (e.g., style, lighting ). Thus, an image is modeled as m = f (ctgt , C ctx , U ).Existing baselines typically construct negatives via global resampling processes that fail to preserve instance-level consistency. Synthesis-based approaches (Xie et al., 2024; Zhang et al., 2024; Wu et al., 2025b; Liu et al., 2025b), which utilize text-to-image diffusion models (Rombach et al., 2022), suffer from the under-specification prob-lem (D’Amour et al., 2022): since textual descriptions can-not enumerate all background details, the model generates a new scene from the learned distribution, inadvertently al-tering the context. Retrieval-based approaches (Liu et al., 2025b) also introduce an independent realization of the scene by picking a distinct image m′ from a database. Both paradigms result in coarse-grained negatives exhibiting global semantic drift: P (Cctx , U |m)̸ = P (Cctx , U |m′).Crucially, due to the simplicity bias of deep neural net-works (Shah et al., 2020), these global distributional shifts provide a highly salient discriminative signal. Since dis-tinguishing samples based on global style or background artifacts is easier than verifying fine-grained visual discrep-ancies, the model is more likely to collapse into a shortcut solution: rejecting m′ simply based on environmental incon-sistencies rather than learning the target concept grounding. In contrast, we define hard negatives as valid contrastive samples generated via surgical intervention: we aim to per-form a precise operation do (ctgt → c′
+
+> tgt
+
+) while encourag-ing invariance on the semantic context and environmental factors: {Cctx , U }m ≈ { Cctx , U }m′ . This formulation ensures that the preference label primarily hinges on the 
+
+Table 1. Statistics of the contrastive sample editing dataset. 
+
+Hallucination Type Scenario A (Realization) Scenario B (Injection) Total Attribute 7,560 3,072 10,632 
+
+Existence 7,463 530 7,993 
+
+Relation 715 113 828 
+
+Total 15,738 3,715 19,453 0.000 0.032 0.065 0.097 0.129 0 20 40 60 80 100  
+
+> CLIP chosen-rejected image similarity score Density
+> SymMPO-Synthetic Contrastive Sample Editing (Ours)
+> 72.88 94.72
+
+Figure 3. CLIP-based image pair similarity distribution. 
+
+fine-grained visual discrepancies of the target concept. To approximate this theoretical objective, we propose a Con-trastive Sample Editing Framework utilizing a targeted edit pipeline to generate high-quality contrastive samples. 
+
+Editing Pipeline. Given a seed tuple (m, x, y, y ′), we use QwenVL-Plus (Bai et al., 2025a) as an expert planner to generate an executable editing instruction T . The planner handles two cases: hallucination realization , where an ex-plicit hallucinated detail in y′ is made true in the edited 5Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+image m′, and hallucination injection , where a visual detail supporting y is minimally contradicted when y′ does not provide a localized hallucination target. The target edit is categorized as existence , attribute , or relation . We then con-struct a contrastive response y′ 
+
+> new
+
+by minimally rewriting the original chosen response y according to T , so that (m′, y ′
+
+> new
+
+)
+
+becomes the positive pair and (m′, y ) becomes the negative pair while preserving the linguistic style of y. The token-level differences between y and y′ 
+
+> new
+
+are also recorded as fine-grained masks for token-level preference scoring. Next, Qwen-Image-Edit (Wu et al., 2025a) applies T to m with a reversible padding procedure that preserves the original aspect ratio and maps the edited output back to the origi-nal resolution, keeping non-target regions aligned. Finally, QwenVL-Plus verifies whether m′ faithfully implements T
+
+and rectifies minor textual mismatches in y′
+
+> new
+
+; failed edits or samples with unintended structural changes are discarded. We provide full pipeline details in Appendix B. 
+
+Data Source. We use the SymMPO dataset (Liu et al., 2025b) as our seed corpus. This dataset comprises approx-imately 21.4k samples, originally aggregated from VQA v2 (Goyal et al., 2017), MSCOCO (Lin et al., 2014), and TextVQA (Singh et al., 2019) via the TPO dataset (He et al., 2024). Table 1 shows the core statistics of the contrastive sample editing dataset. We finally construct 19,453 con-trastive samples, with an overall success rate of 91%. 
+
+Quality Inspection. Figure 2 compares synthetic and edited negatives against the original images. We also use CLIP (Radford et al., 2021) to calculate pair-wise image sim-ilarity scores. Figure 3 shows that edited images are more visually similar to the chosen images than synthetic images (mean CLIP image-similarity score: 94.72 vs 72.88). This further validates that our approach is effective at construct-ing hard negatives with fine-grained visual dependencies. 
+
+## 5. Experiment 
+
+5.1. Experimental Setup Training Data Statistics. We use the SymMPO-synthetic dataset as our baseline training set. It contains 21.4k sym-metrical image-text samples (m, m ′, x, y, y ′) where the con-trastive image m′ is generated via text-to-image synthesis. We also use our edited contrastive samples as a comparative training set with 19k symmetrical samples. 
+
+Baselines & Architectures. We implement our method on two representative open-source VLMs: LLaVA-NeXT-Interleave-Qwen-7B (Li et al., 2024) and LLaVA-OneVision-Qwen2-7B (Li et al., 2025a). We compare IC-VCO against the base models and leading multimodal preference alignment methods, including mDPO (Wang et al., 2024a), V-DPO (Xie et al., 2024), S-VCO (Wu et al., 2025b), and SymMPO (Liu et al., 2025b) 1.
+
+Evaluation Benchmarks. We employ five diverse bench-marks to comprehensively evaluate performance across dif-ferent hallucination domains: 1) HallusionBench (Guan et al., 2024) assesses language hallucination and visual illu-sion capabilities. 2) AMBER (Wang et al., 2023) evaluates fine-grained hallucinations, specifically covering object ex-istence, attributes, and spatial relations. 3) CRPE (Wang et al., 2024c) quantitatively tests object recognition and rela-tion comprehension. 4) R-Bench (Li et al., 2025b) measures the model’s robustness against various image corruptions and distortions. 5) BLINK (Fu et al., 2024) evaluates core visual perception abilities across 14 diverse computer vision tasks. To ensure the reproducibility of evaluation results, we use VLMEvalKit (Duan et al., 2024), an open-source evaluation toolkit to perform the standardized evaluations. See Appendix C for implementation details. 
+
+5.2. Main Results 
+
+As presented in Tables 2 and 3, IC-VCO achieves the best overall score among all compared preference-optimization methods under both contrastive sample sources and both backbone models. On LLaVA-NeXT-Interleave, IC-VCO outperforms the strongest baseline by 1.19 points with syn-thetic samples and by 1.24 points with contrastive edited samples. On LLaVA-OneVision, IC-VCO surpasses the strongest baseline by 0.26 points and 0.48 points under the synthetic and edited settings, respectively. The results also verify the general effectiveness of Con-trastive Sample Editing. Replacing synthetic samples with edited samples shows improvements across baselines and base models. On LLaVA-NeXT-Interleave, the overall gains for the baselines range from 0.08 to 0.61 points, and IC-VCO improves from 62.83 to 63.35. On LLaVA-OneVision, the baseline gains range from 0.25 to 1.23 points, and IC-VCO improves from 66.26 to 66.82. These consistent im-provements validate the advantage of fine-grained editing. At the metric level, IC-VCO is particularly strong on at-tribute and existence-oriented grounding. It obtains the best AMBER-Attr score in all settings and also achieves strong AMBER-Exist and CRPE-Exist results. It also con-sistently improves BLINK, suggesting better general vi-sual perception. However, relation-centric metrics are more mixed: IC-VCO does not always outperform all baselines on AMBER-Rel or CRPE-Rel. This may be partly due to the current edited dataset being skewed toward attribute and existence edits, with relation edits accounting for only 828 of 19,453 samples. We leave richer relation-oriented editing   
+
+> 1For fair comparison under the same annotation budget, we use a SymMPO variant without the extra LDPO mterm that requires additional rejected-response annotations. See Appendix C.
+
+6Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+Table 2. Experimental results on LLaVA-NeXT-Interleave-Qwen-7B. We compare the different methods using two distinct contrastive sample sources: Synthetic and Contrastive Sample Editing. The overall score denotes the macro-average across all benchmarks.                                                                                                                                                                               
+
+> Contrastive Sample Source Approach Overall HallusionBench AMBER CRPE R-Bench BLINK Score aAcc fAcc qAcc Attr Exist Rel Exist Rel Dis Ref Score
+> LLaVA-NeXT-Interleave-Qwen-7B 59.14 55.59 25.76 25.90 79.97 89.03 74.51 92.01 60.20 55.96 59.11 45.13 Synthetic (Liu et al., 2025b) DPO(Rafailov et al., 2023) 60.32 58.69 26.10 27.93 76.92 86.11 78.71 89.55 65.38 58.99 63.16 44.93 mDPO(Wang et al., 2024a) 61.64 61.51 30.06 31.43 80.27 88.36 77.16 91.79 64.84 60.40 63.77 44.87 V-DPO(Xie et al., 2024) 60.15 58.26 26.39 27.49 76.48 86.21 78.47 89.41 65.22 58.59 62.15 45.30 S-VCO(Wu et al., 2025b) 60.81 58.68 27.17 28.79 77.88 86.17 79.21 89.92 66.00 59.80 63.36 45.19 SymMPO(Liu et al., 2025b) 61.50 60.79 29.86 31.23 80.41 88.63 76.54 91.83 64.43 60.20 63.77 44.88 IC-VCO (Ours) 62.83 61.94 30.82 31.55 81.81 90.48 75.56 93.16 65.63 59.70 63.87 48.93
+> Contrastive Sample Editing (Ours) DPO(Rafailov et al., 2023) 60.40 60.46 27.17 30.11 78.16 92.47 76.20 89.35 63.31 57.58 61.34 44.66 mDPO(Wang et al., 2024a) 62.02 60.25 29.48 30.99 80.31 92.55 74.64 92.27 65.36 60.00 65.79 45.66 V-DPO(Xie et al., 2024) 60.38 59.94 26.88 30.99 77.77 91.98 76.50 89.20 62.88 57.98 61.34 44.87 S-VCO(Wu et al., 2025b) 61.41 58.25 26.88 29.45 79.72 91.41 79.15 92.58 65.89 58.99 63.36 45.03 SymMPO(Liu et al., 2025b) 62.11 60.57 29.77 31.65 80.39 92.89 74.52 92.47 65.58 61.01 65.18 45.19 IC-VCO (Ours) 63.35 63.51 33.34 33.07 82.24 92.73 70.47 94.15 64.88 60.71 64.67 49.44
+
+Table 3. Experimental results on LLaVA-OneVision-Qwen2-7B. 
+
+Contrastive Sample Source Approach Overall HallusionBench AMBER CRPE R-Bench BLINK Score aAcc fAcc qAcc Attr Exist Rel Exist Rel Dis Ref Score 
+
+LLaVA-OneVision-Qwen2-7B 62.46 53.84 25.04 24.95 84.05 91.67 75.98 94.52 65.26 66.16 71.96 44.82 Synthetic (Liu et al., 2025b) DPO(Rafailov et al., 2023) 64.97 57.95 31.01 31.67 87.98 92.37 82.85 95.43 71.76 63.23 69.03 47.20 mDPO(Wang et al., 2024a) 65.70 63.21 35.93 36.94 87.12 95.68 74.80 95.54 71.24 63.03 70.25 47.25 V-DPO(Xie et al., 2024) 65.08 58.16 31.01 31.67 88.01 92.02 83.69 95.45 71.71 63.64 69.44 47.09 S-VCO(Wu et al., 2025b) 66.00 62.26 36.51 36.94 88.04 92.94 81.71 95.30 71.18 63.44 69.64 47.41 SymMPO(Liu et al., 2025b) 65.88 63.10 36.79 36.50 87.21 95.82 75.46 95.67 71.45 64.24 70.45 46.83 IC-VCO (Ours) 66.26 62.15 35.55 36.26 88.06 95.98 73.20 95.94 71.75 65.25 71.05 48.92 
+
+Contrastive Sample Editing (Ours) DPO(Rafailov et al., 2023) 66.08 63.34 37.06 37.88 86.01 94.24 80.99 94.94 71.53 64.05 68.43 47.75 mDPO(Wang et al., 2024a) 66.24 63.90 36.36 37.45 86.11 96.28 76.39 95.61 71.93 64.50 70.10 47.99 V-DPO(Xie et al., 2024) 66.31 63.90 37.80 38.55 86.42 94.65 81.56 95.46 72.19 64.70 68.88 46.63 S-VCO(Wu et al., 2025b) 66.34 63.27 36.36 37.45 86.36 95.36 79.10 95.48 72.04 64.30 69.69 48.31 SymMPO(Liu et al., 2025b) 66.13 64.00 36.07 37.67 86.06 96.24 76.03 95.48 71.83 63.89 70.30 47.89 IC-VCO (Ours) 66.82 62.54 35.50 35.98 88.00 97.12 73.96 96.80 72.52 66.68 72.08 49.01 
+
+and supervision as future work. 
+
+5.3. Ablation Study 
+
+To validate the design of IC-VCO, we analyze component contributions in Table 4 and training diagnostics in Fig-ure 4 on LLaVA-NeXT-Interleave-Qwen-7B. Compared to the full IC-VCO model on edited samples, removing the single-image branch decreases the overall score to 62.69, showing that single-image DPO is necessary for maintaining inference-time compatibility. Removing LVCDist reduces the score to 63.04, indicating that calibrating the single-image branch with the multi-image preference signal is benefi-cial. Removing the token mask also hurts the overall score, which suggests that focusing the single-image preference signal on edited evidence tokens improves the effectiveness of fine-grained supervision. Removing the anchor loss LAnc 
+
+reduces overall score to 61.15, confirming that the anchor loss is important for stabilizing preference optimization by preventing the decline of chosen likelihoods. 
+
+Multi-Image Branch and VCDist Signal. Figure 4 (a) and (b) show that the multi-image branch consistently achieves higher reward accuracy than the single-image branch. This validates the premise of VCDist: explicit visual comparison in the multi-image context provides a stronger preference signal. Figure 4 (c) further examines whether this stronger branch provides a reliable distillation target. The valid-teacher ratio measures the fraction of train-ing samples for which the teacher passes the correctness gate. The valid KL measures the Bernoulli KL divergence between the teacher and student preference distributions on these valid samples. A stable valid-teacher ratio indicates that VCDist can continuously access a sufficient amount of teacher-aligned supervision, while the low valid KL sug-gests that the student remains close to the teacher distri-bution and the distillation target is well-conditioned rather than noisy or unstable. Together, these trends indicate that the VCDist signal is both active and reliable during training. 
+
+Robustness of VCDist Design. We further examine the stop-gradient and dual-gating mechanisms in Table 4. Re-moving stop-gradient slightly decreases the overall score from 63.35 to 63.12, while removing dual-gating slightly decreases it to 63.22. These mechanisms could be viewed as stabilization components rather than the sole source of per-7Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+Table 4. Ablation study of IC-VCO. We analyze the impact of different components and the design choices within the VCDist. 
+
+Method Overall HallusionBench AMBER CRPE R-Bench BLINK Score aAcc fAcc qAcc Attr Exist Rel Exist Rel Dis Ref Score 
+
+IC-VCO 63.35 63.51 33.34 33.07 82.24 92.73 70.47 94.15 64.88 60.71 64.67 49.44 w/o single-image branch 62.69 61.72 31.79 31.21 82.42 92.71 70.19 94.25 64.10 60.20 64.17 48.76 w/o LVCDist 63.04 62.68 31.88 32.55 81.97 92.69 69.93 93.92 64.00 60.81 64.37 49.77 w/o token mask 63.10 61.72 31.02 31.53 82.43 92.32 72.58 94.00 64.36 60.30 64.27 50.18 w/o LAnc 61.15 63.09 32.08 33.85 77.81 90.90 73.56 89.83 62.04 57.58 61.34 46.61 
+
+VCDist Ablation 
+
+w/o stop-gradient 63.12 62.67 33.05 32.19 82.30 92.99 70.29 93.97 64.41 59.90 64.67 49.65 w/o dual-gating 63.22 62.35 32.18 31.75 82.30 93.03 70.71 94.00 64.99 59.70 64.67 50.34 Single Multi 
+
+0.6 
+
+0.8 
+
+> Reward accuracy
+
+Preference difficulty 
+
+Synthetic Edited 
+
+0 200 
+
+Training step 
+
+0.6 
+
+0.7 
+
+> Reward accuracy
+
+Branch strength on edited data 
+
+> Single
+> Multi
+
+0 200 
+
+Training step 
+
+0.6 
+
+0.7 
+
+0.8  
+
+> Valid teacher ratio  VCDist
+
+teacher signal 
+
+Valid teacher ratio 
+
+Valid KL 
+
+0.006 
+
+0.008 
+
+0.010 
+
+0.012 
+
+> Valid KL
+
+(a) (b) (c) 
+
+Figure 4. Training diagnostics of IC-VCO on synthetic and edited preference data. (a) Edited preferences are harder to optimize than synthetic preferences under the same response-level IC-VCO setup, yielding lower reward accuracy for both the single-image and multi-image branches. (b) On edited data, the multi-image branch consistently achieves higher reward accuracy than the single-image branch, indicating that multi-image comparison provides a stronger preference signal. (c) The VCDist objective maintains a stable valid-teacher ratio and low valid KL throughout training, showing that its teacher signal is active and well-conditioned. Single-image IC-VCO  
+
+> w/o single
+> 57.5
+> 60.0
+> 62.5
+> Overall score
+> -1.97
+> -0.24
+> 60.32
+> 62.44
+> 58.35
+> 62.20
+> (a) Synthetic
+> Single-image IC-VCO
+> w/o single
+> -0.56
+> -0.31
+> 60.40
+> 62.69
+> 59.84
+> 62.38
+> (b) Edited
+> DPO
+> VisDPO
+> IC-VCO
+> IC-VCO CrossAnc
+> No mismatch
+> Partition Function Mismatch
+
+Figure 5. Partition function bias analysis. We remove the single-image branch of IC-VCO to form pure multi-image preference optimization. IC-VCO CrossAnc regroups the preference pairs by creating anchor prompt mismatch. The difference between DPO and VisDPO is shown in Eq. 4 and Eq. 5. 
+
+formance gains: they make VCDist more conservative and robust without heavily changing the optimization objective. 
+
+5.4. More Analysis Sample Preference Difficulty. Figure 4 (a) shows that the preference pairs with edited samples are harder to optimize than synthetic preferences, with lower reward accuracy for both the single-image and multi-image branches. This sup-ports our claim that edited samples act as fine-grained hard negatives rather than trivial contrastive examples. 0 100 200 300     
+
+> Training step
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Fraction
+> Active
+> Confidence-blocked
+> Correctness-blocked
+> Dual-gating partition
+> 0100 200 300
+> Training step
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> Fraction  Last-100-step mean
+> 13.3%
+> Confidence-gate filtering
+> (a) (b)
+
+Figure 6. VCDist dual-gating dynamics . (a) As training pro-gresses, the active fraction increases while the correctness-blocked fraction decreases. (b) The confidence gate provides an additional filtering step among teacher-correct samples by blocking cases where distillation is no longer needed. 
+
+Impact of Partition Function Mismatch. Directly esti-mating log Z(m, x )/Z (m′, x ) is difficult in DPO because the reward is implicit and the partition term is policy-dependent over an open-ended response space. We there-fore quantify its practical effect with a controlled ablation in Figure 5. In the single-image setting, the mismatch-based visual DPO variant underperforms the corresponding no-mismatch DPO baseline by 1.97 points on synthetic data and 0.56 points on edited data. In the multi-image setting, IC-VCO CrossAnc regroups preference pairs so that the same responses are compared across different anchor prompts, i.e. ,8Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 0.5 0.6 0.7               
+
+> Teacher threshold
+> 62.0
+> 62.5
+> 63.0
+> 63.5
+> 64.0
+> Score
+> 63.35
+> 63.12 63.25
+> Range = 0.23
+> Overall score
+> 0.6 - 0.5 0.7 - 0.5
+> HB-aAcc
+> HB-fAcc
+> HB-qAcc
+> AMBER-Attr
+> AMBER-Exist
+> AMBER-Rel
+> CRPE-Exist
+> CRPE-Rel
+> RBench-Dis
+> RBench-Ref
+> BLINK
+> -0.63 -0.63
+> -0.58 -0.58
+> -0.22 -0.44
+> +0.02 +0.16
+> +0.24 +0.38
+> -0.18 -0.60
+> -0.20 -0.13
+> -0.15 -0.15
+> -1.22 -0.41
+> +0.00 +0.21
+> +0.06 +0.27
+> Metric deltas vs. threshold=0.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> Delta score
+> (a) (b)
+
+Figure 7. Sensitivity analysis of the VCDist teacher threshold. 
+
+(a) Overall benchmark performance remains stable. (b) Per-metric differences show that the effect of threshold tuning does not lead to a consistent performance shift. 
+
+r(M, ˆx, y ) > r (M, ˆx′, y ) and r(M, ˆx′, y ′) > r (M, ˆx, y ′),thereby reintroducing a context mismatch. This also hurts performance, but the degradation is smaller, possibly be-cause the cross-anchor mismatch perturbs the conditioning much less than directly swapping images, and the multi-image visual contrast also provides stronger supervision, making the policy distribution more stable across anchors. 
+
+VCDist Gate Dynamics. Figure 6 analyzes how the VCDist gates behave during training. The dual-gating mechanism partitions training samples into active VCDist updates, confidence-blocked and correctness-blocked sam-ples. The active fraction increases over training, while the correctness-blocked fraction decreases. This shows that the multi-image teacher becomes more reliable as training pro-ceeds. The confidence gate is also empirically active: among teacher-correct samples, it filters 13.3% of cases on average in the last 100 steps. Overall, the dual-gating mechanism actively prevents undesired distillation while still allowing useful teacher signals to guide the single-image branch. 
+
+Sensitivity of VCDist Threshold. We test the sensitivity of the VCDist correctness threshold by changing it from 0.5 to 0.6 and 0.7. As shown in Figure 7, the overall score remains stable: the maximum change is only 0.23 points and per-metric differences do not show a consistent degradation pattern. This suggests that IC-VCO is not sensitive to the exact threshold choice within a reasonable range. 
+
+Position Bias in Multi-Image Context. Because IC-VCO uses positional anchor prompts, we further examine whether the multi-image teacher is affected by image order. We group training samples by whether the anchor-targeted im-age appears as the first or second image in the context. Figure 8 reports ∆ = Pos2 − Pos1 , where positive val-ues indicate higher values when the anchor-targeted image is placed second. The teacher-side quantities show a de-tectable position-2 advantage: the last-100-step deltas are +2.0 points for teacher probability, +8.4 points for teacher accuracy, and +12.7 points for VCDist trigger rate. However, 0.00 0.05 0.10 0.15      
+
+> pos2 pos1
+> Teacher prob.
+> Teacher acc.
+> Trigger rate
+> Student acc.
+> +2.0
+> +8.4
+> +12.7
+> +0.6
+> Last-100-step position bias
+> 0100 200 300
+> Training step
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> pos2  pos1  Trigger rate
+> Teacher acc.
+> Student acc.
+> Position-bias dynamics
+> (a) (b)
+
+Figure 8. Position-effect diagnostics for VCDist . (a) The last-100-step mean deltas for the teacher probability, teacher accuracy, VCDist trigger rate, and student reward accuracy. (b) Represen-tative deltas over training. The teacher-side statistics show a de-tectable positive position bias toward position 2, while the student single-image branch remains nearly position-symmetric. 
+
+the student reward accuracy changes by only +0.6 points, indicating that teacher-side asymmetry does not translate into a substantial single-image policy bias. Since the image order is randomized during training, the position effect is av-eraged across the dataset, while the dual-gating mechanism further restricts distillation to reliable teacher cases. 
+
+## 6. Related Work 
+
+To mitigate multimodal hallucinations, recent works (Wang et al., 2024a; Yang et al., 2025; Wu et al., 2025b) incorporate visual constraints into DPO by contrasting positive and neg-ative image pairs. While pioneering, these approaches face two critical limitations. Theoretically, conditioning on dis-tinct visual inputs prevents the cancellation of partition func-tions, violating the rigorous DPO derivation and introducing intractable bias. Practically, relying on retrieved or synthe-sized negatives often introduces coarse stylistic discrepan-cies (Liu et al., 2025b), creating trivial negatives that enable shortcut learning rather than enforcing fine-grained visual grounding. See Appendix A for detailed related works. 
+
+## 7. Conclusion 
+
+In this work, we present In-Context Visual Contrastive Optimization (IC-VCO) , a framework to address the theo-retical inconsistencies in multimodal preference optimiza-tion for hallucination mitigation. By unifying contrastive images within a shared context, IC-VCO eliminates the intractable partition function bias, establishing a rigorous mathematical foundation for visual preference alignment. We also introduce Visual Contrast Distillation (VCDist) ,a gated distillation regularizer to calibrate the single-image policy with the visual contrastive multi-image distribution. Furthermore, we propose a Contrastive Sample Editing 
+
+pipeline which generates high-quality hard negatives to pre-vent shortcut learning on global distribution shift and en-force fine-grained visual grounding. Empirical results across diverse benchmarks validate the best overall performance of IC-VCO and the benefits from contrastive sample editing. 9Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+## Impact Statement 
+
+This work introduces a visual preference optimization frame-work for improving the reliability of Vision-Language Mod-els. By encouraging models to distinguish fine-grained visual evidence through contrastive preference supervision, the method may help reduce visually inconsistent responses in applications such as visual assistants, educational tools, and content understanding systems. However, our work should not be interpreted as a complete solution to multimodal hallucination or as a replacement for broader safety mechanisms. The method targets a specific post-training setting, namely DPO-style multimodal pref-erence alignment, and is complementary to decoding-time, representation-editing, and human-feedback-based hallu-cination mitigation approaches. Models trained with our method may still produce incorrect or misleading outputs, especially in open-world or high-stakes scenarios such as medical diagnosis, legal evidence analysis, autonomous driving, or security surveillance, where additional validation and human oversight are necessary. The proposed contrastive sample editing pipeline also relies on external expert VLMs and image editing models, which may introduce biases, verification errors, or editing artifacts. Moreover, edited counterfactual images could be misused if detached from their intended research context. We there-fore recommend using the pipeline and samples only for controlled model training and evaluation. Finally, our ap-proach introduces additional computational cost through multi-image training and model-assisted data construction. We release the materials to help reduce redundant generation costs for future research. 
+
+## References 
+
+Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., Ge, W., Guo, Z., Huang, Q., Huang, J., Huang, F., Hui, B., Jiang, S., Li, Z., Li, M., Li, M., Li, K., Lin, Z., Lin, J., Liu, X., Liu, J., Liu, C., Liu, Y., Liu, D., Liu, S., Lu, D., Luo, R., Lv, C., Men, R., Meng, L., Ren, X., Ren, X., Song, S., Sun, Y., Tang, J., Tu, J., Wan, J., Wang, P., Wang, P., Wang, Q., Wang, Y., Xie, T., Xu, Y., Xu, H., Xu, J., Yang, Z., Yang, M., Yang, J., Yang, A., Yu, B., Zhang, F., Zhang, H., Zhang, X., Zheng, B., Zhong, H., Zhou, J., Zhou, F., Zhou, J., Zhu, Y., and Zhu, K. Qwen3-vl technical report, 2025a. URL https://arxiv.org/abs/2511.21631 .Bai, S., Chen, K., Liu, X., Wang, J., Ge, W., Song, S., Dang, K., Wang, P., Wang, S., Tang, J., et al. Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923 ,2025b. Bai, Z., Wang, P., Xiao, T., He, T., Han, Z., Zhang, Z., and Shou, M. Z. Hallucination of multimodal large language models: A survey. arXiv preprint arXiv:2404.18930 ,2024. Black Forest Labs, Batifol, S., Blattmann, A., Boesel, F., Consul, S., Diagne, C., Dockhorn, T., English, J., English, Z., Esser, P., Kulal, S., Lacey, K., Levi, Y., Li, C., Lorenz, D., M ¨uller, J., Podell, D., Rombach, R., Saini, H., Sauer, A., and Smith, L. Flux.1 kontext: Flow matching for in-context image generation and editing in latent space, 2025. URL https://arxiv.org/abs/2506.15742 .D’Amour, A., Heller, K., Moldovan, D., Adlam, B., Ali-panahi, B., Beutel, A., Chen, C., Deaton, J., Eisenstein, J., Hoffman, M. D., et al. Underspecification presents challenges for credibility in modern machine learning. 
+
+Journal of Machine Learning Research , 23(226):1–61, 2022. Deletang, G., Ruoss, A., Duquenne, P.-A., Catt, E., Ge-newein, T., Mattern, C., Grau-Moya, J., Wenliang, L. K., Aitchison, M., Orseau, L., Hutter, M., and Veness, J. Language modeling is compression. In The Twelfth International Conference on Learning Representations ,2024. URL https://openreview.net/forum? id=jznbgiynus .Deng, H., Wang, C., Xin, L., Yuan, D., Zhan, J., Zhou, T., Ma, J., Gao, J., and Xu, R. Webcites: Attributed query-focused summarization on chinese web search results with citations. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 15095–15114, 2024. Duan, H., Yang, J., Qiao, Y., Fang, X., Chen, L., Liu, Y., Dong, X., Zang, Y., Zhang, P., Wang, J., et al. Vlmevalkit: An open-source toolkit for evaluating large multi-modality models. In Proceedings of the 32nd ACM International Conference on Multimedia , pp. 11198– 11201, 2024. Fu, J., Huangfu, S., Fei, H., Shen, X., Hooi, B., Qiu, X., and Ng, S.-K. Chip: Cross-modal hierarchical direct prefer-ence optimization for multimodal llms. In The Thirteenth International Conference on Learning Representations ,2025. URL https://openreview.net/forum? id=7lpDn2MhM2 .Fu, X., Hu, Y., Li, B., Feng, Y., Wang, H., Lin, X., Roth, D., Smith, N. A., Ma, W.-C., and Krishna, R. Blink: Multi-modal large language models can see but not perceive. In 
+
+European Conference on Computer Vision , pp. 148–166. Springer, 2024. Geirhos, R., Jacobsen, J.-H., Michaelis, C., Zemel, R., Bren-del, W., Bethge, M., and Wichmann, F. A. Shortcut learn-ing in deep neural networks. Nature Machine Intelligence ,2(11):665–673, 2020. 10 Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+Goyal, Y., Khot, T., Summers-Stay, D., Batra, D., and Parikh, D. Making the v in vqa matter: Elevating the role of image understanding in visual question answer-ing. In Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 6904–6913, 2017. Guan, T., Liu, F., Wu, X., Xian, R., Li, Z., Liu, X., Wang, X., Chen, L., Huang, F., Yacoob, Y., et al. Hallusionbench: an advanced diagnostic suite for entangled language hal-lucination and visual illusion in large vision-language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 14375– 14385, 2024. Guo, D., Yang, D., Zhang, H., Song, J., Wang, P., Zhu, Q., Xu, R., Zhang, R., Ma, S., Bi, X., et al. Deepseek-r1 incentivizes reasoning in llms through reinforcement learning. Nature , 645(8081):633–638, 2025. He, L., Chen, Z., Shi, Z., Yu, T., Shao, J., and Sheng, L. A topic-level self-correctional approach to mitigate hal-lucinations in mllms. arXiv preprint arXiv:2411.17265 ,2024. Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., and Chen, W. LoRA: Low-rank adaptation of large language models. In International Conference on Learning Representations , 2022. URL https:// openreview.net/forum?id=nZeVKeeFYf9 .Jiang, C., Xu, H., Dong, M., Chen, J., Ye, W., Yan, M., Ye, Q., Zhang, J., Huang, F., and Zhang, S. Hallucina-tion augmented contrastive learning for multimodal large language model. In Proceedings of the IEEE/CVF Con-ference on Computer Vision and Pattern Recognition , pp. 27036–27046, 2024. Jiang, N., Kachinthaya, A., Petryk, S., and Gandelsman, Y. Interpreting and editing vision-language represen-tations to mitigate hallucinations. In The Thirteenth International Conference on Learning Representations ,2025. URL https://openreview.net/forum? id=94kQgWXojH .Jin, Z., Song, X., Wang, N., Liu, Y., Li, C., Li, X., Wang, R., Li, Z., Qi, Q., Cheng, L., et al. Andesvl technical re-port: An efficient mobile-side multimodal large language model. arXiv preprint arXiv:2510.11496 , 2025. Leng, S., Zhang, H., Chen, G., Li, X., Lu, S., Miao, C., and Bing, L. Mitigating object hallucinations in large vision-language models through visual contrastive decoding. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 13872–13882, 2024. Li, B., Zhang, Y., Guo, D., Zhang, R., Li, F., Zhang, H., Zhang, K., Zhang, P., Li, Y., Liu, Z., and Li, C. LLaVA-onevision: Easy visual task transfer. Transac-tions on Machine Learning Research , 2025a. ISSN 2835-8856. URL https://openreview.net/forum? id=zKv8qULV6n .Li, C., Zhang, J., Zhang, Z., Wu, H., Tian, Y., Sun, W., Lu, G., Min, X., Liu, X., Lin, W., et al. R-bench: Are your large multimodal model robust to real-world corruptions? 
+
+IEEE Journal of Selected Topics in Signal Processing ,2025b. Li, F., Zhang, R., Zhang, H., Zhang, Y., Li, B., Li, W., Ma, Z., and Li, C. Llava-next-interleave: Tackling multi-image, video, and 3d in large multimodal models. arXiv preprint arXiv:2407.07895 , 2024. Lin, T.-Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ra-manan, D., Doll ´ar, P., and Zitnick, C. L. Microsoft coco: Common objects in context. In European conference on computer vision , pp. 740–755. Springer, 2014. Liu, H., Li, C., Wu, Q., and Lee, Y. J. Visual instruction tun-ing. Advances in neural information processing systems ,36:34892–34916, 2023. Liu, S., Ye, H., and Zou, J. Reducing hallucinations in vision-language models via latent space steering. arXiv preprint arXiv:2410.15778 , 2024. Liu, S., Wang, S., Li, Z., Wang, J., Zeng, C., and Wei, Z. Ovip: Online vision-language preference learning. arXiv preprint arXiv:2505.15963 , 2025a. Liu, W., Song, X., Li, J., Wei, Y., Zheng, N., Yin, J., and Nie, L. Mitigating hallucination through theory-consistent symmetric multimodal preference optimiza-tion. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025b. URL https: //openreview.net/forum?id=tIW29IpCwG .Liu, Z., Zang, Y., Dong, X., Zhang, P., Cao, Y., Duan, H., He, C., Xiong, Y., Lin, D., and Wang, J. MIA-DPO: Multi-image augmented direct preference optimization for large vision-language models. In The Thirteenth International Conference on Learning Representations ,2025c. URL https://openreview.net/forum? id=f7WBRSuf9l .Lu, P., Mishra, S., Xia, T., Qiu, L., Chang, K.-W., Zhu, S.-C., Tafjord, O., Clark, P., and Kalyan, A. Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in Neural Infor-mation Processing Systems , 35:2507–2521, 2022. Luo, T., Cao, A., Lee, G., Johnson, J., and Lee, H. Probing visual language priors in VLMs. In Forty-second International Conference on Machine Learning ,2025. URL https://openreview.net/forum? id=bhTBirS0qi .11 Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+Manevich, A. and Tsarfaty, R. Mitigating hallucinations in large vision-language models (lvlms) via language-contrastive decoding (lcd). In Findings of the Association for Computational Linguistics ACL 2024 , pp. 6008–6022, 2024. Min, S., Krishna, K., Lyu, X., Lewis, M., Yih, W.-t., Koh, P., Iyyer, M., Zettlemoyer, L., and Hajishirzi, H. Factscore: Fine-grained atomic evaluation of factual precision in long form text generation. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pp. 12076–12100, 2023. Pearl, J. Causality . Cambridge university press, 2009. Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al. Learning transferable visual models from natural language supervision. In International conference on machine learning , pp. 8748–8763. PmLR, 2021. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Ermon, S., and Finn, C. Direct preference optimiza-tion: Your language model is secretly a reward model. 
+
+Advances in neural information processing systems , 36: 53728–53741, 2023. Rombach, R., Blattmann, A., Lorenz, D., Esser, P., and Ommer, B. High-resolution image synthesis with latent diffusion models. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , pp. 10684–10695, 2022. Sarkar, P., Ebrahimi, S., Etemad, A., Beirami, A., Arik, S. O., and Pfister, T. Mitigating object hallucina-tion in MLLMs via data-augmented phrase-level align-ment. In The Thirteenth International Conference on Learning Representations , 2025a. URL https:// openreview.net/forum?id=yG1fW8igzP .Sarkar, S., Che, Y., Gavin, A., Beerel, P. A., and Kundu, S. Mitigating hallucinations in vision-language models through image-guided head suppression. In Christodoulopoulos, C., Chakraborty, T., Rose, C., and Peng, V. (eds.), Proceedings of the 2025 Conference on Empirical Methods in Natural Language Process-ing , pp. 12481–12500, Suzhou, China, November 2025b. Association for Computational Linguistics. ISBN 979-8-89176-332-6. doi: 10.18653/v1/2025.emnlp-main. 631. URL https://aclanthology.org/2025. emnlp-main.631/ .Sch ¨olkopf, B., Locatello, F., Bauer, S., Ke, N. R., Kalch-brenner, N., Goyal, A., and Bengio, Y. Toward causal representation learning. Proceedings of the IEEE , 109(5): 612–634, 2021. Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal policy optimization algo-rithms, 2017. URL https://arxiv.org/abs/ 1707.06347 .Shah, H., Tamuly, K., Raghunathan, A., Jain, P., and Netra-palli, P. The pitfalls of simplicity bias in neural networks. 
+
+Advances in Neural Information Processing Systems , 33: 9573–9585, 2020. Singh, A., Natarajan, V., Shah, M., Jiang, Y., Chen, X., Batra, D., Parikh, D., and Rohrbach, M. Towards vqa models that can read. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pp. 8317–8326, 2019. Stiennon, N., Ouyang, L., Wu, J., Ziegler, D., Lowe, R., Voss, C., Radford, A., Amodei, D., and Christiano, P. F. Learning to summarize with human feedback. Advances in neural information processing systems , 33:3008–3021, 2020. Wang, F., Zhou, W., Huang, J. Y., Xu, N., Zhang, S., Poon, H., and Chen, M. mDPO: Conditional preference op-timization for multimodal large language models. In Al-Onaizan, Y., Bansal, M., and Chen, Y.-N. (eds.), Pro-ceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pp. 8078–8088, Miami, Florida, USA, November 2024a. Association for Compu-tational Linguistics. doi: 10.18653/v1/2024.emnlp-main. 460. URL https://aclanthology.org/2024. emnlp-main.460/ .Wang, J., Wang, Y., Xu, G., Zhang, J., Gu, Y., Jia, H., Yan, M., Zhang, J., and Sang, J. An llm-free multi-dimensional benchmark for mllms hallucination evaluation. arXiv preprint arXiv:2311.07397 , 2023. Wang, J., Gao, Y., and Sang, J. Valid: Mitigating the hallucination of large vision language models by vi-sual layer fusion contrastive decoding, 2024b. URL 
+
+https://arxiv.org/abs/2411.15839 .Wang, W., Ren, Y., Luo, H., Li, T., Yan, C., Chen, Z., Wang, W., Li, Q., Lu, L., Zhu, X., et al. The all-seeing project v2: Towards general relation comprehension of the open world. arXiv preprint arXiv:2402.19474 , 2024c. Wang, X., Pan, J., Ding, L., and Biemann, C. Mitigat-ing hallucinations in large vision-language models with instruction contrastive decoding. In Findings of the As-sociation for Computational Linguistics ACL 2024 , pp. 15840–15853, 2024d. Wu, C., Li, J., Zhou, J., Lin, J., Gao, K., Yan, K., Yin, S.-m., Bai, S., Xu, X., Chen, Y., et al. Qwen-image technical report. arXiv preprint arXiv:2508.02324 , 2025a. 12 Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+Wu, S., Sun, F.-Y., Wen, K., and Haber, N. Symmet-rical visual contrastive optimization: Aligning vision-language models with minimal contrastive images. In Che, W., Nabende, J., Shutova, E., and Pilehvar, M. T. (eds.), Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 30284–30297, Vienna, Austria, July 2025b. Association for Computational Linguistics. ISBN 979-8-89176-251-0. doi: 10.18653/v1/2025.acl-long. 1462. URL https://aclanthology.org/2025. acl-long.1462/ .Xie, Y., Li, G., Xu, X., and Kan, M.-Y. V-dpo: Mitigating hallucination in large vision language models via vision-guided direct preference optimization. In Findings of the Association for Computational Linguistics: EMNLP 2024 , pp. 13258–13273, 2024. Yang, Z., Luo, X., Han, D., Xu, Y., and Li, D. Mitigat-ing hallucinations in large vision-language models via dpo: On-policy data hold the key. In Proceedings of the Computer Vision and Pattern Recognition Conference , pp. 10610–10620, 2025. Ye, Z., Li, Q., Feng, X., Qin, L., Huang, Y., Li, B., Jiang, K., Xiang, Y., Zhang, Z., Lu, Y., Tang, D., Tu, D., and Qin, B. CLAIM: Mitigating multilingual object hal-lucination in large vision-language models with cross-lingual attention intervention. In Che, W., Nabende, J., Shutova, E., and Pilehvar, M. T. (eds.), Proceedings of the 63rd Annual Meeting of the Association for Com-putational Linguistics (Volume 1: Long Papers) , pp. 13080–13094, Vienna, Austria, July 2025. Association for Computational Linguistics. ISBN 979-8-89176-251-0. doi: 10.18653/v1/2025.acl-long.640. URL https: //aclanthology.org/2025.acl-long.640/ .Yu, T., Yao, Y., Zhang, H., He, T., Han, Y., Cui, G., Hu, J., Liu, Z., Zheng, H.-T., Sun, M., et al. Rlhf-v: To-wards trustworthy mllms via behavior alignment from fine-grained correctional human feedback. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 13807–13816, 2024a. Yu, T., Zhang, H., Li, Q., Xu, Q., Yao, Y., Chen, D., Lu, X., Cui, G., Dang, Y., He, T., Feng, X., Song, J., Zheng, B., Liu, Z., Chua, T.-S., and Sun, M. Rlaif-v: Open-source ai feedback leads to super gpt-4v trustworthiness. arXiv preprint arXiv:2405.17220 , 2024b. Zeng, Y., Liu, G., Ma, W., Yang, N., Zhang, H., and Wang, J. Token-level direct preference optimization. In Inter-national Conference on Machine Learning , pp. 58348– 58365. PMLR, 2024. Zhang, J., Cai, M., Xie, T., and Lee, Y. J. Countercu-rate: Enhancing physical and semantic visio-linguistic compositional reasoning via counterfactual examples. In 
+
+Findings of the Association for Computational Linguistics ACL 2024 , pp. 15481–15495, 2024. Zou, X., Wang, Y., Yan, Y., Lyu, Y., Zheng, K., Huang, S., Chen, J., Jiang, P., Liu, J., Tang, C., et al. Look twice before you answer: Memory-space visual retracing for hallucination mitigation in multimodal large language models. In International Conference on Machine Learn-ing , pp. 80873–80899. PMLR, 2025. 13 Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+## A. Extended Related Work 
+
+A.1. Multimodal Hallucination and Mitigation 
+
+Despite the remarkable capabilities of Large Vision-Language Models (LVLMs), they frequently exhibit multimodal hallucinations, where generated responses contradict visual content or fabricate non-existent objects (Bai et al., 2024; Guan et al., 2024; Luo et al., 2025). Recent analyses attribute this phenomenon to the model’s over-reliance on language priors (Deletang et al., 2024; Luo et al., 2025) and insufficient visual grounding during the generation process (Lu et al., 2022; Xie et al., 2024; Wu et al., 2025b). Mitigation strategies can be broadly categorized into training-free and training-based 
+
+approaches. 
+
+Training-Free Approaches. These methods intervene during inference or manipulate internal representations without updating model parameters. Decoding-based strategies, such as Visual Contrastive Decoding (VCD) (Leng et al., 2024), Instruction Contrastive Decoding (ICD) (Wang et al., 2024d), and VaLiD (Wang et al., 2024b), construct contrastive or modified decoding distributions to reduce hallucinations from different sources, including language priors and visual encoding distortions. Language-Contrastive Decoding (LCD) (Manevich & Tsarfaty, 2024) further refines this by directly contrasting VLM logits with those of a uni-modal LLM. MemVR (Zou et al., 2025) re-injects visual tokens before answer decoding to enhance visual grounding. Beyond decoding, representation editing methods (Liu et al., 2024; Jiang et al., 2025) manipulate activation patterns or suppress specific attention heads (Sarkar et al., 2025b; Ye et al., 2025) to enhance visual signal reliance. While effective, these methods often incur additional inference latency or require meticulous hyperparameter tuning for different architectures. 
+
+Training-Based Approaches. These methods align models via auxiliary visual supervision (Jiang et al., 2024; Sarkar et al., 2025a) or Reinforcement Learning (Stiennon et al., 2020; Yu et al., 2024a;b). Among them, Direct Preference Optimization (DPO) (Rafailov et al., 2023) based approaches have become a dominant paradigm due to its training stability and efficiency. Early multimodal adaptations, such as mDPO (Wang et al., 2024a) and V-DPO (Xie et al., 2024), extended textual DPO by optimizing preference between hallucinated and faithful captions while treating the image as a static condition. To explicitly enforce visual grounding, subsequent works like S-VCO (Wu et al., 2025b) and SymMPO (Liu et al., 2025b) introduced 
+
+visual contrastive optimization , where the model learns to distinguish between matching and mismatched image-text pairs. To explicitly enforce visual grounding, mDPO (Wang et al., 2024a) pioneers a visual preference optimization objective, constructing rejected samples by manipulating visual contexts to penalize image-text misalignment. To further mitigate the model’s over-reliance on language priors, Xie et al. (2024) propose V-DPO , which incorporates a Vision-Guided Classifier-Free Guidance (CFG) framework also utilizing visual contrastive samples for optimization. Subsequently, Wu et al. (2025b) argue that utilizing preference pairs symmetrically—by assigning each response with a contradictory image—improves data efficiency. Their proposed S-VCO objective leverages contrastive image samples alongside text-only samples for visual preference modeling. Most recently, Liu et al. (2025b) identified that these prior visual DPO formulations are theoretically non-rigorous due to the partition function mismatch issue. As a theory-consistent alternative, they propose SymMPO ,which restores DPO consistency by performing symmetric response-pair optimization under two separate single-image conditions (m, x ) and (m′, x ), coupled by a preference-margin regularizer. In contrast, IC-VCO reformulates the task so that both contrastive images are placed in one shared context M = [ m, m ′] and the preference comparison is performed under the same full condition (M, x ). This allows IC-VCO to retain explicit in-context visual comparison while remaining theory-consistent. Concurrent works have also explored fine-grained improvements to the DPO objective itself. For instance, TDPO (Zeng et al., 2024) proposes a token-level DPO formulation with forward KL divergence constraints; CHiP (Fu et al., 2025) designs a cross-model hierarchical DPO framework which combines textual preference at response-level, segment-level, and token-level. We note that these fine-grained preference optimizations are orthogonal to our research direction. In this work, we apply single-image token-level DPO using edited samples to all evaluated methods to align the granularity dimension. Furthermore, OPA-DPO (Yang et al., 2025) highlights the importance of on-policy data and aligns the preference data with the initial policy via finetuning. In our experiments, we apply this setting to all evaluated methods. MIA-DPO (Liu et al., 2025c) is similar to our IC-VCO as both works model multi-image DPO. The key difference lies in the supervision geometry. In MIA-DPO, the additional images are inserted as noisy distractors to induce multi-image hallucinations, the extra image mainly acts as a nuisance variable which is expected to be ignored by the model. In contrast, IC-VCO constructs semantically paired images which provide the supervision signal for explicit visual comparison while also supporting symmetrical optimization. MIA-DPO’s approach could not support this, as the additional image is a distractor irrelevant to the question, which cannot ensure r(M, ˆx, y ′) > r (M, ˆx, y ). To further validate this, we sample 100 samples from the 14 Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+MIA-DPO dataset 2 and use the expert VLM to evaluate the symmetry of preference pairs, and found only 21/100 pairs are symmetric. Additionally, MIA-DPO uses policy-coupled self-generated preference pairs, whereas IC-VCO operates on a fixed offline contrastive dataset shared across methods in our comparisons. IC-VCO also shows that jointly optimizing multi-image and single-image policies brings benefits, and proposes VCDist to bridge them. 
+
+A.2. Visual Contrastive Data Construction 
+
+A pivotal challenge in multimodal preference optimization lies in constructing high-quality negative samples—specifically, contrastive images m′—that compel the model to attend to fine-grained visual details. Pioneering efforts (Wang et al., 2024a; Yang et al., 2025) typically derived m′ via heuristic augmentations, such as random cropping or noise injection. However, empirical studies (Wu et al., 2025b; Liu et al., 2025b) indicate that these corruption-based techniques yield suboptimal gains. Such drastic structural perturbations often destroy essential semantic information, rendering the negatives too easily distinguishable and prone to shortcut learning. Furthermore, these low-fidelity images prove ineffective under symmetric optimization frameworks, which require high-quality distributional matching. To address this, subsequent approaches (Xie et al., 2024; Wu et al., 2025b; Liu et al., 2025a) have shifted towards leveraging text-to-image diffusion models (Rombach et al., 2022; Black Forest Labs et al., 2025) to synthesize distinct negatives conditioned on hallucinated captions, or utilizing image retrieval (Liu et al., 2025b) to source hard negatives. While domain-specific heuristics like horizontal flipping (Wu et al., 2025b) have also been explored for spatial relations, they lack generalizability. Crucially, as discussed in § 4, both synthesis-based and retrieval-based paradigms suffer from the under-specification problem (D’Amour et al., 2022), inevitably introducing global semantic drift. These deviations result in coarse-grained negatives , allowing models to bypass visual reasoning. In contrast, our Contrastive Sample Editing framework employs a localized sample editing strategy, implementing precise, surgical manipulations to generate 
+
+fine-grained negatives that strictly preserve the surrounding context. 
+
+## B. Detailed Contrastive Sample Editing Pipeline 
+
+This section provides the detailed procedure used to construct the edited contrastive samples in Section 4. Given a seed preference tuple (m, x, y, y ′), our goal is to produce an edited image m′ and a rewritten contrastive response y′ 
+
+> new
+
+such that (m, x, y ) and (m′, x, y ′
+
+> new
+
+) form a symmetrical fine-grained contrastive pair, while (m′, x, y ) becomes a hard negative whose error is localized to the edited visual evidence. 
+
+Edit Strategy Formulation. The first stage derives an executable image editing instruction T that introduces a precise semantic conflict between the edited image m′ and the original faithful response y. We use QwenVL-Plus (Bai et al., 2025a) as an expert VLM to analyze the seed tuple (m, x, y, y ′) and formulate T under two scenarios. • Scenario A: Hallucination Realization. If the rejected response y′ contains an explicit hallucinated detail that contradicts the original image m and the faithful response y, the edit instruction T modifies m to make one targeted hallucinated detail in y′ factually true in the edited image m′. After this intervention, the original chosen response y naturally becomes a negative description for m′.• Scenario B: Hallucination Injection. If y′ does not contain a localized hallucinated detail suitable for editing, we instead target the chosen response y. The edit instruction T minimally modifies m to contradict a distinct visual detail described in y. In this case, the visual evidence supporting y is surgically removed or altered, making y a negative description for the edited image m′.For both scenarios, the expert VLM classifies the target edit into one of three hallucination types: existence , attribute , and 
+
+relation . We additionally enforce strict constraints on the editing instruction to avoid structural changes, global style shifts, or background modifications. This ensures that m′ remains visually congruent with m except for the targeted semantic concept. 
+
+Contrastive Response Rewriting. To construct a valid symmetrical preference pair, we require a contrastive response 
+
+y′ 
+
+> new
+
+that faithfully describes the edited image m′. The original rejected response y′ is not directly used as the positive 
+
+> 2https://huggingface.co/datasets/laolao77/MIA-DPO
+
+15 Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization              
+
+> Table 5. Computation overhead of visual editing: Qwen-Image-Edit-2511 with a fused Lightning LoRA in bf16, 8 inference steps per image, and the reversible padding/unpadding pipeline. Statistics are reported over 100 image-editing runs on a single NVIDIA H20 GPU.
+> Inference steps per image Measured images Mean latency Median latency P90 latency Peak GPU memory Total time for 100 images 8100 14.02 s/image 14.00 s/image 14.08 s/image 58.79 GiB 1402.05 s (23.37 min)
+
+response for m′ because it may contain multiple hallucinations in Scenario A or may be unrelated to the selected edit target in Scenario B. Therefore, we adopt a minimal intervention rewriting strategy. Specifically, the expert VLM rewrites the original chosen response y by changing only the keywords or short phrases necessary to align with the edit instruction T ,while preserving the sentence structure, reasoning pattern, and linguistic style of y.This rewriting strategy has three benefits. First, it inherits the coherence and detailed reasoning of the original chosen response, avoiding the noise often present in rejected responses. Second, the resulting pair (m′, y ′
+
+> new
+
+) versus (m′, y )
+
+differs only in the atomic concept targeted by the edit, which prevents the model from exploiting textual style, length, or reasoning-format shortcuts. Third, because y′ 
+
+> new
+
+is produced by minimally modifying y, we can directly compute the token-level differences between the two responses and extract fine-grained masks for token-level preference scoring. 
+
+Fine-Grained Visual Editing. We use Qwen-Image-Edit (Wu et al., 2025a) to apply the editing instruction T to the original image m. In our implementation, the editor is instantiated with the Qwen-Image-Edit-2511 3 base checkpoint and a fused Lightning LoRA checkpoint, Qwen-Image-Edit-2511-Lightning 4. We fuse the LoRA with scale 1.0 in bf16, and use 8 denoising steps with true cfg scale=1. The editor input resolution is fixed to 1024 × 1024 , the random seed is fixed to 42, and we use an empty negative prompt. A practical challenge is that image editing models typically operate at a fixed square resolution. Naively resizing the original image to this resolution can distort the aspect ratio and break the spatial alignment between m and m′. To avoid such artifacts, we adopt a reversible padding pipeline. We first resize m to fit the 1024 × 1024 canvas while preserving its aspect ratio using Lanczos resampling, then pad the remaining margins with a white background to form a square input. After editing, we crop out the padded margins according to the recorded padding metadata and resize the edited content back to the original resolution. This geometry-aware procedure keeps the original and edited images pixel-aligned in non-edited regions. As a result, the contrastive supervision is concentrated on the localized semantic change specified by T , rather than on resolution artifacts, aspect-ratio distortion, or unintended background shifts. 
+
+Validity Verification. Because generative image editing can fail or introduce unintended artifacts, we apply a post-hoc verification loop using QwenVL-Plus. The expert VLM re-evaluates the generated triplet (m′, T , y ′
+
+> new
+
+) under two criteria. First, it performs a visual consistency check to determine whether the edited image m′ faithfully implements the semantic change specified by T . Samples with failed edits, excessive background changes, structural distortion, or unintended modifications to non-target objects are discarded. Second, it performs response rectification by checking whether y′
+
+> new
+
+accurately describes the edited image m′. Minor textual mismatches or residual hallucinations are corrected through minimal editing, while samples requiring substantial rewriting are removed. The entire pipeline for processing each sample involves a single call for strategy formulation, response rewriting, visual editing, and verification respectively. Table 5 presents the computational overhead for deploying the visual editor on local NVIDIA H20 GPU. For other stages, we relied on API calls via DashSope. 5
+
+## C. Implementation Details 
+
+All methods are trained on fixed base models with the same training set. Token masks in edited samples are applied to all methods. For methods that do not model symmetrical relations (i.e. DPO, mDPO, V-DPO), we simply split the samples 
+
+(m, m ′, x, y, y ′) into separate image-text pairs (m, x, y ) and (m′, x, y ′). The objective of SymMPO (Liu et al., 2025b) includes a term LDPO m that requires extra annotation of rejected responses for both the original and contrastive images. To ensure fair comparison, we exclude this term which in practice could be integrated into all methods given extra annotation. 
+
+> 3https://huggingface.co/Qwen/Qwen-Image-Edit-2511
+> 4https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning
+> 5https://dashscope.console.aliyun.com
+
+16 Mitigating Multimodal Hallucinations via In-Context Visual Contrastive Optimization 
+
+We follow the paradigm of OPA-DPO (Yang et al., 2025) to first finetune the base models with LoRA (Hu et al., 2022), using the chosen samples from the training data for on-policy alignment. In practice, we merge synthetic and edited chosen samples to form a unified SFT dataset. For IC-VCO, we add multi-image samples to align the policy with our anchor prompt instruction. We set the LoRA rank to 128 and alpha to 256, finetune for one epoch with a learning rate of 2e-5 and a batch size of 128. Then, we use the finetuned policy as the reference policy for preference optimization, using another initialized LoRA adapter with the same configuration for training. The preference optimization uses a learning rate of 5e-6 and a global batch size of 64, and runs for one epoch. All runs are conducted on 8 NVIDIA H20 GPUs. We follow prior works (Wang et al., 2024a; Xie et al., 2024; Liu et al., 2025b) for hyper-parameters initialization. For all methods, we set β = 0 .1, and set the anchor loss weight η = 1 . For IC-VCO, we set λ1 = 0 .75 , λ2 = 1 .75 , η1 = η2 = 1 ,and γ = 0 .3. For all other hyper-parameters in baselines, we use their reported values. For evaluation, we use greedy decoding for deterministic prediction, with max new tokens=128. For HallusionBench and AMBER, we use Qwen-Flash API via DashScope to map model predictions to yes-or-no labels. For multiple-choice benchmarks including CRPE, R-Bench, and BLINK, we use exact matching for prediction scoring. 17
