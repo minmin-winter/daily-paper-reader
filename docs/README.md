@@ -6,93 +6,84 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-05
-- 运行时间：2026-06-05 22:00:55 UTC
+- 最新运行日期：2026-06-06
+- 运行时间：2026-06-06 21:42:09 UTC
 - 运行状态：成功
-- 本次总论文数：23
-- 精读区：9
+- 本次总论文数：20
+- 精读区：6
 - 速读区：14
 
 ### 今日简报（AI）
-今日23篇新作中，两篇9分精读分别从判别式隐状态读取和主动模态检测革新多模态分析。
+今日推荐20篇论文，精读6篇中重点聚焦视频理解与推理分割，速读14篇覆盖多模态对齐与持续学习等方向。
 
-最值得关注的方向：多模态情感分析的新范式（Beyond Generative Decoding）与查询自适应的视听人物检索。
+精读高分工作《VideoKR》（9.0）值得深耕知识密集型视频理解，《CR-Seg》（8.0）的推理分割思路也有新意；速读中《CRAM》的多模态持续学习可跟进。
 
-建议从这两篇精读入手，深入理解“去生成化”与“模态选择性”如何提升鲁棒性，再延伸到速读中的空间推理与运动理解。
-- 详情：[/202606/05/README](/202606/05/README)
+建议优先精读《VideoKR》掌握视频推理前沿，再结合速读中多智能体视觉对齐文献拓宽思路。
+- 详情：[/202606/06/README](/202606/06/README)
 
 ### 精读区论文标签
-1. [Beyond Generative Decoding: Discriminative Hidden-State Readout from a Native Omni-Modal LLM for Multimodal Sentiment Analysis](/202606/05/2606.05713v1-beyond-generative-decoding-discriminative-hidden-state-readout-from-a-native-omni-modal-llm-for-multimodal-sentiment-analysis)  
-   标签：评分：9.0/10、query:native-multi
-   evidence：原生全模态大模型用于情感分析
-2. [To Be Multimodal or Not to Be: Query-Adaptive Audio-Visual Person Retrieval via Active Modality Detection](/202606/05/2606.05931v1-to-be-multimodal-or-not-to-be-query-adaptive-audio-visual-person-retrieval-via-active-modality-detection)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：查询自适应的活跃模态检测，避免缺失模态引入噪声
-3. [LoomVideo: Unifying Multimodal Inputs into Video Generation and Editing](/202606/05/2606.06042v1-loomvideo-unifying-multimodal-inputs-into-video-generation-and-editing)  
-   标签：评分：9.0/10、query:unified-mm
-   evidence：统一的多模态架构用于视频生成与编辑
-4. [Geometry-based Schrödinger Bridges for Trustworthy Multimodal Fusion](/202606/05/2605.31193v1-geometry-based-schrdinger-bridges-for-trustworthy-multimodal-fusion)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：基于几何的可信多模态融合方法
-5. [Zero-Shot 3D Question Answering via Hierarchical View-to-Token Transportation](/202606/05/2606.03100v2-zero-shot-3d-question-answering-via-hierarchical-view-to-token-transportation)  
+1. [VideoKR: Towards Knowledge- and Reasoning-Intensive Video Understanding](/202606/06/2606.05259v1-videokr-towards-knowledge--and-reasoning-intensive-video-understanding)  
+   标签：评分：9.0/10、query:mm-reasoning
+   evidence：视频推理与理解
+2. [CR-Seg: Attention-Guided and CoT-Enhanced Coarse-to-Refined Reasoning Segmentation](/202606/06/2606.03564v2-cr-seg-attention-guided-and-cot-enhanced-coarse-to-refined-reasoning-segmentation)  
    标签：评分：8.0/10、query:mm-reasoning
-   evidence：结合2D视图和VLM的3D问答视觉推理
-6. [Stable Hybrid Cross-Attention Fusion for Audio-Visual Event Recognition](/202606/05/2606.03747v1-stable-hybrid-cross-attention-fusion-for-audio-visual-event-recognition)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：稳定的音频-视觉混合交叉注意力融合
-7. [Benchmarking Visual State Tracking in Multimodal Video Understanding](/202606/05/2606.03920v1-benchmarking-visual-state-tracking-in-multimodal-video-understanding)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：视频理解中视觉状态跟踪的基准
-8. [Continual Visual and Verbal Learning Through a Child's Egocentric Input](/202606/05/2606.05115v1-continual-visual-and-verbal-learning-through-a-childs-egocentric-input)  
+   evidence：提出CoT增强的推理分割，集成视觉和语言进行细粒度分割
+3. [Geometry-Preserving Unsupervised Alignment for Heterogeneous Foundation Models](/202606/06/2606.04385v1-geometry-preserving-unsupervised-alignment-for-heterogeneous-foundation-models)  
    标签：评分：8.0/10、query:native-multi
-   evidence：以时间顺序从第一人称视频和文本进行端到端持续学习
-9. [Disentangled Fine-Grained Prototype Learning for Incomplete Image-Tabular Classification](/202606/05/2606.05455v1-disentangled-fine-grained-prototype-learning-for-incomplete-image-tabular-classification)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：处理图像表格模态缺失并平衡贡献
+   evidence：视觉-语言与纯视觉基础模型之间的几何保持无监督对齐
+4. [Query-based Cross-Modal Projector Bolstering Mamba Multimodal LLM](/202606/06/2606.04719v1-query-based-cross-modal-projector-bolstering-mamba-multimodal-llm)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：面向Mamba多模态大模型的跨模态投影器
+5. [RePercENT: Scaling Disentangled Representation Learning Beyond Two Modalities](/202606/06/2606.05109v1-repercent-scaling-disentangled-representation-learning-beyond-two-modalities)  
+   标签：评分：8.0/10、query:native-multi
+   evidence：可扩展的超出两模态的成对解耦表示学习
+6. [PAR3D: A Unified 3D-MLLM with Part-Aware Representation for Scene Understanding](/202606/06/2606.06485v1-par3d-a-unified-3d-mllm-with-part-aware-representation-for-scene-understanding)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：统一3D多模态模型架构
 
 ### 速读区论文标签
-1. [Imaginative Perception Tokens Enhance Spatial Reasoning in Multimodal Language Models](/202606/05/2606.03988v2-imaginative-perception-tokens-enhance-spatial-reasoning-in-multimodal-language-models)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：视觉语言模型中的空间想象推理
-2. [NextMotionQA: Benchmarking and Judging Human Motion Understanding with Vision-Language Models](/202606/05/2606.04773v1-nextmotionqa-benchmarking-and-judging-human-motion-understanding-with-vision-language-models)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：视觉语言推理用于人体运动理解
-3. [UAT: Unified Audio-Text Diffusion for Audio Generation, Editing, and Captioning](/202606/05/2606.04939v1-uat-unified-audio-text-diffusion-for-audio-generation-editing-and-captioning)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：统一的音频-文本扩散框架
-4. [M2S-AVSR: Modality-aware Multi-view Self-supervised Representation for Robust Audio-Visual Speech Recognition](/202606/05/2606.05763v1-m2s-avsr-modality-aware-multi-view-self-supervised-representation-for-robust-audio-visual-speech-recognition)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：感知模态质量的模块实现细粒度自适应融合
-5. [GRAMformer: Any-Order Modality Interactions via Volumetric Multimodal Cross-Attention](/202606/05/2606.06249v1-gramformer-any-order-modality-interactions-via-volumetric-multimodal-cross-attention)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：体积多模态交叉注意力实现统一多模态融合
-6. [V-LynX: Token Interface Alignment for Video+X LLMs](/202606/05/2606.00508v1-v-lynx-token-interface-alignment-for-videox-llms)  
-   标签：评分：7.0/10、query:native-multi
-   evidence：对齐不同模态的表示
-7. [Pause and Think: A Dataset and Benchmark for Video-Grounded Assistive Action Suggestion](/202606/05/2606.00616v2-pause-and-think-a-dataset-and-benchmark-for-video-grounded-assistive-action-suggestion)  
+1. [Seeing Before Agreeing: Aligning Multi-Agent Consensus with Visual Evidence](/202606/06/2605.30698v1-seeing-before-agreeing-aligning-multi-agent-consensus-with-visual-evidence)  
    标签：评分：7.0/10、query:mm-reasoning
-   evidence：针对视频的多模态推理数据集和基准
-8. [PMC-InterCPT: Rethinking Biomedical Interleaved Data for Multimodal Continued Pretraining](/202606/05/2606.01049v1-pmc-intercpt-rethinking-biomedical-interleaved-data-for-multimodal-continued-pretraining)  
+   evidence：多智能体视觉问答中对齐视觉证据以增强推理
+2. [CRAM: Centroid-Routing and Adaptive MoE for Multimodal Continual Instruction Tuning](/202606/06/2606.02502v1-cram-centroid-routing-and-adaptive-moe-for-multimodal-continual-instruction-tuning)  
    标签：评分：7.0/10、query:unified-mm
-   evidence：使用交错数据进行多模态持续预训练
-9. [Zero-Shot 3D Question Answering via Hierarchical View-to-Token Transportation](/202606/05/2606.03100v1-zero-shot-3d-question-answering-via-hierarchical-view-to-token-transportation)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：用于零样本3D视觉问答的分层视图-令牌选择
-10. [Mixed-Modality Dual Face-Hair Retrieval](/202606/05/2606.03470v1-mixed-modality-dual-face-hair-retrieval)  
+   evidence：提出质心路由和自适应MoE用于多模态持续指令微调，统一任务并高效路由
+3. [KODA: Contrastive Representation Comparison and Alignment for Vision-Language Foundation Models](/202606/06/2606.04180v1-koda-contrastive-representation-comparison-and-alignment-for-vision-language-foundation-models)  
    标签：评分：7.0/10、query:native-multi
-   evidence：用于混合模态检索的跨模态语义对齐
-11. [MLLM-Microscope: Unlocking Hidden Structure Within Multimodal Large Language Models](/202606/05/2606.00909v1-mllm-microscope-unlocking-hidden-structure-within-multimodal-large-language-models)  
+   evidence：视觉语言模型的对比表示对齐
+4. [Video2LoRA: Parametric Video Internalization for Vision-Language Models](/202606/06/2606.04351v1-video2lora-parametric-video-internalization-for-vision-language-models)  
+   标签：评分：7.0/10、query:native-multi
+   evidence：视频参数化内化至视觉语言模型
+5. [VCIFBench: Evaluating Complex Instruction Following for Video Understanding](/202606/06/2606.04588v1-vcifbench-evaluating-complex-instruction-following-for-video-understanding)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：视频理解复杂指令遵循基准
+6. [LongSpace: Exploring Long-Horizon Spatial Memory from Perception to Recall in Video](/202606/06/2606.05677v1-longspace-exploring-long-horizon-spatial-memory-from-perception-to-recall-in-video)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：长时域空间记忆的视频理解与推理
+7. [Learning Geometric Representations from Videos for Spatial Intelligent Multimodal Large Language Models](/202606/06/2606.05833v1-learning-geometric-representations-from-videos-for-spatial-intelligent-multimodal-large-language-models)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：从视频学习几何表示增强多模态大语言模型空间推理
+8. [T-CLIP: Enabling Thermal Perception for Contrastive Language-Image Pretraining](/202606/06/2606.00673v1-t-clip-enabling-thermal-perception-for-contrastive-language-image-pretraining)  
    标签：评分：6.0/10、query:native-multi
-   evidence：分析原生多模态大语言模型的隐藏表示
-12. [SVHalluc: Benchmarking Speech-Vision Hallucination in Audio-Visual Large Language Models](/202606/05/2606.02642v1-svhalluc-benchmarking-speech-vision-hallucination-in-audio-visual-large-language-models)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：语音-视觉对齐和幻觉的基准评估
-13. [Hand Trajectory Fusion for Egocentric Natural Language Query Grounding](/202606/05/2606.02962v1-hand-trajectory-fusion-for-egocentric-natural-language-query-grounding)  
+   evidence：通过对比学习对齐热成像图像与文本
+9. [Enhancing Protein-Protein Interaction Prediction with Hierarchical Motif-based Multimodal Protein Embedding](/202606/06/2606.02629v1-enhancing-protein-protein-interaction-prediction-with-hierarchical-motif-based-multimodal-protein-embedding)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：手部轨迹、视频和文本的多模态融合
-14. [MUSE: A Unified Agentic Harness for MLLMs](/202606/05/2606.03005v1-muse-a-unified-agentic-harness-for-mllms)  
+   evidence：多模态融合用于蛋白质表示
+10. [Eliciting Complex Spatial Reasoning in MLLMs through Wide-Baseline Matching](/202606/06/2606.03577v1-eliciting-complex-spatial-reasoning-in-mllms-through-wide-baseline-matching)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：统一代理执行框架，从冻结MLLM中激发多模态推理能力
+   evidence：连接视觉和语言的空间推理基准
+11. [Visual Instruction Tuning Aligns Modalities through Abstraction](/202606/06/2606.03871v1-visual-instruction-tuning-aligns-modalities-through-abstraction)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：视觉指令调优通过抽象对齐模态
+12. [MorphoQuant: Modality-Aware Quantization for Omni-modal Large Language Models](/202606/06/2606.04349v1-morphoquant-modality-aware-quantization-for-omni-modal-large-language-models)  
+   标签：评分：6.0/10、query:balanced-mml
+   evidence：针对全模态大语言模型中各模态的分布异质性和离群模式，提出模态感知量化
+13. [Cosine Misleads: Auxiliary Losses Reshape Vision Language Models, Not Their Latents](/202606/06/2606.05753v1-cosine-misleads-auxiliary-losses-reshape-vision-language-models-not-their-latents)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：分析潜在视觉推理对齐，揭示反直觉负相关，有助于理解多模态推理
+14. [FORTE: FOL-guided Optimal Refinement for Text-audio rEtrieval](/202606/06/2606.05812v1-forte-fol-guided-optimal-refinement-for-text-audio-retrieval)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：将一阶逻辑推理与跨模态对齐相结合用于文本-音频检索
 
 
 <div class="dpr-home-promo-card">
