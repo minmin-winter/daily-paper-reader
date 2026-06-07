@@ -1,0 +1,1142 @@
+Title: The Image Reconstruction Game: Drawing Common Ground Through Iterative Multimodal Dialogue
+
+URL Source: https://arxiv.org/pdf/2606.01901v1
+
+Published Time: Tue, 02 Jun 2026 02:59:01 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+## The Image Reconstruction Game: Drawing Common Ground Through Iterative Multimodal Dialogue 
+
+Sherzod Hakimov 1, Mattia D’Agostini 1, Ivan Samodelkin 1, David Schlangen 1,21Computational Linguistics, Department of Linguistics University of Potsdam, Germany 
+
+> 2
+
+German Research Center for Artificial Intelligence (DFKI), Berlin, Germany 
+
+{firstname.lastname}@uni-potsdam.de 
+
+Abstract 
+
+We introduce the Image Reconstruction Game, a fully automated benchmark in which a vision-language model issues corrective instructions to an image generator across multiple turns, making accumulated common ground directly observable as a rendered image. Benchmarking two Describer models crossed with two Gen-erator models across seven image categories, we find that the describer is the dominant fac-tor in reconstruction quality, while the gener-ator determines whether iterative refinement helps or hurts. Mathematical and geometric images pose the greatest challenge. The de-scriber’s token budget strongly affects conver-gence: shorter budgets yield sparser first ren-derings with more room for visible improve-ment, while longer budgets raise absolute qual-ity but leave less to fix. Stronger describers use a richer correction vocabulary spanning spa-tial, numeric, and structural categories, while weaker describers concentrate on surface prop-erties and tend to stop after a few turns. Human validation shows that the best automated judge reaches only slight-to-fair agreement with hu-man preferences, and automated scores require human recalibration to be used reliably. 
+
+1 Introduction 
+
+Imagine you have a picture “in your head” – a scene that you saw, a diagram that you think could explain something, etc. – that you want to see ma-terialised. Image generation models aim to address this use case: You describe what is “in your head” using language, and the model generates an image. Where early models technically simply were func-tions from textual prompts to images, modern mod-els set up this task in a more iterative, incremental and dialogic way, where earlier attempts can be cor-rected and modified. Using terminology from the study of conversations, this can be described as a process of conversational grounding (Clark, 1996), where common ground between the interactants is Turn 1 Turn 2 Turn 3 Target     
+
+> Turn 1 Turn 2 Turn 6 Turn 10 …
+> Turn 1 Turn 2 …
+> P1
+> P2 P3
+
+Figure 1: In the IR game, one model (the describer) tries to steer another (the generator) towards faithful reproduction of a target, using only natural language descriptions, over several turns. Figure shows example of how the generated image develops in response to the instructions (which are not shown), for three different model pairings and the same target. 
+
+reached through an interactive process of clarifi-cation and correction. This paper uses this setup to test current models on the various components of this task: How good are current language and vision models at describing an image in such a way as to steer an image generation model to reproduce it, and how good are such image generation models at being steered? Figure 1 illustrates the outputs of three model pairs across turns to reconstruct the target image through dialogue. This adds a new dimension to the testing of mod-els that combine linguistic and visual capabilities, as commonly the focus in their evaluation is on non-interactive tasks—captioning, VQA, image–text alignment—that do not test the capacities (Shrid-har et al., 2020). Settings such as those used in CoDraw (Kim et al., 2019) establish that iterative visual communication can be studied as a collab-
+
+> arXiv:2606.01901v1 [cs.CV] 1 Jun 2026 <DESCRIPTION>on a solid teal-green background: triangle, half circle, a “Pac ‑Man” slice pointing right. </DESCRIPTION>
+> Target image
+> (Image generation Model)
+> Generator
+> <DESCRIPTION>Make the right circle much smaller. Replace the “Pac-Man” with a small pale lavender wedge near the lower center-left, and slightly shrink the upper-left triangle. </DESCRIPTION>
+> DONE
+> (Vision-Language Model)
+> Describer
+
+Multimodal Dialogue Channel 
+
+> 1.Describe the target image
+> 2. Generate an image based on the dialogue history
+> 3. Loop until termination conditions: 1) Describer is satisfied with the outcome and stops 2) Maximum turn limit is reached
+> Generated image
+> 4. Compare images
+
+Figure 2: Overview of the Image Reconstruction Game. The Describer (a VLM) has access to the target image I∗
+
+and communicates with the Generator (an image model) exclusively through natural language. The Generator produces a rendering ( I1 or I2) from the accumulated dialogue; the Describer observes both I∗ and the rendering and issues a corrective instruction for the next turn. Each rendering makes the current state of common ground directly visible, and the loop continues until the Describer signals convergence or a turn limit is reached. Comparison is done between target image I∗ and the final turn generated image IT .
+
+orative task with measurable outcomes, but rely on human players and fixed symbolic representa-tions. Conversational image generation systems (El-Nouby et al., 2019; Huang et al., 2025; Ma et al., 2026) place the human in the describer role, targeting user intent rather than evaluating the de-scriber itself. Neither line holds one component fixed while varying the other, and neither connects communication trajectories to human perceptual judgements of outcomes. We introduce the Image Reconstruction Game ,a fully automated multimodal dialogue game that fills these gaps (see Figure 2). A describer model (a VLM) observes a target image and must steer an 
+
+image generator to reproduce it through a sequence of natural-language turns; at each turn the genera-tor’s rendering makes the current state of common ground directly visible, and the describer observes both target and all renderings up to that point in the dialogue before issuing a corrective instruc-tion. No human is in the loop: the game is played entirely between models under controlled, repro-ducible conditions. This design lets us investigate four research questions: RQ1 Can VLMs detect fine-grained perceptual differences between paired images and verbalise them as actionable, corrective instructions? RQ2 Do those instructions measur-ably reduce the difference between the target and the current rendering over turns? RQ3 Does the describer–generator pair build common ground pro-gressively, as reflected in both automated similarity scores and human ratings? RQ4 Which automated image-similarity metrics best track human percep-tual judgements in this setting? Addressing this last question is non-trivial: embedding-based similarity metrics are known to diverge substantially from human perceptual judge-ments (Ghazanfari et al., 2024), and LLM-based judges—while better correlated with human ratings than CLIP or BLIP in text-to-image settings (Lu et al., 2023)—cannot be assumed to carry over to image reconstruction without direct empirical vali-dation (Fu et al., 2024; Marjieh et al., 2024). Our contributions are: (i) a new task formulation and instance set spanning seven image categories that vary the difficulty of perception and verbalisation; (ii) a benchmark comparing two describer models against two generators, isolating describer quality from generator variation; (iii) a human similarity rating study on a stratified subset, together with an analysis of which automated metrics are most reliable proxies; and (iv) a qualitative analysis of what kinds of differences are hard to perceive or verbalise 1.
+
+> 1
+
+https://github.com/clp-research/ image-reconstruction-game 2 Related Work 
+
+CoDraw (Kim et al., 2019) establishes the asym-metric Teller–Drawer paradigm for iterative visual reconstruction through multi-turn dialogue, and related work shows how common ground accumu-lates across turns when agents describe or identify shared images (Haber et al., 2019; Clark et al., 2021; Madureira and Schlangen, 2023; Testoni and Fernández, 2024; Han and Schlangen, 2017). Game-based frameworks have also been adopted as evaluation instruments for language and multi-modal models: Chalamalasetti et al. (2023) sys-tematise this for text-based chat models, and Haki-mov et al. (2025) extend it to multimodal models with games probing reference resolution and image comparison (Zhong et al., 2021; Mohapatra, 2023; Li et al., 2024). Our game inherits this paradigm where players are VLM models as describer and generative image model as generator, making com-mon ground directly observable as a rendered im-age at every turn. A broad family of systems generates or refines images through multi-turn natural language (Ullah et al., 2022; El-Nouby et al., 2019; Lee et al., 2021; Wei et al., 2023; Wang et al., 2024; Feng et al., 2025; Ma et al., 2025; Huang et al., 2025; Wang et al., 2025; Ma et al., 2026; Hu et al., 2026). In all cases a human user provides instructions; the research question is how to build a better generative pipeline, not how to evaluate the instruction-giver. Co-creative drawing agents assist human sketch-ers in open-ended creative tasks (Davis et al., 2016, 2017; Fan et al., 2019; Huang et al., 2020; Zhang et al., 2021; Ibarrola et al., 2024; Davis and Rafner, 2025), while emergent communication re-search asks whether agents can evolve functional vi-sual protocols through interaction (Fernando et al., 2020; Mihai and Hare, 2021; Qiu et al., 2022; Vinker et al., 2025). Both treat visual output as a communicative medium, but target artistic expres-sion or protocol emergence rather than the fidelity of reconstruction by existing models. Human evaluation of generated images typically takes the form of pairwise preference judgements or direct similarity ratings, and is used as the ground-truth reference against which automated metrics are calibrated. Standard metrics such as SSIM, LPIPS, DINO, and CLIP are known to diverge from human mid-level perceptual judge-ments (Ghazanfari et al., 2024), and multimodal LLMs similarly under-perform humans on explicit visual similarity tasks (Fu et al., 2024). Lip-Sim (Ghazanfari et al., 2024) and LLMScore (Lu et al., 2023) address this by providing provably robust perceptual similarity estimates and align-ing metrics to human quality ratings respectively, while Marjieh et al. (2024, 2022) show that LLMs can approximate human similarity ratings across perceptual domains, though with systematic biases. We extend this line to image reconstruction, using human ratings to validate LLM judges that also participated as Describer models. Recent benchmarks specifically targeting mathematical and geometric visual perception— including MathOPEval (Li et al., 2025), GG-Bench (Wei et al., 2026), MATHGLANCE (Sun et al., 2025)—consistently show that diagram-level geometric perception is a critical bottleneck in current VLMs. Where these benchmarks measure whether a model can read a geometric figure, the Image Reconstruction Game asks whether a model can articulate residual differences between two such figures—a harder, relational task. Our finding that Functions and Geometry categories pose the greatest challenge aligns with and extends this body of evidence to corrective, goal-directed communication. 
+
+3 The Image Reconstruction Game 
+
+3.1 Task definition Game description. The Image Reconstruction Game is a two-player dialogue game implemented within the clem framework for game-based model evaluation (Chalamalasetti et al., 2023; Hakimov et al., 2025). In this framework, a programmatic GAME MASTER instantiates each game episode with a given target image, manages turn-by-turn prompting of the two players, enforces the com-munication protocol, and records the episode for scoring. The two players occupy asymmetric roles with different information access and capabilities (see Figure 2). The Describer is a Vision-and-Language Model that has full access to the target image I∗.Its goal is to produce natural-language utterances that guide the Generator toward a faithful visual reproduction of I∗. The Generator is an image gen-eration model that never observes I∗ directly; it can only perceive the accumulated dialogue history— the sequence of Describer utterances—and must render an image conditioned on that text. The game unfolds over multiple turns: at each turn the Describer observes both I∗ and the Gen-erator’s previous rendering It−1 (t stands for the turn index), then issues a corrective instruction or signals convergence; the Generator produces a new image based on the dialogue and previous render-ing. This iterative structure operationalises the pro-gressive building of common ground (Alikhani and Stone, 2020): each rendering It is a visible pro-jection of the shared state constructed so far, and each Describer utterance is a grounding act that attempts to reduce the residual gap. The asymmet-ric information design—where only the Describer knows I∗— mirrors the Teller–Drawer setup of Co-Draw (Kim et al., 2019) and multimodal dialogue games (referential, collaboration, spatial naviga-tion) studied by Hakimov et al. (2025), while ex-tending them to open-ended natural-language com-munication with modern generative image models. 
+
+Capability tested. The game is designed to probe two interleaved capabilities that standard VLM benchmarks (Agrawal et al., 2017; Yue et al., 2024) do not jointly assess. First, the Describer must perceive fine-grained differences between I∗
+
+and It−1— a visual discrimination task that is con-siderably harder than captioning a single image and that demands sensitivity to spatial, metric, and relational properties. Second, it must verbalise 
+
+those differences as specific corrective instructions for the Generator to act on, which requires goal-directed language production rather than generic scene description. The Generator, in turn, must interpret and act on incremental instructions while maintaining coherence with what has already been rendered. Jointly, these demands test whether a VLM can function as a goal-directed communica-tive agent in a closed-loop, multimodal setting. 
+
+3.2 Prompts and communication protocol 
+
+Each player’s messages must conform to the com-munication protocol so that the G AME MASTER 
+
+can validate, parse, and relay them between players. An episode continues until one of three stopping criteria is met: (1) Player A signals convergence by producing a DONE action; (2) the maximum turn limit of T =10 is reached; or (3) a player violates the protocol. 
+
+Player A (Describer). Player A is a VLM that receives the target image I∗ and the most re-cent Generator rendering It−1 at every turn (on turn 1, only I∗ is available, as no rendering ex-ists yet). The G AME MASTER presents these im-ages with a prompt that asks Player A either to describe I∗ in sufficient detail for an image gen-erator to reproduce it (turn 1), or to identify spe-cific remaining differences between I∗ and It−1
+
+and issue a targeted corrective instruction (turns 
+
+t > 1). Player A must wrap its output in 
+
+<DESCRIPTION> . . . </DESCRIPTION> tags so that the G AME MASTER can parse and relay the mes-sage to Player B; a response consisting solely of  
+
+> DONE
+
+(without tags) signals convergence and ends the episode. A token budget of 200 tokens per turn is imposed to enforce concise, targeted corrections rather than exhaustive re-descriptions. The correction turns place a higher demand on visual reasoning than the initial description: correc-tions must be relational —specifying what is wrong relative to the current rendering—should focus on what to improve rather than descriptions of the im-age from scratch. 
+
+Player B (Generator). Player B is an image gen-eration model that receives two inputs at each turn: the previous rendering It−1 and the text message produced by Player A in the same turn. It does not have access to I∗ at any point; its only signal is the accumulated dialogue history together with the visual context of its own previous output. The GAME MASTER also passes the full sequence of prior Player A utterances alongside It−1, ensuring that compositional information established in early turns is not lost when later turns focus on local cor-rections. Player B’s sole output is a new rendered image It, which is then forwarded to Player A as the basis for the next turn. All prompt templates are given in Appendix C. 
+
+4 Experimental Setup 
+
+4.1 Models Describer models. We evaluate a set of publicly available VLMs in the Describer role. QWEN 3-VL-30B-A3B-I NSTRUCT (Yang et al., 2025) was run locally on a single NVIDIA A100 GPU and GPT-5.2 model was accessed via API. A fixed token budget of 200 tokens was used. 
+
+Generator models. We use two image genera-tion models as generators: GEMINI -3.1-NANO - 
+
+> BANANA
+
+and GPT-I MAGE -1.5. Both are ac-cessed via their respective image generation APIs in image-to-image conditioning mode: at each Bar graph  Function Geometric shapes  
+
+> Line graph
+> Pie chart
+> Simple shapes Visual Genome
+
+Figure 3: Representative target images ( hard level) for seven categories in the dataset 
+
+turn the Generator receives the previous render-ing It−1 together with the accumulated dialogue history, not merely the latest instruction. Calls are made with default sampling parameters; seeds are not fixed across turns (as neither API exposes turn-level seed control), so observed score changes across turns reflect a combination of conditioning behaviour and sampling stochasticity. Each De-scriber is evaluated against each Generator, yield-ing a Describer × Generator grid of results; the Generator is held fixed within each grid cell so that outcome differences are attributable to the De-scriber’s communicative quality rather than to ren-dering capability. 
+
+4.2 Benchmark conditions 
+
+The benchmark comprises 14 experiment condi-tions obtained by crossing seven instance cate-gories with two difficulty levels, easy and hard .Each condition contains 10 episodes , yielding 
+
+140 episodes in total. The six categories are gen-erated synthetically by prompting an LLM to pro-duce Python code, the code is executed to obtain the target image (see Figure 22 in Appendix C). Figure 3 shows representative target images. 
+
+Simple Shapes contain coloured geometric primi-tives at specified positions; differences are visually salient but require precise spatial and color lan-guage. Geometry diagrams depict labelled figures and constructions with subtle metric differences. 
+
+Functions show mathematical function graphs; dif-ferences concern curve shape, scale, and axis labels. 
+
+Line Graph , Bar Graph , and Pie Graph encode statistical data visually; corrections must be numer-ically precise. We also use real photographs from the Visual Genome (Krishna et al., 2017) dataset to compare the with synthetic categories. Difficulty is defined consistently across synthetic categories: easy instances use fewer elements, sim-pler structure, and unambiguous layouts, while 
+
+hard instances introduce additional complexity— more data series, finer geometric detail, denser labelling—that increases both perceptual and ver-balisation demands. For Visual Genome, easy in-stances depict scenes with a small number of salient objects; hard instances are denser and more clut-tered. All instances were checked and verified man-ually (synthetic ones were generated with the com-plexity included in the prompt and then confirmed, Visual Genome instances were manually selected). Hard instances receive consistently lower mean similarity scores than easy instances across all cat-egories and model pairs (Table 3, Appendix B), confirming the intended difficulty ordering. 
+
+4.3 Tasks & Evaluation 
+
+We evaluate episode outcomes using two tasks. 
+
+Task 1: Pairwise Similarity Judges are shown the target image ( Image A ) and a Generator ren-dering ( Image B ) and asked to rate their visual and semantic similarity on a 0–10 scale:      
+
+> How similar is Image B to Image A? Image A is the original. Image B was generated by a model. Please rate their overall visual & semantic simi-larity using the scale below:
+> 0Completely different image
+> 1–3 Very different; only a few elements in com-mon
+> 4–6 Partial match; some key elements captured, but important differences remain
+> 7–9 Strong match; most elements correct, with minor differences in detail, colour, or placement
+> 10 Identical or indistinguishable
+
+Task 2: Triplet Preference Judges are shown the target image alongside two Generator render-ings (from the first and the final turns) and asked to select which rendering is more visually similar to the target . This two-alternative forced-choice format abstracts away from absolute scale calibra-tion and directly measures relative reconstruction quality—for example, whether a later-turn render-ing is preferred over an earlier one considering the iterative improvement across turns. 
+
+Human judges. We collect human ratings for both tasks by asking them to annotate all 140 episodes. Each data point in both tasks is rated by three independent annotators with backgrounds in Computational Linguistics and Computer Science (who are also authors). The annotation guidelines and interfaces are given in Appendix A. 
+
+LLM judges. We use three LLMs as judges for both tasks. GPT-5.2 and Q WEN 3-VL-30B are drawn from the same model families used in the Describer role, allowing us to examine whether a model’s ratings are consistent with—or system-atically biased by—its prior exposure to the task as a generator of descriptions. Self-serving eval-uation, in which a model rates its own outputs more favourably than an independent observer would, is a known failure mode of LLM-as-judge pipelines (Fu et al., 2024; Marjieh et al., 2024); including these models as judges provides a di-rect test of whether this bias is present in our set-ting. C LAUDE -4.5 S ONNET was not used in exper-iments and therefore we included it as an indepen-dent, out-of-distribution LLM judge. Comparing the three judges against each other and against hu-man ratings allows us to assess both the overall reli-ability of LLM-based evaluation in this setting and the degree to which judge scores are confounded by a model’s participation in the task being eval-uated. All three models receive the same prompt and rating scale as human annotators. 
+
+Automated metrics. LipSim (Ghazanfari et al., 2024) serves as the automated metric for Task 2; standard alternatives (SSIM, LPIPS, DINO, CLIP) are excluded as they are well-documented to di-verge from human mid-level perceptual judge-ments (Ghazanfari et al., 2024; Fu et al., 2024). LipSim provides a provably robust perceptual simi-larity distance using Lipschitz-constrained neural networks, offering certified stability under input perturbations. 
+
+5 Results and Analysis 
+
+5.1 Automated judge calibration 
+
+Table 1 reports pairwise judge agreement for both evaluation tasks. Figure 4 shows that all three auto-
+
+Table 1: Automatic judge calibration across annotation tasks (all model pairs). Task 1 — Pairwise Similarity: Pearson correlation ( r) and Spearman rank correlation (ρ) on matched instance–turn pairs. Task 2 — Triplet Preference: pairwise agreement rate (%) and Cohen’s κ
+
+on binary final-vs-turn-0 choices. LipSim is treated as an additional perceptual judge. 
+
+Task 1 — Pairwise Similarity 
+
+Judge A Judge B r ρ
+
+GPT Claude 0.76 0.74 GPT Qwen3 0.65 0.65 Claude Qwen3 0.63 0.65 
+
+Task 2 — Triplet Preference 
+
+Judge A Judge B % κ
+
+GPT Claude 62.28 0.24 GPT Qwen 53.29 0.06 Claude Qwen 49.10 -0.02 GPT LipSim 62.57 0.22 Claude LipSim 52.99 0.05 Qwen LipSim 57.78 0.15 Qwen3-VL-30B    
+
+> gemini-3.1
+> Qwen3-VL-30B
+> gpt-image-1.5
+> gpt-5.2
+> gemini-3.1
+> gpt-5.2
+> gpt-image-1.5
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> Mean Similarity Score
+> 7.02 6.69
+> 8.09
+> 7.09 6.94 6.66
+> 7.68
+> 6.69
+> 7.41 7.25
+> 8.29
+> 7.54
+> Average Pairwise Similarity Score by Describer Generator Pair
+> Judge
+> GPT
+> Claude
+> Qwen3
+
+Figure 4: Task-1: Mean similarity scores for all four describer–generator pairs under LLM judges. 
+
+mated judges agree mainly on the overall ranking of model pairs, with GPT -5.2 + GEMINI -3.1 con-sistently highest and Q WEN 3 + GPT -IMAGE -1.5 consistently lowest among all judges. 
+
+Task 1 (pairwise similarity). GPT-5.2 and Claude-4.5 agree more closely ( r = 0 .76 , ρ =0.74 ), while Qwen-3 shows lower alignment with both ( r = 0 .65 / ρ = 0 .65 vs. GPT-5.2; r = 0 .63 /
+
+ρ = 0 .65 vs. Claude). 
+
+Task 2 (triplet preference). GPT-5.2 and Claude-4.5 reach fair agreement (62.2%, κ =0.23 ), while Qwen-3 shows lower alignment. The 
+
+LipSim aligns more closely with GPT-5.2 (62.6%, 
+
+κ = 0 .22 ). 
+
+5.2 Overall Performance 
+
+Figure 4 shows mean similarity scores for all four describer–generator pairs (full breakdown in Ta-ble 3, Appendix B). The describer is the domi-Qwen3-VL-30B     
+
+> gemini-3.1
+> Qwen3-VL-30B
+> gpt-image-1.5
+> gpt-5.2
+> gemini-3.1
+> gpt-5.2
+> gpt-image-1.5
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Episodes (%)
+> 10%
+> 30%
+> 18%
+> 24%
+> 12%
+> 41%
+> 45%
+> 8%
+> 10% 32%
+> 61%
+> 76%
+> 19%
+> Convergence Outcome ( = final baseline) All judges (pooled)
+> Improved
+> Stable
+> Regressed
+> No Refinement
+
+Figure 5: Convergence outcome distribution per model pair (pooled across all three LLM judges). Improved 
+
+(∆ > 0), Stable (∆ = 0 ), Regressed (∆ < 0), No Refinement (single-turn episode). 
+
+nant factor (RQ1) : GPT -5.2 outperforms Q WEN -3 by approximately one point across all condi-tions, with the ranking stable across all three judges. Within each describer, GEMINI -3.1 yields higher scores than GPT -IMAGE -1.5 ( RQ2 ). Category-level results reveal two separable bottlenecks: per-ception limits scores on Functions and Geometry 
+
+hard instances (fine-grained details such as curve shapes, axis ticks), while verbalisation is the sepa-rate challenge of converting perceived differences into actionable instructions. 
+
+5.3 Iterative Refinement 
+
+The iterative payoff (the difference in scores be-tween the final turn image in comparison to the first turn image) is as follows and address the RQ3 :
+
+∆Q = score IT − score I1 . G EMINI -3.1 pairings improve across turns; GPT -IMAGE -1.5 pairings show near-zero or negative deltas—additional turns degrade rather than improve the recon-struction (Figures 15 and 16, Appendix B). The generator also determines whether iterative re-finement is beneficial . Figure 5 shows conver-gence outcomes per pair where each category refers to whether the first turn image has changed in scores in comparison to the final turn one. Qwen3-based pairs produce mostly single-turn episodes, leaving little room for improvement or regres-sion; GPT -5.2/ GPT -IMAGE -1.5 continues to the turn limit but still regresses in roughly a third of cases. More turns do not guarantee higher quality (see also Figure 19, Appendix B). Among all pairs, 
+
+GPT -5.2 + GEMINI -3.1 shows the most consistent per-turn improvement. 10 tok 50 tok 200 tok    
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Episodes (%)
+> 64%
+> 43%
+> 18%
+> 25%
+> 34%
+> 45%
+> 10%
+> 21%
+> 32%
+> 5%
+> Convergence Outcome ( = final baseline) All judges (pooled)
+> Improved
+> Stable
+> Regressed
+> No Refinement
+
+Figure 6: Convergence outcomes by token budget for 
+
+> GPT
+
+-5.2 + GPT -IMAGE -1.5. A shorter budget produces a sparser first rendering, giving corrections more visible room to improve it. 
+
+5.4 Describer Token Budget 
+
+To analyse the effect of the token budget, we also ran GPT -5.2 + GPT -IMAGE -1.5 with 10, 50 tokens per turn to compare with 200 tokens experiments (see Figure 6). A shorter budget yields more visibly improved final images: at 10 tokens the first ren-dering I1 is sparse, so corrections have substantial room to close the gap; at 200 tokens I1 is already detailed, leaving little room for improvement—and more for regression. Absolute final-turn scores in-crease with budget while triplet preference for the final image decreases because it is easier to tell apart the first rendering from the final when the budget is low (full statistics in Figures 17 and 18, Appendix B). This quality–stability trade-off is driven by the starting-point quality of I1.
+
+5.5 Correction Language 
+
+We collected a list of words for respective cate-gories that the describer uses to correct the ren-dering on subsequent turns. Figure 7 summarises the per-category usage rate per model pair. GPT -5.2 corrections are lexically broad, spanning L A-
+
+BEL /T EXT , N UMERIC , C OMPARISON , and P OSI -
+
+TIVE ACKNOWLEDGEMENT in addition to the uni-versal P OSITION and C OLOR axes. Q WEN 3-VL-30B corrections concentrate almost exclusively on COLOR and S HAPE , with near-zero N UMERIC use (GPT-5.2 uses coordinate notation such as x=0 ,
+
+y=0 ; Qwen3 contributes almost nothing) and zero POSITIVE ACKNOWLEDGEMENT . Qwen3-based pairs produce mostly single-turn episodes, so the language profile reflects only the coarsest initial instructions, with no opportunity for the structural and numeric precision that GPT-5.2 develops over Position   
+
+> Add/Remove
+> Color Size/Scale
+> Style
+> Label/Text
+> Shape
+> Comparison Numeric
+> Positive Ack.
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Correction Language Use per Model Pair Qwen3-VL-30B /
+> gemini-3.1
+> Qwen3-VL-30B /
+> gpt-image-1.5
+> gpt-5.2 /
+> gemini-3.1
+> gpt-5.2 /
+> gpt-image-1.5
+
+Figure 7: Correction language profiles per model pair. 
+
+longer dialogues (Table 5: full list of keywords, Figure 14: top-10 keywords). 
+
+5.6 Human Judgements 
+
+Table 2 reports human–automated judge calibration for the GPT -5.2 + GPT -IMAGE -1.5 pair. Human annotators showed moderate mutual agreement: mean r = 0 .48 / ρ = 0 .49 on Task 1 and mean 
+
+κ = 0 .29 on Task 2 (Table 4, Appendix A). GPT-5.2 is the most human-aligned judge (RQ4) but still very low for practical applications : Task-1 correlation r = 0 .56 is the highest among all au-tomated judges, and Task-2 triplet agreement is 
+
+κ = 0 .22 . All three automated judges are sys-tematically more tolerant than humans: human an-notators assign substantially lower mean similar-ity scores, with Qwen3 showing the largest up-ward bias. Automated scores require human recalibration before they can be used to set quality thresholds. Qwen3’s near-chance triplet agreement with humans ( κ ≈ 0), despite competi-tive static benchmark performance, illustrates that game-based probing surfaces failure modes that single-turn evaluation misses. LipSim is a practi-cal automated complement for Task-2, matching Claude’s human agreement at lower inference cost. 
+
+5.7 Qualitative Analysis 
+
+Qualitative samples are available in Figure 8, Fig-ure 9, and Figure 10 for Functions , Geometry and 
+
+Visual Genome instances. Across all three category types, GPT -5.2 + GEMINI -3.1 produces the clos-est renderings; GPT -5.2 + GPT -IMAGE -1.5 runs to ten turns but still falls short on fine details. Lower token budgets and Qwen3-based pairs yield seman-tically weaker reconstructions, with key structural 
+
+Table 2: Human vs automatic judge calibration ( GPT -5.2/ GPT -IMAGE -1.5). Task 1 — Pairwise Similarity: Pearson correlation ( r) and Spearman rank correlation (ρ). Task 2 — Triplet Preference: agreement rate (%) and Cohen’s κ between Human and each LLM judge and LipSim perceptual metric. 
+
+Task 1 — Pairwise Similarity 
+
+Judge A Judge B r ρ
+
+Human GPT 0.56 0.60 Human Claude 0.51 0.54 Human Qwen3 0.41 0.40 
+
+Task 2 — Triplet Preference 
+
+Judge A Judge B % κ
+
+Human GPT 60.90 0.22 Human Claude 54.89 0.11 Human Qwen 48.87 -0.01 Human LipSim 54.89 0.06 
+
+elements missing or substituted. 
+
+6 Conclusion 
+
+We introduced the Image Reconstruction Game, a fully automated multimodal reference game that turns common ground into a directly observ-able artefact: the rendered image produced af-ter each dialogue turn. Unlike static benchmarks, the game separately measures two distinct model competencies—the ability to perceive and verbalise residual differences (Describer), and the ability to incorporate targeted corrections without los-ing prior progress (Generator). Our experiments show that describer quality is the dominant factor in reconstruction fidelity, while the generator de-termines whether multi-turn interaction provides any benefit at all. Notably, stronger VLMs are capable of fine-grained visual articulation: even for mathematically complex and geometrically un-usual images, they produce detailed, actionable correction sequences. Functions and geometry cat-egories nonetheless pose the greatest challenge, confirming that fine-grained geometric and mathe-matical perception remains a critical bottleneck for current VLMs—consistent with recent geometric benchmarks. Human validation reveals that au-tomated LLM judges systematically overestimate reconstruction quality, and even the best-aligned judge remains unreliable for episode-level deci-sions without human recalibration. 
+
+Limitations 
+
+The benchmark comprises 140 episodes across four Describer–Generator pairs (10 per category– difficulty condition)—sufficient for exploratory analysis but modest for robust category-level con-clusions and cross-model generalisation; the ob-served rankings may shift with additional model pairings or larger episode counts. Human anno-tations are available for a single model pair ( GPT -5.2 + GPT -IMAGE -1.5), limiting the scope of the human–automated correlation analysis; extending ratings to further pairs would validate whether it-erative improvement observed by LLM judges is also perceived by human raters. All prompts and evaluations are in English; the game’s generalisa-tion to other languages is not assessed. The au-tomated judges are themselves subject to the per-ceptual and linguistic biases of their training data, and their ratings should be interpreted alongside, rather than as a replacement for, human judgements. The benchmark currently covers seven image cat-egories; extending it to broader visual domains, including natural photographs at higher resolution, remains future work. 
+
+Ethics Statement 
+
+All images in the dataset are either synthetically generated or drawn from Visual Genome (Krishna et al., 2017), a publicly available, consent-collected dataset. No personally identifiable information is present in the stimuli. Annotation tasks were de-signed to be low-risk and non-sensitive. The gen-erated images produced by the game’s Generator models may contain artefacts or unintended content. Automated evaluation with LLM judges carries the general risk that model-specific biases propagate into benchmark rankings; we mitigate this by us-ing three judges from distinct model families and validating against human ratings. All game tran-scripts, model outputs, human annotation data, and evaluation code will be publicly released to support reproducible follow-up research. 
+
+References 
+
+Aishwarya Agrawal, Jiasen Lu, Stanislaw Antol, Mar-garet Mitchell, C. Lawrence Zitnick, Devi Parikh, and Dhruv Batra. 2017. VQA: visual question an-swering - www.visualqa.org. Int. J. Comput. Vis. ,123(1):4–31. Malihe Alikhani and Matthew Stone. 2020. Achiev-ing common ground in multi-modal dialogue. In 
+
+Proceedings of the 58th Annual Meeting of the As-sociation for Computational Linguistics: Tutorial Abstracts, ACL 2020, Online, July 5, 2020 , pages 10–15. Association for Computational Linguistics. Kranti Chalamalasetti, Jana Götze, Sherzod Haki-mov, Brielen Madureira, Philipp Sadler, and David Schlangen. 2023. clembench: Using game play to evaluate chat-optimized language models as conver-sational agents. In Proceedings of the 2023 Confer-ence on Empirical Methods in Natural Language Pro-cessing, EMNLP 2023, Singapore, December 6-10, 2023 , pages 11174–11219. Association for Computa-tional Linguistics. Christopher Clark, Jordi Salvador, Dustin Schwenk, Derrick Bonafilia, Mark Yatskar, Eric Kolve, Alvaro Herrasti, Jonghyun Choi, Sachin Mehta, Sam Skjons-berg, Carissa Schoenick, Aaron Sarnat, Hannaneh Hajishirzi, Aniruddha Kembhavi, Oren Etzioni, and Ali Farhadi. 2021. Iconary: A pictionary-based game for testing multimodal communication with drawings and text. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing, EMNLP 2021, Virtual Event / Punta Cana, Domini-can Republic, 7-11 November, 2021 , pages 1864– 1886. Association for Computational Linguistics. Herbert H. Clark. 1996. Using Language . Cambridge University Press, Cambridge. Nicholas Davis, Chih-Pin Hsiao, Kunwar Yashraj Singh, Boyang Lin, and Brian Magerko. 2017. Quantifying collaboration with a co-creative drawing agent. ACM Transactions on Interactive Intelligent Systems , 7(4). Nicholas Davis, Chih-Pin Hsiao, Kunwar Yashraj Singh, and Brian Magerko. 2016. Co-creative drawing agent with object recognition. In Proceedings of the Twelfth AAAI Conference on Artificial Intelligence and Interactive Digital Entertainment , AIIDE’16, pages 9–15. AAAI Press. Nicholas Davis and Janet Rafner. 2025. AI drawing partner: Co-creative drawing agent and research plat-form to model co-creation. CoRR , abs/2501.06607. Alaaeldin El-Nouby, Shikhar Sharma, Hannes Schulz, R. Devon Hjelm, Layla El Asri, Samira Ebrahimi Kahou, Yoshua Bengio, and Graham W. Taylor. 2019. Tell, draw, and repeat: Generating and modifying images based on continual linguistic instruction. In 
+
+2019 IEEE/CVF International Conference on Com-puter Vision, ICCV 2019, Seoul, Korea (South), Oc-tober 27 - November 2, 2019 , pages 10303–10311. IEEE. Judith E. Fan, Monica Dinculescu, and David Ha. 2019. collabdraw: An environment for collaborative sketch-ing with an artificial agent. In Proceedings of the 2019 Conference on Creativity and Cognition , C&C ’19, page 556–561, New York, NY, USA. Association for Computing Machinery. Yuheng Feng, Jianhui Wang, Kun Li, Sida Li, Tianyu Shi, Haoyue Han, Miao Zhang, and Xueqian Wang. 2025. TDRI: two-phase dialogue refinement and co-adaptation for interactive image generation. CoRR ,abs/2503.17669. Chrisantha Fernando, Daria Zenkova, Stanislav Nikolov, and Simon Osindero. 2020. From language games to drawing games. CoRR , abs/2010.02820. Xingyu Fu, Yushi Hu, Bangzheng Li, Yu Feng, Haoyu Wang, Xudong Lin, Dan Roth, Noah A. Smith, Wei-Chiu Ma, and Ranjay Krishna. 2024. BLINK: multi-modal large language models can see but not perceive. In Computer Vision - ECCV 2024 - 18th European Conference, Milan, Italy, September 29-October 4, 2024, Proceedings, Part XXIII , Lecture Notes in Computer Science, pages 148–166. Springer. Sara Ghazanfari, Alexandre Araujo, Prashanth Krish-namurthy, Farshad Khorrami, and Siddharth Garg. 2024. Lipsim: A provably robust perceptual similar-ity metric. In The Twelfth International Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net. Janosch Haber, Tim Baumgärtner, Ece Takmaz, Lieke Gelderloos, Elia Bruni, and Raquel Fernández. 2019. The photobook dataset: Building common ground through visually-grounded dialogue. In Proceedings of the 57th Conference of the Association for Compu-tational Linguistics, ACL 2019, Florence, Italy, July 28- August 2, 2019, Volume 1: Long Papers , pages 1895–1910. Association for Computational Linguis-tics. Sherzod Hakimov, Yerkezhan Abdullayeva, Kushal Koshti, Antonia Schmidt, Yan Weiser, Anne Beyer, and David Schlangen. 2025. Using game play to investigate multimodal and conversational ground-ing in large multimodal models. In Proceedings of the 31st International Conference on Computational Linguistics, COLING 2025, Abu Dhabi, UAE, Jan-uary 19-24, 2025 , pages 5686–5718. Association for Computational Linguistics. Ting Han and David Schlangen. 2017. Draw and tell: Multimodal descriptions outperform verbal- or sketch-only descriptions in an image retrieval task. In 
+
+Proceedings of the 8th International Joint Conference on Natural Language Processing (IJCNLP 2017), Volume 2: Short Papers , pages 361–365. Asian Fed-eration of Natural Language Processing. Yujie Hu, Zecheng Tang, Xu Jiang, Weiqi Li, and Jian Zhang. 2026. Talkphoto: A versatile training-free conversational assistant for intelligent image editing. 
+
+CoRR , abs/2601.01915. Forrest Huang, Eldon Schoop, David Ha, and John Canny. 2020. Scones: Towards conversational au-thoring of sketches. In Proceedings of the 25th Inter-national Conference on Intelligent User Interfaces ,pages 313–323. ACM. Minbin Huang, Yanxin Long, Xinchi Deng, Ruihang Chu, Jiangfeng Xiong, Xiaodan Liang, Hong Cheng, Qinglin Lu, and Wei Liu. 2025. Dialoggen: Multi-modal interactive dialogue system with multi-turn text-image generation. In Findings of the Association for Computational Linguistics: NAACL 2025, Albu-querque, New Mexico, USA, April 29 - May 4, 2025 ,Findings of ACL, pages 411–426. Association for Computational Linguistics. Francisco Ibarrola, Tomas Lawton, and Kazjon Grace. 2024. A collaborative, interactive and context-aware drawing agent for co-creative design. IEEE Trans. Vis. Comput. Graph. , 30(8):5525–5537. Jin-Hwa Kim, Nikita Kitaev, Xinlei Chen, Marcus Rohrbach, Byoung-Tak Zhang, Yuandong Tian, Dhruv Batra, and Devi Parikh. 2019. Codraw: Col-laborative drawing as a testbed for grounded goal-driven communication. In Proceedings of the 57th Conference of the Association for Computational Lin-guistics, ACL 2019, Florence, Italy, July 28- August 2, 2019, Volume 1: Long Papers , pages 6495–6513. Association for Computational Linguistics. Ranjay Krishna, Yuke Zhu, Oliver Groth, Justin John-son, Kenji Hata, Joshua Kravitz, Stephanie Chen, Yannis Kalantidis, Li-Jia Li, David A. Shamma, Michael S. Bernstein, and Li Fei-Fei. 2017. Vi-sual genome: Connecting language and vision us-ing crowdsourced dense image annotations. Int. J. Comput. Vis. , 123(1):32–73. Hyunhee Lee, Gyeongmin Kim, Yuna Hur, and Heuiseok Lim. 2021. Visual thinking of neural net-works: Interactive text to image synthesis. IEEE Access , 9:64510–64523. Tao Li, Gang Li, Jingjie Zheng, Purple Wang, and Yang Li. 2024. MUG: interactive multimodal grounding on user interfaces. In Findings of the Association for Computational Linguistics: EACL 2024, St. Julian’s, Malta, March 17-22, 2024 , Findings of ACL, pages 231–251. Association for Computational Linguistics. Xiaoyuan Li, Moxin Li, Wenjie Wang, Rui Men, Yichang Zhang, Fuli Feng, Dayiheng Liu, and Jun-yang Lin. 2025. Mathopeval: A fine-grained evalu-ation benchmark for visual operations of mllms in mathematical reasoning. CoRR , abs/2507.18140. Yujie Lu, Xianjun Yang, Xiujun Li, Xin Eric Wang, and William Yang Wang. 2023. Llmscore: unveiling the power of large language models in text-to-image syn-thesis evaluation. In Proceedings of the 37th Interna-tional Conference on Neural Information Processing Systems , NIPS ’23, Red Hook, NY, USA. Curran Associates Inc. Shichao Ma, Yunhe Guo, Jiahao Su, Qihe Huang, Zhengyang Zhou, and Yang Wang. 2026. Talk2Image: A multi-agent system for multi-turn image generation and editing. In Proceedings of the Fortieth AAAI Conference on Artificial Intelligence . AAAI Press. Shichao Ma, Xinfeng Zhang, Zeng Zhao, Bai Liu, Changjie Fan, and Zhipeng Hu. 2025. DialogDraw: Image generation and editing system based on multi-turn dialogue. In Proceedings of the Thirty-Ninth AAAI Conference on Artificial Intelligence . AAAI Press. Brielen Madureira and David Schlangen. 2023. Instruc-tion clarification requests in multimodal collaborative dialogue games: Tasks, and an analysis of the codraw dataset. In Proceedings of the 17th Conference of the European Chapter of the Association for Computa-tional Linguistics, EACL 2023, Dubrovnik, Croatia, May 2-6, 2023 , pages 2295–2311. Association for Computational Linguistics. Raja Marjieh, Ilia Sucholutsky, Theodore R. Sumers, Nori Jacoby, and Thomas L. Griffiths. 2022. Predict-ing human similarity judgments using large language models. In Proceedings of the 44th Annual Meet-ing of the Cognitive Science Society, CogSci 2022, Toronto, ON, Canada, July 27-30, 2022 . cognitive-sciencesociety.org. Raja Marjieh, Ilia Sucholutsky, Pol van Rijn, Nori Ja-coby, and Thomas L Griffiths. 2024. Large language models predict human sensory judgments across six modalities. Scientific Reports , 14(1):21445. Daniela Mihai and Jonathon S. Hare. 2021. Learning to draw: Emergent communication through sketching. In Advances in Neural Information Processing Sys-tems 34: Annual Conference on Neural Information Processing Systems 2021, NeurIPS 2021, December 6-14, 2021, virtual , pages 7153–7166. Biswesh Mohapatra. 2023. Conversational grounding in multimodal dialog systems. In Proceedings of the 25th International Conference on Multimodal Interaction , pages 706–710. ACM. Shuwen Qiu, Sirui Xie, Lifeng Fan, Tao Gao, Jungseock Joo, Song-Chun Zhu, and Yixin Zhu. 2022. Emer-gent graphical conventions in a visual communication game. In Advances in Neural Information Processing Systems 35: Annual Conference on Neural Informa-tion Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 .Mohit Shridhar, Jesse Thomason, Daniel Gordon, Yonatan Bisk, Winson Han, Roozbeh Mottaghi, Luke Zettlemoyer, and Dieter Fox. 2020. ALFRED: A Benchmark for Interpreting Grounded Instructions for Everyday Tasks. In The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) .Yanpeng Sun, Shan Zhang, Wei Tang, Aotian Chen, Pi-otr Koniusz, Kai Zou, Yuan Xue, and Anton van den Hengel. 2025. Math blind: Failures in diagram un-derstanding undermine reasoning in mllms. Preprint ,arXiv:2503.20745. Alberto Testoni and Raquel Fernández. 2024. Asking the right question at the right time: Human and model uncertainty guidance to ask clarification questions. In Proceedings of the 18th Conference of the Euro-pean Chapter of the Association for Computational Linguistics, EACL 2024 - Volume 1: Long Papers, St. Julian’s, Malta, March 17-22, 2024 , pages 258–275. Association for Computational Linguistics. Ubaid Ullah, Jeong-Sik Lee, Chang-Hyeon An, Hyeon-jin Lee, Su-Yeong Park, Rock-Hyun Baek, and Hyun-Chul Choi. 2022. A review of multi-modal learn-ing from the text-guided visual processing viewpoint. 
+
+Sensors , 22(18):6816. Yael Vinker, Tamar Rott Shaham, Kristine Zheng, Alex Zhao, Judith E. Fan, and Antonio Torralba. 2025. Sketchagent: Language-driven sequential sketch gen-eration. In IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition, CVPR 2025, Nashville, TN, USA, June 11-15, 2025 , pages 23355–23368. Computer Vision Foundation / IEEE. Jianhui Wang, Yangfan He, Yan Zhong, Xinyuan Song, Jiayi Su, Yuheng Feng, Ruoyu Wang, Hongyang He, Wenyu Zhu, Xinhang Yuan, Miao Zhang, Keqin Li, Jiaqi Chen, Tianyu Shi, and Xueqian Wang. 2025. Twin co-adaptive dialogue for progressive image gen-eration. In Proceedings of the 33rd ACM Interna-tional Conference on Multimedia , pages 3645–3653. ACM. Zhijie Wang, Yuheng Huang, Da Song, Lei Ma, and Tianyi Zhang. 2024. PromptCharm: Text-to-image generation through multi-modal prompting and re-finement. In Proceedings of the CHI Conference on Human Factors in Computing Systems , pages 1–16. ACM. Jingxuan Wei, Caijun Jia, Xi Bai, Xinglong Xu, Siyuan Li, Linzhuang Sun, Bihui Yu, Conghui He, Lijun Wu, and Cheng Tan. 2026. Ggbench: A geometric gen-erative reasoning benchmark for unified multimodal models. Preprint , arXiv:2511.11134. Jingxuan Wei, Shiyu Wu, Xin Jiang, and Yequan Wang. 2023. Dialogpaint: A dialog-based image editing model. CoRR , abs/2303.10073. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Day-iheng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, and 41 others. 2025. Qwen3 technical report. Preprint ,arXiv:2505.09388. Xiang Yue, Yuansheng Ni, Tianyu Zheng, Kai Zhang, Ruoqi Liu, Ge Zhang, Samuel Stevens, Dongfu Jiang, Weiming Ren, Yuxuan Sun, Cong Wei, Botao Yu, Ruibin Yuan, Renliang Sun, Ming Yin, Boyuan Zheng, Zhenzhu Yang, Yibo Liu, Wenhao Huang, and 3 others. 2024. MMMU: A massive multi-discipline multimodal understanding and reasoning benchmark for expert AGI. In IEEE/CVF Conference on Com-puter Vision and Pattern Recognition, CVPR 2024, Seattle, WA, USA, June 16-22, 2024 , pages 9556– 9567. IEEE. Chao Zhang, Cheng Yao, Jianhui Liu, Zili Zhou, Weilin Zhang, Lijuan Liu, Fangtian Ying, Yijun Zhao, and Guanyun Wang. 2021. Storydrawer: A co-creative agent supporting children’s storytelling through col-laborative drawing. In Extended Abstracts of the 2021 CHI Conference on Human Factors in Com-puting Systems , CHI EA ’21, New York, NY, USA. Association for Computing Machinery. Victor Zhong, Austin W. Hanjie, Sida I. Wang, Karthik Narasimhan, and Luke Zettlemoyer. 2021. Silg: the multi-environment symbolic interactive language grounding benchmark. In Proceedings of the 35th International Conference on Neural Information Pro-cessing Systems , NIPS ’21, Red Hook, NY, USA. Curran Associates Inc. 
+
+A Human Annotation Guidelines 
+
+Human annotations were collected for both eval-uation tasks (Section 4.3) on the GPT -5.2 + GPT -
+
+> IMAGE
+
+-1.5 model pair (140 episodes). Three anno-tators with backgrounds in Computer Science rated each episode independently; all 140 episodes were covered by all three annotators. 
+
+Task 1 — Pairwise Similarity Rating 
+
+Annotators saw the target image I∗ alongside each Generator rendering and rated visual and semantic similarity on a 0–10 integer scale. Figure 11 shows the interface. 
+
+Task 2 — Triplet Preference 
+
+Annotators saw the target image alongside the turn-0 and final-turn renderings and selected which was more similar to the target. Figure 12 shows the interface. 
+
+B Additional Results 
+
+Per-category similarity scores 
+
+Table 3 reports mean similarity scores for every category at both difficulty levels across all four judges. 
+
+Iterative payoff and triplet preference 
+
+Figure 15 shows ∆Q per model pair and judge: 
+
+> GEMINI
+
+-3.1 pairings yield consistent positive gains while GPT -IMAGE -1.5 pairings show near-zero or negative deltas. Figure 16 corroborates this via Task-2 preference rates, with GEMINI -3.1 pairings consistently above the 50% chance baseline and 
+
+> GPT
+
+-IMAGE -1.5 pairings at or below it. 
+
+Correction language analysis 
+
+Correction utterances (turns ≥ 2) were la-belled across ten categories using stem patterns (\b<stem>\w{0,6}\b ) and phrase patterns for multi-word expressions; a category is flagged if any pattern fires. Tables 4 and 5 appear together on the following page. Figure 13 shows per-category usage rates across turns. GPT -5.2 pairs sustain broad-coverage pro-files throughout all ten turns; Q WEN 3-VL-30B pairs show narrowing toward C OLOR dominance at later turns, partly reflecting the small number of episodes that reach them. Figure 14 shows the top-10 keyword tokens per category: the sharpest con-trasts are in N UMERIC (coordinate notation absent in Qwen3), L ABEL /T EXT (structural references ab-sent in Qwen3), and P OSITIVE ACKNOWLEDGE - 
+
+> MENT
+
+(zero counts for Qwen3). 
+
+Effect of describer token budget 
+
+Scores increase monotonically with budget (Fig-ure 17), confirming that longer descriptions yield richer first renderings and higher absolute quality at episode end. Triplet preference for the final-turn image decreases monotonically (Figure 18): at 10 tokens the gap between I1 and IT is large and visually salient; at 200 tokens I1 is already detailed, leaving little room for visible improvement. 
+
+Score trajectories by category 
+
+Figure 19 shows mean similarity score per turn for every category and model pair: GPT -5.2 pairings improve steadily across turns; Q WEN 3-VL-30B pairings plateau after turn 1. 
+
+C Prompt Templates 
+
+The prompt templates are given in Figure 20, 21. The prompt template for generating synthetic im-ages is given in Figure 22. We used GPT-5.2 for generating the synthetic images. A line plot on a white background with light gray gridlines shows a black, moderately thick curve labeled f(x) versus x. The x-axis spans 
+
+−4 to 4 (ticks at integers) and the y-axis spans about −5 to 6 (ticks at 
+
+−4, −2, 0, 2, 4, 6). Starting near x= −4, the curve is around −4.5 and rises quickly with small oscillations, reaching positive values by about x ≈− 3 and peaking around y ≈2–2.5 between x ≈− 2.6 and −1.3 with frequent ripples. It then trends downward with irregular, smaller oscillations, crossing near y ≈0 around x ≈0 and dipping to roughly y≈− 1.5 near x ≈1.8. After x ≈2, it turns upward smoothly and steeply, curving to end near y ≈5.6 at x=4. Increase the irregular, higher-frequency oscillations between x ≈− 1 and x ≈1.5 (especially clustered around x ≈0–1.2) to match the jaggier original; reduce the smooth, large-wave look there. Shift the main minimum slightly right and deepen it: lowest point near x ≈1.8 at about y ≈− 1.5, with a small ripple train around x ≈1.0–1.3. After x ≈2, make the rise start a bit earlier and be more continuously convex upward, with less of a flat shoulder near y ≈0 around x≈2.3–2.7. Soften the extreme dense spike cluster between x ≈0.4 and 1.1: reduce oscillation amplitude and make it less “vertical-bar” like, with smaller ripples that taper out by x ≈1.4. Add a slight downward drift through x ≈0– 1.8 so the curve reaches its minimum closer to x ≈1.8 at y ≈− 1.5 (current minimum is too early/shallow). Make the segment x ≈2.0–2.6 slightly below zero (not sitting on y=0), then transition into the steep convex rise. 
+
+gpt-5.2-gemini3.1 
+
+gpt-5.2-gpt-image-1.5 
+
+Turn 1 Turn 2 Turn 3 
+
+Turn 1 Turn 2 Turn 6 Turn 10 
+
+A 2D line plot on a light-gray grid with black axes. The horizontal axis is labeled “x” and spans roughly from −4 to 4 with integer tick labels; the vertical axis is labeled “f(x)” and shows ticks from about −4 up to 6. A thick black curve starts near ( −4, −4.5), rises steeply with small rapid oscillations, reaching values around 2–2.6 between x ≈− 2.6 and −1.5. It then trends downward with continued jagged oscillations, crossing near y ≈0 around x ≈− 0.5 to 0, dipping to about −1.3 around x≈1.7–1.9. After x ≈2 it turns upward smoothly, accelerating sharply to end near (4, 5.6). Make the plot match a standard Matplotlib-style framed chart: add a full rectangular border; remove arrowheads on axes. Place x-axis label “x” centered below and y-axis label “f(x)” vertically along left axis (not a large italic at top). Adjust x-range to exactly −4..4 and y-range about −5..6 with matching tick marks. Redraw the curve: start near ( −4, −4.5) (not around −3); include many fine, rapid oscillations from x ≈− 3.8 to −1.2, then additional smaller jagged oscillations around x≈− 0.2 to 1.3; keep values near y ≈− 1 around x ≈1 and a shallow minimum around x ≈1.8 at about −1.3 (not a deep U at x≈2.5). After x ≈2, rise smoothly to end near (4, 5.6) without overshooting to 6.7. Set x-axis range back to −4..4 (currently extends to ~6+) with integer ticks −4 to 4. Set y-axis range to about −5..6 with ticks at −4, −2, 0, 2, 4, 6. Redraw curve to match: at x= −4 start near y ≈− 4.5 (not 0) and rise quickly with many small oscillations; peak around x ≈− 1.6 at y ≈2.6 (higher than current ~1.5). From x ≈− 1 to 1.5 keep jagged oscillations around y ≈0 (not steadily below −1). Add a very tight high-frequency oscillation cluster centered at x≈1.0, y ≈− 0.8. Minimum should be shallow around x≈1.8–1.9 at y ≈− 1.3, then rise smoothly to y ≈5.6 at x=4 (no minimum near x ≈4.6 at y ≈− 2.4). Fix labels: y-axis label must be “f(x)” (not “f(y)”). Adjust left start: at x= −4 the curve should be around y ≈− 4.5 (not near −1) and then rise; remove the large valley around x ≈− 3.6 at y ≈− 4.6—left side should be a mostly rising jagged ramp from −4.5 up toward positive values. Increase the main peak height to about y ≈2.6 around x ≈− 1.6 (currently ~1.6). For x from about −1 to 2, shift the curve upward so it oscillates around y ≈0 with jagged spikes and several crossings; it should not sit near y ≈− 1. Move the minimum to x ≈1.8–1.9 with y≈− 1.3 and eliminate the later dip near x ≈3.3. Ensure a smooth monotonic rise begins near x ≈2 and reaches about y ≈5.6 at x=4. 
+
+…
+
+Target A black line graph on a white background with a grid. The x-axis ranges from -4 to 4, labeled "x". The y-axis ranges from -5 to 6, labeled "f(x)". The function starts at (-4, -4.5), oscillates with increasing frequency and decreasing amplitude as x increases, crossing the x-axis around x = -1.5 and again near x = 1.5. After x = 1.5, the oscillations dampen and the function increases monotonically, rising steeply to f(4) ≈ 5.5. The y-axis label should be "f(x)" instead of "f(x)" (corrected from "f(x)" to "f(x)"). The y-axis range should be from -5 to 6, not -5 to 6 (corrected from -5 to 6 to -5 to 6). The x-axis label should be "x" and the y-axis label should be "f(x)", both correctly positioned. The function should start at (-4, -4.5), not (-4, -4.5). The oscillations should be more frequent near x = -2 and decrease in amplitude as x increases. The function should cross the x-axis around x = -1.5 and x = 1.5, and rise steeply after x = 2. The amplitude of oscillations should dampen significantly after x = 1. The curve should not be smooth at x = 1; it should have sharp oscillations. The overall shape should match the original with the correct axis labels and scale. 
+
+Qwen3-gemini3.1 
+
+Qwen3-gpt-image-1.5 
+
+Turn 1 Turn 2 Turn 1 
+
+A black line graph on a white background with a grid. The x-axis ranges from -4 to 4, labeled "x", and the y-axis ranges from -4 to 6, labeled "f(x)". The function starts at approximately (-4, -4.5), rises with increasing oscillations in amplitude and frequency near x = -3, reaches a peak around x = -2.5, then oscillates with decreasing amplitude and frequency, crossing the x-axis around x = -1.5, and continues oscillating with very small amplitude near x = 1. After x = 1, the function sharply increases, crossing the x-axis around x = 2 and rising to approximately (4, 6). The graph is smooth and continuous with no breaks. gpt-5.2-gpt-image-1.5 gpt-5.2-gpt-image-1.5 
+
+10 token budget 50 token budget Figure 8: Qualitative samples for Functions (hard, instance#2) four model pairs and including token budget experiments Qwen3-gemini3.1 Qwen3-gpt-image-1.5 
+
+Target gpt-5.2-gemini3.1 gpt-5.2 gpt-img 
+
+Target gpt-5.2-gpt-image-1.5 gpt-5.2-gpt-image-1.5 10 token budget 50 token budget Figure 9: Qualitative samples for Geometry (hard, instance#3) four model pairs and including token budget experiments Qwen3-gemini3.1 Qwen3-gpt-image-1.5 
+
+Target gpt-5.2-gemini3.1 gpt-5.2 gpt-img gpt-5.2-gpt-image-1.5 gpt-5.2-gpt-image-1.5 10 token budget 50 token budget Figure 10: Qualitative samples for Visual Genome (hard, instance#4) four model pairs and including token budget experiments Figure 11: Task 1 interface: target ( Image A ) and Generator rendering ( Image B ) side by side; anchor labels calibrate the 0–10 slider. 
+
+Figure 12: Task 2 interface: annotators choose which of two renderings (first vs. final turn) is more similar to the target. Table 3: Mean final-turn similarity score (1–10) per model pair, image category, and difficulty level, broken down by judge. LipSim reports % of instances where the final-turn image was preferred over turn-0 (triplet task). Human annotations are available for the gpt-5.2 / gpt-image-1.5 pair only; ‘–’ indicates no annotation. 
+
+Model Pair Category Diff. GPT Claude Qwen3 LipSim (%) Human Qwen-3 / gemini-3.1 
+
+Bar Graph easy 8.70 8.70 9.00 — –Bar Graph hard 8.50 8.10 8.80 0.0% –Functions easy 6.10 6.70 7.40 100.0% –Functions hard 5.20 5.60 6.00 40.0% –Geometry easy 7.20 6.40 6.50 40.0% –Geometry hard 5.20 5.00 5.10 33.3% –Line Graph easy 8.00 7.90 8.50 50.0% –Line Graph hard 6.90 6.90 7.10 0.0% –Pie Graph easy 7.90 7.90 8.90 66.7% –Pie Graph hard 8.10 8.30 8.40 33.3% –Simple Shapes easy 6.50 5.90 6.70 66.7% –Simple Shapes hard 7.00 6.30 7.50 33.3% –Visual Genome easy 6.40 6.70 7.30 55.6% –Visual Genome hard 6.60 6.70 6.50 44.4% –
+
+Qwen-3 / gpt-image-1.5 
+
+Bar Graph easy 7.70 7.60 8.80 — –Bar Graph hard 7.60 7.10 8.20 — –Functions easy 4.90 4.40 6.20 100.0% –Functions hard 4.80 5.90 7.40 100.0% –Geometry easy 6.30 5.90 5.70 0.0% –Geometry hard 5.20 5.10 5.30 100.0% –Line Graph easy 7.10 7.50 8.00 — –Line Graph hard 6.70 7.20 7.20 100.0% –Pie Graph easy 8.20 8.10 8.40 0.0% –Pie Graph hard 8.20 8.00 7.90 0.0% –Simple Shapes easy 6.80 6.60 7.10 40.0% –Simple Shapes hard 6.60 6.60 6.50 16.7% –Visual Genome easy 7.20 7.00 8.10 0.0% –Visual Genome hard 6.30 6.30 6.70 40.0% –
+
+gpt-5.2 / gemini-3.1 
+
+Bar Graph easy 8.90 8.80 9.20 66.7% –Bar Graph hard 8.80 8.60 9.20 100.0% –Functions easy 7.30 7.00 7.20 88.9% –Functions hard 6.50 7.20 6.70 66.7% –Geometry easy 8.70 7.70 8.80 87.5% –Geometry hard 7.90 6.50 7.50 88.9% –Line Graph easy 8.50 8.00 9.10 83.3% –Line Graph hard 8.00 8.10 8.60 88.9% –Pie Graph easy 8.80 8.70 9.20 87.5% –Pie Graph hard 8.80 8.60 8.80 90.0% –Simple Shapes easy 7.60 6.60 8.00 50.0% –Simple Shapes hard 7.70 7.00 7.80 40.0% –Visual Genome easy 7.80 7.40 8.00 40.0% –Visual Genome hard 8.00 7.30 8.00 80.0% –
+
+gpt-5.2 / gpt-image-1.5 
+
+Bar Graph easy 7.90 7.40 8.60 40.0% 6.00 Bar Graph hard 7.40 7.00 8.50 40.0% 5.17 Functions easy 6.10 5.90 7.20 80.0% 5.10 Functions hard 4.80 5.20 6.80 70.0% 5.33 Geometry easy 7.50 6.80 7.10 80.0% 5.63 Geometry hard 6.60 5.70 6.20 100.0% 4.37 Line Graph easy 6.60 6.70 8.20 80.0% 6.37 Line Graph hard 6.00 6.40 6.90 80.0% 5.40 Pie Graph easy 8.30 8.00 8.40 70.0% 6.93 Pie Graph hard 7.60 7.30 7.80 30.0% 5.97 Simple Shapes easy 7.50 6.30 7.10 42.9% 6.40 Simple Shapes hard 7.50 6.80 7.20 37.5% 7.17 Visual Genome easy 7.90 7.10 7.90 40.0% 7.47 Visual Genome hard 7.60 7.10 7.70 55.6% 6.83 Table 4: Human inter-annotator agreement across both tasks (140 episodes, GPT -5.2 / GPT -IMAGE -1.5 pair). Task 1: Pearson r and Spearman ρ on 0–10 similarity scores. Task 2: agreement rate and Cohen’s κ on binary triplet choices. 
+
+Task 1 Task 2 
+
+Pair r ρ Agree. (%) κ
+
+A vs. B 0.421 0.447 63.6 0.247 A vs. C 0.562 0.546 65.7 0.308 B vs. C 0.454 0.465 66.4 0.316 
+
+Mean 0.479 0.486 65.2 0.290 
+
+Table 5: Correction language categories with representative stem roots and phrase patterns. Stems are matched as 
+
+\b<stem>\w{0,6}\b to cover inflected forms; a category is flagged if any pattern fires. 
+
+Category Representative stem roots Representative phrase patterns Position mov, shift, left, right, top, bottom, center, centr, above, below, higher, lower, align, overlap, corner, diagonal, horizon, vertic, perpendicular, parallel 
+
+“move to the left/right/top/bottom”; “upper-left”; “top-right corner”; “to the left of” Size/Scale enlarg, larg, bigg, small, shrink, reduc, widen, narrow, thin, thick, tall, shorter, resize, rescal, upscal, downscal 
+
+“too big/small/wide/narrow”; “scale up/down”; “make it larger/s-maller”; “slightly narrower” Color named colours ( red, blue, green, orange, purple, yellow, cyan, teal, gray, black, white, . . . ); darker, lighter, brighter, saturate, desaturat, muted, vivid, pale 
+
+“color/colour”; “shade of”; “hue”; “more saturated/vivid”; “make it darker/lighter” Add/Remove add, remov, delet, insert, includ, exclud, omit, missing, extra, eliminat, replac, substitut, absent, introduc, eras, drop 
+
+“should not be there”; “add/insert a”; “remove/delete the”; “no longer visible” Shape round, circular, ellips, oval, squar, rectangl, triangl, polygon, diamond, arc, curv, straight, angl, vertex, wedge, convex, concave, symmet, wavy 
+
+“should be a circle/square/triangle”; “more rounded/pointed”; “right-angle” Label/Text label, mislabel, title, annot, font, legend, caption, tick, axis, note, header, bold, italic, underlin, misalign, misplac 
+
+“x/y-axis”; “axis label/tick/title”; “missing/wrong label”; “font size/weight/style” Style gradient, shadow, blur, smooth, texture, flat, solid, dashed, dotted, stroke, opaci, transparent, fill, outlin, border, grid, background, blend 
+
+“flat color/fill”; “solid/dashed/dotted line”; “line weight/thickness”; “stroke width” Comparison incorrect, inaccurat, erroneous, mismatch, discrepancy, differ, wrong, misrepresent 
+
+“instead of”; “rather than”; “should be”; “doesn’t match”; “compared to the original” Numeric approximat, exactl, precisel, percent, proportion digits with units (%, px, pt, degrees); coordinate notation ( x=3.2 ,
+
+y≈1); “about/around/exactly N”Positive Ack. correct, accurat, almost, nearly, well “close/similar enough”; “otherwise correct/good”; “other than that”; “now correct” 2 3 4 5 6 7 8 9 10                         
+
+> Correction turn
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Fraction of instances
+> Qwen3-VL-30B
+> gemini-3.1
+> 2345678910
+> Correction turn
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Fraction of instances
+> Qwen3-VL-30B
+> gpt-image-1.5
+> 2345678910
+> Correction turn
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Fraction of instances
+> gpt-5.2
+> gemini-3.1
+> 2345678910
+> Correction turn
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Fraction of instances
+> gpt-5.2
+> gpt-image-1.5
+
+Correction Language Category Usage per Turn 
+
+> Category
+> Position
+> Add/Remove
+> Color
+> Size/Scale
+> Style
+> Label/Text
+> Shape
+> Comparison
+> Numeric
+> Positive Ack.
+
+Figure 13: Correction language category usage per turn for each model pair. GPT -5.2 pairs (bottom row) sustain consistent multi-category coverage; Q WEN 3-VL-30B pairs (top row) show higher variance and sparse later-turn coverage. 0 200 400 600 800 
+
+right 
+
+left 
+
+top 
+
+move 
+
+lower 
+
+bottom 
+
+edge 
+
+vertical 
+
+above 
+
+shift 
+
+Position 
+
+0 200 400 600 800 1000 
+
+remove 
+
+remove the 
+
+add 
+
+extra 
+
+missing 
+
+replace 
+
+add a 
+
+include 
+
+add the 
+
+drop 
+
+Add/Remove 
+
+0 100 200 300 400 500 
+
+reduce 
+
+gray 
+
+purple 
+
+blue 
+
+teal 
+
+green 
+
+orange 
+
+white 
+
+black 
+
+red 
+
+Color 
+
+0 100 200 300 400 500 
+
+reduce 
+
+small 
+
+smaller 
+
+increase 
+
+large 
+
+thin 
+
+thinner 
+
+larger 
+
+shrink 
+
+extend 
+
+Size/Scale 
+
+0 100 200 300 400 
+
+background 
+
+flat 
+
+solid 
+
+dashed 
+
+gradient 
+
+shading 
+
+fills 
+
+gridlines 
+
+flat solid 
+
+texture 
+
+Style 
+
+0 100 200 300 400 500 600 
+
+labels 
+
+axis 
+
+label 
+
+tick 
+
+y-axis 
+
+x-axis 
+
+ticks 
+
+legend 
+
+title 
+
+labeled 
+
+Label/Text 
+
+0 25 50 75 100 125 150 175 200 
+
+curve 
+
+angle 
+
+square 
+
+triangle 
+
+arc 
+
+wedge 
+
+right-angle 
+
+sector 
+
+straight 
+
+vertex 
+
+Shape 
+
+0 100 200 300 400 500 600 
+
+should be 
+
+to match the original 
+
+must be 
+
+instead of 
+
+incorrect 
+
+rather than 
+
+as in the original 
+
+incorrectly 
+
+wrong 
+
+different 
+
+Comparison 
+
+0 25 50 75 100 125 150 175 200 
+
+exactly 
+
+x=0 
+
+y=0 
+
+0
+
+1
+
+x 0
+
+1.5 
+
+2
+
+x 1
+
+4
+
+Numeric 
+
+0 50 100 150 200 
+
+correct 
+
+correctly 
+
+nearly 
+
+almost 
+
+well 
+
+accurate 
+
+correction 
+
+corrected 
+
+similar enough 
+
+corrections 
+
+Positive Ack. 
+
+Top 10 Keywords per Correction Language Category 
+
+Qwen3-VL-30B / gemini-3.1 Qwen3-VL-30B / gpt-image-1.5 gpt-5.2 / gemini-3.1 gpt-5.2 / gpt-image-1.5 Figure 14: Top-10 matched keyword tokens per correction language category by model pair. GPT-5.2 pairings dominate N UMERIC , L ABEL /T EXT , and P OSITIVE ACK .; Qwen3-VL-30B pairings lead in C OLOR and S HAPE and are absent from N UMERIC and P OSITIVE ACK .Qwen3-VL-30B 
+
+gemini-3.1 
+
+Qwen3-VL-30B 
+
+gpt-image-1.5 
+
+gpt-5.2 
+
+gemini-3.1 
+
+gpt-5.2 
+
+gpt-image-1.5 
+
+0.6 
+
+0.4 
+
+0.2 
+
+0.0 
+
+0.2 
+
+0.4 
+
+> Mean Score  (final  turn 0)  +0.20
+> -0.52
+> +0.32
+> -0.21
+> +0.22
+> -0.30
+> +0.25
+> -0.40
+> +0.31
+> -0.09
+> +0.30
+> -0.07
+
+Iterative Payoff: Turn-0 Final Score Delta per Model Pair 
+
+Judge 
+
+GPT 
+
+Claude 
+
+Qwen3 Figure 15: Task-1: Mean iterative payoff ∆Q =
+
+score IT − score I1 per model pair and judge (error bars: SEM). The dashed line marks the no-improvement base-line. Qwen3-VL-30B 
+
+gemini-3.1 
+
+(n=55) 
+
+Qwen3-VL-30B 
+
+gpt-image-1.5 
+
+(n=33) 
+
+gpt-5.2 
+
+gemini-3.1 
+
+(n=113) 
+
+gpt-5.2 
+
+gpt-image-1.5 
+
+(n=133)  
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> % final-turn image preferred
+> 58%
+> 33%
+> 82%
+> 49%
+> 58%
+> 42%
+> 62%
+> 46%
+> 47%
+> 39%
+> 63%
+> 46% 45% 45%
+> 73%
+> 61%
+
+Triplet Preference by Model Pair 
+
+> Judge
+> Chance (50 %)
+> GPT
+> Claude
+> Qwen
+> LipSim
+
+Figure 16: Task-2: Percentage of multi-turn episodes where the final-turn image is preferred over the first-turn image, by model pair and judge. The red dashed line marks the 50% chance baseline. GPT Claude Qwen3 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10  
+
+> Mean Final-Turn Similarity Score (1 10)
+> 5.56
+> 5.07 5.11
+> 6.63
+> 6.23
+> 6.85
+> 7.09
+> 6.69
+> 7.54
+
+Effect of Token Budget on Final-Turn Score 
+
+Token budget 
+
+10 tok 
+
+50 tok 
+
+200 tok 
+
+Figure 17: Mean final-turn similarity score for GPT -5.2 + GPT -IMAGE -1.5 at three token budgets, by judge (error bars: SEM). Absolute quality increases monoton-ically with budget. GPT Claude Qwen LipSim    
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> % Final-Turn Image Preferred over Turn-0  93%
+> 81%
+> 74%
+> 60%
+> 76%
+> 64% 63%
+> 47% 49% 46% 46%
+> 61%
+
+Triplet Preference Rate by Token Budget 
+
+> Token budget
+> Chance (50%)
+> 10 tok
+> 50 tok
+> 200 tok
+
+Figure 18: Triplet preference rate for GPT -5.2 + GPT -
+
+IMAGE -1.5 at three token budgets, by judge and Lip-Sim. Preference for the final-turn image decreases with budget; all conditions remain above the 50% chance baseline (dashed line). 0 1 2 3 4 5 6 7 8 9
+
+Turn 
+
+Bar Graph 
+
+easy 
+
+Bar Graph 
+
+hard 
+
+Functions 
+
+easy 
+
+Functions 
+
+hard 
+
+Geometry 
+
+easy 
+
+Geometry 
+
+hard 
+
+Line Graph 
+
+easy 
+
+Line Graph 
+
+hard 
+
+Pie Graph 
+
+easy 
+
+Pie Graph 
+
+hard 
+
+Simple Shapes 
+
+easy 
+
+Simple Shapes 
+
+hard 
+
+Visual Genome 
+
+easy 
+
+Visual Genome 
+
+hard 
+
+Qwen3-VL-30B 
+
+gemini-3.1 
+
+0 1 2 3 4 5 6 7 8 9
+
+Turn 
+
+Qwen3-VL-30B 
+
+gpt-image-1.5 
+
+0 1 2 3 4 5 6 7 8 9
+
+Turn 
+
+gpt-5.2 
+
+gemini-3.1 
+
+0 1 2 3 4 5 6 7 8 9
+
+Turn 
+
+gpt-5.2 
+
+gpt-image-1.5 
+
+0 2 4 6 8 10 
+
+Similarity Score Figure 19: Score trajectory heatmap: mean similarity score per turn, image category, and describer–generator pair. Rows are categories; columns are turns; colour encodes mean similarity. The turn scores are assigned by GPT-5.2. TEMPLATE C.0.1 
+
+Let’s play a game. I will feed you an image and you will produce the most accurate description possible. The description should capture every detail and be extremely precise. Your description must be at most 200 tokens long. The output should consist of an initial tag <DESCRIPTION> followed by the description. Reply just with the two tags and their related content.  
+
+> TEMPLATE
+
+C.0.2 
+
+You will now receive an image that was generated using your initial description. The goal is to generate an image as similar as possible to the original one. If you deem that the generated image is close enough to the original one, reply with "<DONE>". If not, you will reply with the changes needed to correct the image. The updated description should ONLY contain the changes/edits that have to be made to the previous image to make it look like the original image. Do NOT provide the full description again. Your description must be at most 200 tokens long. The output should consist of an initial tag <DESCRIPTION> ,followed by the changes or just a tag word <DONE> if you deem that the images are similar enough. Reply just with the two tags and the content related. Then these steps will repeat until you find the generated image similar enough to the original image. <GENERATED_IMAGE> 
+
+Figure 20: Prompt templates for Describer player. The first template is for the initial turn and the next template is for consecutive turns.  
+
+> TEMPLATE
+
+C.0.3 
+
+<DESCRIPTION WHAT TO GENERATE>  
+
+> TEMPLATE
+
+C.0.4 
+
+<DESCRIPTION WHAT TO GENERATE> <PREVIOUS_GENERATED_IMAGE> 
+
+Figure 21: Prompt templates for Generator player. The first template is for the initial turn and the next template is for consecutive turns. TEMPLATE C.0.5 
+
+Generate a description for a simple geometry diagram. Requirements: 
+
+• The diagram should be completely different from the ones generated early,vary the graphical settings and colours as well. 
+
+• The diagram described should be similar to ones found in geometry book 
+
+• The diagram should be simple and easily understandable STRICT OUTPUT FORMAT REQUIREMENT (MANDATORY): Output ONLY: <DESCRIPTION> (technical construction details only) </DESCRIPTION> <SUMMARY> (exactly two lines describing the resulting diagram) </SUMMARY>  
+
+> TEMPLATE
+
+C.0.6 
+
+When provided with an image description, generate the Python code required to visualize the image. Requirements: 
+
+• Output should consist only of the required code, placed between two <CODE> tags. 
+
+• Do not display the plot using plt.show(); 
+
+• Do not include any title or legend in the picture. 
+
+• !IMPORTANT! All figures should fit entirely in the image, adjust sizes if necessary 
+
+• !IMPORTANT! THE CODE MUST CONSISTS OF A FUNCTION NAMED "GENERATE" THAT RETURNS THE PLOT OBJECT WHEN CALLED AND THAT TAKES NO INPUT 
+
+• !IMPORTANT! code will be run using the exec command so make sure to include all required imports 
+
+• !IMPORTANT! DO NOT use ax or subplots 
+
+• !IMPORTANT: THE CODE MUST BE BETWEEN TWO <CODE TAGS> as in the following example <CODE> (code goes here) </CODE> 
+
+Figure 22: Prompts used to generate synthetic data for the experiment using GPT-5.2. The first prompt produces the diagrams descriptions (here is shown an example for the easy geometry experiment), the second one produces the code to generate images with Matplotlib. The first prompt was sent to the LLM alongside with all the previously generated images summaries.
