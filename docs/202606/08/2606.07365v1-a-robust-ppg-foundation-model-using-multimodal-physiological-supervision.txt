@@ -1,0 +1,575 @@
+Title: A robust PPG foundation model using multimodal physiological supervision
+
+URL Source: https://arxiv.org/pdf/2606.07365v1
+
+Published Time: Mon, 08 Jun 2026 01:13:28 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# A robust PPG foundation model using multimodal physiological supervision 
+
+Eloy Geenjaar 1 2 † Vince Calhoun 1 2 Scott Daly 3 Gouthaman KV 3 Lie Lu 3 Trisha Mittal 3 Daniel P. Darcy 3
+
+# Abstract 
+
+Photoplethysmography (PPG), a non-invasive measure of changes in blood volume, is widely used in both wearable devices and clinical settings. Recent PPG foundation models either use open-source ICU datasets with pretraining paradigms that require curated data and thus complicate gen-eralization to field-like data, or use closed-source field-like PPG data. In contrast, we propose a PPG foundation model that does not require high-quality or field-like pretraining data, and instead leverages accompanying electrocardiogram and respiratory signals in ICU datasets to select con-trastive samples during pretraining. Our approach allows the model to retain and learn from noisy PPG segments, improving robustness at inference. Our model, pretrained on 3x fewer subjects than existing state-of-the-art approaches, achieves per-formance improvements on 14 out of 15 diverse downstream tasks, including field-like daily activ-ity and heart rate prediction. Our results demon-strate that multimodal supervision can integrate complementary physiological information to im-prove the robustness of PPG foundation models and enhance their generalization to consumer-grade data. 
+
+# 1. Introduction 
+
+Wearable devices are rapidly emerging as powerful tools to monitor physiological and behavioral signals in everyday life. These devices typically rely on embedded sensors that must meet strict design constraints: they must be small, low-
+
+†Work completed during an internship at Dolby Laborato-ries. Authors are ordered alphabetically by last name, except for the corresponding authors. 1Department of Electrical and Computer Engineering, Georgia Institute of Technology, Atlanta, USA 2Tri-Institutional Center for Translational Research in Neu-roimaging and Data Science (TReNDS), Georgia State Univer-sity, Georgia Institute of Technology, Emory University, Atlanta, USA 3Dolby Laboratories, San Francisco, USA. Correspondence to: Eloy Geenjaar <egeenjaar@gatech.edu >, Daniel P. Darcy 
+
+<dan.darcy@dolby.com >.
+
+Preprint. June 8, 2026. 
+
+power, cost-effective, and unobtrusive. However, these con-straints often compromise signal quality, introducing noise and variability that significantly challenge downstream tasks. Consequently, there is a critical need for robust models that can learn effective representations from noisy signals while maintaining high accuracy and generalizability across di-verse conditions. Among the various biosignals used in wearables, photoplethysmography (PPG) has gained promi-nence due to its simplicity, low energy consumption, and compatibility with optically-based sensing hardware. PPG measures changes in blood volume in peripheral tissue, al-lowing the estimation of vital signs such as heart rate and blood pressure (Elgendi et al., 2019). Unlike electrocardio-graphy (ECG), PPG is more prone to motion artifacts and signal noise (Fine et al., 2021). Nevertheless, PPG’s ability to reflect vascular dynamics makes it a promising candidate for foundation models that aim to generalize across multiple tasks and conditions. The advent of PaPaGei (Pillai et al., 2024), the first open-source PPG foundation model, highlights the growing inter-est in building general-purpose representations from wear-able biosignals. PaPaGei demonstrates substantial perfor-mance gains over engineered features across multiple down-stream tasks, including hypertension classification, blood pressure estimation, and heart rate prediction. These results suggest that foundation models can capture rich, transferable representations of PPG signals. However, PaPaGei depends on extensive preprocessing to extract clean morphological features for pretraining, and other existing approaches often rely on proprietary datasets (Abbaspourazad et al., 2023; Saha et al., 2025), limiting reproducibility and/or scalability. In this work, we investigate whether the reliance on curated and denoised PPG signals can be relaxed by leveraging co-recorded multimodal signals from large-scale intensive care unit (ICU) datasets. Specifically, we propose a novel PPG foundation model that uses co-recorded high-quality signals (electrocardiogram (ECG) and respiratory (RESP) data) to select contrastive PPG samples during pretraining. This allows us to learn from relatively noisy clinical PPG data, without requiring explicit denoising, preprocessing, or mor-phological feature extraction. Importantly, our model only requires PPG signals at inference, with multimodal data used exclusively during pretraining to enhance representa-tion learning, as shown in Figure 1. Our key contributions 1  
+
+> arXiv:2606.07365v1 [cs.LG] 5 Jun 2026 A Robust PPG Foundation Model using multimodal physiological supervision
+> Figure 1. Multimodal contrastive supervision framework. (Left) The electrocardiogram (ECG) and respiratory (RESP) data co-recorded with PPG is segmented into 10s windows. Five metrics are extracted from the ECG and RESP segments that summarize those windows in a 5-dimensional vector. (Middle) The metrics are used to generate contrastive samples during pretraining. (Right) The unimodal PPG embeddings are evaluated using various tasks for unseen datasets.
+
+are as follows: • We propose a multimodal-guided pretraining frame-work for PPG foundation models that leverages co-recorded physiological signals (ECG and RESP) as supervisory signals during pretraining, while requiring only PPG at inference time. This increases robustness to consumer-level noise without increasing deployment or sensing complexity. • We introduce within-subject linear probing as a comple-mentary evaluation protocol for PPG foundation mod-els, enabling fine-grained, subject-specific assessment of learned representations and revealing generalization properties beyond standard cross-subject evaluation. • Extensive experiments across 15 downstream tasks show that our PPG foundation model outperforms five strong baselines on 14 out of 15 tasks, despite be-ing pretrained on a single dataset with a substantially smaller subject pool. These results demonstrate the effectiveness, efficiency, and robustness of multimodal-guided pretraining, particularly for field-like deploy-ment scenarios. 
+
+Conflict of Interest Disclosure The authors SD, GKV, LL, TM, and DD are employed by Dolby Laboratories, which leads the development of the model proposed in this paper, which was among the ones evaluated in this paper. 
+
+# 2. Related work 
+
+Foundation models have demonstrated strong generalization across a wide range of domains, driven by large-scale pre-training and self-supervised learning (Bommasani, 2021). These models are often trained using self-supervised learn-ing techniques that involve generating masked or incomplete data (Devlin et al., 2019). Generative and/or predictive pre-training has been replicated with success in other fields as well, including computer vision (He et al., 2022), pretrain-ing for timeseries (Nie et al., 2022), and biosignals (Kostas et al., 2021; Chen et al., 2021; Chien et al., 2022; Dong et al., 2023; Liu et al., 2023; Yun et al., 2024; Zhang et al., 2024; Geenjaar & Lu, 2025). An important downside to these methods is that they can be sensitive to noise. In prac-tice, biosignals like PPG are far noisier than image or text data, and can be highly subject-dependent, influenced by factors such as skin tone and body composition (Bent et al., 2020). Generative approaches may thus fail to capture good embeddings for high-noise segments. Predictive approaches like JEPA (LeCun, 2022) aim to mitigate this by learning abstract representations without full reconstruction. Still, they remain sensitive to slow-varying or predictive noise patterns (Sobal et al., 2022). This slow and/or predictive noise may be induced by movement in PPG data. JEPA ap-proaches may thus still struggle to learn good embeddings from noisy PPG data. Other, nongenerative or predictive self-supervised approaches have also been proposed for PPG data, including motif matching (Xu et al., 2023; 2024; Saha et al., 2025), morphology-based contrastive learning (Pillai et al., 2024), and temporal- or participant-based contrastive learning (Tonekaboni et al., 2021; Abbaspourazad et al., 2023). Although these approaches do not rely on generation and/or prediction during pretraining, they may still be sensi-tive to noise. For instance, PaPaGei relies on morphological features that are difficult to extract accurately from noisy segments, which can result in poor supervision or the exclu-sion of data. Moreover, similar to JEPA approaches, time-or participant-based contrastive learning that uses two noisy positive pairs may learn to focus on slow-frequency features, 2A Robust PPG Foundation Model using multimodal physiological supervision 
+
+as opposed to potentially important medium-frequency sig-nals like systolic peaks in the PPG signal. Unimodal self-supervised supervision is only one subset of foundation models for general representation learning (Li et al., 2024). Other subsets include label supervision, multi-modal supervision, and multimodal fusion models (Li et al., 2024). Given that labels vary significantly between PPG datasets, and future inference may be restricted by training a PPG foundation model using a specific set of classes, it is not practical to use label supervision for PPG foundation models. Moreover, although multimodal biosignal founda-tion models can be made robust to modality dropout (Liu et al., 2023; Fang et al., 2024), it is preferable to train a PPG foundation model that only requires PPG as an input to make it as general for wearable use as possible. Specifically, a model that can be trained using multimodal inputs but deployed using a single modality allows it to operate on a wider range of wearable devices that may not support all pre-training modalities. Multimodal pretraining is particularly relevant because large-scale open-source PPG pretraining datasets are often derived from clinical studies, where mul-tiple physiological modalities are routinely recorded from patients as part of standard monitoring. To leverage the availability of such data, we therefore focus on multimodal supervision as a method to train a PPG foundation model. Multimodal supervision models in computer vision include CLIP (Radford et al., 2021; Jia et al., 2021), while in biosig-nals related approaches include multimodal contrastive pre-training (Raghu et al., 2022), BioFAME (Liu et al., 2023), SleepFM (Thapa et al., 2024), cross-modal masked auto-encoding (Fang et al., 2024), and CiTrus (Geenjaar & Lu, 2025). These works commonly incorporate signals that are not available in most wearable devices, such as ECG, EOG, or EEG. For PPG specifically, foundation models using multimodal supervision include SensorLM (Zhang et al., 2025), as well as approaches that jointly leverage PPG and accelerometer data (Abbaspourazad et al., 2024). Both mod-els are trained on closed-source datasets. In contrast, our approach uses open-source ICU data and relies only on PPG at inference time. We leverage biosignals co-recorded with PPG to construct a physiologically grounded supervision signal during pretraining, enabling robust representation learning from noisy clinical PPG data while maintaining scalability and reproducibility. This allows the community to build, evaluate, and extend upon our method by training on the same set of data. In fact, we share a list of the exact data files we use for our pretraining dataset can be found in the Supplementary Materials. 
+
+# 3. Methods 
+
+Let D = {(PPG , ECG , RESP )n,s }n=1 ...N,s =1 ...S denote the multimodal biosignal dataset, where N is the number of subjects and S is the number of sessions per subject. Each tuple (PPG , ECG , RESP )n,s contains time-aligned signals from each modality of equal length. The con-tinuous signals are segmented into non-overlapping 10-second windows following PaPaGei (Pillai et al., 2024), 
+
+wn,s t = ( PPG , ECG , RESP )n,s t:( t+10 s). The PPG segment 
+
+xn,s t = wn,s t, PPG is used as the model input, while the corre-sponding ECG and RESP segments are utilized to compute physiological metrics that guide contrastive supervision. 
+
+3.1. A Physiological Metric Space for Contrastive Supervision 
+
+To ensure our PPG foundation model is robust to naturally occurring noise, such noise must be well-represented in its pretraining dataset. Previous work relied on morphological features directly extracted from PPG segments to define con-trastive targets (Pillai et al., 2024). Noisy segments, which are important to include in the pretraining dataset (Saha et al., 2025), consequently either need to be discarded or lead to inaccurate contrastive targets during pretraining. By contrast, ECG and RESP signals are typically less noisy and provide unique and physiologically relevant information. To ensure that noise sources like motion artifacts, which often co-occur in all modalities, do not affect contrastive target selection, we filter the ECG and RESP signals. However, filtering the raw ECG or RESP signal is challenging because it is unclear how noisy ECG or RESP segments should be imputed or interpolated. To ensure that co-occurring noise does not affect the multimodal supervision signal, we ex-tract heart rate, heart-rate variability, and respiratory metrics. This allows us to use the known physiological ranges of the metrics, like heart rate, to filter out any noise, and improve contrastive target selection. The metrics are computed for each 10-second segment to reflect the underlying cardio-respiratory state of the subject. 
+
+ECG-derived metrics. We extract two cardiovascular tar-gets from each 10s ECG waveform: heart rate ( HR ) and the root mean square of successive differences ( RMSSD ). These are metrics that have relatively good repeatability for short segments (Schroeder et al., 2004; Nussinovitch et al., 2011; Shaffer & Ginsberg, 2017). Both provide a measure of heart rate variability (HRV), whereas resting HR is an indicator of all-around fitness and even cardiovascular dis-ease (Fox et al., 2007), RMSSD is sensitive to autonomic function and stress (Kim et al., 2018). Especially because we are able to filter the derived metrics before using them as contrastive targets, they are less sensitive to peripheral noise than PPG and serve as a physiological target for cardiac dynamics. 
+
+RESP-derived metrics. We compute three respiratory fea-tures from each 10s RESP waveform: respiratory rate ( RR ), respiratory amplitude ( RA ), and respiratory volume per time 3A Robust PPG Foundation Model using multimodal physiological supervision 
+
+(RVT ). These metrics reflect different aspects of breathing behavior, such as rhythm and tidal volume, and can indi-cate stress or enhanced attention (Widjaja et al., 2013), or disorders (Brinkman et al., 2026). By precomputing and filtering these metrics to ensure phys-iological plausibility and reduce noise-induced artifacts, we obtain a stable multidimensional metric space. Contrastive relationships are then defined on the basis of similarity in this space rather than using potentially noisy PPG morphol-ogy. This design enables the model to learn representations that are better aligned with meaningful physiological varia-tion, and more robust to naturally occurring PPG noise. 
+
+Pretraining setup and learning objective. Given a batch of B PPG segments, two augmented views are generated for each segment, yielding 2B inputs. These are encoded using a shared convolutional neural network fθ (·), pro-ducing embeddings {vi ∈ R512 }i=1 ... 2B. Each embed-ding vi is associated with a physiological metric vector 
+
+yi. For each anchor embedding vi, the other embeddings 
+
+vj (j̸ = i) are ranked according to the distance between their physiological targets d(yi, yj ) in the metric space. Embeddings corresponding to more physiologically simi-lar segments are ranked higher. Formally, define the set 
+
+Si,j = {vk | k̸ = i, d (yi, yk) ≥ d(yi, yj )}, which con-tains all embeddings that are further away than vj is from 
+
+vi. Then, we employ the rank-n-contrast (RNC) loss (Zha et al., 2023), which encourages embeddings that are closer in the physiological metric space to be closer in the learned representation space as well: 
+
+LRNC = 12B(2 B − 1) 
+
+> 2B
+
+X
+
+> i=1 2B
+
+X 
+
+> j=1
+> j̸=i
+
+ℓ(vi, vj ),ℓ(vi, vj ) = − log exp(sim( vi, vj )/τ )
+
+P  
+
+> vk∈S i,j
+
+exp(sim( vi, vk)/τ ) .
+
+(1) where sim (·, ·) denotes cosine similarity and τ is a temper-ature hyperparameter. This loss anchors the learned PPG embeddings to the robust physiological metric space derived from multimodal signals, improving noise robustness and encouraging physiologically meaningful representations. 
+
+Unimodal inference. Although we use co-recorded biosig-nals in PPG model pretraining, we would like to emphasize that our model only uses PPG during inference, making it applicable for a wide range of consumer-level applications. 
+
+# 4. Experimental Setup 
+
+Datasets. For pretraining, we use the MIMIC-III Wave-form Database Matched Subset (Goldberger et al., 2000; 
+
+Table 1. Downstream dataset information . More information is provided in Appendix B. # P is the number of participants, # S is the number of total samples, HR is heart rate, and IR is infrared.                                                            
+
+> Datasets Task Task type # P # S WESAD Stress Clf (2) 15 4125 (Schmidt et al., 2018) Affect Clf (4) 15 4125 PPG-DaLiA Daily activities Clf (9) 15 12865 (Reiss et al., 2019) HR Reg 15 64697 EEVR Valence Clf (2) 37 10508 (Singh et al., 2024) Arousal Clf (2) 37 10508 PPG-BP Hypertension Clf (2) 219 657 Average HR Reg 219 657 (Liang et al., 2018) Systolic BP Reg 219 657 Diastolic BP Reg 219 657 VitalVideos Systolic BP Reg 100 300 (Toye, 2023) Diastolic BP Reg 100 300 WildPPG HR (green) Reg 64 304708 (Meier et al., 2024) HR (IR) Reg 64 304708 HR (red) Reg 64 304708
+
+Johnson et al., 2016; Moody et al., 2020) 1, which contains waveform data from 10,282 ICU patients. We selected this dataset among the three used by PaPaGei because its sub-jects are neither asleep nor under anesthesia, unlike the other two datasets. This allows patients to move their arms nat-urally, introducing realistic movement artifacts and noise that improve the robustness of our model. The dataset in-cludes multiple time-aligned biosignals sampled at 125Hz. The pretraining data preprocessing pipeline, detailed in Ap-pendix A, filters the data to retain 4,998 subjects, yielding approximately 20 million 10-second PPG segments (about 56,000 hours of data). We evaluate our model on unseen datasets and tasks, an overview of these datasets is given in Table 1. In our selection of downstream datasets we fo-cus on wearable-level data to verify the robustness of our model to noise in the PPG signal. Specifically, PPG-BP and VitalVideos are similar to clinical-level PPG data, WESAD and EEVR are lab environment datasets, and DaLiA and WildPPG are field-like datasets, which exhibit the highest noise levels. 
+
+Backbone & pretraining. We use a 1D ResNet-26 convolu-tional encoder 2 fθ (·) with instance normalization applied to the input. The network comprises 12 residual blocks, each using a kernel size of 11 and stride 2. The initial convolu-tion outputs 128 filters, doubling every four layers. Spatial resolution is downsampled by a factor of 2 every two layers via max-pooling. Each unfiltered 10-second PPG window 
+
+xn,t is passed through the network to produce embeddings used in our contrastive learning objective (Eq. 1). For data augmentation, two random transformations are applied to each input window, selected from: GaussianNoise (p = 0.25), Negation (p = 0.20), Scaling (p = 0.40), and 
+
+RandomCrop (p = 0.50). These augmentations follow the 
+
+> 1
+
+https://physionet.org/content/ mimic3wdb-matched/1.0/ 
+
+> 2
+
+https://github.com/hsd1503/resnet1d 
+
+4A Robust PPG Foundation Model using multimodal physiological supervision 
+
+same strategy as PaPaGei (Pillai et al., 2024). Additional hyperparameter details are provided in Appendix C. 
+
+Evaluation across subjects. We evaluate our foundation model on 15 downstream tasks from six unseen datasets, encompassing both classification and regression problems. Classification tasks include stress, affect, arousal, valence, activity, and hypertension detection, while regression tasks cover heart rate prediction in field, daily activity, and clini-cal settings, as well as diastolic and systolic blood pressure estimation. Table 1 provides a detailed list of datasets and tasks, with more information in Appendix B. Following Pa-PaGei (Pillai et al., 2024), we assess representation quality and generalizability using linear probing. Linear probing measures linear predictability from inferred embeddings while keeping the backbone weights frozen. For classifica-tion tasks, we use logistic regression, and for regression we use ridge regression. Hyperparameters for both models are tuned via 5-fold cross-validation on the training and valida-tion splits, and are discussed in Appendix C. Both probes are implemented using scikit-learn (Pedregosa et al., 2011). Final results are averaged over five test folds. Model selection uses macro F1 score for classification and mean ab-solute error (MAE) for regression. Additionally, we report accuracy (ACC) and area under the receiver operating char-acteristic curve (AUC) for classification, as well as mean squared error (MSE) and mean absolute percentage error (MAPE) for regression. 
+
+Evaluation within subjects. To better assess performance in realistic deployment settings, we introduce a within-subject linear probing protocol. Wearable devices are typ-ically used by individual users, and labeled data can often be obtained over time via user interaction or automatic an-notation. Because physiological patterns vary substantially across individuals, evaluating linear probe performance sep-arately per subject provides insight into generalization un-der subject-specific distributions. We use the same linear probe architecture, hyperparameter tuning strategy, and met-rics as in across-subject evaluation. However, each fold corresponds to a single user rather than a subset of sub-jects. Training, validation, and test splits are constructed from the temporally varying targets of that user, and results are averaged over five randomly selected users (details in Appendix C). Only datasets with temporally varying per-subject targets are included (e.g., affect detection and heart rate), while datasets with static labels, such as PPG-BP, are excluded, yielding nine tasks from the WESAD, DaLiA, EEVR, and WildPPG datasets. 
+
+Baselines. We compare our model against PaPaGei-S, PaPaGei-P (Pillai et al., 2024), SimCLR, BYOL, and PulsePPG (Saha et al., 2025). When available, we use the official open-source weights for each model. Com-parisons with PaPaGei-S, PaPaGei-P, and PulsePPG are presented in the main text, while across-subject results for BYOL and SimCLR are reported in Appendix E. For Sim-CLR and BYOL, we use the same backbone architecture, model size, and pre-training data as our proposed model to ensure a controlled and fair comparison. In addition to domain-specific foundation models like PaPaGei and PulsePPG, we also compare our model against Chronos and MOMENT, which are general-purpose timeseries founda-tion models. For Chronos, we use the Chronos-T5-base (200M) backbone (Ansari et al., 2024), and for MOMENT we use MOMENT-1-Large (385M) (Goswami et al., 2024). In both cases, we use the publicly available checkpoints, and evaluate the model embeddings on our downstream evaluation data splits. The results for these general-purpose foundation models are reported in Appendix L. 
+
+# 5. Results 
+
+Our model outperforms all baselines on nearly all ( 14 out of 15 ) downstream tasks in across-subject and (9 out of 9) within-subject linear probing evaluations, as shown in Figure 2. Notably, these gains are achieved despite us-ing 3x fewer pretraining subjects than PaPaGei, and with-out requiring field-like pretraining data as in prior work, PulsePPG (Saha et al., 2025). This demonstrates the effi-ciency and robustness of our approach. Detailed numerical results for the across-subject evaluation are provided in Ta-ble 2, while within-subject results are summarized in Table 3. These results highlight the effectiveness and versatility of our model across diverse PPG analysis scenarios. 
+
+Evaluation across subjects. Our model achieves consis-tent and substantial improvements over the PaPaGei and PulsePPG models. Notable classification gains include stress ( 0.83 vs. 0.81 ), affect detection ( 0.52 vs. 0.46 ), and hypertension classification ( 0.71 vs. 0.69 ) reflecting stronger generalization across user states, and generalization to lab and clinical data. Regression tasks also show large improve-ments both under field-like (DaLiA: 7.78 vs. 10.5 , WildPPG (Green): 7.61 vs. 9.68 ) and clinical conditions (Sys-BP: 
+
+13.2 vs. 14.0 ). The only tasks our model underperforms PulsePPG at is systolic blood pressure regression for the Vi-talVideos dataset ( 15.9 vs. 15.7 ). This may be due to subtle differences in the pretraining data. However, our model per-forms better in terms of diastolic blood pressure regression for the same dataset ( 8.04 vs. 8.12 ). Our results replicate the general improvement of PaPaGei-S over PaPaGei-P, and the improvement of the PulsePPG model especially on field-like datasets as reported in the PaPaGei (Pillai et al., 2024) and PulsePPG papers (Saha et al., 2025). Minor differences in our paper’s absolute numbers stem from our use of K-fold cross-validation, which better captures subject variability compared to single-split setups (Geenjaar & Lu, 2025). 
+
+Evaluation within subjects. Similar to the across subjects 5A Robust PPG Foundation Model using multimodal physiological supervision HR (Dalia) 
+
+> Dia-BP
+> Avg-HR
+> Sys-BP
+> Sys-BP (VV)
+> Dia-BP (VV)
+> HR-Green
+> HR-Infrared
+> HR-Red
+
+Classification 
+
+Macro F-1 Score 
+
+(larger area is better) 
+
+Regression 
+
+Mean Average Error 
+
+(smaller area is better) 
+
+> Out-of-subject
+> generalization
+> Out-of-subject
+> generalization
+> Within-subject
+> generalization
+> Within-subject
+> generalization
+> Affect
+> Stress
+> Hypertension
+> Valence (VR)
+> Valence (VR)
+> Arousal (VR)
+> Arousal (VR)
+> Activities
+> HR (Dalia)
+> HR-Green
+> HR-Red
+> HR-Infrared
+> Affect
+> Stress
+> Activities
+> PaPaGei-P
+> PaPaGei-S
+> PulsePPG
+> Ours
+
+Figure 2. Comparison with state-of-the-art . (Left) Classification results in terms of their macro F-1 score ( larger area is better ). (Right) Regression results in terms of their mean average error ( smaller area is better ). We evaluate across subject linear probing, and within subject linear probing. 
+
+Table 2. Downstream across subjects linear probing results . Results for each method are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+PaPaGei-P PaPaGei-S PulsePPG Ours 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.65 0.79 0.8 0.67 0.78 0.76 0.81 0.86 0.92 0.83 0.88 0.94 Affect 0.4 0.49 0.69 0.39 0.47 0.66 0.46 0.55 0.74 0.52 0.6 0.78 Activities 0.25 0.33 0.72 0.23 0.29 0.68 0.31 0.38 0.79 0.36 0.41 0.82 Arousal 0.49 0.56 0.53 0.49 0.54 0.51 0.51 0.56 0.53 0.53 0.57 0.57 Valence 0.46 0.63 0.55 0.48 0.62 0.54 0.51 0.62 0.57 0.53 0.62 0.58 Hypertension 0.6 0.65 0.64 0.64 0.69 0.71 0.69 0.73 0.74 0.71 0.75 0.77 Avg 0.48 0.58 0.65 0.48 0.56 0.64 0.55 0.62 0.71 0.58 0.64 0.74 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 12.7 303 0.14 15.1 407 0.17 10.5 221 0.12 7.78 143 0.09 Avg-HR 4.76 40.0 0.07 4.95 43.4 0.07 4.43 34.4 0.06 3.8 26.3 0.05 Sys-BP 14.9 366 0.12 14.4 351 0.12 14.0 336 0.11 13.2 281 0.11 Dia-BP 8.73 121 0.12 8.77 122 0.12 8.68 121 0.12 8.16 109 0.12 Sys-BP (VV) 17.0 516 0.13 16.8 500 0.13 15.7 439 0.12 15.9 451 0.12 Dia-BP (VV) 8.7 143 0.11 8.22 125 0.1 8.12 119 0.1 8.04 123 0.1 HR-Green 12.2 266 0.17 12.5 273 0.17 9.68 188 0.13 7.61 149 0.1 HR-Infrared 12.6 273 0.17 12.7 277 0.17 11.6 246 0.16 9.82 206 0.14 HR-Red 12.7 279 0.17 12.7 284 0.17 12.1 261 0.17 10.8 231 0.15 Avg 11.6 256 0.13 11.8 265 0.14 10.5 218 0.12 9.45 191 0.11 
+
+results, we find that classification improvements within sub-jects are also higher for stress ( 0.9 vs. 0.83 ), affect ( 0.87 vs. 0.69 ), and daily activities classification ( 0.69 vs. 0.49 ). We find that our model outperforms every model on within-subject classification and regression tasks. Moreover, we see a large increase in performance for valence and arousal detection, which could highlight that they are highly unique to each subject. Further, Appendix J shows that even when trained with only 10% of the available data, our model con-sistently outperforms all baseline models trained with the full dataset. Moreover, Appendix J also provides visual-izations of within-subject embedding structures, offering additional insight into the quality of the learned representa-tions. 
+
+Unimodal vs multimodal pretraining ablation. To ver-ify that differences in performance are due to our use of multimodal contrastive guidance during pretraining, and not because of architectural and pretraining data differences, we pretrain PaPaGei-S based on the available code 3 on our data. We adopt the PaPaGei-S pretraining objective, as it was shown to consistently outperform PaPaGei-P across downstream tasks in the original work. As a comparison, we match PaPaGei’s backbone in our model, and use our 
+
+> 3
+
+https://github.com/Nokia-Bell-Labs/ papagei-foundation-model 
+
+6A Robust PPG Foundation Model using multimodal physiological supervision                                                                                                                                                                   
+
+> Table 3. Downstream within subjects linear probing results . Results for each method are averaged across 5test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE).
+> PaPaGei-P PaPaGei-S PulsePPG Ours
+> Clf ( ↑)MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC
+> Stress 0.76 0.83 0.76 0.75 0.81 0.77 0.83 0.86 0.92 0.9 0.92 0.96 Affect 0.69 0.73 0.83 0.61 0.66 0.83 0.6 0.67 0.87 0.87 0.89 0.96 Activities 0.45 0.51 0.82 0.39 0.44 0.75 0.49 0.52 0.87 0.69 0.69 0.94 Arousal 0.56 0.59 0.61 0.54 0.56 0.58 0.55 0.58 0.61 0.7 0.71 0.76 Valence 0.65 0.69 0.69 0.63 0.67 0.66 0.64 0.67 0.7 0.81 0.83 0.86 Avg 0.62 0.67 0.74 0.58 0.63 0.72 0.62 0.66 0.79 0.79 0.81 0.9
+> Reg ( ↓)MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE
+> HR (Dalia) 7.92 121 0.09 10.4 199 0.12 6.29 82.7 0.07 4.2 40.0 0.05 HR-Green 7.22 122 0.09 8.45 186 0.11 6.35 97.8 0.08 4.38 65.9 0.06 HR-Infrared 8.03 142 0.11 8.27 151 0.11 7.95 143 0.11 6.25 107 0.08 HR-Red 7.85 130 0.1 8.26 185 0.11 7.76 128 0.1 6.5 103 0.08 Avg 7.76 129 0.1 8.83 180 0.11 7.09 113 0.09 5.33 78.9 0.07
+
+proposed multimodal pretraining. For a fair comparison, we match the pretraining data, and all training hyperparameters between the models, differing only in the pretraining objec-tive. As detailed in Table 10 in Appendix H, our multimodal pretraining consistently and substantially outperforms uni-modal pretraining across all evaluated tasks, except diastolic blood pressure regression. These results strongly validate our core hypothesis: integrating complementary biosignal modalities during contrastive learning effectively mitigates the limitations inherent in unimodal morphology-based con-trastive targets, leading to significantly enhanced robustness, generalization, and downstream task performance. To fur-ther assess our model’s sensitivity to noise, we perform an additional analysis on the PPG-DaLiA dataset in Ap-pendix M. 
+
+Scaling ablation. The PaPaGei paper shows that increas-ing its backbone model parameters does not necessarily lead to improvements across downstream tasks. To verify that our model’s performance scales well with backbone size, we compare the PaPaGei backbone with our proposed backbone in Appendix I. The proposed larger backbone improves over the PaPaGei backbone on all but the average heart rate esti-mation, which indicates that our pretraining method likely benefits from further model size scaling. Contrastive learn-ing and projector ablations are presented in Appendices F and G. 
+
+Metric ablation. To assess the contribution of different supervisory metrics, we compare models pretrained using various combinations of auxiliary signals, including ECG-only, RESP-only, and ECG+RESP supervision. Detailed re-sults are reported in Table 4. Overall, both ECG-guided and RESP-guided pretraining yield strong performance across downstream tasks. ECG-only supervision achieves the best average performance on regression tasks, whereas com-bined ECG+RESP supervision performs best on average for classification tasks. Notably, the ECG+RESP model outperforms baseline methods on the largest number of downstream tasks (14 out of 15), and is therefore selected as the most versatile and robust configuration. Moreover, supervision from both ECG and RESP improves generaliza-tion even for downstream tasks that are not directly related to these metrics. For instance, RESP-only pretraining using our proposed framework surpasses all baselines on field-like heart-rate regression benchmarks (Dalia and WildPPG). Moreover, ECG-only pretraining surpasses all baselines on systolic blood pressure regression, demonstrating that the observed performance gains primarily arise from the pro-posed multimodal-guided pretraining methodology rather than from direct correlations between the supervisory sig-nals and downstream tasks. 
+
+Demographic analysis. It is important to ensure that neither the specific set of subjects in the pretraining dataset nor the pretraining method lead to demographic biases in the model. To check for any demographic biases, we use the systolic blood pressure regression task on the VitalVideos dataset, which records the Fitzpatrick skin tone (Gupta & Sharma, 2019), age, and sex of each subject. We use a leave-one-subject-out approach to perform linear probing, and also to select hyperparameters on the training set. The importance of skin tone in PPG analyses cannot be understated because PPG is an optical method, and skin tone can affect light wave reflectance (Fallow et al., 2013). Moreover, general device error for wearables recording heart rate has been found to be higher for darker skin tones (Gupta & Sharma, 2019). The results in Figure 3 show that some of the known biases appear in the models we tested. Specifically, performance is best for skin tone 1, and in case of skin tone 5 we see that our model performs worse than the the baseline models, but better for skin tone 6. In addition, performance for adults 7A Robust PPG Foundation Model using multimodal physiological supervision 
+
+Table 4. ECG vs RESP ablation . Results for each method are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+HR + RESP ECG RESP ECG + RESP 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.83 0.88 0.94 0.83 0.88 0.94 0.83 0.88 0.94 0.83 0.88 0.94 Affect 0.52 0.6 0.77 0.53 0.61 0.78 0.52 0.6 0.77 0.52 0.6 0.78 Activities 0.36 0.41 0.82 0.36 0.41 0.82 0.36 0.41 0.81 0.36 0.41 0.82 Arousal 0.53 0.56 0.55 0.52 0.54 0.53 0.53 0.57 0.56 0.53 0.57 0.57 Valence 0.54 0.61 0.58 0.54 0.61 0.57 0.54 0.61 0.58 0.53 0.62 0.58 Hypertension 0.71 0.74 0.76 0.7 0.73 0.76 0.7 0.73 0.75 0.71 0.75 0.77 Avg 0.58 0.63 0.74 0.58 0.63 0.73 0.58 0.63 0.74 0.58 0.64 0.74 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 8.29 153 0.09 6.9 123 0.08 8.97 170 0.1 7.78 143 0.09 Avg-HR 4.14 28.6 0.06 3.66 23.2 0.05 4.06 28.0 0.06 3.8 26.3 0.05 Sys-BP 13.3 289 0.11 13.2 289 0.11 13.4 288 0.11 13.2 281 0.11 Dia-BP 8.18 109 0.12 8.38 113 0.12 8.3 110 0.12 8.16 109 0.12 Sys-BP (VV) 15.9 454 0.12 15.9 457 0.12 15.5 438 0.12 15.9 451 0.12 Dia-BP (VV) 8.13 120 0.1 8.33 130 0.1 8.11 116 0.1 8.04 123 0.1 HR-Green 7.99 154 0.11 7.17 142 0.1 8.53 167 0.12 7.61 149 0.1 HR-Infrared 10.2 214 0.14 9.38 195 0.13 10.6 222 0.15 9.82 206 0.14 HR-Red 11.2 241 0.15 10.4 222 0.14 11.4 246 0.16 10.8 231 0.15 Avg 9.7 196 0.11 9.25 188 0.1 9.87 198 0.11 9.45 191 0.11 Fitzpatrick Skin Tone             
+
+> Systolic blood pressure regression (VitalVideos)
+> MAE
+> 116-31 32-46 47-61 62-76 77-91 Female Male 23456
+> Age Sex
+> PaPaGei-S
+> PaPaGei-P
+> PulsePPG
+> Ours
+
+Figure 3. Systolic blood pressure regression comparison across demographic variables. Green            
+
+> Wrist Ankle Head Chest Wrist Ankle Head Chest Wrist Ankle Head Chest
+> Infrared
+> Red
+> Ours PulsePPG PaPaGei-P
+> 5
+> 14
+> MAE
+
+Figure 4. WildPPG heart rate estimation comparison across PPG sensor location (x-axis) and type (y-axis). 
+
+aged 47-61 is worst and performance is lower for female subjects. These findings underscore existing challenges in equitable biosignal modeling and highlight areas for future bias mitigation. 
+
+Heart rate estimation ablation. Figure 4 characterizes heart rate estimation performance in field-like conditions across different PPG recording locations and sensor types (green, red, and infrared). We compare against PaPaGei-P instead of PaPaGei-S because it performs better on average for the WildPPG heart rate estimation tasks. Our model con-sistently achieves the best performance across all conditions, with particularly strong results for green wrist-worn PPG sensors. It is also clear from these results that all models perform best for head-based PPG sensors. An additional ab-lation experiment that compares heart rate regression perfor-mance with NeuroKit’s (Makowski et al., 2021) automatic heart rate estimation tool is presented in Appendix D. 
+
+# 6. Discussion 
+
+This paper presents a PPG foundation model with a ro-bust multimodal pretraining pipeline that utilizes multiple biosignals alongside PPG to guide contrastive foundation model pretraining. By extracting metrics from co-recorded biosignals, we leverage their known physiological bounds to filter noise and construct reliable contrastive targets. This improves robustness beyond clinical data and leads to im-proved downstream performance. Through ablation stud-ies, we show consistent gains, with our model outperform-ing all baselines on all but two of 15 downstream tasks in the across-subject setting, and on all tasks in the within-subject setting. Notably, it achieves large improvements on field-like datasets (DaLiA and WildPPG) without requir-ing field-specific pretraining data, as previously thought necessary (Saha et al., 2025). However, gains are less con-sistent for blood pressure prediction, where our model un-derperforms in one of four settings and remains close to baseline models in the other settings, which suggests that 8A Robust PPG Foundation Model using multimodal physiological supervision 
+
+hemodynamic estimation may require richer multimodal supervision. Overall, results indicate that high-quality mul-timodal supervision can serve as an effective alternative to large-scale field-specific datasets for learning robust PPG representations. A key limitation in our setup, that may help explain the lower performance on blood pressure regression, is that pretrain-ing on MIMIC-III primarily reflects ICU populations and may not generalize to ambulatory settings. Additionally, we use only a single session per subject due to computational constraints, prioritizing subject-level diversity over within-subject temporal variability. Although selecting the longest available session for each subject partially mitigates this, fu-ture work should incorporate more heterogeneous datasets, including hospital, ambulatory, and wearable recordings, and explore scaling to larger foundation models and pre-training corpora. Demographic variation is another important axis of general-ization. We analyze performance across skin tones using the Fitzpatrick scale (Figure 3), but this does not fully capture skin tone diversity or potential biases in PPG signals (Ware et al., 2020; Colvonen, 2021). While these results reveal disparities, we report them for transparency and to support responsible deployment. Addressing them likely requires more diverse demographic representation in pretraining data, improved fairness evaluation, and fine-tuning on broader datasets. Furthermore, scaling to more heterogeneous pop-ulations may also help reduce bias during representation learning. Within our multimodal framework, we use heart and respi-ratory metrics from biosignals as contrastive targets, though both the range of signals and metrics can be expanded within our framework. The current 10-second window, which matches the PaPaGei models, limits reliable HRV feature ex-traction (Schroeder et al., 2004). Extending the PPG window to 1–2 minute windows would enable richer HRV features for pretraining, and a larger context window that can help im-prove embedding quality. Additional signals such as blood pressure could further enhance supervision (Elgendi et al., 2019), especially given their availability in ICU datasets and relevance to wearable monitoring. Blood pressure re-gression is also a downstream task that our model currently performs closest to baselines on, further underlining its im-portance as a potential addition as a multimodal pretraining target. On the other hand, we find that ECG-based supervi-sion alone already yields strong performance, suggesting di-minishing returns from adding modalities in our pretraining framework. This highlights a cost–performance trade-off, as each additional biosignal increases acquisition, synchro-nization, and preprocessing complexity without guaranteed proportional gains, based on our results. Since our targets are aggregated physiological features (e.g., HR, RMSSD) rather than raw event-level annotations, the framework is also relatively robust to fine-grained preprocessing differ-ences, though different reasonable pipelines may still affect supervision quality. These preprocessing pipelines are an important direction to explore in future work. The within-subject setting we propose exhibits high vari-ance due to limited subjects and inter-subject heterogeneity, making statistical testing underpowered despite consistent improvements across tasks. This highlights the importance of evaluating in a within-subject setting, as results may vary substantially depending on the specific subject under con-sideration. Future work should therefore expand evaluation to a larger and more diverse set of subjects and increase the number of evaluation folds to increase the statistical power of the analyses. More comprehensive statistical evalua-tion would also strengthen robustness claims in this regime. Moreover, given the heterogeneity across subjects, it may be beneficial to explicitly model subject-specific character-istics via subject-adaptive methods, particularly in low-data personalization settings. Overall, this work shows that multimodal physiological su-pervision significantly improves PPG foundation models by providing physiologically grounded contrastive targets from ECG and respiratory signals. This enables more generaliz-able representations than PPG-only or morphology-based approaches, achieving strong performance across cross-domain settings without requiring field-specific datasets. The results highlight multimodal supervision as a scalable alternative to dataset scaling, while pointing to future di-rections in more diverse pretraining data, improved subject-adaptive learning, and more rigorous evaluation under dis-tribution shift and fairness constraints. 9A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# Impact statement 
+
+Non-invasive health monitoring can revolutionize the health-care system. It is important to ensure that groups of people can equally benefit from non-invasive health monitoring. To verify biases in systolic blood pressure regression, we perform a demographic analysis to understand what demo-graphics our model is biased towards. Although this is a step in the right direction, it is important to develop methods that can counteract any biases and more thoroughly verify what biases exist in health foundation models. Further expansions of bias analyses across more demographics, and for more tasks is thus important, and the development of datasets that allow foundation models to be tested exhaustively be-fore deployment is essential. The deployment of wearables for health monitoring is also accompanied by ethical and legal implications that must be addressed (Capulli et al., 2025). Finally, it is important that any health monitoring data from wearables is used in alignment with a user’s preferences . We are committed to protecting participant and/or user privacy and welfare, and to ensuring scientific validity. 
+
+# References 
+
+Abbaspourazad, S., Elachqar, O., Miller, A. C., Emrani, S., Nallasamy, U., and Shapiro, I. Large-scale training of foundation models for wearable biosignals. arXiv preprint arXiv:2312.05409 , 2023. Abbaspourazad, S., Mishra, A., Futoma, J., Miller, A. C., and Shapiro, I. Wearable accelerometer foundation mod-els for health via knowledge distillation. arXiv preprint arXiv:2412.11276 , 2024. Ansari, A. F., Stella, L., Turkmen, C., Zhang, X., Mer-cado, P., Shen, H., Shchur, O., Rangapuram, S. S., Pineda Arango, S., Kapoor, S., Zschiegner, J., Mad-dix, D. C., Mahoney, M. W., Torkkola, K., Gordon Wil-son, A., Bohlke-Schneider, M., and Wang, Y. Chronos: Learning the language of time series. Transactions on Machine Learning Research , 2024. ISSN 2835-8856. URL https://openreview.net/forum? id=gerNCVqqtR .Bent, B., Goldstein, B. A., Kibbe, W. A., and Dunn, J. P. Investigating sources of inaccuracy in wearable optical heart rate sensors. NPJ digital medicine , 3(1):18, 2020. Bommasani, R. On the opportunities and risks of foundation models. arXiv preprint arXiv:2108.07258 , 2021. Brinkman, J. E., Toro, F., and Sharma, S. Physiology, respi-ratory drive. In StatPearls [Internet] . StatPearls Publish-ing, Treasure Island, FL, 2026. URL https://www. ncbi.nlm.nih.gov/books/NBK482414/ . [Up-dated 2023 Jun 5]. Capulli, E., Druda, Y., Palmese, F., Butt, A. H., Domenicali, M., Macchiarelli, A. G., Silvani, A., Bedogni, G., and Ingravallo, F. Ethical and legal implications of health monitoring wearable devices: A scoping review. Social Science & Medicine , pp. 117685, 2025. Chen, H., Lundberg, S. M., Erion, G., Kim, J. H., and Lee, S.-I. Forecasting adverse surgical events using self-supervised transfer learning for physiological sig-nals. NPJ digital medicine , 4(1):167, 2021. Chien, H.-Y. S., Goh, H., Sandino, C. M., and Cheng, J. Y. Maeeg: Masked auto-encoder for eeg representation learning. arXiv preprint arXiv:2211.02625 , 2022. Colvonen, P. J. Response to: investigating sources of inac-curacy in wearable optical heart rate sensors. NPJ Digital Medicine , 4(1):38, 2021. Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. In Proceedings of the 2019 confer-ence of the North American chapter of the association for computational linguistics: human language technologies, volume 1 (long and short papers) , pp. 4171–4186, 2019. Dong, J., Wu, H., Zhang, H., Zhang, L., Wang, J., and Long, M. Simmtm: A simple pre-training framework for masked time-series modeling. Advances in Neural Information Processing Systems , 36:29996–30025, 2023. Elgendi, M., Fletcher, R., Liang, Y., Howard, N., Lovell, N. H., Abbott, D., Lim, K., and Ward, R. The use of photoplethysmography for assessing hypertension. NPJ digital medicine , 2(1):60, 2019. Fallow, B. A., Tarumi, T., and Tanaka, H. Influence of skin type and wavelength on light wave reflectance. Journal of clinical monitoring and computing , 27(3):313–317, 2013. Fang, C., Sandino, C., Mahasseni, B., Minxha, J., Pouransari, H., Azemi, E., Moin, A., and Zippi, E. Pro-moting cross-modal representations to improve multi-modal foundation models for physiological signals. arXiv preprint arXiv:2410.16424 , 2024. Fine, J., Branan, K. L., Rodriguez, A. J., Boonya-Ananta, T., Ajmal, Ramella-Roman, J. C., McShane, M. J., and Cote, G. L. Sources of inaccuracy in photoplethysmography for continuous cardiovascular monitoring. Biosensors , 11 (4):126, 2021. Fox, K., Borer, J. S., Camm, A. J., Danchin, N., Ferrari, R., Lopez Sendon, J. L., Steg, P. G., Tardif, J.-C., Tavazzi, L., Tendera, M., et al. Resting heart rate in cardiovascular disease. Journal of the American College of Cardiology ,50(9):823–830, 2007. 10 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+Geenjaar, E. and Lu, L. Citrus: Squeezing extra perfor-mance out of low-data bio-signal transfer learning. In 
+
+Proceedings of the AAAI Conference on Artificial Intelli-gence , volume 39, pp. 16781–16789, 2025. Goldberger, A. L., Amaral, L. A., Glass, L., Hausdorff, J. M., Ivanov, P. C., Mark, R. G., Mietus, J. E., Moody, G. B., Peng, C.-K., and Stanley, H. E. Physiobank, physiotoolkit, and physionet: components of a new research resource for complex physiologic signals. circulation , 101(23): e215–e220, 2000. Goswami, M., Szafer, K., Choudhry, A., Cai, Y., Li, S., and Dubrawski, A. Moment: A family of open time-series foundation models. In International Conference on Machine Learning , 2024. Gupta, V. and Sharma, V. K. Skin typing: Fitzpatrick grad-ing and others. Clinics in dermatology , 37(5):430–436, 2019. Harris, C. R., Millman, K. J., Van Der Walt, S. J., Gommers, R., Virtanen, P., Cournapeau, D., Wieser, E., Taylor, J., Berg, S., Smith, N. J., et al. Array programming with numpy. nature , 585(7825):357–362, 2020. He, K., Chen, X., Xie, S., Li, Y., Doll ´ar, P., and Girshick, R. Masked autoencoders are scalable vision learners. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 16000–16009, 2022. Jia, C., Yang, Y., Xia, Y., Chen, Y.-T., Parekh, Z., Pham, H., Le, Q., Sung, Y.-H., Li, Z., and Duerig, T. Scaling up visual and vision-language representation learning with noisy text supervision. In International conference on machine learning , pp. 4904–4916. PMLR, 2021. Johnson, A. E., Pollard, T. J., Shen, L., Lehman, L.-w. H., Feng, M., Ghassemi, M., Moody, B., Szolovits, P., An-thony Celi, L., and Mark, R. G. Mimic-iii, a freely ac-cessible critical care database. Scientific data , 3(1):1–9, 2016. Kim, H.-G., Cheon, E.-J., Bai, D.-S., Lee, Y. H., and Koo, B.-H. Stress and heart rate variability: a meta-analysis and review of the literature. Psychiatry investigation , 15 (3):235, 2018. Kirschbaum, C., Pirke, K.-M., and Hellhammer, D. H. The ‘trier social stress test’–a tool for investigating psychobio-logical stress responses in a laboratory setting. Neuropsy-chobiology , 28(1-2):76–81, 1993. Kostas, D., Aroca-Ouellette, S., and Rudzicz, F. Bendr: Us-ing transformers and a contrastive self-supervised learn-ing task to learn from massive amounts of eeg data. Fron-tiers in Human Neuroscience , 15:653659, 2021. LeCun, Y. A path towards autonomous machine intelli-gence, version 0.9.2. OpenReview, 2022. URL https: //openreview.net/forum?id=BZ5a1r-kVsf .Published June 27, 2022. Li, B. J., Bailenson, J. N., Pines, A., Greenleaf, W. J., and Williams, L. M. A public database of immersive vr videos with corresponding ratings of arousal, valence, and corre-lations between head movements and self report measures. 
+
+Frontiers in psychology , 8:2116, 2017. Li, C., Gan, Z., Yang, Z., Yang, J., Li, L., Wang, L., Gao, J., et al. Multimodal foundation models: From specialists to general-purpose assistants. Foundations and Trends® in Computer Graphics and Vision , 16(1-2):1–214, 2024. Liang, Y., Chen, Z., Liu, G., and Elgendi, M. A new, short-recorded photoplethysmogram dataset for blood pressure monitoring in china. Scientific data , 5(1):1–7, 2018. Liu, R., Zippi, E. L., Pouransari, H., Sandino, C., Nie, J., Goh, H., Azemi, E., and Moin, A. Frequency-aware masked autoencoders for multimodal pretraining on biosignals. arXiv preprint arXiv:2309.05927 , 2023. Makowski, D., Pham, T., Lau, Z. J., Brammer, J. C., Lespinasse, F., Pham, H., Sch ¨olzel, C., and Chen, S. H. A. NeuroKit2: A python toolbox for neuro-physiological signal processing. Behavior Research Methods , 53(4):1689–1696, feb 2021. doi: 10.3758/ s13428-020-01516-y. URL https://doi.org/10. 3758%2Fs13428-020-01516-y .McInnes, L., Healy, J., and Melville, J. Umap: Uniform manifold approximation and projection for dimension reduction. arXiv preprint arXiv:1802.03426 , 2018. Meier, M., Demirel, B. U., and Holz, C. Wildppg: A real-world ppg dataset of long continuous recordings. Ad-vances in Neural Information Processing Systems , 37: 2246–2266, 2024. Moody, B., Moody, G., Villarroel, M., Clifford, G., and Silva, I. Mimic-iii waveform database matched subset (version1. 0). physionet, 2020. Nie, Y., Nguyen, N. H., Sinthong, P., and Kalagnanam, J. A time series is worth 64 words: Long-term forecasting with transformers. arXiv preprint arXiv:2211.14730 , 2022. Nussinovitch, U., Elishkevitz, K. P., Katz, K., Nussinovitch, M., Segev, S., Volovitz, B., and Nussinovitch, N. Relia-bility of ultra-short ecg indices for heart rate variability. 
+
+Annals of Noninvasive Electrocardiology , 16(2):117–122, 2011. Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., and Chintala, S. Pytorch: An imperative 11 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+style, high-performance deep learning library. In Ad-vances in Neural Information Processing Systems , vol-ume 32, pp. 8024–8035, 2019. Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., Vanderplas, J., Passos, A., Cour-napeau, D., Brucher, M., Perrot, M., and Duchesnay, E. Scikit-learn: Machine learning in Python. Journal of Machine Learning Research , 12:2825–2830, 2011. Pillai, A., Spathis, D., Kawsar, F., and Malekzadeh, M. Pa-pagei: Open foundation models for optical physiological signals. arXiv preprint arXiv:2410.20542 , 2024. Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al. Learning transferable visual models from natural language supervision. In International conference on machine learning , pp. 8748–8763. PmLR, 2021. Raghu, A., Chandak, P., Alam, R., Guttag, J., and Stultz, C. M. Contrastive pre-training for multimodal medi-cal time series, 2022. URL https://openreview. net/forum?id=4M-D9j9gFHW .Reiss, A., Indlekofer, I., Schmidt, P., and Van Laerhoven, K. Deep ppg: Large-scale heart rate estimation with convolutional neural networks. Sensors , 19(14):3079, 2019. Russell, J. A. A circumplex model of affect. Journal of personality and social psychology , 39(6):1161, 1980. Saha, M., Xu, M. A., Mao, W., Neupane, S., Rehg, J. M., and Kumar, S. Pulse-ppg: An open-source field-trained ppg foundation model for wearable applications across lab and field settings. arXiv preprint arXiv:2502.01108 ,2025. Schmidt, P., Reiss, A., Duerichen, R., Marberger, C., and Van Laerhoven, K. Introducing wesad, a multimodal dataset for wearable stress and affect detection. In Pro-ceedings of the 20th ACM international conference on multimodal interaction , pp. 400–408, 2018. Schroeder, E. B., Whitsel, E. A., Evans, G. W., Prineas, R. J., Chambless, L. E., and Heiss, G. Repeatability of heart rate variability measures. Journal of electrocardiology ,37(3):163–172, 2004. Shaffer, F. and Ginsberg, J. P. An overview of heart rate variability metrics and norms. Frontiers in public health ,5:258, 2017. Singh, P., Budhiraja, R., Gupta, A., Goswami, A., Kumar, M., and Singh, P. Eevr: A dataset of paired physiolog-ical signals and textual descriptions for joint emotion representation learning. Advances in Neural Information Processing Systems , 37:15765–15778, 2024. Sobal, V., S V, J., Jalagam, S., Carion, N., Cho, K., and LeCun, Y. Joint embedding predictive architectures focus on slow features, 2022. URL https://arxiv.org/ abs/2211.10831 .Thapa, R., He, B., Kjaer, M. R., Moore IV, H., Ganjoo, G., Mignot, E., and Zou, J. Y. Sleepfm: Multi-modal representation learning for sleep across ecg, eeg and res-piratory signals. In AAAI 2024 Spring Symposium on Clinical Foundation Models , 2024. Tonekaboni, S., Eytan, D., and Goldenberg, A. Unsuper-vised representation learning for time series with temporal neighborhood coding. arXiv preprint arXiv:2106.00750 ,2021. Toye, P.-J. Vital videos: A dataset of face videos with ppg and blood pressure ground truths. arXiv preprint arXiv:2306.11891 , 2023. Ware, O. R., Dawson, J. E., Shinohara, M. M., and Taylor, S. C. Racial limitations of fitzpatrick skin type. Cutis ,105(2):77–80, 2020. Widjaja, D., Orini, M., Vlemincx, E., and Van Huffel, S. Cardiorespiratory dynamic response to mental stress: A multivariate time-frequency analysis. Computational and mathematical methods in medicine , 2013(1):451857, 2013. Xu, M. A., Moreno, A., Wei, H., Marlin, B. M., and Rehg, J. M. Rebar: Retrieval-based reconstruction for time-series contrastive learning. arXiv preprint arXiv:2311.00519 , 2023. Xu, M. A., Narain, J., Darnell, G., Hallgrimsson, H., Jeong, H., Forde, D., Fineman, R., Raghuram, K. J., Rehg, J. M., and Ren, S. Relcon: Relative contrastive learning for a motion foundation model for wearable data. arXiv preprint arXiv:2411.18822 , 2024. Yun, T., Cosentino, J., Behsaz, B., McCaw, Z. R., Hill, D., Luben, R., Lai, D., Bates, J., Yang, H., Schwantes-An, T.-H., et al. Unsupervised representation learning on high-dimensional clinical data improves genomic discovery and prediction. Nature Genetics , 56(8):1604–1613, 2024. Zha, K., Cao, P., Son, J., Yang, Y., and Katabi, D. Rank-n-contrast: learning continuous representations for re-gression. Advances in Neural Information Processing Systems , 36:17882–17903, 2023. Zhang, Y., Ayush, K., Qiao, S., Heydari, A. A., Narayan-swamy, G., Xu, M. A., Metwally, A. A., Xu, S., Garrison, J., Xu, X., et al. Sensorlm: Learning the language of wear-able sensors. arXiv preprint arXiv:2506.09108 , 2025. 12 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+Zhang, Z., Lu, H., Ma, S., Peng, J., Lin, C., Li, N., and Dong, B. A general framework for generative self-supervised learning in non-invasive estimation of physiological pa-rameters using photoplethysmography. Biomedical Signal Processing and Control , 98:106788, 2024. 13 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# A. ECG and RESP pre-processing 
+
+We identify sessions containing more than one hour of continuous data across all three modalities: ECG, RESP, and PPG. The ECG and RESP signals are filtered using NeuroKit (Makowski et al., 2021), and then used to detect peaks: R-peaks in ECG and respiratory peaks/troughs in RESP. Signal regions without valid peaks are trimmed, and the remaining data is segmented into non-overlapping 10-second windows. From the RESP signal, we compute RR, RA, and RVT, and average them within each window. From the ECG signal, we extract HR and RMSSD. Any NaN values (i.e. in case a heart rate under 30 was observed) were linearly interpolated. Afterwards, all metrics are filtered using a low-pass filter with a cut-off frequency of 0.001Hz (since the metrics are sampled at 0.1Hz after averaging). The PPG signal is used in its raw, unfiltered form. During pretraining we map all of the metrics within the [0, 1] range to ensure that all metrics equally contribute to the distance computation. We decide lower and upper bounds for the range based on known physiological ranges, and by computing the lower and upper 4 standard deviations away from the mean across all metrics in the pretraining dataset. We land on the following ranges, which we use to map all metrics between [0, 1]: HR [30, 210], RMSSD [10, 200], RA [8, 60], RR [0, 2], and RVT [0, 0.88]. Any values outside of this range are clipped to be within the range. Lastly, during pretraining we select one session for each subject for pretraining, the names of the session files that correspond to files in the MIMIC Database can be found in the Supplementary Materials. 
+
+# B. Downstream dataset information 
+
+WESAD The Wearable Stress and Affect Detection (WESAD) dataset (Schmidt et al., 2018) contains 15 subjects recorded in a lab setting. Although the dataset records data from a variety of physiological sensors, we only select the PPG data, which is recorded with a 64Hz sensor. In terms of PPG preprocessing we follow (Xu et al., 2023), whose preprocessing code is available on GitHub. We adapt the preprocessing code to obtain 10s non-overlapping segments, and we use PaPaGei’s 
+
+resample batch signal function to resample the segments to 125Hz to match the pretraining dataset. WESAD contains 4 classes: segments that consist of a baseline recording for each subject, segments where stress is induced using a Trier Social Stress Test (TSST) (Kirschbaum et al., 1993), segments where amusement is induced using a set of eleven funny video clips, and segments where subjects follow guided meditation. In case of our affect prediction task, we classify between each of these four classes. In case of the stress classification type, we classify between segments where stress is induced versus all other segments. 
+
+PPG-DaLiA To better understand how well heart rate can be extracted from PPG during a wide range of activities under real-life conditions, (Reiss et al., 2019) introduced the PPG-DaLiA dataset, which records PPG at 64Hz. The dataset contains data from 15 subjects that perform eight different activities: (1) Sitting still for 10 minutes (2) Ascending/descending stairs for 5 min (3) Table soccer for 5 min (4) Cycling for 8 min (5) Driving a car for 15 min (6) Having a lunch break for 30 min (7) Walking for 10 min (8) Working for 20 min. During these daily activities, both a subject’s PPG and ECG signals are recorded. The ECG signal is used as the ground truth for each 8 second window, with 2 second overlap between the windows. For the heart regression task, we use this label ( ’label’ ) because it is provided by the dataset and has been verified and preprocessed. Although the segment window is smaller than the pretraining dataset, both our and the PaPaGei backbone architecture can easily deal with slightly shorter segments because both use global averaging. For each subject, we first filter the PPG data with PapaGei’s preprocess one ppg signal , segment the data into 8 second windows with a 2 second overlap to match the target labels, and then use PaPaGei’s resample batch signal function to resample the segments to 125Hz to match the pretraining dataset. The segments are z-scored for each subject. For the daily activities classification task, we use 10 second non-overlapping segments. The labels are sampled at 4Hz ( ’activity’ ), and we assign a label to a specific 10 second window if 75% or more of the window contains that specific activity. If there is no consensus on the window, we discard it. We first filter the PPG data with PapaGei’s preprocess one ppg signal , segment the data into 10 seconds non-overlapping segments to match the target labels, and then use PaPaGei’s resample batch signal 
+
+function to resample the segments to 125Hz to match the pretraining dataset. 
+
+EEVR The Emotion Elicitation in Virtual Reality (EEVR) dataset (Singh et al., 2024) measures PPG data at 125Hz while 37 subjects are wearing a virtual reality (VR) headset. The study consists of baseline dataset collection, a VR familiarity task, and then a set of VR stimuli with post-exposure questionnaires. To evoke specific levels of arousal and valence, the authors use annotated 360 ◦ videos from a public database (Li et al., 2017), and select videos based on four emotional quadrants of the Russell circumplex of affect (Russell, 1980). The circumplex contains two dimensions, valence and arousal, and the videos can thus be organized into high valence and low valence or high arousal and low arousal. The authors 14 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+provide a csv file called Raw PPG.csv . We use the Participant ID column to separate data into specific subjects, and 
+
+Label no index to separate each subject’s session into a specific video with a high/low arousal and high/low valence label. Each video’s corresponding PPG data is first filtered with PapaGei’s preprocess one ppg signal , and data is segmented into 10 second, 5 second overlapping windows. Each segment is labeled separately for arousal and valence, and since the PPG sampling rate matches that of our pretraining dataset, we do not resample the data. 
+
+PPG-BP To better understand how PPG can be used to understand and predict cardiovascular disease, (Liang et al., 2018) released the PPG blood pressure dataset ( PPG-BP), with PPG sampled at 1000Hz. There are three PPG recordings for each subject that last around 2 second each, and 219 subjects in total. We noticed some issues with resampling the data, so we decided to linearly interpolate the data instead. Using np.interp (Harris et al., 2020), we interpolate each segment’s frequency from 1000Hz down to 125Hz to match the pretraining dataset frequency. Given that both our and PaPaGei’s architecture use global averaging, both architectures can handle a variety of input sizes, so we didn’t pad the input data, but before interpolation we did ensure the data was not longer than 2.1 seconds. Each subject has a recorded systolic blood pressure, diastolic blood pressure, and hypertension label. We use the same label for each of the three segments for a subject. After downsampling, we filter each segment with PapaGei’s preprocess one ppg signal , and z-score each segment. 
+
+VitalVideos As an additional evaluation of blood pressure, we also evaluate our model on the VV-Small subset of the VitalVideos database. The demographics of this dataset are outlined on Page 6 of (Toye, 2023). The dataset contains systolic and diastolic blood pressure measurements for 100 subjects, and PPG sampled at 55-60Hz. Given that the sampling rate varies throughout recording, we interpolate the data to 125Hz, in order to match the sampling rate of the pretraining dataset, with np.interp (Harris et al., 2020) based on the provided sample timings. We also record the age, Fitzpatrick scale, and sex of each participant to perform our demographic analysis (See Figure 3). After interpolating, the PPG data for each subject is filtered with PapaGei’s preprocess one ppg signal , and data is segmented into non-overlapping 10 second windows. The PPG data is then z-scored for each subject. 
+
+WildPPG To better understand how different placements of PPG sensors, different types (wavelengths) of PPG sensors, and daily activities impact heart rate estimation (Meier et al., 2024) released the WildPPG database. The dataset records data from 16 subjects, and each PPG sensor records at 128 Hz. The ground truth estimate of the heart rate is estimated with an ECG trace recorded from each subject’s sternum. The dataset contains data for three types of PPG sensors: green, red, and infrared (IR), and four types of locations: wrist, head, ankle, and the sternum (chest in our manuscript). We follow the code provided by the authors on GitHub, but adapt the code in the following ways. We ensure that the ground truth heart rate from the ECG trace is estimated in 10s non-overlapping windows. Moreover, for each sensor, location, and subject, we filter the PPG data with PapaGei’s preprocess one ppg signal , segment the PPG data into non-overlapping 10s windows, and resample the segments from 128Hz to 125Hz to match the pretraining dataset with PaPaGei’s resample batch signal .In case it is necessary, we trim the ground-truth heart rate segments based on the number of PPG windows. Then, we remove any segments where the ground-truth heart rate is zero (generally indicates that the heart rate could not be estimated), and then we z-score the PPG data for each sensor, location, and subject. 
+
+# C. Hyperparameters and experimental settings  
+
+> Table 5. The 1D ResNet-26 hyperparam-eters
+
+in channels 128 kernel size 11 stride 2groups 1n block 12 n classes 512 downsample gap 2increasefilter gap 4use bn True use do True verbose False 
+
+Architecture. Our model’s architecture is implemented in PyTorch (Paszke et al., 2019), and consists of two main parts. First, the input to our model is a (2 × batch size , 1, 1250) tensor. We use 256 as the batch size during pretraining for all models. The reason we have twice as many segments along the batch dimension is because we sample two random augmentations, as described in Section 3. This tensor first passes through an InstanceNorm1d layer, and then the 1D ResNet-26 architecture, as described in Section 3. The hyperparameters for the ResNet are shown in Table 5. The output embedding for our model is thus a 
+
+(2 × batch size , 512) tensor. 
+
+Checkpoint selection. During pretraining we save checkpoints for the backbone every 5000 steps. To select the final checkpoint that we use for comparisons, we evaluate each checkpoint on every single downstream cross-subject task, except the WildPPG tasks. To ensure there is no data leakage, we use each model’s training 15 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+and validation set score during the hyperparameter selection process for the linear probe. Moreover, we z-score the performance for all the tasks independently across the checkpoints, average the task scores for each checkpoint, and select the checkpoint with the highest average z-score. The reason we do not use the WildPPG data is to ensure atleast one dataset is not used for checkpoint selection. 
+
+Linear probing K-folds. There are generally two types of datasets. The following datasets where each subject has a label. PPG-BP: average heart rate (Avg-HR), systolic blood pressure (Sys-BP), diastolic blood pressure (Dia-BP), and hypertension, and VitalVideos: systolic blood pressure (Sys-BP VV) and diastolic blood pressure (Dia-BP VV). The other type of dataset are datasets with labels that vary for each subject over time. WESAD: stress and affect, PPG-DaLiA: activities and heart rate, EEVR: arousal and valence, WildPPG: heart rate. For across subject linear probing, datasets where each subject has a label are stratified when computing 5 folds. Specifically, for regression tasks, values are binned into 10 bins, using an ordinal encoding, and based on quantiles in the dataset using KBinsDiscretizer . For classification tasks, no additional binning is necessary. The 5 splits are then obtained using StratifiedKFold with random state=42 
+
+and shuffling on. The training indices for each fold are split into training and validation indices with a training size of 0.75, 
+
+random state=42 , shuffling on, and by stratifying the targets. For datasets where labels vary over time, we obtain 5 splits with KFold , random state=42 , and shuffling on. All names align with scikit-learn ’s API (Pedregosa et al., 2011). For within-subject linear probing, we first randomly shuffle all subjects with np.random.default rng(42) ,and select the subject that corresponds to the fold index. For regression tasks, we follow the same binning process described above to create a stratified test set. The test set is created using train test split , stratification, 0.2 as the test size, 
+
+random state=42 , and shuffling on. The leftover data samples are then split into a stratified training and validation set with train test split , 0.8 as the training size, random state=42 , and shuffling on. 
+
+Linear probing hyperparameters. The search space includes α ∈ {0.1, 1, 10 , 100 , 1000 } and solver ∈{auto , cholesky , sparse cg }. For regression tasks, we employ ridge regression with hyperparameters C ∈{0.0, 0.1, 1, 10 , 100 } and max iter fixed to 10,000. The naming of these hyperparameters is aligned with the 
+
+scikit-learn API (Pedregosa et al., 2011). 16 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# D. Heart rate estimation with NeuroKit ablation 
+
+Heart rate estimation is often done using automated tools, but in cases where PPG segments are quite noisy, they may fail. In Table 6 we compare the best-performing PaPaGei model in terms of heart rate estimation (PaPaGei-P) with NeuroKit’s automatic heart rate estimation, and our proposed model. All models take 10s of PPG segments as input, and for NeuroKit (Makowski et al., 2021) we use ppg process ’s PPG Rate output. If no heart rate was detected or not enough peaks were present for NeuroKit, the heart rate was set to 0. Afterwards, we perform the linear probing procedure to account for small linear errors in the NeuroKit model, and to make the procedure as similar to the results reported for PaPaGei-P and our model. Although the example is a little manufactured given that NeuroKit is often used to estimate heart rate for longer segments of PPG data, our experiment provides a one-to-one comparison for real-time 10s window heart rate estimation. Moreover, Table 6 shows that our model outperforms both models, and that PaPaGei outperforms NeuroKit. In some cases, PaPaGei-P and NeuroKit’s performances are closely matched, e.g. for HR (DaLiA) and HR-Green. 
+
+Table 6. NeuroKit ablation, NeuroKit heart rate estimation vs PaPaGei-P and our model . Results for both methods are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+NeuroKit PaPaGei-P PulsePPG Ours 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 12.9 318 0.14 12.7 303 0.14 9.03 170 0.1 7.78 143 0.09 Avg-HR 8.67 116 0.12 4.76 40.0 0.07 4.17 30.9 0.06 3.8 26.3 0.05 HR-Green 12.1 256 0.16 12.2 266 0.17 9.47 188 0.13 7.61 149 0.1 HR-Infrared 13.1 289 0.18 12.6 273 0.17 10.8 221 0.15 9.82 206 0.14 HR-Red 13.1 291 0.18 12.7 279 0.17 12.1 261 0.17 10.8 231 0.15 Avg 11.9 254 0.16 11.0 232 0.14 9.1 174 0.12 7.95 151 0.11 
+
+# E. Expanded baseline results 
+
+Table 7 show the comparisons with BYOL and SimCLR. These models are trained on the same data as our own model. We find that our model in general outperforms both. 
+
+Table 7. Additional baseline results . Results for each method are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+BYOL SimCLR Ours 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.81 0.87 0.92 0.83 0.88 0.94 0.83 0.88 0.94 Affect 0.49 0.56 0.75 0.5 0.59 0.77 0.52 0.6 0.78 Activities 0.33 0.38 0.8 0.32 0.38 0.8 0.36 0.41 0.82 Arousal 0.51 0.57 0.55 0.52 0.56 0.56 0.53 0.57 0.57 Valence 0.52 0.61 0.58 0.53 0.61 0.58 0.53 0.62 0.58 Hypertension 0.69 0.73 0.73 0.68 0.72 0.74 0.71 0.75 0.77 Avg 0.56 0.62 0.72 0.56 0.62 0.73 0.58 0.64 0.74 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 9.08 176 0.1 9.49 186 0.11 7.78 143 0.09 Avg-HR 3.98 29.3 0.05 4.4 33.6 0.06 3.8 26.3 0.05 Sys-BP 13.9 314 0.11 13.6 308 0.11 13.2 281 0.11 Dia-BP 8.26 110 0.12 8.31 113 0.12 8.16 109 0.12 Sys-BP (VV) 16.8 492 0.13 16.0 458 0.12 15.9 451 0.12 Dia-BP (VV) 8.44 125 0.1 8.17 122 0.1 8.04 123 0.1 HR-Green 8.67 171 0.12 8.8 174 0.12 7.61 149 0.1 HR-Infrared 10.7 228 0.15 10.8 230 0.15 9.82 206 0.14 HR-Red 11.4 248 0.16 11.5 250 0.16 10.8 231 0.15 Avg 10.1 210 0.12 10.1 208 0.12 9.45 191 0.11 
+
+17 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# F. Contrastive learning ablation 
+
+Table 8 shows the comparison between using an L2 loss during pretraining to directly predict the metrics we extract, compared to using the contrastive loss we discuss in Section 3.1. 
+
+Table 8. Our model with L2 vs the contrastive loss . Results for each method are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+Ours (L2 loss) Ours (new) 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.81 0.86 0.92 0.83 0.88 0.94 Affect 0.5 0.58 0.76 0.52 0.6 0.78 Activities 0.31 0.37 0.79 0.36 0.41 0.82 Arousal 0.51 0.56 0.54 0.53 0.57 0.57 Valence 0.53 0.61 0.59 0.53 0.62 0.58 Hypertension 0.69 0.73 0.73 0.71 0.75 0.77 Avg 0.56 0.62 0.72 0.58 0.64 0.74 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 8.39 163 0.09 7.78 143 0.09 Avg-HR 3.84 26.1 0.05 3.8 26.3 0.05 Sys-BP 14.1 330 0.11 13.2 281 0.11 Dia-BP 8.64 121 0.12 8.16 109 0.12 Sys-BP (VV) 15.6 433 0.12 15.9 451 0.12 Dia-BP (VV) 8.37 126 0.1 8.04 123 0.1 HR-Green 8.52 173 0.12 7.61 149 0.1 HR-Infrared 10.8 237 0.15 9.82 206 0.14 HR-Red 11.6 255 0.16 10.8 231 0.15 Avg 9.98 207 0.11 9.45 191 0.11 
+
+# G. Projector ablation 
+
+We use a projector, like the BYOL and SimCLR models, during pretraining. The following experiment ablates the use of this projector. We found gains in both the classification and regression tasks, and use this model for all experiments. The results are shown in Table 9. 
+
+Table 9. Projector ablation across subjects linear probing results . Results for each method are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+Without projector With projector 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.82 0.87 0.93 0.83 0.88 0.94 Affect 0.53 0.62 0.78 0.52 0.6 0.78 Activities 0.35 0.41 0.81 0.36 0.41 0.82 Arousal 0.53 0.56 0.55 0.53 0.57 0.57 Valence 0.55 0.62 0.59 0.53 0.62 0.58 Hypertension 0.68 0.72 0.75 0.71 0.75 0.77 Avg 0.58 0.63 0.74 0.58 0.64 0.74 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 7.2 134 0.08 7.78 143 0.09 Avg-HR 3.74 24.9 0.05 3.8 26.3 0.05 Sys-BP 13.5 299 0.11 13.2 281 0.11 Dia-BP 8.38 115 0.12 8.16 109 0.12 Sys-BP (VV) 16.6 473 0.12 15.9 451 0.12 Dia-BP (VV) 9.0 145 0.11 8.04 123 0.1 HR-Green 7.28 144 0.1 7.61 149 0.1 HR-Infrared 9.57 201 0.13 9.82 206 0.14 HR-Red 10.6 227 0.15 10.8 231 0.15 Avg 9.54 196 0.11 9.45 191 0.11 
+
+18 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# H. Pretraining ablation with the same architecture 
+
+To compare PaPaGei’s unimodal pretraining loss with our multimodal pretraining loss, we adopt the PaPaGei-S pretraining objective, and match the pretraining data, and all training hyperparameters, including the architectures, between the models. The setups only differ in the pretraining objective. As detailed in Table 10, our multimodal pretraining consistently and substantially outperforms unimodal pretraining across all evaluated tasks, except diastolic blood pressure regression. 
+
+Table 10. Unimodal vs multimodal pre-training, same architecture and data . Results for both methods are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+Unimodal pre-training Multimodal pre-training 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.63 0.79 0.84 0.76 0.83 0.86 Affect 0.39 0.51 0.71 0.43 0.53 0.71 Activities 0.19 0.32 0.7 0.31 0.37 0.78 Arousal 0.38 0.58 0.53 0.49 0.55 0.52 Valence 0.39 0.65 0.53 0.52 0.61 0.57 Hypertension 0.52 0.64 0.61 0.67 0.72 0.72 Avg 0.42 0.58 0.65 0.53 0.6 0.69 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 16.0 443 0.18 8.25 167 0.09 Avg-HR 7.69 94.6 0.11 3.69 24.2 0.05 Sys-BP 15.8 408 0.13 14.1 326 0.11 Dia-BP 8.58 120 0.12 8.73 120 0.12 Sys-BP (VV) 16.9 505 0.13 16.2 467 0.12 Dia-BP (VV) 8.35 127 0.1 8.64 137 0.11 HR-Green 13.0 286 0.18 8.42 176 0.12 HR-Infrared 12.8 277 0.18 10.4 226 0.15 HR-Red 12.7 279 0.17 11.6 260 0.16 Avg 12.4 282 0.14 10.0 211 0.11 
+
+# I. Architecture ablation with the same pretraining 
+
+To verify that our model’s performance scales well with backbone size, we compare the PaPaGei backbone with our proposed backbone in Table 11, and use our proposed pretraining objective. The proposed larger backbone improves over the PaPaGei backbone on all but the average heart rate estimation, which indicates that our pretraining method likely benefits from further model size scaling. 
+
+Table 11. Architecture ablation, PaPaGei backbone architecture vs our proposed architecture, same pre-training . Results for both methods are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+PaPaGei Arch Proposed Arch 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.76 0.83 0.86 0.83 0.88 0.94 Affect 0.43 0.53 0.71 0.52 0.6 0.78 Activities 0.31 0.37 0.78 0.36 0.41 0.82 Arousal 0.49 0.55 0.52 0.53 0.57 0.57 Valence 0.52 0.61 0.57 0.53 0.62 0.58 Hypertension 0.67 0.72 0.72 0.71 0.75 0.77 Avg 0.53 0.6 0.69 0.58 0.64 0.74 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 8.25 167 0.09 7.78 143 0.09 Avg-HR 3.69 24.2 0.05 3.8 26.3 0.05 Sys-BP 14.1 326 0.11 13.2 281 0.11 Dia-BP 8.73 120 0.12 8.16 109 0.12 Sys-BP (VV) 16.2 467 0.12 15.9 451 0.12 Dia-BP (VV) 8.64 137 0.11 8.04 123 0.1 HR-Green 8.42 176 0.12 7.61 149 0.1 HR-Infrared 10.4 226 0.15 9.82 206 0.14 HR-Red 11.6 260 0.16 10.8 231 0.15 Avg 10.0 211 0.11 9.45 191 0.11 
+
+19 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# J. Additional within-subject generalization results 
+
+Figure 5 shows a visualization of the embedding space for a single subject from the PPG-DaLiA dataset, highlighting the difference between our method and our replication of PaPaGei-S (labeled as ’Unimodal’). In the figure, our model’s embedding space shows a clear gradient in terms of heart rate, whereas the other models do not. Moreover, since data availability for a new user may be sparse, in Figure 6 we show how our model significantly outperforms the baseline models. Specifically, even on 10% data, the average performance of our model is better than the best baseline model on 100% of the data. Data is removed in a stratified manner from the training set. PaPaGei-P PaPaGei-S 
+
+PulsePPG  
+
+> 56 146 Heart rate
+
+Ours 
+
+Figure 5. UMAP plots(McInnes et al., 2018) colored by heart rate. Data are from a single subject in the PPG-DaLiA dataset. Average classification 
+
+# F1 score (higher is better) Average regression 
+
+# MAE (lower is better) 
+
+5
+
+# 6
+
+# 0.50 
+
+# 0.45 
+
+# 0.60 
+
+# 10 0 20 50 100 10 0 20 50 100 
+
+# 0.80 
+
+# 0.70 
+
+# 7
+
+# 8
+
+# 9
+
+# Percentage of training data used Percentage of training data used 
+
+> PaPaGei-S
+> PaPaGei-P
+> PulsePPG
+> Ours
+
+Figure 6. Average performance across varying percentages of within-subject data. Shaded areas represent standard deviation across folds. 
+
+20 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# K. Standard deviations 
+
+Tables 12, 13, 14, and 15 report the standard deviations across 5 folds for the main tables in the text. Table 12 corresponds to Table 2 in the main text, and Table 13 corresponds to Table 3 in the main text. Tables 14 and 15 correspond to ablation Tables 10 and 11, respectively. 
+
+Table 12. Downstream across subjects linear probing standard deviations across 5 folds . Results for each method are averaged across 
+
+5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+PaPaGei-P PaPaGei-S PulsePPG Ours 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.03 0.02 0.06 0.04 0.03 0.05 0.04 0.03 0.02 0.04 0.03 0.02 Affect 0.05 0.04 0.04 0.01 0.03 0.03 0.02 0.04 0.05 0.05 0.04 0.05 Activities 0.04 0.03 0.03 0.03 0.03 0.03 0.06 0.05 0.02 0.04 0.04 0.03 Arousal 0.02 0.01 0.02 0.02 0.02 0.02 0.03 0.03 0.01 0.03 0.01 0.04 Valence 0.02 0.01 0.04 0.02 0.02 0.02 0.01 0.02 0.02 0.02 0.04 0.05 Hypertension 0.03 0.03 0.04 0.03 0.04 0.05 0.04 0.03 0.04 0.05 0.04 0.04 Avg 0.03 0.03 0.04 0.03 0.03 0.03 0.03 0.03 0.03 0.04 0.03 0.04 Reg ( ↓) MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 1.08 75.7 0.02 1.57 111 0.03 0.98 45.8 0.02 0.89 41.0 0.02 Avg-HR 0.27 6.04 0.0 0.35 3.56 0.0 0.24 4.41 0.0 0.23 3.63 0.0 Sys-BP 0.8 57.0 0.01 0.62 47.5 0.01 1.01 59.8 0.01 1.16 47.8 0.01 Dia-BP 0.34 6.61 0.01 0.31 6.44 0.01 0.35 8.71 0.01 0.34 6.18 0.01 Sys-BP (VV) 2.0 148 0.01 2.18 179 0.02 1.13 69.5 0.01 1.6 110 0.01 Dia-BP (VV) 1.1 56.5 0.01 1.35 53.7 0.02 1.29 60.5 0.02 1.86 73.0 0.02 HR-Green 1.51 68.1 0.04 1.28 54.4 0.03 1.36 51.9 0.03 1.3 50.1 0.03 HR-Infrared 2.05 86.1 0.04 2.17 89.5 0.05 1.84 77.8 0.04 1.98 85.6 0.04 HR-Red 0.79 29.7 0.01 0.77 27.4 0.01 0.82 30.4 0.01 0.4 12.2 0.01 Avg 1.1 59.3 0.02 1.18 63.7 0.02 1.0 45.4 0.02 1.09 47.8 0.02 
+
+Table 13. Downstream within subjects linear probing standard deviations across 5 folds . Results for each method are averaged across 
+
+5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+PaPaGei-P PaPaGei-S PulsePPG Ours 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.04 0.03 0.08 0.1 0.08 0.12 0.07 0.07 0.07 0.08 0.06 0.04 Affect 0.09 0.08 0.09 0.13 0.11 0.08 0.09 0.08 0.06 0.08 0.07 0.03 Activities 0.14 0.13 0.05 0.14 0.14 0.09 0.09 0.1 0.03 0.09 0.1 0.03 Arousal 0.02 0.02 0.03 0.06 0.06 0.07 0.03 0.03 0.03 0.05 0.05 0.06 Valence 0.08 0.07 0.1 0.11 0.12 0.14 0.14 0.13 0.15 0.1 0.1 0.11 Avg 0.07 0.07 0.07 0.11 0.1 0.1 0.08 0.08 0.07 0.08 0.08 0.05 Reg ( ↓) MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 0.88 26.7 0.01 1.03 40.0 0.01 0.78 16.9 0.01 0.76 14.6 0.01 HR-Green 0.65 36.0 0.01 0.38 48.7 0.01 0.81 32.1 0.02 0.94 32.0 0.02 HR-Infrared 1.5 69.0 0.03 1.54 80.5 0.03 1.2 54.4 0.02 1.56 63.6 0.03 HR-Red 0.44 28.6 0.01 0.5 45.8 0.01 0.81 39.4 0.01 0.98 33.8 0.02 Avg 0.87 40.1 0.02 0.86 53.7 0.02 0.9 35.7 0.02 1.06 36.0 0.02 
+
+21 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+Table 14. Unimodal vs multimodal pre-training standard deviations across 5 folds . Results for both methods are averaged across 5
+
+test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+Unimodal pre-training Multimodal pre-training 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.06 0.02 0.03 0.04 0.03 0.04 Affect 0.04 0.03 0.05 0.04 0.06 0.04 Activities 0.03 0.04 0.04 0.05 0.05 0.03 Arousal 0.02 0.02 0.02 0.01 0.03 0.02 Valence 0.0 0.0 0.04 0.03 0.02 0.02 Hypertension 0.07 0.04 0.04 0.03 0.02 0.03 Avg 0.04 0.03 0.04 0.03 0.03 0.03 Reg ( ↓) MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 2.38 155 0.03 1.1 42.5 0.03 Avg-HR 0.37 11.4 0.01 0.19 3.58 0.0 Sys-BP 0.31 39.2 0.0 0.77 49.8 0.01 Dia-BP 0.24 6.02 0.01 0.41 9.31 0.01 Sys-BP (VV) 1.16 105 0.01 1.22 87.4 0.01 Dia-BP (VV) 1.3 58.4 0.01 1.27 64.1 0.02 HR-Green 1.21 52.5 0.03 1.65 66.3 0.04 HR-Infrared 2.18 88.6 0.05 1.97 88.0 0.04 HR-Red 0.76 28.2 0.01 0.79 28.2 0.01 Avg 1.1 60.5 0.02 1.04 48.8 0.02 
+
+Table 15. Architecture ablation standard deviations across 5 folds . Results for both methods are averaged across 5 test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE). 
+
+PaPaGei Arch Proposed Arch 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.04 0.03 0.04 0.04 0.03 0.02 Affect 0.04 0.06 0.04 0.05 0.04 0.05 Activities 0.05 0.05 0.03 0.04 0.04 0.03 Arousal 0.01 0.03 0.02 0.03 0.01 0.04 Valence 0.03 0.02 0.02 0.02 0.04 0.05 Hypertension 0.03 0.02 0.03 0.05 0.04 0.04 Avg 0.03 0.03 0.03 0.04 0.03 0.04 Reg ( ↓) MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 1.1 42.5 0.03 0.89 41.0 0.02 Avg-HR 0.19 3.58 0.0 0.23 3.63 0.0 Sys-BP 0.77 49.8 0.01 1.16 47.8 0.01 Dia-BP 0.41 9.31 0.01 0.34 6.18 0.01 Sys-BP (VV) 1.22 87.4 0.01 1.6 110 0.01 Dia-BP (VV) 1.27 64.1 0.02 1.86 73.0 0.02 HR-Green 1.65 66.3 0.04 1.3 50.1 0.03 HR-Infrared 1.97 88.0 0.04 1.98 85.6 0.04 HR-Red 0.79 28.2 0.01 0.4 12.2 0.01 Avg 1.04 48.8 0.02 1.09 47.8 0.02 22 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# L. General timeseries foundation model comparisons 
+
+Our model achieves consistent improvements over general-purpose timeseries foundation models Chronos and MOMENT across both classification and regression tasks under across-subject linear probing. The only task that Chronos and MOMENT outperform our model at is systolic blood pressure regression on the VitalVideos dataset, which is a task that other baselines also outperform our model at. Another notable result is that MOMENT comes closest to our model’s performance relative to other baselines for Avg-HR prediction, even though it is not a PPG-specific foundation model. Lastly, Chronos performs on par with our model in terms of F-1 score and AUC for valence prediction, but does worse in terms of accuracy. We hence conclude that although Chronos’ performance is close to ours, it still underperforms our model in terms of valence prediction. Overall, these results are consistent with results for other baseline models, namely that our model generally outperforms across most downstream tasks, except systolic blood pressure prediction on the VitalVideos dataset. It is also important to note that these general time-series foundation models contain substantially more parameters than our model.    
+
+> Table 16. Downstream across subjects linear probing results for general timeseries foundation models . Results for each method are averaged across 5test folds, and standard deviations can be found in Appendix K. For the classification tasks, higher is better, and evaluation metrics are macro F-1 score (MF1), accuracy (ACC), and the area under the receiver operating characteristic (AUC). For regression tasks lower is better, and we use mean average error (MAE), mean squared error (MSE), and mean average percentage error (MAPE).
+
+PulsePPG Chronos MOMENT Ours 
+
+Clf ( ↑) MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC MF1 ACC AUC 
+
+Stress 0.81 0.86 0.92 0.81 0.87 0.92 0.78 0.84 0.91 0.83 0.88 0.94 Affect 0.46 0.55 0.74 0.51 0.59 0.76 0.46 0.53 0.72 0.52 0.6 0.78 Activities 0.31 0.38 0.79 0.34 0.4 0.81 0.29 0.36 0.77 0.36 0.41 0.82 Arousal 0.51 0.56 0.53 0.52 0.56 0.56 0.51 0.55 0.54 0.53 0.57 0.57 Valence 0.51 0.62 0.57 0.53 0.6 0.58 0.52 0.6 0.56 0.53 0.62 0.58 Hypertension 0.69 0.73 0.74 0.64 0.69 0.69 0.7 0.73 0.74 0.71 0.75 0.77 Avg 0.55 0.62 0.71 0.56 0.62 0.72 0.54 0.6 0.71 0.58 0.64 0.74 
+
+Reg ( ↓) MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE MAE MSE MAPE 
+
+HR (Dalia) 10.5 221 0.12 9.47 181 0.11 9.27 189 0.1 7.78 143 0.09 Avg-HR 4.43 34.4 0.06 4.75 37.6 0.07 3.82 26.6 0.05 3.8 26.3 0.05 Sys-BP 14.0 336 0.11 14.5 347 0.12 13.6 315 0.11 13.2 281 0.11 Dia-BP 8.68 121 0.12 8.55 118 0.12 8.53 117 0.12 8.16 109 0.12 Sys-BP (VV) 15.7 439 0.12 15.5 432 0.12 15.6 446 0.12 15.9 451 0.12 Dia-BP (VV) 8.12 119 0.1 8.6 133 0.11 8.25 127 0.1 8.04 123 0.1 HR-Green 9.68 188 0.13 9.5 192 0.13 9.11 181 0.12 7.61 149 0.1 HR-Infrared 11.6 246 0.16 11.0 228 0.15 11.4 248 0.16 9.82 206 0.14 HR-Red 12.1 261 0.17 11.8 250 0.16 12.0 266 0.16 10.8 231 0.15 Avg 10.5 218 0.12 10.4 213 0.12 10.2 213 0.12 9.45 191 0.11 
+
+23 A Robust PPG Foundation Model using multimodal physiological supervision 
+
+# M. Noise robustness evaluation 
+
+To further evaluate robustness under varying motion conditions, we conduct a noise sensitivity analysis on the PPG-DaLiA dataset using IMU-based motion estimates. We first calculate the IMU energy by taking the square of IMU values along each IMU direction in the 8 second window that corresponds to the PPG data, averaging the directions and timesteps within the window, and then taking the square root. This gives us an IMU energy estimate in each PPG window. The regime definitions (low, med-high, ultra-high) are defined based on the IMU energy distribution shown in Figure 7. To define low noise IMU energy ( < 0.575 ), we use any IMU energy that is less common (before the clear peak in IMU energy values in Figure 7), middle-to-high ( 0.575 − 0.75 ) is defined to capture the bulk of the IMU energy distribution, and ultra-high IMU energy values ( > 0.75 ) are ones that fall into the long tail of the distribution. These thresholds roughly correspond to distinct operating conditions ranging from relatively stable acquisition to severe motion artifacts. Heart rate regression results in each of these regimes are reported in Table 17. The medium-to-high noise regime, which most closely reflects the most common IMU energy estimate and thus realistic wearable usage conditions, yields the largest relative gains for our method compared to all baselines. This indicates that physiologically grounded supervision is most effective under moderate-to-strong motion contamination, where traditional methods begin to degrade but signals remain partially recoverable. In the ultra-high noise regime, all methods exhibit increased error and variance, consistent with extreme signal corruption. It is notable however, that our approach remains competitive and does not exhibit disproportionate degradation. In the low-noise regime, baseline methods are potentially more sensitive to minor waveform perturbations, whereas our method yields more stable predictions by reducing sensitivity to instantaneous signal fluctuations due to the physiological supervision. Overall, these findings reinforce the robustness claims of our approach and are consistent with the main experimental results reported in the paper.     
+
+> Figure 7. The distribution of IMU energy in the DaLiA dataset, with the x-axis on a log-scale.
+> Table 17. Model performance by noise level (MAE ±sample count).
+
+Model Low Med-High Ultra 
+
+MAE N MAE N MAE N
+
+PaPaGei-S 9.35 6K 15.65 58K 19.80 789 PaPaGei-P 7.91 6K 13.17 58K 16.42 789 PulsePPG 5.82 6K 10.96 58K 13.17 789 
+
+Ours 4.13 6K 8.09 58K 12.01 789 24
