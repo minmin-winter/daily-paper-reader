@@ -1,0 +1,743 @@
+Title: Decompose, Compare, and Decide: Multimodal LLMs are Implicit Few-Shot Learners
+
+URL Source: https://arxiv.org/pdf/2607.00125v1
+
+Published Time: Thu, 02 Jul 2026 00:10:22 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Decompose, Compare, and Decide: Multimodal LLMs are Implicit Few-Shot Learners 
+
+Yunhan Wang, Eshika Khandelwal, Edson Araujo, Walid Bousselham, Nina Shvetsova, and Hilde Kuehne 
+
+Tuebingen AI Center, University of Tuebingen, Germany 
+
+yunhan.wang@student.uni-tuebingen.de 
+
+Abstract. Multimodal Large Language Models (MLLMs) have demon-strated remarkable abilities when analyzing images, yet translating these capabilities to few-shot image classification remains challenging. To bridge this gap, we present DeCoDe, a simple yet effective technique that en-ables off-the-shelf MLLMs to act as strong few-shot classifiers without any additional training. Our approach builds on the idea of few-shot classification as a set of pairwise image comparisons, decomposing the task into a set of binary decisions. Given a query image and a support image from a candidate class, the MLLM is prompted to decide whether the two images depict the same class. The logit corresponding to an af-firmative response is then used as a similarity score to assign the query image to the most likely class. While this already yields good results, we show that providing additional high-level information, such as the data domain, to the model further improves performance. Our evalu-ation provides an extensive analysis of various inference variants on a suite of twelve datasets, six established and six newly curated few-shot benchmarks spanning across diverse domains. The results show that the proposed simple decomposition technique can turn off-the-shelf MLLMs into powerful few-shot learners, significantly outperforming current state-of-the-art few-shot methods on both standard and novel domains. Code is available at https://github.com/yunhanwang1105/DeCoDe .
+
+Keywords: Few-Shot Learning · Multimodal Large Language Models ·
+
+Vision-Language Models · In-Context Learning 
+
+1 Introduction 
+
+Few-shot learning (FSL) enables models to generalize to new tasks and domains using only a small number of labeled examples per class. This can be especially valuable for real-world scenarios where large annotated datasets are unavail-able or adaptation to novel tasks is required at inference time. Early few-shot methods required model training on a set of base classes in order to enable recognition of held-out novel classes [12,21,34,39,41,44]. With the emergence of foundation models trained on large-scale web data via self- or weakly-supervised objectives, such as DINO [30] or CLIP [33], the focus shifted towards exploring 
+
+> arXiv:2607.00125v1 [cs.CV] 30 Jun 2026
+
+2 Y. Wang et al. What is this?   
+
+> Class 1.
+> What is this?
+> Class 3.
+> So what is this?
+> Choose from …
+> What is this?
+> Class 2.
+
+MLLM      
+
+> Vision Encoder
+> + Projector
+> Text Tokenizer img
+> token
+> text
+> token
+> …… Output: “Class 1.”
+> 3. Score(Yes) = 37.1 2
+
+In -context Prompting 
+
+Decomposed Prompting    
+
+> Depict same pose? Answer Yes or No.
+> 3
+> Depict same pose? Answer Yes or No.
+> 2
+> Depict same class? Answer Yes or No.
+> 1
+
+MLLM   
+
+> Vision Encoder
+> + Projector
+> Text Tokenizer 2. Score(Yes) = 89.3
+
+MLLM  
+
+> Vision Encoder
+> + Projector
+> Text Tokenizer
+
+MLLM  
+
+> Vision Encoder
+> + Projector
+> Text Tokenizer
+> 1. Score(Yes) = 64.9
+
+Fig. 1: We propose a decomposed prompting technique (DeCoDe) for few-shot classi-fication with MLLMs. We decompose the task into pairwise support–query compar-isons, asking whether two images belong to the same class. By ranking the model’s af-firmative responses across candidate pairs ( compare ) and selecting the highest-scoring logit as the predicted class ( decide ), MLLMs become strong few-shot classifiers without any training. Unlike standard in-context prompting, which relies heavily on semantic label names, our decomposed approach succeeds even with anonymized labels by forc-ing the model to perform direct visual-to-visual comparison. 
+
+how pretrained representations can be leveraged for improved few-shot classifica-tion with minimal or no additional training [6,8,14,42,50,52,53]. More recently, multimodal large language models (MLLMs), such as LLaVA-OneVision [22], InternVL3 [55], or Qwen3-VL [3], have demonstrated strong vision-language ca-pabilities, raising the question of whether such models can also serve as effective few-shot learners [26, 46]. So far, MLLMs have been explored for few-shot learning in three ways: by extracting discriminative embeddings from the internal representations of the MLLM [28], by verbalizing discriminative visual features and matching them to query images [46], or via in-context learning where support and query images are jointly provided in a single prompt [26]. However, in-context prompting has been shown to perform poorly for few-shot image classification when used off-the-shelf [26, 28], often requiring additional fine-tuning to encourage stronger reliance on the support examples [26]. To address this limitation, the proposed approach reformulates few-shot clas-sification as a set of pairwise comparisons. Instead of reasoning over all support examples jointly, the few-shot task is decomposed into binary prompts asking the MLLM whether a query image and a support image belong to the same class. Unlike existing methods, particularly [26, 46], the proposed technique considers the logit of the Yes token to rank all candidate pairs and assign the query image to the most likely class. While this simple technique, when applied to standard DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 3
+
+MLLMs, is already sufficient to outperform current state-of-the-art methods, it shows that the models can benefit from contextual information, such as the domain of the data. Namely, we found that the performance of the pairwise de-composed setting further improves when models are given the topic of the data, usually based on the dataset name, such as cars, yoga poses, etc. We thus coin the respective workflow as De compose , Co mpare , De cide (DeCoDe) and show that this technique can transform state-of-the-art MLLMs into high-performing few-shot learners. However, evaluating the few-shot capabilities of web-scale pretrained mod-els remains challenging. In particular, the performance of models on standard few-shot benchmarks may be influenced by potential overlap between bench-mark datasets and the models’ pretraining corpora. As a result, models may rely on memorized knowledge rather than adapting to the provided support ex-amples [20]. To address this issue, we conduct an extensive analysis on two sets of datasets and in two evaluation modes. First , with respect to datasets, we consider six standard few-shot datasets, as well as six novel datasets, which can be considered as out-of-domain for web-scale trained models. We observe that most MLLMs already achieve near-perfect accuracy on the standard datasets in a 0-shot setting, often even exceeding 1-shot performance. In contrast, we consider novel, out-of-domain datasets as datasets that show substantially low 0-shot performance as well as a clear improvement from 0-shot to a simple 1-shot baseline. We consider this as an indication that the model might have seen less of the original data and needs to rely more on visual cues. Second , we consider two different few-shot settings for MLLMs: first, we consider a semantic setting, in which semantically meaningful class labels are provided together with the support images, and, second, we consider an anonymized setting, where sup-port images are labeled only with numerical identifiers (e.g., Class 1 , Class 2), preventing the model from relying directly on textual knowledge. Our anal-ysis shows that the anonymization alone is enough to reduce the performance of MLLMs for in-context learning, even on standard benchmarks, whereas the proposed decomposition is able to significantly increase the performance in all cases, with and without class labels, as well as for standard and novel datasets. The contributions of this work can be summarized as follows: 
+
+– We propose a simple, yet effective technique of Decompose, Compare, Decide 
+
+(DeCoDe), to turn MLLMs into powerful few-shot learners by ranking the logits corresponding to an affirmative response to a binary prompt question. 
+
+– We show that decomposed MLLMs can further benefit from high-level cues such as domain information and propose a new few-shot evaluation scenario by providing the global dataset domain as context. 
+
+– We conduct a systematic evaluation of current MLLMs for few-shot learning across standard and novel out-of-domain datasets and under different modes, including anonymized class labels, revealing when models rely on memorized pretraining knowledge versus true few-shot adaptation. 4 Y. Wang et al. 
+
+2 Related Works 
+
+VLM Embeddings for Few-Shot Learning. Vision-Language Models (VLMs) such as CLIP provide a strong foundation for FSL by enabling classification based on embedding similarity. Prior work has adapted such embeddings for few-shot tasks via prompt learning [7, 18, 47, 52–54] or adapter-based methods [14, 43, 48, 50]. More recent works explore additional adaptation strategies. Two-Stage Few-Shot (2SFS) [10] performs two-stage PEFT-based representation learning; Logit De-confusion [23] addresses class bias at the logit level; ProKeR [6] applies training-free kernel regression over pretrained CLIP features; LoRA Recycle [17] enables tuning-free adaptation via reuse of pre-trained LoRAs [16]. CAML [11] is a large-scale, meta-trained framework built on a ViT [9] backbone that enables in-context classification using frozen image embeddings. Unlike methods that modify pretrained encoders, our proposed technique does not adapt the under-lying representation or update parameters. Instead, we investigate how frozen MLLMs can perform few-shot classification purely through structured inference. Finally, Kravets et al. [20] discuss the problem that standard CLIP few-shot evaluations are partially transductive due to pretraining overlap, and in-troduce an unlearning-based pipeline to construct inductive benchmarks that reveal substantial performance drops in existing methods. We follow this idea, but instead of unlearning and thus changing the model parameters, we use al-ternative datasets that can be considered more out-of-domain for web-trained multimodal models. 
+
+MLLMs for Few-Shot Learning. Beyond adapting pretrained VLM encoders, SAVs [28] extracts representations from MLLMs for downstream few-shot clas-sification. VRL [46] leverages MLLMs to automatically derive interpretable ver-balized features that capture inter-class differences and intra-class commonali-ties. Other works explore generative few-shot prompting with MLLMs [26, 28], yet such models often remain less effective with respect to embedding-based few-shot methods, despite strong performance on open-ended vision–language tasks. A central challenge is their reliance on semantic language priors rather than visual evidence from the support set [5]. GFSL [26] addresses this in part through label anonymization, applied within a fine-tuning strategy. Across these works, evaluations vary considerably in scope: SAVs focus on standard bench-marks, VRL reports results on novel out-of-domain datasets. Building on this idea, we jointly examine zero-shot and few-shot regimes, the effect of semantic versus anonymized labels, and evaluate across both standard and novel datasets, providing a unified evaluation across these axes. 
+
+3 Method 
+
+In this section, we introduce our inference framework for few-shot classification. Fig. 1 illustrates the inference pipeline of our framework. Given multimodal context consisting of images and text, the MLLM is prompted to predict the DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 5                             
+
+> Variant Paradigm Label Domain Description
+> 0-shot w. labels In-context Semantic ✗No support images; only query image and labels given 1-shot w. labels In-context Semantic ✗Support images with labels given 1-shot w/o labels In-context Anonymous ✗Support images with anonymized labels e.g., Class 1 , . . . , Class 5
+> Ours (Decomposition)
+> 1-shot dec. w. labels Decompose Semantic ✗Binary comparisons w. label added to binary question 1-shot dec.+ Dinfo w. labels Decompose Semantic ✓Binary comparisons w. label + Domain-adapted prompt wording 1-shot dec. w/o labels Decompose Anonymous ✗Binary comparisons w/o label 1-shot dec.+ Dinfo w/o labels Decompose Anonymous ✓Binary comparisons w/o label + Domain-adapted prompt wording
+
+Table 1: Overview of inference variants. Each variant is characterized by its task structure, label naming strategy, and distinguishing mechanism. dec. = decompose, 
+
+Dinfo = domain information. 
+
+class of a query image based on the provided support examples. Depending on the prompting paradigm, the prediction is either obtained directly from the model’s generated response or derived from the model’s output logits for specific answer tokens (e.g., ‘Yes’). Table 1 summarizes the inference variants evaluated in this work. The vari-ants differ along three dimensions: (i) the prompting paradigm (in-context learn-ing vs. decomposed pairwise prompting); (ii) the use of dataset-level domain in-formation; and (iii) the anonymization of semantic class labels. In addition, we evaluate a 0-shot setting as a baseline to assess whether the models can classify a query based solely on its prior knowledge without visual support examples. In all experiments, we follow the prompt design of [26] and explore more prompt options in the supplementary material. 
+
+3.1 Problem Formulation 
+
+Classical few-shot learning protocols [12, 39, 44] divide a dataset into a set of base classes used for supervised pre-training and a set of novel classes reserved for few-shot evaluation. In contrast, training-free approaches leverage VLMs and MLLMs [6, 28, 43, 50], bypassing supervised base-class training, thanks to rich representations acquired during large-scale web pretraining. In this paper, we follow a training-free protocol in the standard N-way K-shot setting. The model’s task is to classify a query image into one of N classes given a support set of K
+
+labeled examples per class. We define the support set S to be sampled from the test set as: 
+
+S = (xsn,k , c n) | n = 1 , . . . , N, k = 1 , . . . , K , (1) where N is the number of classes sampled, K is the number of samples per class, and C = {c1, . . . , c N } is the set of corresponding class names where each cn is the semantic name of the n-th class. We formulate the query set Q as: 
+
+Q = {(xq , c y )}, (2) where xq is the query image and y ∈ { 1, . . . , N } is its ground-truth class index with respect to the support classes C.6 Y. Wang et al. <Image: 𝑥 1,1                         
+
+> 𝑠 >
+> What is this? 𝑐 1(option 1).
+> ...
+> <Image: 𝑥 5,1
+> 𝑠 >
+> What is this? 𝑐 5(option 5).
+> <Image: 𝑥 𝑞 >
+> So what is this? Choose one of the following
+> options: 1. 𝑐 1; ...; 5. 𝑐 5
+> <Image: 𝑥 1,1
+> 𝑠 >
+> What is this? Class 1.
+> ...
+> <Image: 𝑥 5,1
+> 𝑠 >
+> What is this? Class 5.
+> <Image: 𝑥 𝑞 >
+> So what is this? Choose one of the following
+> classes: Class 1; ...; Class 5
+> <Image: 𝑥 𝑛 ,𝑘
+> 𝑠 >
+> <Image: 𝑥 𝑞 >
+> Are the two images depicting the same class?
+> Answer Yes or No.
+> <Image: 𝑥 𝑛 ,𝑘
+> 𝑠 >
+> <Image: 𝑥 𝑞 >
+> The semantic label of the first (support)
+> image is: 𝑐 𝑛 .
+> Does the second image depict the same class
+> as the support image?
+> Answer Yes or No.
+> In -context Decomposed
+
+Semantic  Anonymous             
+
+> Decomposed + 𝐷 𝑖𝑛𝑓𝑜
+> <Image: 𝑥 𝑛 ,𝑘
+> 𝑠 >
+> <Image: 𝑥 𝑞 >
+> The semantic label of the first (support)
+> image is: 𝑐 𝑛 .
+> Does the second image depict the same 𝑫 𝐢𝐧𝐟𝐨 as
+> the support image?
+> Answer Yes or No.
+> <Image: 𝑥 𝑛 ,𝑘
+> 𝑠 >
+> <Image: 𝑥 𝑞 >
+> Are the two images depicting the same 𝑫 𝐢𝐧𝐟𝐨 ?
+> Answer Yes or No.
+
+a
+
+c
+
+e
+
+b
+
+d
+
+f
+
+Fig. 2: Variants of prompt formulations used in our experiments. (a) standard in-context prompting with semantic labels. (b) standard in-context prompting with anonymized labels. (c) decomposed pairwise prompting with semantic labels. (d) 
+
+decomposed pairwise prompting with anonymized labels. (e) decomposed pairwise prompting with domain information and semantic labels. (f ) decomposed pairwise prompting with domain information and anonymized labels. 
+
+3.2 In-Context Few-Shot Classification with MLLMs 
+
+To assess the few-shot capabilities of current MLLMs, we consider few-shot learn-ing as an in-context learning task. Given a support set S and a query image xq ,the model is prompted to predict the class of the query image via multiple-choice selection over the candidate classes. The prompt consists of the concatenation of all support images with their corresponding class labels, followed by the query image and the list of candidate class options. The resulting prompt p is struc-tured as: 
+
+p = xs
+
+1,1 ⊕ Str ⊕ c1 . . . x sN,K ⊕ Str ⊕ cN ⊕ xq ⊕ Str ⊕ 1. c 1; 2 . c 2; . . . ; (3) The model is expected to output a class index ˆy ∈ { 1, . . . , N }, which we extract from the generated text via regular expression matching. Full prompt can be found in the top-left of Figure 2 (a). We further instruct the model to output the expected answer format. Exact prompts and instruction-following errors are reported in the supplementary material. DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 7
+
+3.3 Decomposed Few-Shot Classification with MLLMs 
+
+In contrast to in-context learning, we propose to decompose the few-shot classifi-cation problem into a set of pairwise comparisons. For each support example and the query image, the model is prompted to determine whether the two images belong to the same class. Given (S, x q ), we decompose the support set into a set of pairwise prompts: 
+
+P = pn,k | n = 1 , . . . , N, k = 1 , . . . , K , (4) Each prompt compares the query image with a support example: 
+
+pn,k = xsn,k ⊕ xq ⊕ Str ⊕ cn (5) All prompts are independently processed by the model. The full prompt can be found in the mid-right of Figure 2 (c). For each prompt pn,k , the model’s output logit for the token Yes is used as the score indicating whether the pair belongs to the same class: 
+
+spair  
+
+> n,k
+
+= logit (Yes | pn,k ), ˆy = arg max 
+
+> n
+
+1
+
+K
+
+> K
+
+X
+
+> k=1
+
+spair  
+
+> n,k
+
+, (6) where ˆy ∈ { 1, . . . , N } is the index with the highest averaged pairwise score as the predicted class. This choice is consistent with recent VQA-based scoring approaches such as VQAScore [25], which scores image-text alignment using the 
+
+Yes token for evaluating text-to-visual generation; in contrast, we score support– query image-pair matches for few-shot image classification. 
+
+3.4 Decomposed Prompting with Domain Information 
+
+Table 2: Mapping of datasets to their domain information text.               
+
+> Dataset Dinfo text
+> mini-ImageNet [44] –UCF101 [40] action category CUB [45] bird species Aircraft [27] aircraft variant Dogs [19] dog breed DomainNet [31] –Lego [15] Lego brick type Industrial [36] industrial product Yoga [35] yoga pose Egyptian hieroglyph [13] Egyptian hieroglyph Flying insects [32] insect species Arabic sign language [1] sign language
+
+Decomposed prompting resembles the classical few-shot classification scenario, where a single representation is com-pared against a set of others. However, MLLMs also offer the ability to fur-ther refine this setting by encouraging the model to focus on dataset-specific concepts. To leverage those capabili-ties, we replace the generic term class 
+
+with a domain-appropriate term Dinfo 
+
+(e.g., pose , texture , species ) that re-flects the concept represented in a given dataset. The full prompt can be found in the bottom-right of Figure 2 (e). The descriptors Dinfo are inferred for each dataset as shown in Table 2. This grounds each comparison in both visual and textual semantics, allowing the MLLM to leverage its pretrained domain-level knowledge alongside the visual 8 Y. Wang et al. 
+
+evidence from the support image 1. We further provide preliminary evidence in the supplementary material that Dinfo can be inferred automatically with com-petitive performance, and we also include example dataset labels to illustrate how Dinfo captures domain-level information distinct from class labels. 
+
+3.5 Prompting Without Class Labels 
+
+To isolate the model’s ability to learn from visual examples alone, we replace all semantic class names cn with abstract identifiers (e.g., Class 1 , . . . , Class N )in both the support demonstrations and the option list. All other formatting stays identical. This forces the MLLM to rely on visual similarity rather than leveraging any prior knowledge associated with class names. The full anonymous prompts can be found in the right column of Figure 2. 
+
+3.6 Episode Construction 
+
+We construct evaluation episodes using the standard N -way K-shot protocol [6, 28, 43, 50]. In each episode e, an N -way label set is sampled, C = {c1, . . . , c N },with support set S = {(xsn,k , c n)}N ×Kn=1 ,k =1 containing K examples per class, and a single query sample Q = {(xq , c y )}. Given (S, x q ), the model predicts ˆy ∈{1, . . . , N }. Performance is measured as mean episodic accuracy over a set of evaluation episodes E:
+
+Acc = 1
+
+|E| 
+
+X
+
+> e∈E
+
+1[ˆ ye = ye].
+
+For each dataset, we pre-sample a fixed set of 1000 evaluation episodes using a fixed random seed. We verify that cumulative accuracy stabilizes well within 1000 episodes. All evaluation runs are performed on the same set of episodes to ensure fair comparison across models and variants. 
+
+4 Evaluation 
+
+4.1 Datasets 
+
+We evaluate the proposed technique on a diverse collection of datasets spanning established few-shot benchmarks and novel specialized domains. 
+
+Standard benchmarks. We evaluate on standard few-shot classification bench-marks following [11,26,28], including mini-ImageNet [44], a widely used general-purpose few-shot benchmark; CUB [45], Aircraft [27], and Dogs [19], which test fine-grained visual discrimination within natural categories; UCF101 [40] (mid-dle frame of video clip), representing action recognition under a video-to-image transfer. We further remove action images with strong object bias [38]. In Do-mainNet [31], we sample episodes within a single domain at a time, excluding the real domain to avoid overlap with the mini-ImageNet domain.   
+
+> 1For mini-ImageNet and DomainNet, we use a generic instruction asking the model to focus on the depicted concept rather than domain or texture. See supplement. DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 9
+
+Novel datasets. We introduce a benchmark suite of six visually distinctive datasets to probe model generalization under stronger domain shift. Namely, we con-sider the Lego bricks dataset (Lego) [15], industrial parts (Ind.) [36], yoga poses (Yoga) [35], ancient Egyptian hieroglyphs (Hiero.) [13], flying insects (Insect) [32] and Arabic alphabet sign language (Sign) [1]. These cover highly specialized concepts as shown by the particularly low 0-shot recognition performance of pretrained MLLMs. We thus assume that those concepts are only sparsely rep-resented in standard text-image pretraining, making them suitable test cases for evaluating the visual few-shot capabilities of pretrained MLLMs. 
+
+4.2 Experimental Details 
+
+Models. We analyze three open-source state-of-the-art MLLMs of comparable scale (7–8B parameters): Qwen2.5-VL-7B-Instruct [4], Qwen3-VL-8B-Instruct [3], and InternVL3-8B [55]. All models are used in inference-only mode, with token-level scores extracted directly from output logits as described in Eq. (6). 
+
+SFT Baseline. We use supervised fine-tuning (SFT) for Qwen3-VL-8B-Instruct with LoRA [16] on the semantic in-context few-shot formulation. The training data consists of 1000 5-way 1-shot episodes sampled from the miniImageNet base classes and the model is trained to output the correct query class. We fine-tune for 3 epochs with LoRA rank 16 and alpha 16, applying LoRA to all non-visual linear modules while keeping the visual modules frozen. Optimization uses a learning rate of ( 5 × 10 −5), warmup ratio 0.03. The model is then evaluated directly on all target datasets without any further tuning. 
+
+FSL Baselines. We compare against a diverse set of few-shot learning base-lines. CLIP [33] and SigLIP [49] are vision-language models that support 0-shot classification via text-image cosine similarity, and few-shot classification via K-nearest neighbour (KNN) search over image embeddings. CLIP uses a ViT-B/32 backbone, while the SigLIP model variant is base-patch16-224 . DI-NOv2 base model [30] and I-JEPA (ViT-H/14) [2] are vision-only self-supervised models, evaluated via KNN over frozen embeddings. Tip-Adapter [50] builds a training-free cache model from CLIP features (ViT-B/32). CAML [11] is a large-scale meta-learning method with a ViT-H encoder pre-trained on Laion-2B [37] that performs in-context classification from frozen embeddings. ProKeR [6] im-plements training-free kernel regression over pretrained CLIP features (ViT-B/32). Finally, SAVs [28] directly leverage internal representations of MLLMs for training-free few-shot classification. We implement SAVs on top of Qwen2.5-VL-7B-Instruct, making it the closest baseline to our approach. 
+
+4.3 Comparison to State-of-the-art 
+
+Table 3 compares our method against few-shot baselines and recent MLLM-based approaches across standard and novel benchmarks, evaluated under both semantic and anonymized settings. 10 Y. Wang et al. 
+
+Panel A: Main comparison Standard Datasets Novel Datasets Method mini UCF CUB Air. Dogs Dom. Avg Lego Ind. Yoga Hiero. Insect Sign Avg Total With labels (Semantic) 
+
+Reported results 
+
+SAVs [28] 1-shot – – 98.7 – – – – – – – – – – – –CAML [11] 1-shot 96.2 – 91.8 63.3 – – – – – – – – – – –GFSL [26] 1-shot 98.2 – 96.6 96.6 96.7 – – – – – – – – – –
+
+Reproduced baselines 
+
+CLIP [33] 0-shot 95.5 81.2 94.0 72.9 90.4 86.2 86.7 30.3 31.7 31.3 39.9 57.7 20.0 35.2 60.9 ProKeR [6] 1-shot 98.1 89.0 94.7 73.4 92.5 90.3 89.3 49.7 51.7 43.2 68.1 70.3 38.2 53.5 71.4 SigLip [49] 0-shot 98.3 85.4 97.5 79.0 98.7 88.2 91.5 63.0 49.4 91.8 47.2 72.9 20.2 57.4 74.5 SAVs [28] 1-shot 98.4 94.4 96.0 89.4 93.1 86.2 92.9 68.2 57.8 62.4 64.4 80.4 28.8 60.3 76.6 CAML [11] 1-shot 98.7 90.7 95.3 86.9 94.9 81.2 91.3 62.3 78.0 25.2 84.4 95.4 52.3 66.3 78.8 
+
+InternVL3 
+
+0-shot 99.1 95.7 89.6 73.8 93.7 92.0 90.7 53.1 60.8 58.5 45.2 68.2 18.8 50.8 70.7 1-shot 76.2 94.8 83.2 30.3 86.6 61.8 72.2 49.0 64.9 45.2 35.6 82.4 20.0 49.5 60.8 1-shot dec. 98.4 94.5 94.1 75.7 92.7 89.8 90.9 62.8 75.0 73.6 75.7 89.0 58.7 72.5 81.7 
+
+Qwen2.5-VL 
+
+0-shot 97.2 93.0 96.4 89.5 91.8 85.3 92.2 50.1 42.9 50.7 43.1 80.0 20.7 47.9 70.1 1-shot 88.1 84.7 66.6 61.9 81.0 73.6 76.0 54.9 49.9 67.9 66.0 88.8 59.3 64.5 70.2 1-shot dec. 98.5 93.7 96.9 94.6 95.8 90.5 95.0 65.5 73.5 80.6 78.1 93.3 67.7 76.5 85.7 
+
+Qwen3-VL 
+
+0-shot 99.1 96.6 96.5 89.1 96.4 92.6 95.1 63.4 62.8 66.0 48.1 80.1 21.3 57.0 76.0 1-shot 85.3 92.7 85.0 75.3 86.2 84.6 84.9 66.9 80.3 74.5 82.4 89.1 68.4 76.9 80.9 1-shot dec. 98.9 97.3 96.8 92.2 96.1 91.9 95.5 70.6 81.4 83.4 89.5 89.1 70.6 79.1 87.3 
+
+1-shot SFT 98.9 97.6 97.6 90.1 96.9 92.9 95.7 77.9 77.9 81.7 81.6 95.5 70.1 80.8 88.2 
+
+Without labels (Anonymous) 
+
+Reproduced baselines 
+
+I-JEPA [2] 1-shot 76.8 75.5 53.8 32.5 79.1 39.8 59.6 45.1 42.1 60.0 68.4 45.1 31.3 48.7 54.1 Tip-A. [50] 1-shot 97.7 82.2 93.9 70.9 90.2 87.0 87.0 31.2 39.5 33.2 42.2 62.1 21.5 38.3 62.6 CLIP [33] 1-shot 86.5 83.0 80.6 61.0 66.7 63.9 73.6 51.3 51.5 35.3 80.4 76.8 41.5 56.1 64.9 DINO [30] 1-shot 93.0 95.2 97.8 64.6 95.5 74.1 86.7 65.0 73.6 52.1 85.1 66.0 40.2 63.7 75.2 SigLip [49] 1-shot 91.3 88.6 90.4 85.2 84.7 70.1 85.1 70.3 75.7 62.4 87.9 91.0 48.2 72.6 78.8 
+
+InternVL3 
+
+1-shot 22.9 36.0 20.4 21.0 21.0 19.9 23.5 23.0 27.5 23.4 21.0 23.3 21.9 23.4 23.4 1-shot dec. 94.8 92.8 90.6 70.8 91.4 78.8 86.5 55.4 81.2 51.9 92.1 86.0 76.2 73.8 80.2 
+
+Qwen2.5-VL 
+
+1-shot 23.0 70.4 38.4 47.9 43.7 30.9 42.4 41.3 49.4 57.2 57.1 88.8 68.8 60.4 51.4 1-shot dec. 97.0 94.9 96.2 92.8 92.7 82.9 92.8 60.8 73.9 74.6 86.2 72.1 76.5 74.0 83.4 
+
+Qwen3-VL 
+
+1-shot 21.4 26.6 38.0 39.4 27.7 20.5 28.9 25.6 31.1 21.3 30.0 23.6 28.1 26.6 27.8 1-shot dec. 94.9 93.0 87.0 91.1 88.1 79.1 88.9 63.7 81.2 67.5 94.5 33.9 72.6 68.9 78.9 
+
+1-shot SFT 51.4 51.8 80.3 65.1 62.3 26.8 56.3 44.2 51.1 51.4 58.4 68.2 54.4 54.6 55.5 
+
+Panel B: With dataset-specific domain information Method mini UCF CUB Air. Dogs Dom. Avg Lego Ind. Yoga Hiero. Insect Sign Avg Total With labels (Semantic) 
+
+InternVL3 
+
+1-shot dec. 98.4 94.5 94.1 75.7 92.7 89.8 90.9 62.8 75.0 73.6 75.7 89.0 58.7 72.5 81.7 1-shot dec. + Dinfo 98.0 94.9 95.1 76.6 93.0 89.8 91.2 64.7 75.3 80.1 77.3 91.8 65.1 75.7 83.5 
+
+Qwen2.5-VL 
+
+1-shot dec. 98.5 93.7 96.9 94.6 95.8 90.5 95.0 65.5 73.5 80.6 78.1 93.3 67.7 76.5 85.7 1-shot dec. + Dinfo 98.5 94.3 97.6 95.8 96.5 91.0 95.6 66.4 74.2 84.3 88.1 97.0 80.9 81.8 88.7 
+
+Qwen3-VL 
+
+1-shot dec. 98.9 97.3 96.8 92.2 96.1 91.9 95.5 70.6 81.4 83.4 89.5 89.1 70.6 79.1 87.3 1-shot dec. + Dinfo 99.0 97.3 97.9 93.6 96.6 92.0 96.1 72.9 80.5 88.3 90.2 97.4 82.0 85.2 90.6 Without labels (Anonymous) 
+
+InternVL3 
+
+1-shot dec. 94.8 92.8 90.6 70.8 91.4 78.8 86.5 55.4 81.2 51.9 92.1 86.0 76.2 73.8 80.2 1-shot dec. + Dinfo 95.1 95.0 95.3 77.0 90.7 80.6 89.0 61.2 78.2 84.8 90.3 93.8 86.9 82.5 85.7 
+
+Qwen2.5-VL 
+
+1-shot dec. 97.0 94.9 96.2 92.8 92.7 82.9 92.8 60.8 73.9 74.6 86.2 72.1 76.5 74.0 83.4 1-shot dec. + Dinfo 97.2 92.4 97.4 95.2 94.7 84.3 93.5 63.0 72.1 84.3 83.0 97.5 82.0 80.3 86.9 
+
+Qwen3-VL 
+
+1-shot dec. 94.9 93.0 87.0 91.1 88.1 79.1 88.9 63.7 81.2 67.5 94.5 33.9 72.6 68.9 78.9 1-shot dec. + Dinfo 95.2 96.6 96.8 92.4 95.4 78.7 92.5 68.9 80.3 89.6 91.2 98.2 86.6 85.8 89.2 
+
+Table 3: Comparison with state-of-the-art on standard/novel benchmarks for 5-way 1-shot, resp. 0-shot if indicated. Panel A reports the main comparison; Panel B re-ports the effect of dataset-specific domain information Dinfo . dec. = decompose and 
+
+SFT = supervised fine-tuning. Best results are highlighted bold per subsection. Col-ored rows mark our method variants. 
+
+With semantic labels. On standard datasets, 0-shot MLLMs already achieve remarkably strong performance. For example, Qwen3-VL and InternVL3 reach above 90% average accuracy without any support examples. Interestingly, 1-shot in-context inference often performs worse than 0-shot (e.g., InternVL3 drops from 90.7% to 72.2% average; Qwen2.5-VL from 92.2% to 76.0%). This indicates that DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 11 
+
+adding support images does not guarantee effective adaptation and may even introduce interference when strong semantic priors dominate. In contrast, on novel datasets, the trend reverses: 1-shot generally improves over 0-shot. For instance, Qwen3-VL increases from 57.0% (0-shot avg) to 76.9% (1-shot avg), suggesting that support examples become more beneficial as pre-training overlap decreases. This highlights the importance of evaluating beyond saturated standard benchmarks. Across both dataset groups, our decompositional approach consistently out-performs 1-shot inference and matches or surpasses 0-shot performance on stan-dard benchmarks, while substantially outperforming 0-shot performance on novel datasets. Adding dataset-specific domain information further improves results, yielding the best overall averages (e.g., 90.6% for Qwen3-VL, 88.7% for Qwen2.5-VL) and establishing new state-of-the-art few-shot performance. Compared to the FSL baseline methods, mainly Qwen3-VL models outper-form current methods in the simple decomposed setting, while the other two models perform on par. This is expected for standard datasets, given the large-scale pretraining data, but the difference becomes more pronounced for novel datasets, where MLLMs significantly outperform our considered FSL baselines in most cases while remaining on par with the SFT baseline. 
+
+Without semantic labels (Anonymous). When semantic class names are removed, the performance of in-context 1-shot MLLMs drops dramatically. InternVL3 and Qwen3-VL collapse to near-random prediction (around 23–28% total average in 5-way classification), revealing a heavy reliance on semantic priors rather than true support–query alignment. Qwen2.5-VL shows slightly more robustness but still degrades substantially. In stark contrast, the decomposition approach remains highly effective in the anonymized regime. For all three MLLMs, our method restores strong few-shot performance. With Qwen3-VL, it surpasses the SFT baseline by 23.4 points. This shows that structured pairwise inference explicitly enforces visual corre-spondence and mitigates the semantic dominance. Interestingly, also in this setting, where MLLMs cannot rely on their textual knowledge, they are able to outperform few-shot baseline methods. We again observe that, also here, the performance difference to the baseline models is smaller on the standard benchmarks, but widens for the novel benchmark setting. This shows that MLLMs might have learned general visual patterns that help them to generalize beyond the training distribution. Moreover, in Panel B of Table 3, incorporating domain information leads to consistent overall gains across models and evaluation settings. The improve-ment is particularly clear on the novel datasets, suggesting that Dinfo provides useful high-level context about the label space when the classes are less famil-iar. These results indicate that lightweight domain descriptions can complement decision-based prediction and improve recognition without additional training. Overall, the results confirm that the proposed decomposed inference frame-work consistently enables robust few-shot adaptation across both semantic and anonymized settings, achieving state-of-the-art performance. 12 Y. Wang et al.                                                                                                                                                                                
+
+> Standard Datasets Novel Datasets
+> Method mini CUB Dogs Avg Lego Yoga Hiero. Avg Total With labels (Semantic)
+> InternVL3
+> 0-shot 99.1 89.6 93.7 94.1 53.1 58.5 45.2 52.3 73.2 0-shot dec. 97.0 88.2 91.5 92.2 49.4 53.9 42.4 48.6 70.4 1-shot (baseline) 76.2 83.2 86.6 82.0 49.0 45.2 35.6 43.3 62.6 1-shot calibrated 94.0 95.7 90.9 93.5 65.4 56.6 47.2 56.4 75.0 1-shot dec. (ours) 98.4 94.1 92.7 95.1 62.8 73.6 75.7 70.7 82.9 1-shot dec.+ Dinfo (ours) 98.0 95.1 93.0 95.4 64.7 80.1 77.3 74.0 84.7
+> Qwen2.5-VL
+> 0-shot 97.2 96.4 91.8 95.1 50.1 50.7 43.1 48.0 71.5 0-shot dec. 97.6 96.4 96.0 96.7 65.5 56.1 45.7 55.8 76.2 1-shot (baseline) 88.1 66.6 81.0 78.6 54.9 67.9 66.0 62.9 70.8 1-shot calibrated 94.8 96.1 92.7 94.5 64.1 70.7 72.7 69.2 81.8 1-shot dec. (ours) 98.5 96.9 95.8 97.1 65.5 80.6 78.1 74.7 85.9 1-shot dec.+ Dinfo (ours) 98.5 97.6 96.5 97.5 66.4 84.3 88.1 79.6 88.5
+> Qwen3-VL
+> 0-shot 99.1 96.5 96.4 97.3 63.4 66.0 48.1 59.2 78.2 0-shot dec. 96.2 96.0 95.9 96.0 63.4 62.7 46.7 57.6 76.8 1-shot (baseline) 85.3 85.0 86.2 85.5 66.9 74.5 82.4 74.6 80.0 1-shot calibrated 94.5 93.2 92.4 93.4 70.9 80.0 85.8 78.9 86.2 1-shot dec. (ours) 98.9 96.8 96.1 97.3 70.6 83.4 89.5 81.2 89.2 1-shot dec.+ Dinfo (ours) 99.0 97.9 96.6 97.8 72.9 88.3 90.2 83.8 90.8
+
+Table 4: Ablation on decomposition and context across standard and novel bench-marks (5-way). Top-1 accuracy (%). dec. = decompose, Dinfo = dataset specific domain info. Best and second-best results are highlighted bold and underlined per section. 
+
+4.4 Ablation 
+
+We ablate three design choices that determine the effectiveness of our framework. 
+
+Ablation of Decomposed Prompting. First, we analyze whether the performance gains stem from the binary decomposition itself or from the support–query com-parison it introduces. To this end, we consider a 0-shot decompose variant where no support image is given; the model answers: “Is this image depicting cn?Yes or No.” In Table 4, 0-shot decomposition does not improve over standard 0-shot inference and can even perform slightly worse (e.g., Qwen3-VL: 78.2% →
+
+76.8%). This indicates that the gains of 1-shot decomposition do not arise from the binary prompt structure, but from the support-query comparisons. 
+
+Ablation on Calibration Effects. Second, given that MLLMs exhibit strong lan-guage priors, we examine whether the performance of pairwise decomposition just stems from an implicit calibration. To this end, we consider an in-context 1-shot inference with calibration. Namely, we apply pointwise mutual informa-tion (PMI)-style calibration [51] to reduce option bias introduced by the prompt context. For each candidate class, we compute the standard prediction given the query image xq and support set S, and then subtract the score obtained when the query image is replaced by a placeholder text “query image is omitted” DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 13                                                   
+
+> Standard Datasets Novel Datasets
+> Scoring rule mini CUB Dogs Avg Lego Yoga Hiero. Avg Total (1) arg max [Confidence( Yes )] 73.3 84.6 86.6 81.5 46.9 71.2 68.2 62.1 71.8 (2) arg min [Score( No )] 97.0 96.1 92.9 95.3 64.1 74.4 85.7 74.7 85.0 (3) arg max [Score( Yes ) - Score( No )] 97.1 96.2 92.6 95.3 63.9 74.4 86.1 74.8 85.1 (4) arg max [Score( Yes )] 97.1 96.1 92.7 95.3 64.1 74.6 86.2 75.0 85.1
+
+Table 5: Comparison of pairwise scoring rules for Qwen2.5-VL in the 5-way 1-shot decomposed setting without semantic labels. All logit-style scoring variants perform nearly identically, confirming the scoring choice (4) of our method. 
+
+while keeping the rest of the prompt unchanged: P (y|xq , S) − P (y|S ). As shown in Table 4, PMI-style calibration mitigates option bias in in-context inference and improves total accuracy (e.g., InternVL3: 62.6% → 75.0%; Qwen3-VL: 80.0% 
+
+→ 86.2%). However, it remains inferior to decomposition. Replacing N-way infer-ence with pairwise decomposition consistently yields larger gains (e.g., Qwen3-VL: 86.2% → 89.2%), with particularly great improvements on novel datasets. 
+
+Evaluation of Logit scoring. Having established decomposition as the key com-ponent, we verify that its performance is robust to the choice of logit scoring rule used for ranking. Our pairwise inference ranks each support–query pair using the logit score of the Yes token (Eq. (6)). Table 5 compares alternative scoring strategies on Qwen2.5-VL, including: (1) using the model’s generated confidence score output for Yes ; (2) minimizing the No logit score: Score( No ); (3) a PMI-style correction Score( Yes ) - Score( No ); (4) the direct Yes logit score. The exact prompt used to obtain the confidence score is provided in the supplementary material. The three logit-based variants yield nearly identical results across all datasets, confirming that the method is robust to the choice of ranking rule. In contrast, using the model’s explicit confidence score leads to a substantial drop in accuracy (e.g., 73.3 on mini-ImageNet, 46.9 on Lego), indicating that generative confidence signals are less reliable for fine-grained pairwise matching. We provide further details on scoring in the supplement. 
+
+4.5 5-way 5-shot Analysis 
+
+We analyze the effect of increasing the number of shots under a fixed 5-way set-ting. The 5-way 5-shot episodes are constructed by extending the corresponding 5-way 1-shot episodes with four additional support samples per class, allowing for a controlled comparison (see also Equation 6). Results are reported in Table 6 for Yoga, Lego, and Industrial datasets. While in-context learning benefits from a single support example, its per-formance deteriorates when moving to 5-shot, suggesting that longer in-context prompts introduce interference rather than improved adaptation. In contrast, decomposition with Dinfo consistently improves from 1-shot to 5-shot, achieving the best average accuracy (85.8%), outperforming the SFT baseline. This be-havior highlights a key advantage of decomposition: additional support images contribute positively through independent pairwise aggregation. 14 Y. Wang et al. 
+
+> Novel Datasets
+
+Method Yoga Lego Industrial Avg 5w-1s 5w-5s 5w-1s 5w-5s 5w-1s 5w-5s 5w-1s 5w-5s In-context 74.5 45.9 66.9 43.9 80.3 60.9 73.9 50.2 Decompose + Dinfo 88.3 91.8 72.9 80.7 80.5 85.0 80.6 85.8 
+
+SFT baseline 81.5 88.0 77.6 77.3 78.2 82.4 79.1 82.6 
+
+Table 6: Few-shot classification accuracy (%) on Yoga, Lego, and Industrial datasets under semantic 5-way 1-shot and 5-way 5-shot settings using Qwen3-VL. 3 5 10 20 
+
+> N-way
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Average Accuracy (%)
+> SFT | Total avg
+> In-context | Standard avg
+> In-context | Novel avg
+> In-context | Total avg
+> Dec. +D_info | Standard avg
+> Dec. +D_info | Novel avg
+> Dec. +D_info | Total avg
+
+(a) N -way-1-shot accuracy for comparing In-context and Decompose + domain info perfor-mance. We report the average accuracy for stan-dard and novel datasets, as well as for all. 3 5 10 20 
+
+> N-way
+> 0
+> 1000
+> 2000
+> 3000
+> 4000
+> 5000
+> Latency per Episode (ms)
+> In-context
+> Decompose
+
+(b) N -way-1-shot runtime analysis comparing 
+
+In-context and Decompose + domain info. We report the mean episode latency for single-pass and decomposed batch inference (batch size 64). 
+
+Fig. 3: Scaling with N -way using Qwen3-VL. (a) Accuracy comparison between 
+
+In-context (with and without SFT) and Decompose + domain info. (b) Correspond-ing runtime analysis under identical decoding and batching settings. N ∈ { 3, 5, 10 , 20 }.
+
+4.6 N-way 1-shot Analysis 
+
+We further analyze the scalability with respect to the number of classes N ∈{3, 5, 10 , 20 } under the 1-shot setting. In Fig. 3a, In-context inference degrades sharply as N increases. While performance is competitive at small N , accu-racy drops substantially at 10- and 20-way episodes. In contrast, our decom-posed method remains robust across all N , outperforming the SFT baseline. The performance gap widens as the task becomes more challenging, demon-strating that structured pairwise comparison scales more reliably than standard N-way prompting. This trend holds consistently across standard, novel, and av-eraged results, confirming that the improved scalability is not dataset-specific but inherent to the inference structure. 
+
+4.7 Runtime 
+
+The main limitation of decomposition is that it requires access to token logits and incurs O(N ) comparisons for an N -way problem. Thus, to investigate the DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 15 
+
+computational cost difference, we measure runtime as end-to-end episode latency (ms) in the 1-shot N -way setting using Qwen3-VL ( N ∈ { 3, 5, 10 , 20 }), averaged over 50 episodes per N . We compare in-context prompting, which requires one forward pass per episode, and with the proposed pairwise decomposition, which requires N comparisons per episode. All experiments were conducted on a single NVIDIA H100 GPU (80GB) [29] using Bfloat16 precision, deterministic de-coding, left padding, CUDA synchronization, and a batch size of 64 for both episodes and generation. We report the mean latency per episode. Results in Figure 3b show approximately linear scaling for both single infer-ence and decomposition. The runtime gap is modest at small N but widens at 10–20 way (approximately 1.7× slower at 20-way), reflecting the computational trade-off introduced by structured decomposition. While those numbers reflect the single GPU setting, we argue that, especially for real-world scenarios, settings with larger N or K would most likely aim for a parallelization across multiple GPUs, as all forward paths can be processed independently, which would allow to mitigate longer runtime in those cases if needed. 
+
+5 Conclusion 
+
+We presented a simple yet effective framework for few-shot image classification with multimodal large language models based on Decompose, Compare, Decide 
+
+(DeCoDe). Instead of prompting the model to directly select among class names, our method reformulates classification as binary support–query matching, using the logit of the Yes response as a similarity score aggregated across support examples. This structured inference encourages direct visual comparison and reduces reliance on semantic priors from class labels. Across both standard and novel benchmarks, the proposed decomposition consistently improves performance over conventional in-context prompting and competitive training-free baselines, achieving state-of-the-art results. The gains are particularly pronounced in the anonymized setting where semantic labels are removed, revealing that structured pairwise comparison more effectively lever-ages the support set. These findings suggest a practical inference-time adaptation strategy: users can define new visual categories using a few support images, while the MLLM classifies queries by explicitly comparing them against the provided references without parameter updates. Beyond the inference method, we introduce a controlled evaluation protocol that disentangles semantic priors from visual adaptation by comparing zero-shot and few-shot regimes with and without semantic labels across diverse datasets. Our results show that standard in-context prompting relies heavily on semantic cues, while the proposed decomposition better captures support adaptation. 16 Y. Wang et al. 
+
+References 
+
+1. Al-Barham, M., Alsharkawi, A., Al-Yaman, M., Al-Fetyani, M., Elnagar, A., SaAleek, A.A., Al-Odat, M.: Rgb arabic alphabets sign language dataset. arXiv preprint arXiv:2301.11932 (2023) 2. Assran, M., Duval, Q., Misra, I., Bojanowski, P., Vincent, P., Rabbat, M., Le-Cun, Y., Ballas, N.: Self-supervised learning from images with a joint-embedding predictive architecture. In: CVPR (2023) 3. Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., et al.: Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 (2025) 4. Bai, S., Chen, K., Liu, X., Wang, J., Ge, W., Song, S., Dang, K., Wang, P., Wang, S., Tang, J., et al.: Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923 (2025) 5. Baldassini, F.B., Shukor, M., Cord, M., Soulier, L., Piwowarski, B.: What makes multimodal in-context learning work? In: CVPR (2024) 6. Bendou, Y., Ouasfi, A., Gripon, V., Boukhayma, A.: Proker: A kernel perspective on few-shot adaptation of large vision-language models. In: CVPR (2025) 7. Chen, G., Yao, W., Song, X., Li, X., Rao, Y., Zhang, K.: Plot: Prompt learning with optimal transport for vision-language models. In: ICLR (2023) 8. Chi, Z., Gu, L., Liu, H., Wang, Z., Wu, Y., Wang, Y., Plataniotis, K.N.: Learning to adapt frozen CLIP for few-shot test-time domain adaptation. In: ICLR (2025) 9. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al.: An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 (2020) 10. Farina, M., Mancini, M., Iacca, G., Ricci, E.: Rethinking few-shot adaptation of vision-language models in two stages. In: CVPR (2025) 11. Fifty, C., Duan, D., Junkins, R.G., Amid, E., Leskovec, J., Re, C., Thrun, S.: Context-aware meta-learning. In: ICLR (2024) 12. Finn, C., Abbeel, P., Levine, S.: Model-agnostic meta-learning for fast adaptation of deep networks. In: ICML (2017) 13. Franken, M., van Gemert, J.C.: Automatic egyptian hieroglyph recognition by retrieving images as texts. In: ACM MM (2013) 14. Gao, P., Geng, S., Zhang, R., Ma, T., Fang, R., Zhang, Y., Li, H., Qiao, Y.: Clip-adapter: Better vision-language models with feature adapters. IJCV (2024) 15. Garciam, P.: Lego brick sorting image recognition (2019), kaggle 16. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W.: Lora: Low-rank adaptation of large language models. In: ICLR (2022) 17. Hu, Z., Wei, Y., Shen, L., Yuan, C., Tao, D.: Unlocking tuning-free few-shot adapt-ability in visual foundation models by recycling pre-tuned loras. In: CVPR (2025) 18. Khattak, M.U., Rasheed, H., Maaz, M., Khan, S., Khan, F.S.: Maple: Multi-modal prompt learning. In: CVPR (2023) 19. Khosla, A., Jayadevaprakash, N., Yao, B., Li, F.F.: Novel dataset for fine-grained image categorization: Stanford dogs 20. Kravets, A., Chen, D., Namboodiri, V.P.: Rethinking few shot clip benchmarks: A critical analysis in the inductive setting. In: ICCV (2025) 21. Kukleva, A., Kuehne, H., Schiele, B.: Generalized and incremental few-shot learn-ing by explicit learning and calibration without forgetting. In: ICCV (2021) DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 17 22. Li, B., Zhang, Y., Guo, D., Zhang, R., Li, F., Zhang, H., Zhang, K., Zhang, P., Li, Y., Liu, Z., et al.: Llava-onevision: Easy visual task transfer. arXiv preprint arXiv:2408.03326 (2024) 23. Li, S., Liu, F., Hao, Z., Wang, X., Li, L., Liu, X., Chen, P., Ma, W.: Logits decon-fusion with clip for few-shot learning. In: CVPR (2025) 24. Li, Y., Li, Y., Vasconcelos, N.: Resound: Towards action recognition without rep-resentation bias. In: ECCV (2018) 25. Lin, Z., Pathak, D., Li, B., Li, J., Xia, X., Neubig, G., Zhang, P., Ramanan, D.: Evaluating text-to-visual generation with image-to-text generation. In: ECCV (2024) 26. Liu, F., Cai, W., Huo, J., Zhang, C., Chen, D., Zhou, J.: Making large vision language models to be good few-shot learners. In: AAAI (2025) 27. Maji, S., Kannala, J., Rahtu, E., Blaschko, M., Vedaldi, A.: Fine-grained visual classification of aircraft. arXiv preprint arXiv:1306.5151 (2013) 28. Mitra, C., Huang, B., Chai, T., Lin, Z., Arbelle, A., Feris, R., Karlinsky, L., Darrell, T., Ramanan, D., Herzig, R.: Enhancing few-shot vision-language classification with large multimodal model features. In: ICCV (2025) 29. NVIDIA: NVIDIA H100 Tensor Core GPU Architecture (2022), whitepaper 30. Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., et al.: Dinov2: Learning robust visual features without supervision. arXiv preprint arXiv:2304.07193 (2023) 31. Peng, X., Bai, Q., Xia, X., Huang, Z., Saenko, K., Wang, B.: Moment matching for multi-source domain adaptation. In: ICCV (2019) 32. Piosenka, G.: Butterfly and moths image classification 100 species (2023), kaggle 33. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., Sutskever, I.: Learning transferable visual models from natural language supervision. In: ICML (2021) 34. Ravi, S., Larochelle, H.: Optimization as a model for few-shot learning. In: ICLR (2017) 35. Saxena, S.: Yoga pose image classification dataset (2021), kaggle 36. Schuerrle, B., Sankarappan, V.: Industrial classification dataset (2023), kaggle 37. Schuhmann, C., Beaumont, R., Vencu, R., Gordon, C., Wightman, R., Cherti, M., Coombes, T., Katta, A., Mullis, C., Wortsman, M., et al.: Laion-5b: An open large-scale dataset for training next generation image-text models. In: NeurIPS (2022) 38. Shvetsova, N., Nagrani, A., Schiele, B., Kuehne, H., Rupprecht, C.: Unbiasing through textual descriptions: Mitigating representation bias in video benchmarks. In: CVPR (2025) 39. Snell, J., Swersky, K., Zemel, R.: Prototypical networks for few-shot learning. In: NeurIPS (2017) 40. Soomro, K., Zamir, A.R., Shah, M.: Ucf101: A dataset of 101 human actions classes from videos in the wild. arXiv preprint arXiv:1212.0402 (2012) 41. Sung, F., Yang, Y., Zhang, L., Xiang, T., Torr, P.H., Hospedales, T.M.: Learning to compare: Relation network for few-shot learning. In: CVPR (2018) 42. Tian, Y., Wang, Y., Krishnan, D., Tenenbaum, J.B., Isola, P.: Rethinking few-shot image classification: a good embedding is all you need? In: ECCV (2020) 43. Udandarao, V., Gupta, A., Albanie, S.: Sus-x: Training-free name-only transfer of vision-language models. In: ICCV (2023) 44. Vinyals, O., Blundell, C., Lillicrap, T., Wierstra, D., et al.: Matching networks for one shot learning. In: NeurIPS (2016) 18 Y. Wang et al. 45. Wah, C., Branson, S., Welinder, P., Perona, P., Belongie, S., et al.: The caltech-ucsd birds-200-2011 dataset. Tech. rep. 46. Yang, C.F., Yin, D., Hu, W., Ji, H., Peng, N., Zhou, B., Chang, K.W.: Verbalized representation learning for interpretable few-shot generalization. In: ICCV (2025) 47. Yao, H., Zhang, R., Xu, C.: Visual-language prompt tuning with knowledge-guided context optimization. In: CVPR (2023) 48. Yu, T., Lu, Z., Jin, X., Chen, Z., Wang, X.: Task residual for tuning vision-language models. In: CVPR (2023) 49. Zhai, X., Mustafa, B., Kolesnikov, A., Beyer, L.: Sigmoid loss for language image pre-training. In: ICCV (2023) 50. Zhang, R., Wei, Z., Fang, R., Gao, P., Li, K., Dai, J., Qiao, Y., Li, H.: Tip-adapter: Training-free adaption of clip for few-shot classification. In: ECCV (2022) 51. Zhao, Z., Wallace, E., Feng, S., Klein, D., Singh, S.: Calibrate before use: Improving few-shot performance of language models. In: ICML (2021) 52. Zhou, K., Yang, J., Loy, C.C., Liu, Z.: Conditional prompt learning for vision-language models. In: CVPR (2022) 53. Zhou, K., Yang, J., Loy, C.C., Liu, Z.: Learning to prompt for vision-language models. IJCV (2022) 54. Zhu, B., Niu, Y., Han, Y., Wu, Y., Zhang, H.: Prompt-aligned gradient for prompt tuning. In: ICCV (2023) 55. Zhu, J., Wang, W., Chen, Z., Liu, Z., Ye, S., Gu, L., Tian, H., Duan, Y., Su, W., Shao, J., et al.: Internvl3: Exploring advanced training and test-time recipes for open-source multimodal models. arXiv preprint arXiv:2504.10479 (2025) DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 19 
+
+A Supplementary Materials 
+
+A.1 Dataset Details                                                   
+
+> Dataset Classes Total Images Avg Img/Cls Eval Classes
+> Standard mini-ImageNet [44] 100 60,000 600 20 UCF101 [40] 101 13,320 132 21 CUB [45] 200 11,788 59 50 Aircraft [27] 100 10,000 100 100 Dogs [19] 120 20,580 172 30 DomainNet [31] 345 596,006 1,728 61 Novel Lego bricks [15] 20 4,580 229 20 Industrial [36] 10 100,000 10,000 10 Yoga pose [35] 107 5,991 56 107 Egyptian hieroglyphs [13] 164 17,388 106 164 Flying insects [32] 100 13,594 136 100 Arabic sign language [1] 31 7,856 253 31
+> Table 7: Overview of few-shot learning datasets. “Eval Classes” is the number of classes used for evaluation (sampled test split).
+
+Table 7 provides an overview of the datasets used for few-shot evaluation in this work. In the Dogs [19] dataset, to reduce background noise, we crop the dog image using the official bounding box annotation. In the Aircraft [27] dataset, we use the granularity of variant as class, forming a total of 100 classes. In the Arabic sign language [1] dataset, we resize the images to have a width of 340 without distortion for lower computational costs. The Industrial parts [36] dataset contains 10 types of industrial products. Each is represented as a CAD object and rendered from various angles. We provide example images from the novel datasets in Figure 4. 
+
+A.2 Implementation Details 
+
+Foundational Model Implementation. We compare against four foundational vision baselines: SigLIP ( base-patch16-224 ) [49] and CLIP ( ViT-B/32 ) [33], both vision-language models with dual encoders that support 0-shot and 1-shot evaluation; and two vision-only models, DINOv2 ( base ) [30] and I-JEPA (ViT-H/14 ) [2] , which support only 1-shot. For 0-shot, CLIP and SigLIP use text prompts of the form "This is a photo of {class}." and predict via argmax over image–text similarity (softmax for CLIP, sigmoid for SigLIP). For 1-shot, all models extract L2-normalized image embeddings: CLS token for DINOv2, pooler 20 Y. Wang et al. an 88  large marble  comet moth 
+
+Dal  Meem  Waw 
+
+parivrtta trikonasana  lolasana  ustrasana 
+
+adapter plate triangular  engine part cooler square  injection pump 
+
+Plate 1x1 Slope  Brick 1x3  Plate 1x2 Grill     
+
+> swallow wedjat eye clump of papyrus arm of negation lasso
+
+Fig. 4: Example images from the novel datasets (ordered top-down): Lego bricks [15], Industrial parts [36], Yoga [35], Egyptian hieroglyphs [13], Flying insects [32], Arabic sign language [1]. DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 21 
+
+or patch-mean for I-JEPA, and get_image_features for CLIP and SigLIP. Then assign each query to its nearest support-set prototype in cosine similarity. All models run in float16 without fine-tuning. 
+
+CAML Implementation. CAML [11] is an in-context meta-learner for 1-shot clas-sification without fine-tuning. We use CAML-Laion2b (frozen ViT-H/14, Laion-2B pretrained). Support and query images are encoded by the frozen backbone; features are arranged as [q, s1, . . . , sN ] and each position is concatenated with a label embedding (query: unknown embedding; support: class embeddings). The transformer encoder outputs logits over N classes for the query, and the predic-tion is obtained by arg max over the logits. 
+
+ProKeR Implementation. ProKeR [6] is a training-free few-shot method that corrects CLIP’s zero-shot logits using the support set. We use frozen CLIP (ViT-B/32) with prompts "a photo of a {class}." On the support set, ProKeR fits the gap between ground-truth labels and zero-shot predictions using an RBF kernel over normalized image features, then interpolates this correction to the query images. Hyperparameters: β = 1 .0, λ = 0 .1 (default). 
+
+SAVs Implementation. SAVs [28] uses sparse attention activations from a frozen LMM (Qwen2.5-VL-7B) for few-shot classification. Each sample is a single im-age and a text prompt (e.g., "What class is shown? Answer with the class name only." ); there are no in-prompt few-shot examples. We extract attention output vectors at the last input token, average them per class over the support set to form class prototypes, and select the top 20 heads that best predict sup-port labels. For each query, each head votes for the class with the highest cosine similarity to that head’s prototype; the majority vote is the final prediction. 
+
+Tip-Adapter Implementation. Tip-Adapter [50] is a training-free few-shot method that augments zero-shot CLIP with a support-set cache. We use frozen CLIP (ViT-B/32) and prompts "a photo of a {class}." Support and query im-ages are encoded and L2-normalized; support features serve as cache keys, and one-hot labels as cache values. Query logits combine zero-shot CLIP logits with a weighted sum over support votes, where the weight depends on the cosine similarity to each support sample. Hyperparameters: β = 5 .5, α = 1 .0 (default). 
+
+InternVL3 Implementation. InternVL3-8B [55] combines an InternViT vision en-coder with a Qwen2.5-7B language backbone via an MLP connector. Images are dynamically tiled into up to 4 patches of 448 ×448 pixels (aspect-ratio-preserving) and normalized using ImageNet statistics. The model runs in bfloat16 ; infer-ence uses max_new_tokens=5 and greedy decoding. 
+
+Qwen2.5-VL Implementation. We use Qwen2.5-VL-7B-Instruct [4], which com-bines a dynamic-resolution ViT with 14 ×14 patch size, window attention, MRoPE, and a Qwen2.5-LM backbone. Images are processed at native resolution with the processor defaults. The model runs in bfloat16 ; inference uses max_new_tokens=5 
+
+and greedy decoding. 22 Y. Wang et al.                         
+
+> Dataset Dinfo text Example class labels
+> mini-ImageNet [44] –house finch; triceratops; Tibetan mastiff UCF101 [40] action category ApplyEyeMakeup; BasketballDunk; PlayingGuitar CUB [45] bird species Black-footed Albatross; Laysan Albatross; Fish Crow Aircraft [27] aircraft variant Gulfstream V; 727-200; Saab 340 Dogs [19] dog breed Chihuahua; Saluki; Pekinese DomainNet [31] –aircraft carrier; cello; lighthouse Lego [15] Lego brick type Brick 1 ×3; Brick 2 ×2 Slope; Plate 2 ×4Industrial [36] industrial product bracket big; engine part cooler square; screw Yoga [35] yoga pose tittibhasana; vajrasana; bakasana Egyptian hieroglyph [13] Egyptian hieroglyph road with shrubs; cow with calf; sun disk Flying insects [32] insect species Red Cracker; An 88; Danaid Eggfly Arabic sign language [1] sign language Alef; Reh; Qaf
+
+Table 8: Mapping of datasets to their domain information and example class labels. 
+
+Qwen3-VL Implementation. We use Qwen3-VL-8B-Instruct [3], which combines a ViT encoder with 16 ×16 patch size, a Qwen3-LM backbone, Interleaved-MRoPE positional encoding, and DeepStack multi-level feature fusion. Images are processed with dimensions resized to the nearest multiple of 32. The model runs in bfloat16 ; inference uses max_new_tokens=5 and greedy decoding. 
+
+A.3 Prompt Templates and Formatting 
+
+Logit Scoring Using Confidence. In Section 4.4, we discuss the use of the model’s generated confidence score output for Yes . The exact prompt used in the exper-iment is demonstrated as follows: 
+
+<Image: xsn,k ><Image: xq >Are the two images depicting the same Dinfo ? Reply in exactly this format: ConfidenceYes: <number from 0 to 100> Rules: ConfidenceYes must be between 0 and 100, where 100 means fully confident they are the same. Output exactly this line. 
+
+Domain Information for Each Dataset. Table 8 lists the corresponding Dinfo 
+
+(domain-specific concept) for all evaluated datasets. For general-purpose datasets such as mini-ImageNet [44] and DomainNet [31], we do not specify a dataset-specific domain term. Instead, following the question "...depicting the same class?" , we insert: "You should focus on the concept depicted in the image rather than the domain or texture." on the Dinfo mode. DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 23                                  
+
+> Instruction-following score (%) ↑
+> Model mini CUB Yoga Lego Avg. Sem. Anon. Sem. Anon. Sem. Anon. Sem. Anon.
+> Qwen3-VL 100.0 100.0 100.0 100.0 99.9 100.0 99.1 100.0 99.9 InternVL3 87.3 100.0 94.0 100.0 89.6 99.2 100.0 100.0 96.3
+> Table 9: Instruction-following score (%) of in-context prompting on four datasets for both semantic-label ( Sem. ) and anonymous ( Anon. ) settings, computed as 100 −
+> instruction-following error rate.
+
+A.4 Instruction Following 
+
+We observe that the native responses of MLLMs tend to be verbose, which could incur additional noise in answer extraction. Thus, for in-context prompts, we in-sert instructions to enforce the model to output expected answers. For prompts with semantic labels, we require the model to output options by appending: 
+
+"Respond with only the option number (1-5), e.g. 1 or 2." For prompts without semantic labels, we append: "Respond with only the class label (e.g. Class 1 or Class 2)." 
+
+We use a deterministic regex-based parser to extract the predicted class. For semantic-label prompts, we match the first standalone option number; for anonymous-label prompts, we match the first case-insensitive pattern of the form 
+
+Class <n> . Outputs with no valid match are counted as incorrect. Furthermore, we compute an instruction-following score, which is the per-centage of times the model outputs text that follows the instruction. In Table 9, Qwen3-VL achieves almost perfect instruction-following performance across all datasets and both prompt settings. InternVL3 also performs well overall, es-pecially in the anonymous setting, but shows lower instruction-following scores than Qwen3-VL on several semantic-label settings. 24 Y. Wang et al. Qwen3-VL 2B Qwen3-VL 32B Method std (m,c,d) nvl (y,h,s) Avg std (m,c,d) nvl (y,h,s) Avg 0-shot 92.7 35.2 63.9 97.3 53.7 75.5 1-shot 85.6 60.2 72.8 91.7 81.9 86.8 1-shot dec. 84.8 68.6 76.7 97.6 87.3 92.5             
+
+> Above: with labels (Semantic); Below: without labels (Anonymous) 1-shot 25.9 31.6 28.7 75.2 85.6 80.4 1-shot dec. 93.3 77.5 85.4 86.1 89.5 87.8
+
+Table 10: Evaluation on Qwen3-VL 2B and 32B models 
+
+A.5 Cross-model Transferability 
+
+To examine whether the gain from decomposition transfers across model scales, we additionally evaluate Qwen3-VL-2B/32B in Table 10. Decomposition im-proves the average performance for both model sizes, suggesting that the ben-efit is not restricted to a particular model capacity. The gains are especially clear on novel datasets and in the anonymous setting, where direct label-based recognition is more challenging. For Qwen3-VL-2B, decomposition substantially improves the anonymous average from 28.7 to 85.4, while for Qwen3-VL-32B, it improves the semantic average from 86.8 to 92.5 and the anonymous aver-age from 80.4 to 87.8. These results indicate that decomposition is robust for improving few-shot recognition across both compact and large MLLMs. 
+
+A.6 Few-shot Action Recognition with Decomposed Prompting 
+
+In this section, we explore the effectiveness of our DeCoDe method adapted to solving the task of few-shot action recognition. We additionally evaluate on UCF101 [40] and Diving48 [24], following the same few-shot evaluation protocol as in the main paper. Diving48 is a fine-grained video action recognition dataset focused on diving actions, making it complementary to UCF101 for evaluating video understanding. We evaluate at 2 FPS for UCF and 8 FPS for Diving48. 
+
+Table 11: Video few-shot results on UCF and Diving48.         
+
+> Setting UCF101 Diving48 With labels (Semantic)
+> Qwen2.5-VL-7B
+> 0-shot 95.9 22.7 1-shot 96.8 24.7 1-shot dec. 96.4 35.5
+
+As shown in Table 11, Qwen2.5-VL already achieves near-saturated perfor-mance on UCF101 in the 0-shot setting, leaving limited room for improvement. In contrast, its performance on Diving48 is much lower, reflecting the fine-grained and temporally sensitive nature of the dataset. Our decision-based variant sub-stantially improves the Diving48 result from 24.7 to 35.5 in the 1-shot setting, while maintaining competitive performance on UCF101. This suggests that our DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 25                       
+
+> Prompt mini CUB Dogs Lego Yoga Hiero. Avg
+> Original prompt 99.0 97.9 96.6 72.9 88.3 90.8 90.9 Alternative prompt (without support reference) 98.7 97.3 96.3 73.1 89.5 88.8 90.6
+> Table 12: Few-shot classification accuracy (%) of Qwen3-VL using decomposition with semantic label and domain information under two prompt variants.
+
+method can be beneficial for few-shot action recognition, while there is a lack of multi-video input training and highly dynamic video training. 
+
+A.7 Exploring Prompts and Domain Information 
+
+In this section, we explore more prompt choices and domain information. 
+
+Alternative prompt for the decomposed method with semantic label. In the orig-inal prompt for the decomposed method with semantic label (Figure 2e), we explicitly stated that the first image is from the support set and asked to com-pare with the support image. To investigate whether this support reference has an effect, we provide an alternative prompt :       
+
+> <Image: xsn,k ><Image: xq>The semantic label of the first image is: cn.Does the second image depict the same Dinfo as the first image? Answer Yes or No.
+
+In Table 12, the performance difference between using the original prompt and the alternative prompt is minor. This result shows that the decomposed prompting method is not sensitive to a slight change in the prompt text. 
+
+Alternative prompt for in-context prompting. The current 1-shot in-context prompt-ing we use in this work is in an interleaved fashion to start with support images. We explored four alternative prompts: 1. Put the query image first, followed by the support images ( query first ). 2. Redefine the few-shot classification problem as an in-context visual matching task ( visual match ). 3. Present the support images and query image first, followed by the text de-scription and instruction ( images then text ). 4. Standard in-context prompt in Chain of Thought (CoT) style, we use Qwen3-VL-Thinking-8B for this prompt, and set max_token=600. 26 Y. Wang et al. 
+
+> Novel Datasets
+
+Prompt Setting Yoga Hiero. Sign Avg. With semantic label 
+
+Standard in-context 74.5 82.4 68.4 75.1 
+
+1. Query first 76.7 77.8 56.1 70.2 3. Images then text 9.0 13.8 12.5 11.8 4. CoT (Thinking) 41.7 68.4 24.1 44.7 
+
+Anonymous 
+
+Standard in-context 20.3 30.0 28.1 26.1 1. Query first 70.5 80.5 52.5 67.8 
+
+2. Visual match 18.5 12.5 15.2 15.4 3. Images then text 5.9 20.8 8.4 11.7 4. CoT (Thinking) 9.0 47.3 2.3 19.5 
+
+Table 13: In-context prompt exploration on three novel datasets using Qwen3-VL. Standard in-context denotes the interleaved in-context prompting used in the main paper. We experimented with both the semantic and anonymous settings. 
+
+1. Query first prompt: 
+
+<Image: xq >What is this? Match it to one of the options below. <Image: xs
+
+> 1,1
+
+> Option 1: c1.... <Image: xs
+
+> 5,1
+
+> Option 5: c5.Which option matches the query image shown first? Choose one of: 1. c1; ...; 5. c5
+
+2. Visual match prompt: 
+
+<Image: xs
+
+> 1,1
+
+>Image 1. ... <Image: xs
+
+> 5,1
+
+>Image 5. <Image: xq >Which image (1-5) is most visually similar to the last image? Answer with 1-5 only. DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 27 
+
+3. Images then text prompt:       
+
+> <Image: xs
+> 1,1>... <Image: xs
+> 5,1><Image: xq>Image 1 belongs to Option 1: c1; ...; Image 5 belongs to Option 5: c5.What class is in the last image? Choose one of the options (1-5).
+
+4. CoT style prompt (Thinking):           
+
+> <Image: xs
+> 1,1> What is this? c1(option 1). ... <Image: xs
+> 5,1> What is this? c5(option 5). The following image is the query image. <Image: xq>So what is this? Choose one of the options: 1. c1; ...; 5. c5
+> Think step by step, then output exactly one final line in this format: Final answer: <number>
+
+In Table 13, under the semantic-label setting, the standard in-context prompt achieves the best average accuracy, while placing the query image first slightly improves on Yoga. Under the anonymous setting, the query-first prompt sub-stantially outperforms the standard in-context prompt, whereas visual-match and images-then-text formulations perform poorly. We observe that placing the query image before the support images sub-stantially improves anonymous in-context prompting. One plausible explanation is the autoregressive structure of MLLMs: changing the order may alter how later textual predictions condition on the query and support content. We do not directly test the underlying mechanism, so we treat this as an empirical prompt-order effect rather than a confirmed causal-attention explanation. How-ever, query-first still performs worse than decomposed prompting, which achieves 93.0 average across those three datasets. 
+
+Alternative Domain Information. We experiment with more choices of domain information. We also let the model automatically generate domain information by inputting five randomly sampled images and ask the model to write a short phrase to describe these images. In Table 14, the results show that decomposed prompting is fairly robust to the exact choice of Dinfo as long as the term remains semantically aligned with the dataset. For Yoga, several related variants (e.g., 
+
+pose , body pose , and action ) perform similarly well, with body pose giving the best result. For Arabic sign language, the automatically generated term hand gesture performs best, even surpassing our manually chosen sign language . For Egyptian hieroglyphs, several semantically related terms remain competitive, and the generic term class yields the highest accuracy. In contrast, an unrelated descriptor ( kind of flower ) consistently causes a large drop across all datasets. 28 Y. Wang et al.                                           
+
+> Yoga Sign Hiero.
+> Dinfo Acc. Dinfo Acc. Dinfo Acc.
+> class 67.5 class 72.6 class 94.5
+> yoga pose (we use) 89.6 sign language (we use) 86.6 Egyptian hieroglyph (we use) 91.2 pose 89.9 Arabic sign language 66.4 hieroglyph 93.7 body pose 90.8 Arabic alphabet sign language 59.6 drawing 94.0 action 90.5 Arabic sign language alphabet 57.1 icon 94.2 yoga stretch (auto) 88.8 hand gesture (auto) 90.0 ancient symbol (auto) 93.5 kind of flower (unrelated) 20.6 kind of flower (unrelated) 24.0 kind of flower (unrelated) 72.9
+
+Table 14: Effect of different domain information Dinfo in decomposed prompting (anonymous) with Qwen3-VL on three novel datasets. “(we use)” denotes the domain term used in the main paper, while “(auto)” denotes a term automatically generated by Qwen3-VL. Best and second-best results are highlighted in bold and underlined. Qwen3-VL-8B std (mini, cub, dog) nvl (yoga, hiero., sign) Avg 1-shot (baseline) 85.5 75.1 80.3 1-shot + Dinfo 87.5 74.1 80.8 1-shot dec. (ours) 97.3 81.2 89.2 1-shot dec. + Dinfo (ours) 97.8 86.8 92.3 
+
+Above: with labels (Semantic); Below: without labels (Anonymous) 1-shot (baseline) 29.0 26.5 27.8 1-shot + Dinfo 31.9 24.8 28.4 1-shot dec. (ours) 90.0 78.2 84.1 1-shot dec. + Dinfo (ours) 95.8 89.1 92.5 
+
+Table 15: Effect of applying Dinfo to in-context and decomposed prompting. 
+
+Thus, the precise wording of Dinfo is not critical, while the semantic domain relevance is essential. 
+
+Applying domain information to in-context prompting. We also test whether 
+
+Dinfo alone improves standard in-context prompting. Specifically, we modify the query instruction from “So what is this?” to “So what is this Dinfo ?” while keeping the same N-way in-context structure. As shown in Table 15, this change yields only marginal average gains for direct in-context inference, from 80.3 to 80.8 in the semantic setting and from 27.8 to 28.4 in the anonymous setting. In contrast, 
+
+Dinfo provides much larger gains when combined with decomposed prompting. This suggests that domain information is most useful when it guides pairwise support–query comparison, rather than when it is simply inserted into the final N-way question. 
+
+A.8 Episode Curves with Standard Error 
+
+We report cumulative episodic accuracy with uncertainty bands to verify how many episodes are sufficient for reliable 5-way 0-shot/1-shot accuracy. This anal-DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 29   
+
+> Fig. 5: Cumulative 5-way 1-shot episodic classification accuracy across four datasets for three MLLMs. The x-axis shows evaluated episodes (up to 1000; 5 episodes per logging step), and the y-axis shows cumulative accuracy. Solid lines correspond to prompting setups, where semantic denotes using semantic labels, anon. denotes removing semantic labels, and dec. denotes decomposed prompting (0 shot, 1 shot semantic, 1 shot anon., 1 shot anon. + dec., 1 shot semantic + dec.). Shaded regions indicate ±1 standard error around each cumulative accuracy curve.
+
+ysis is important because few-shot episodic results can be noisy at small sample sizes; without uncertainty, early fluctuations can be over-interpreted. To address this, as shown in Figure 5, we run each model on 1000 episodes per dataset (logged every 5 episodes), plot cumulative accuracy trajectories, and overlay standard-error bands at each point. This directly shows both perfor-mance trends and estimated stability as more episodes are accumulated. Across all models and datasets, we observe a common pattern: fast early changes, pro-gressively narrower uncertainty, and eventual flattening of the curves. The rel-ative ordering of prompting variants is largely stable after the initial transient stage, and by around 1000 episodes, the trajectories are near-stationary with tight uncertainty bands, indicating effective convergence. 
+
+A.9 Logit Distribution for Scoring Tokens 
+
+To investigate the logit choice of Yes for the scoring rule of decomposed prompt-ing, we analyze the output logit distribution if we change the original instruc-tion "Answer Yes or No." to free-form answer format: "Answer: " . We run Qwen2.5-VL on Yoga [35] and Mini-ImageNet [44] for 1000 episodes and record 30 Y. Wang et al. No 
+
+> The
+> These  It
+> While
+> Yes
+> Both
+> Although
+> There
+> None  I
+> Based
+> This
+> no
+> Though
+> Neither
+> yes
+> it
+> NO
+> Certainly
+> Output token
+> 0
+> 1,000
+> 2,000
+> 3,000
+> 4,000
+> 5,000
+> Frequency (count)
+> Yoga
+> No
+> The
+> These
+> no
+> Yes  It
+> This
+> There
+> Both
+> They
+> Different
+> None
+> NO
+> While
+> yes
+> Based
+> '**'
+> '###'
+> '```'
+> Although
+> Output token
+> Frequency (count)
+> mini-ImageNet
+
+Logit Distribution for Decomposed Prompting using Qwen2.5-VL 
+
+Fig. 6: Logit distribution for decomposed prompting using Qwen2.5-VL on Yoga (left) and Mini-ImageNet (right). For each decomposed inference in each 5-way 1-shot episode, we collect the top-10 predicted tokens over all support–query comparisons. Bars show token frequency; Yes/No are highlighted as the intended answer tokens. 
+
+the top ten logits by their logit score in each episode. Each episode corresponds to five inferences because of decomposition. Figure 6 shows that tokens such as 
+
+Yes and No frequently appear among high-probability candidates, which is con-sistent with using the Yes logit as a simple scoring signal. We view this analysis as supportive rather than definitive: it provides intuition for the design choice, but does not by itself prove that Yes is the optimal token for all settings. 
+
+A.10 Failure Cases of DeCoDe 
+
+We further provide failure cases of our DeCoDe method with labels and without domain information in Figure 7. DeCoDe: Multimodal LLMs are Implicit Few-Shot Learners 31 Query  Prediction  True class       
+
+> Query Prediction True class
+> Query Prediction True class
+> Query Prediction True class
+
+Fig. 7: Failure Cases of our DeCoDe method with labels and without Dinfo .
