@@ -6,89 +6,92 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-23
-- 运行时间：2026-07-23 21:50:58 UTC
+- 最新运行日期：2026-07-26
+- 运行时间：2026-07-26 20:39:45 UTC
 - 运行状态：成功
-- 本次总论文数：23
-- 精读区：9
+- 本次总论文数：24
+- 精读区：10
 - 速读区：14
 
 ### 今日简报（AI）
-今日23篇多模态论文，精读聚焦工业智能与跨模态绑定。最值得关注：VLT视觉-语言-时间序列基础模型（工业智能）和SceneBind跨视觉、音频、语言绑定。建议进一步探索多模态推理优化及联邦学习在医学影像中的统一框架。
-- 详情：[/202607/23/README](/202607/23/README)
+今日精读两篇9分论文，聚焦多模态智能的语言中心框架与异步多模态扩散策略组合。最值得关注方向：语言作为多模态推理的统一载体，以及感知延迟兼容的异步扩散组合。建议优先阅读这两篇9分论文，理解如何用语言统一多模态表征并处理异步时序融合问题。
+- 详情：[/202607/26/README](/202607/26/README)
 
 ### 精读区论文标签
-1. [VLT: A Vision-Language-Time Series Multimodal Foundation Model for Industrial Intelligence](/202607/23/2607.14510v1-vlt-a-vision-language-time-series-multimodal-foundation-model-for-industrial-intelligence)  
-   标签：评分：9.0/10、query:native-multi
-   evidence：联合建模时间序列、视觉和文本的多模态基础模型
-2. [SceneBind: Binding What and Where Across Vision, Audio and Language](/202607/23/2607.15265v1-scenebind-binding-what-and-where-across-vision-audio-and-language)  
-   标签：评分：9.0/10、query:native-multi
-   evidence：跨视觉、音频和语言的全模态表示
-3. [Modularized Dynamic-Granularity Video LLM for Multi-Event Long Video Understanding](/202607/23/2607.15778v1-modularized-dynamic-granularity-video-llm-for-multi-event-long-video-understanding)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：面向多事件长视频理解的分模块动态粒度视频大语言模型
-4. [Think, Plan, Paint: Layout-Aware Reasoning for Controllable Image Generation in Unified Models](/202607/23/2607.16409v1-think-plan-paint-layout-aware-reasoning-for-controllable-image-generation-in-unified-models)  
+1. [From Modalities to Propositions: A Language-Centric Framework for Multimodal Intelligence](/202607/26/2607.16560v1-from-modalities-to-propositions-a-language-centric-framework-for-multimodal-intelligence)  
    标签：评分：9.0/10、query:unified-mm
-   evidence：具有布局感知推理的统一多模态大语言模型用于可控生成
-5. [Constraint-Anchored Reasoning Traces](/202607/23/2607.16727v1-constraint-anchored-reasoning-traces)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：通过自然语言与符号约束交错提升多模态大模型推理能力
-6. [STBridge: Shared-Target Alignment for Bridging Understanding and Generation in UMMs](/202607/23/2607.17140v1-stbridge-shared-target-alignment-for-bridging-understanding-and-generation-in-umms)  
-   标签：评分：9.0/10、query:unified-mm
-   evidence：在统一多模态模型中通过共享目标对齐桥接理解与生成
-7. [EmoEUS: Uncertainty Supervision for Multimodal Emotion Recognition in Conversation](/202607/23/2607.18336v1-emoeus-uncertainty-supervision-for-multimodal-emotion-recognition-in-conversation)  
+   evidence：使用以语言为中心的命题表示实现统一多模态框架
+2. [Asynchronous Multimodal Diffusion Policy Composition via Latency-Aware Guidance Fusion](/202607/26/2607.17257v1-asynchronous-multimodal-diffusion-policy-composition-via-latency-aware-guidance-fusion)  
    标签：评分：9.0/10、query:balanced-mml
-   evidence：不确定性感知的多模态融合动态加权
-8. [Fusion Embedding: A Unified Embedding Space for Text, Image, Video, and Audio](/202607/23/2607.18666v1-fusion-embedding-a-unified-embedding-space-for-text-image-video-and-audio)  
-   标签：评分：9.0/10、query:unified-mm
-   evidence：文本、图像、视频和音频的统一嵌入空间
-9. [Thinking Fast, Thinking Slow: Adaptive Multimodal Transformer-based Sensor Fusion for Depth Estimation on Ultra-low-power MCUs](/202607/23/2607.18897v1-thinking-fast-thinking-slow-adaptive-multimodal-transformer-based-sensor-fusion-for-depth-estimation-on-ultra-low-power-mcus)  
+   evidence：针对异步多模态策略的延迟感知引导融合
+3. [Beyond Objective Expressivity: Geometry Preservation in Multimodal Contrastive Learning](/202607/26/2607.17673v1-beyond-objective-expressivity-geometry-preservation-in-multimodal-contrastive-learning)  
    标签：评分：9.0/10、query:balanced-mml
-   evidence：自适应AI方法在MCU上平衡多模态传感器融合与能耗
+   evidence：通过几何保持编码器解决三模态对比学习中的模态不平衡问题
+4. [TAP-RAG: Task-Aware Policy Control for Long-Document Multimodal Question Answering](/202607/26/2607.18917v1-tap-rag-task-aware-policy-control-for-long-document-multimodal-question-answering)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：任务感知的自适应模态平衡检索增强
+5. [One Model, Many Graphs: Learning over Attributed Graphs across Heterogeneous Modalities with Vision-Language Models](/202607/26/2607.19128v1-one-model-many-graphs-learning-over-attributed-graphs-across-heterogeneous-modalities-with-vision-language-models)  
+   标签：评分：9.0/10、query:native-multi
+   evidence：统一的视觉-语言模型框架处理多种模态
+6. [Not All Patches are Equal: Sampling Matters for Visible-Infrared Pre-Training](/202607/26/2607.20238v1-not-all-patches-are-equal-sampling-matters-for-visible-infrared-pre-training)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：通过重要性感知采样解决可见光-红外预训练中的模态不平衡
+7. [Test-Time Training for Modality Order Consistency in Vision-Language Models](/202607/26/2607.20351v1-test-time-training-for-modality-order-consistency-in-vision-language-models)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：解决视觉语言模型中的模态顺序偏差
+8. [ViSTR-Bench: Can MLLMs Reason from Continuous Visual Cues in Dynamic Scenes?](/202607/26/2607.20868v1-vistr-bench-can-mllms-reason-from-continuous-visual-cues-in-dynamic-scenes)  
+   标签：评分：9.0/10、query:mm-reasoning
+   evidence：评估多模态大模型视觉时间线索推理能力的基准
+9. [Out of Sight, Still in Mind: Token Compression for Omni-LLMs](/202607/26/2607.21179v1-out-of-sight-still-in-mind-token-compression-for-omni-llms)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：通过跨模态信息再分配自适应压缩视觉token，动态平衡多模态输入成本
+10. [Quality-Aware Multimodal Fusion Reveals Implicit Identity in Valence-Arousal Features](/202607/26/2607.21347v1-quality-aware-multimodal-fusion-reveals-implicit-identity-in-valence-arousal-features)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：质量感知自适应融合，含软门控和质量相关dropout
 
 ### 速读区论文标签
-1. [FM$^2$: Unified Federated Foundation Models for Heterogeneous Multimodal Medical Imaging](/202607/23/2607.13386v1-fm2-unified-federated-foundation-models-for-heterogeneous-multimodal-medical-imaging)  
+1. [Beyond Single Expert: Harmonizing Diverse Visual Priors in MLLMs for Spatial Understanding](/202607/26/2607.15054v1-beyond-single-expert-harmonizing-diverse-visual-priors-in-mllms-for-spatial-understanding)  
    标签：评分：8.0/10、query:unified-mm
-   evidence：面向异构多模态医学影像的统一联邦框架
-2. [SD-MAR: Multi-image Analytical Reasoning via Synthetic Data and Reinforcement Learning](/202607/23/2607.14333v1-sd-mar-multi-image-analytical-reasoning-via-synthetic-data-and-reinforcement-learning)  
+   evidence：通过多模型先验框架协调MLLMs中的多样视觉先验
+2. [Reasoning-Guided Part-Level Visual Grounding via Reinforcement Learning](/202607/26/2607.15374v1-reasoning-guided-part-level-visual-grounding-via-reinforcement-learning)  
    标签：评分：8.0/10、query:mm-reasoning
-   evidence：基于合成数据和强化学习的多图像分析推理
-3. [Stop Thinking, Start Looking: Efficient Post-Training for Multimodal Document Question Answering via Reasoning-Free Alignment](/202607/23/2607.14682v1-stop-thinking-start-looking-efficient-post-training-for-multimodal-document-question-answering-via-reasoning-free-alignment)  
+   evidence：基于推理引导的多模态大语言模型部件级视觉定位
+3. [Audio-Visual Flamingo: Open Audio-Visual Intelligence for Long and Complex Videos](/202607/26/2607.16107v1-audio-visual-flamingo-open-audio-visual-intelligence-for-long-and-complex-videos)  
    标签：评分：8.0/10、query:mm-reasoning
-   evidence：基于GRPO的无推理对齐用于多模态文档问答
-4. [Team RAS in 11th ABAW Competition: Multimodal Ambivalence Recognition Approach](/202607/23/2607.14702v1-team-ras-in-11th-abaw-competition-multimodal-ambivalence-recognition-approach)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：通过门控残差融合动态平衡模态的自适应机制
-5. [Team RAS in 11th ABAW Competition: Multimodal Ambivalence Recognition Approach](/202607/23/2607.14702v2-team-ras-in-11th-abaw-competition-multimodal-ambivalence-recognition-approach)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：基于文本中心的门控残差调整多模态融合
-6. [Learning Speaker Identity Beyond Language and Modality Constraints: Insights from the POLY-SIM 2026 Challenge](/202607/23/2607.13669v1-learning-speaker-identity-beyond-language-and-modality-constraints-insights-from-the-poly-sim-2026-challenge)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：解决说话人识别中的模态缺失问题
-7. [AspectCLIP: Optimizing CLIP Representation Space via Aspect-Guided Consistency Regularization](/202607/23/2607.13805v1-aspectclip-optimizing-clip-representation-space-via-aspect-guided-consistency-regularization)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：方面引导的一致性正则化解决图像-文本信息不对称
-8. [Unleashing Multimodal Large Language Models for Training-free HOI Detection in the Wild](/202607/23/2607.13881v1-unleashing-multimodal-large-language-models-for-training-free-hoi-detection-in-the-wild)  
+   evidence：长音频-视觉视频推理
+4. [Searching Videos as Trees: Self-Correcting Agents for Grounded Long Video QA](/202607/26/2607.16189v1-searching-videos-as-trees-self-correcting-agents-for-grounded-long-video-qa)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：用于长视频问答推理的自纠正智能体
+5. [MultiLoReFT: Decoupling Shared and Modality-Specific Subspaces in Multimodal Learning via Low-Rank Representation Fine-Tuning](/202607/26/2607.16789v1-multiloreft-decoupling-shared-and-modality-specific-subspaces-in-multimodal-learning-via-low-rank-representation-fine-tuning)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：低秩微调解耦多模态学习中的共享和模态特定子空间
+6. [When Do Multimodal and Graph-Augmented RAG Help? A Controlled Evaluation for Document Question Answering](/202607/26/2607.16604v1-when-do-multimodal-and-graph-augmented-rag-help-a-controlled-evaluation-for-document-question-answering)  
    标签：评分：7.0/10、query:mm-reasoning
-   evidence：利用多模态大语言模型的多模态推理能力进行人-物交互检测
-9. [CF-Net: Conflict Fusion with Speaker Normalisation and Certainty Weighting for Ambivalence/Hesitancy Recognition](/202607/23/2607.13976v1-cf-net-conflict-fusion-with-speaker-normalisation-and-certainty-weighting-for-ambivalencehesitancy-recognition)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：基于置信度加权的冲突融合模块实现自适应融合
-10. [CF-Net: Conflict Fusion with Speaker Normalisation and Certainty Weighting for Ambivalence/Hesitancy Recognition](/202607/23/2607.13976v2-cf-net-conflict-fusion-with-speaker-normalisation-and-certainty-weighting-for-ambivalencehesitancy-recognition)  
+   evidence：多模态图RAG架构融合文本、图谱和视觉证据进行推理
+7. [Cross-Branch Conflict as a Shield: Safeguarding Facial Identities in Unified Multimodal Image Editing](/202607/26/2607.16898v1-cross-branch-conflict-as-a-shield-safeguarding-facial-identities-in-unified-multimodal-image-editing)  
    标签：评分：7.0/10、query:unified-mm
-   evidence：冲突融合模块显式计算跨模态不一致性
-11. [Audio-Text Cross-Attention with Psycholinguistic Support Features for Ambivalence/Hesitancy Recognition](/202607/23/2607.13345v1-audio-text-cross-attention-with-psycholinguistic-support-features-for-ambivalencehesitancy-recognition)  
+   evidence：统一多模态模型用于图像编辑，具有多个视觉通路
+8. [Efficient Audio-Visual Event Recognition via Knowledge Distillation and Dynamic INT8 Quantization of a Hybrid Cross-Attention Network](/202607/26/2607.16980v1-efficient-audio-visual-event-recognition-via-knowledge-distillation-and-dynamic-int8-quantization-of-a-hybrid-cross-attention-network)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：基于混合交叉注意力的高效音视频融合
+9. [HarmoHOI: Harmonizing Appearance and 3D Motion for Multi-view Hand-Object Interaction Synthesis](/202607/26/2607.17097v1-harmohoi-harmonizing-appearance-and-3d-motion-for-multi-view-hand-object-interaction-synthesis)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：统一扩散框架联合建模RGB视频和3D点轨迹
+10. [STAR: Skeletal Token Alignment and Rearrangement for Interaction Recognition](/202607/26/2607.17342v1-star-skeletal-token-alignment-and-rearrangement-for-interaction-recognition)  
+   标签：评分：7.0/10、query:native-multi
+   evidence：在共享隐空间中对齐骨骼与RGB视频表示
+11. [Can Experts Adapt Without Training? On Test-Time Modality Generalization in MVLMs](/202607/26/2607.16726v1-can-experts-adapt-without-training-on-test-time-modality-generalization-in-mvlms)  
+   标签：评分：6.0/10、query:balanced-mml
+   evidence：通过动态专家选择实现医学视觉语言模型的测试时模态泛化
+12. [Learning to Detect Cross-Modal Negation: An Analysis of Latent Representations and an Attention-Based Solution](/202607/26/2607.17712v1-learning-to-detect-cross-modal-negation-an-analysis-of-latent-representations-and-an-attention-based-solution)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：音频-文本跨注意力融合结合心理语言特征
-12. [Semantic Anchoring for Robotic Action Representations](/202607/23/2607.13597v2-semantic-anchoring-for-robotic-action-representations)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：锚定动作表征以保持跨模态语义对齐
-13. [AspectCLIP: Optimizing CLIP Representation Space via Aspect-Guided Consistency Regularization](/202607/23/2607.13805v2-aspectclip-optimizing-clip-representation-space-via-aspect-guided-consistency-regularization)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：解决视觉-语言表示中的信息不对称问题
-14. [Reinforcing Egocentric Spatial Perception in Multimodal Large Language Models via Ego Scene Augmentation](/202607/23/2607.14497v1-reinforcing-egocentric-spatial-perception-in-multimodal-large-language-models-via-ego-scene-augmentation)  
+   evidence：跨模态注意力融合
+13. [Dual Adversarial Fine-tuning for Enhancing Robustness of Large Vision Language Model](/202607/26/2607.18958v1-dual-adversarial-fine-tuning-for-enhancing-robustness-of-large-vision-language-model)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：通过增强视觉输入提升自我中心VQA的空间推理能力
+   evidence：联合优化视觉与语义监督以增强鲁棒性
+14. [LAVIFT: Latent-Action-Guided Vision Fine-Tuning for Surgical Interaction Recognition](/202607/26/2607.19889v1-lavift-latent-action-guided-vision-fine-tuning-for-surgical-interaction-recognition)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：视觉语言模型联合微调用于手术交互识别
 
 
 <div class="dpr-home-promo-card">
