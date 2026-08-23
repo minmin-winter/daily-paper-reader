@@ -1,0 +1,328 @@
+Title: Who Leads Now? Token-Level Modality Arbitration for Chart-to-Code Generation
+
+URL Source: https://arxiv.org/pdf/2608.15510v1
+
+Published Time: Tue, 18 Aug 2026 00:56:17 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Who Leads Now? Token-Level Modality Arbitration for Chart-to-Code Generation 
+
+## Qinghao Fu 1,2 ∗, Yarong Wang 1,2 ∗, Shunlei Ning 2∗, Yilin Wang 1, Shunwen Bai 1,2 ,Xinda Wang 3, Jiaotuan Wang 2, Yinan Nie 4, Wei Zhou 2†
+
+> 1
+
+Zhejiang University, 2Ant Group, 3Peking University, 4Fudan University 
+
+Abstract 
+
+Chart-to-code generation requires a model to read the fine-grained visual details of a chart and write executable code that reproduces it. Existing chart-to-code methods either train visual and coding abilities separately, or fine-tune on chart-to-code data with the two abilities entangled. Neither strategy ac-counts for the distinct nature of the two abilities or the interfer-ence that arises when they are optimized together. We propose MoCA (Mixture of Cross-modal Arbitration), which separates the two abilities rather than blending them. MoCA is built on Cross-modal Arbitration Block (CAB), which maintains a vi-sual branch and a code branch as two distinct pathways, and a lightweight arbiter that arbitrates their relative contributions at every layer and generated token. We train MoCA in two stages: a supervised warm-up on self-distilled reasoning tra-jectories that decomposes visual understanding into explicit steps, followed by reinforcement learning with rewards on both the reasoning process and the final code. Analysis shows that the arbiter learns structured rather than arbitrary alloca-tions, with expert contributions varying systematically across tokens, layers, and instances. Across three benchmarks, MoCA delivers competitive performance against general-domain and chart-specialized models. Ablation results show that the gains cannot be attributed to a larger model size alone, but instead arise from the joint contributions of complementary visual and code branch initialization and input-conditioned arbitra-tion through CAB. 
+
+## Introduction 
+
+Charts are widely used to present structured data in a com-pact and interpretable form. Recent advances in multimodal large language models (MLLMs) have enabled research on chart-to-code generation (Tang et al. 2025). The goal is to reconstruct a chart image as executable plotting code. Com-pared with chart understanding tasks such as captioning or question answering, this task is more challenging, since the output must be both syntactically correct and visually faith-ful. It must recover data, layout, text, color, and style from the input chart. A key challenge in chart-to-code generation is that visual grounding and code generation are not uniformly required across different inputs. As shown in Figure 1, some charts are visually complex, requiring accurate recognition of dense labels, subtle color variations, and multi-component layouts. Other charts are more code-demanding, where the main diffi-
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. Visually Complex Chart     
+
+> Visual Code
+> Code-demanding Chart
+> Poor Visual Grounding
+> Poor Code Output
+> Poor Code Quality Visual Code
+> Poor Code Output
+
+Figure 1: Motivation of our work. Chart-to-code generation places unequal demands on visual grounding and code gen-eration across inputs. Top: a visually complex chart, where the model misreads dense labels, subtle colors, and multi-component layouts during visual understanding. Bottom: acode-demanding chart, where the model correctly perceives the chart but fails to generate the plotting logic such as stacked structures and custom axes. culty lies in generating correct plotting logic such as stacked structures, reference lines, or customized axes. This suggests that the relative importance of visual and coding abilities varies across different inputs, rather than being fixed. In ad-dition, different intermediate representations of the same in-put may emphasize different aspects of the task, such as visual alignment, structural reasoning, or execution correct-ness. However, existing chart-to-code methods typically treat visual understanding and code generation as either implic-itly coupled capabilities or independently optimized compo-nents, without explicitly modeling their interaction during generation. Existing methods improve performance from different di-rections, but they do not explicitly model this adaptive coor-dination problem. Strong multimodal models still struggle to generate correct and visually faithful chart code (Zhao et al. 2025b; Tang et al. 2025). Training-based methods such as arXiv:2608.15510v1 [cs.AI] 16 Aug 2026 ChartMaster (Tan et al. 2025) improve performance through supervised fine-tuning (SFT) and reinforcement learning (RL), but the interaction between visual and coding abilities remains implicitly determined by the model. Agent-based methods such as MatPlotAgent (Yang et al. 2024c) introduce iterative refinement with external feedback, but at the cost of increased inference complexity. Model-merging methods such as VisCodex (Jiang et al. 2025) integrate vision and code capabilities into a single backbone using globally fixed parameter-space coefficients shared across all inputs. In this work, we study chart-to-code generation from the perspective of adaptive capability coordination. We propose MoCA, a framework that maintains a visual branch and a code branch while dynamically coordinating their con-tributions during generation. At its core, CAB employs a lightweight Arbiter to predict branch weights from interme-diate hidden representations for each token at every layer, thereby producing instance-specific capability allocation. This design enables MoCA to adapt the relative contribu-tions of visual grounding and code generation according to both the input and the evolving generation context. We train MoCA using a two-stage framework. During SFT, the model learns structured mappings from visual in-puts to executable code using paired chart-code data and self-distilled Snippet-of-Thought (SoT) trajectories, estab-lishing initial alignment between visual understanding and code generation. During RL, we optimize the model with multi-dimensional rewards covering format correctness, rea-soning consistency, structural fidelity, execution validity, and visual similarity. Together, these rewards provide comple-mentary process-level and outcome-level supervision to im-prove both code executability and visual fidelity. We evaluate MoCA on three benchmarks: Chart-Mimic (Yang et al. 2024a), Plot2Code (Wu et al. 2025), and ChartX (Xia et al. 2025). Across these benchmarks, MoCA delivers competitive performance among general-domain models and chart-specialized models. Controlled ab-lations against static merging and parameter-matched vari-ants further suggest that the gains cannot be explained by model size alone, highlighting the importance of coordina-tion between the visual and code branches. In summary, our contributions are three-fold: 
+
+• We formulate chart-to-code generation from the perspec-tive of cross-modal capability coordination, showing that visual grounding and code generation are complementary but heterogeneous abilities whose interaction should be explicitly modeled. 
+
+• We propose MoCA, a dual-branch architecture with CAB, which preserves visual and code expertise separately and employs a lightweight Arbiter to dynamically allocate their contributions based on hidden representations. 
+
+• We establish an effective training and analysis frame-work combining self-distilled SoT supervision with multi-dimensional reinforcement learning rewards, and provide empirical evidence that CAB learns structured cross-modal allocation patterns across tokens, layers, and in-stances. 
+
+## Related Work 
+
+MLLMs. MLLMs extend LLMs with visual understand-ing, enabling joint reasoning over images and text for a wide range of multimodal tasks (Zhao et al. 2025b; Tan et al. 2025; Zeng et al. 2024; Kuang et al. 2025). Early work aligns visual features with language representations through cross-modal projection or query-based interaction mechanisms (Alayrac et al. 2022; Li et al. 2023). Building on this paradigm, re-cent models further introduce multimodal instruction tun-ing so that the model can follow natural language instruc-tions grounded in visual inputs (Zhu et al. 2023; Liu et al. 2023). These models have demonstrated strong performance on tasks such as visual question answering, document un-derstanding, and diagram reasoning (Kim et al. 2025; Liao et al. 2025; Tan et al. 2025). However, generating structured outputs such as executable scripts remains challenging for general-domain MLLMs, since such tasks require not only visual grounding but also strong code generation ability (Gui et al. 2025; Yang et al. 2025). 
+
+Model Merging. Model merging aims to integrate capa-bilities from multiple pretrained models through parameter-space combination, typically without jointly retraining the source models or accessing their original training data (Yang et al. 2026). The merged parameters can be deployed di-rectly or used as initialization for subsequent task-specific adaptation. A basic approach is weight averaging (Wortsman et al. 2022), which ensembles knowledge in parameter space and improves generalization. Task arithmetic further shows that model behaviors can be composed or removed via linear operations on task vectors (Ilharco et al. 2023). Recent studies extend model merging along two main directions. The first focuses on improving merging quality through parameter-level or layer-level weighting (Yang et al. 2024b). The second explores subspace or low-rank decompo-sition to reduce interference between tasks (Yadav et al. 2023; Yu et al. 2024). In addition, some methods learn merging co-efficients in an input-dependent manner (Tang et al. 2024; Ye et al. 2025). However, these approaches are primarily designed for single-modality or homogeneous task settings, and are less effective in cross-modal scenarios where differ-ent experts exhibit fundamentally different functional roles. Recent work such as VisCodex (Jiang et al. 2025) explores merging vision-language and code models for multimodal generation, but relies on static merging weights and cannot adapt to varying visual and coding demands across inputs. In contrast, our work preserves the two capabilities as separate branches and introduces input-conditioned arbitration to dy-namically coordinate their contributions during generation. 
+
+Chart-to-Code Generation. Chart-to-code generation has recently attracted increasing attention as a task that re-quires models to generate executable plotting code grounded in fine-grained chart understanding. Early studies mainly fo-cus on constructing datasets and benchmarks to evaluate model performance in this setting (Tang et al. 2025; Zhao et al. 2025a). Subsequent work improves generation qual-ity by performing SFT on curated chart-code pairs and in-troducing structured intermediate supervision to guide the generation process (Zhao et al. 2025b). Recent methods fur-ther explore preference learning and reinforcement learning with textual, structural, execution-based, or visual rewards to improve code executability and chart reconstruction qual-ity (Zhang, Cao, and Liao 2025). These approaches demon-strate the importance of task-specific supervision for chart-to-code generation. However, they primarily improve the train-ing signal or feedback objective, while the internal coordi-nation between visual grounding and code synthesis remains underexplored. Our work addresses this gap by maintaining visual and code expertise as separate pathways and explicitly coordinating their interaction through a cross-modal arbitra-tion mechanism, enabling adaptive capability usage during chart-to-code generation. 
+
+## Methodology 
+
+We propose MoCA, a framework for chart-to-code gen-eration that dynamically coordinates the visual and code branches based on the input and intermediate hidden rep-resentations. An overview of MoCA is shown in Figure 2. 
+
+Problem Setting 
+
+Let D = {(Ii, x i, C ∗ 
+
+> i
+
+)}Ni=1 denote a chart-to-code dataset, where Ii is a chart image, xi is a natural-language instruction, and C∗ 
+
+> i
+
+is the corresponding ground-truth program. The goal is to learn a model M that generates an executable program 
+
+Ci = ( y1, . . . , y T ).We formulate the autoregressive generation process as 
+
+P (Ci | Ii, x i; Θ) = 
+
+> T
+
+Y
+
+> t=1
+
+P (yt | y<t , I i, x i; Θ) . (1) A key challenge is that visual grounding and code gen-eration are required to different extents across chart struc-tures and generation contexts. Some inputs demand fine-grained visual alignment, whereas others place greater em-phasis on structural and syntactic code construction. Ex-isting approaches generally combine these capabilities ei-ther implicitly within a single backbone or through globally fixed parameter-space coefficients, without explicitly adjust-ing their relative contributions across inputs and intermediate representations. To address this limitation, MoCA dynamically predicts branch weights αi,l,t = ( αvis 
+
+> i,l,t
+
+, α code  
+
+> i,l,t
+
+) from the hidden rep-resentation hi,l,t for each token t at layer l. These input-conditioned weights enable coordination between the visual and code branches throughout the generation process. 
+
+Cross-Modal Arbitration 
+
+To accommodate the heterogeneous requirements of chart-to-code generation, we introduce an input-conditioned co-ordination mechanism between a visual branch and a code branch. Unlike static parameter merging, which uses the same combination coefficients for all inputs, MoCA preserves the two branch transformations separately and dynamically ad-justs their relative contributions based on intermediate hid-den representations. This formulation enables fine-grained arbitration across inputs, layers, and generation steps. 
+
+Branch Initialization MoCA uses Qwen2.5-VL-7B (Qwen et al. 2025) as its multimodal backbone and Qwen2.5-Coder-7B (Hui et al. 2024) to initialize the code branch. Specifically, within each CAB, the visual branch is initialized from the feed-forward network parameters of Qwen2.5-VL-7B, while the code branch is initialized from the corresponding parameters of Qwen2.5-Coder-7B. The remaining backbone components retain their Qwen2.5-VL-7B initialization. This construction preserves the visual grounding capabilities of the multimodal backbone while introducing a prior for code synthesis. 
+
+CAB To explicitly model the interaction between visual grounding and code generation, we introduce the CAB. CAB maintains a visual branch and a code branch as separate transformations, preserving their distinct functional roles. A lightweight Arbiter dynamically determines their relative contributions based on the current hidden representation. Consequently, the branch weights can vary across input in-stances, network layers, and generation tokens. Each CAB consists of three components: 
+
+• Arbiter: a lightweight network that predicts the relative weights of the two branches from the current hidden rep-resentation. 
+
+• Visual branch ( Bvis ): a feed-forward transformation ini-tialized from the corresponding FFN parameters of the vision-language model. 
+
+• Code branch ( Bcode ): a feed-forward transformation ini-tialized from the corresponding FFN parameters of the code model. For sample i and token t at layer l, the Arbiter computes the branch weights as follows: 
+
+αi,l,t = Softmax 
+
+
+
+W(l) 
+
+> a
+
+hi,l,t + b(l)
+
+> a
+
+
+
+, (2) where αi,l,t = ( αvis 
+
+> i,l,t
+
+, α code  
+
+> i,l,t
+
+). The output of CAB is then computed as 
+
+zi,l,t = αvis 
+
+> i,l,t
+
+B(l)vis (hi,l,t ) + αcode  
+
+> i,l,t
+
+B(l)code (hi,l,t ) . (3) By conditioning the branch weights on intermediate hid-den representations, CAB dynamically coordinates visual grounding and code generation throughout the decoding pro-cess, enabling MoCA to accommodate diverse chart struc-tures and evolving generation requirements. 
+
+Model Training 
+
+To train MoCA, we adopt a two-stage framework that pro-gressively aligns structured reasoning with executable and visually faithful code generation. The first stage uses SFT to establish a stable mapping from chart images to structured reasoning trajectories and executable code. The second stage applies RL with execution and structure-aware feedback to further improve reasoning consistency, code validity, and vi-sual fidelity. Together, the two stages provide complementary process-level and outcome-level supervision. Masked Self-Attention Add & Normalize Add & Normalize     
+
+> Stage 1 : Cross-modal Alignment via Supervised Fine-tuning
+> Stage 2 : Reward-Driven Optimization
+> O1
+> O2
+> OG
+
+## ... ... 
+
+Output    
+
+> Format Consistency Structure Execution Visual
+> Cross-modal Arbitration Block
+> Self-Distillted SoT Dataset (48K)
+
+Input  
+
+> Visual Branch Code Branch
+
+Arbiter 
+
+## ... ... ... ... 
+
+> 0.8
+
+## ... 
+
+> 0.6 0.7 0.8
+> Skip
+> 0.7
+> KL
+
+# +
+
+> Image
+> External Dataset ( 400K )
+> r1=3.2
+> r2=0.4
+> rG=-1
+> A1
+> A2
+> AG
+
+## ... ...      
+
+> Supervised Fine-tuning
+> Fine-tuned Model Reference Model Process Reward Result Reward
+> Code
+> Algorithm 33% Chart 52% QA 15% MCD
+> Dataset
+> Fine-tuned Model
+> Skip Skip Skip Skip
+> Code
+
++Our SoT 
+
+> Image
+
++
+
+> ChartCoder SoT
+
+## ... Figure 2: Overview of MoCA. The model incorporates CAB, where a lightweight, input-conditioned arbiter dynamically coordinates the visual and code branches. Training proceeds in two stages: Stage 1 performs SFT on external data and self-distilled SoT trajectories, while Stage 2 applies RL with multi-dimensional rewards. 
+
+Cross-Modal Snippet-of-Thought Alignment In the first stage, we establish a structured mapping from chart images to executable code. However, chart-to-code generation is inher-ently one-to-many: multiple implementations may produce visually equivalent charts while relying on different program structures. As a result, learning only from final code se-quences provides limited supervision for the reasoning pro-cess that connects visual observations with code construction decisions. We introduce a self-distilled SoT training strategy that decomposes the mapping process into concise intermediate steps. These trajectories provide structured supervision for connecting visual observations, chart structures, and code construction decisions. Our training data are derived from McD (Jiang et al. 2025) and ChartCoder (Zhao et al. 2025b). We first obtain teacher-generated SoT trajectories and then apply self-distillation to produce supervision that is better aligned with MoCA’s own generation distribution, reduc-ing the discrepancy between externally generated reasoning patterns and the model’s generation behavior. MoCA is opti-mized using standard autoregressive cross-entropy loss over the complete target sequence, including both the SoT trajec-tory and the final code. 
+
+Multi-Dimensional Rewards Optimization In the second stage, we further optimize MoCA using RL with execution and structure-aware feedback. We adopt Group Relative Pol-icy Optimization (GRPO) (Shao et al. 2024), which estimates relative advantages by comparing multiple responses gener-ated for the same input, without requiring a separately learned critic model. For each generated response O = ( S, C ), where S de-notes the SoT trajectory and C denotes the generated code, we compute five complementary reward signals. The format reward Rf mt evaluates whether the response follows the re-quired output format. The consistency reward Rcon measures the reasoning consistency between S and C. The structural reward Rstr evaluates the reconstruction of key chart at-tributes through AST-based analysis. The execution reward 
+
+Rexec verifies whether C executes successfully and produces a valid chart. The visual reward Rvis measures the similar-ity between the rendered chart and the reference image. We aggregate the five signals into a scalar reward used by GRPO: 
+
+R(S, C ) = Rf mt + Rcon + Rstr 
+
+| {z }
+
+> Process-level
+
++ Rexec + Rvis 
+
+| {z }
+
+> Outcome-level
+
+(4) The detailed configuration is provided in the supplementary material. This aggregation combines process-level guidance with outcome-level feedback, encouraging reasoning consis-tency, code executability, and visual fidelity. 
+
+## Experiment 
+
+We conduct comprehensive experiments on three bench-marks, including comparisons with existing models and de-tailed ablation analyses to validate the effectiveness of MoCA and its key components. 
+
+Experimental Settings 
+
+Model and Baselines We build MoCA upon Qwen2.5-VL-7B by replacing the FFN sublayer in each Transformer block with a CAB. The visual and code branches are initialized from the FFN parameters of Qwen2.5-VL-7B and Qwen2.5-Coder-7B, respectively. We compare MoCA with both general-domain and chart-specialized models. Table 1: Performance of different models on ChartMimic, Plot2Code, and ChartX benchmarks.                                                                                       
+
+> Model ChartMimic Plot2Code ChartX Exec. Rate Low-Level High-Level Code Pass Text Match GPT-4o Score GPT Score
+> Full score 100 100 100 100 100 10 5
+> General-Domain Models
+> GPT-4o-mini 82.17 65.08 65.37 83.33 41.12 4.75 1.62 Qwen2.5-VL-72B 69.17 48.54 48.09 63.64 41.90 4.31 1.98 Qwen2.5-VL-32B 81.17 63.97 69.97 75.00 35.11 4.22 2.58
+> GLM-4.6V 48.33 73.03 43.67 33.33 18.50 2.20 2.47 InternVL3.5-38B 80.17 60.00 60.84 78.03 35.04 3.98 1.83 Qwen3-VL-30B-A3B 76.67 61.67 61.78 59.85 27.85 3.25 1.94
+> Chart-Specialized Models
+> ChartLlama-13B 42.83 10.10 4.01 49.24 8.37 1.02 0.23 ChartCoder-7B 86.17 69.48 67.81 85.61 36.16 3.61 2.22 ChartVLM-L-14B 21.83 6.84 5.74 0.25 5.06 0.45 0.68
+> MoCA 88.83 75.13 73.48 87.88 41.07 4.45 2.44
+
+General-domain baselines include GPT-4o-mini (OpenAI 2024), Qwen2.5-VL-72B/32B (Qwen et al. 2025), GLM-4.6V (Hong et al. 2025), InternVL3.5-38B (Wang et al. 2025), and Qwen3-VL-30B-A3B (Bai et al. 2025). Chart-specialized baselines include ChartLlama-13B (Han et al. 2023), ChartCoder-7B (Zhao et al. 2025b), and ChartVLM-L-14B (Xia et al. 2025). 
+
+Evaluation Datasets and Metrics We evaluate MoCA on three widely used chart-to-code benchmarks. Following prior work (Zhao et al. 2025b), we use GPT-4o (Hurst et al. 2024) as the automatic evaluator for GPT-based visual similarity metrics. We apply a unified prompting protocol across all evaluated models and report Plot2Code results over the full evaluation set without filtering out non-executable outputs. 
+
+Efficient Training and Inference Implementation We conduct SFT for one epoch on 8 NVIDIA H200 GPUs, us-ing a learning rate of 1 × 10 −5 and a global batch size of 64. We conduct RL for three epochs on 32 NVIDIA H200 GPUs, using a learning rate of 1 × 10 −6 and generating eight responses per prompt. To support efficient execution of the dual-branch architecture, we implement custom QKV shard-ing and SwiGLU kernels and integrate them with vLLM. 
+
+Overall Performance 
+
+Table 1 summarizes the performance of MoCA on three chart-to-code benchmarks. MoCA achieves the best result on four of the seven reported metrics and stays competitive on the rest. On ChartMimic, MoCA achieves the best per-formance across all three metrics, with an execution rate of 88.83, a low-level score of 75.13, and a high-level score of 73.48. These results exceed the strongest baseline on each metric by 2.66, 2.10, and 3.51 points, respectively. Notably, the improvements are consistent across both low-level and high-level criteria, whereas competing models often perform well on only one aspect. For example, GLM-4.6V achieves a low-level score of 73.03 but obtains only 43.67 on the high-level metric and an execution rate of 48.33, suggesting that it can reproduce local visual elements without reliably pre-serving global structure or generating executable code. On Plot2Code, MoCA achieves the highest Code Pass rate of 87.88, outperforming the next-best baseline by 2.27 points. Together with its leading execution rate on ChartMimic, this result indicates that MoCA’s advantage in executability is consistent across datasets. MoCA also remains competitive on semantic and perceptual metrics. Its Text Match score of 41.07 is only 0.83 points lower than the 41.90 achieved by the substantially larger Qwen2.5-VL-72B, while its ChartX GPT Score of 2.44 surpasses all chart-specialized baselines and remains competitive with larger general-domain mod-els. Overall, MoCA jointly improves code executability and reconstruction fidelity while maintaining competitive holis-tic quality, demonstrating the effectiveness of coordinating visual grounding with code generation. 
+
+Visualization of Arbitration Behavior 
+
+To better understand the behavior of CAB, we visualize the branch weights produced by the Arbiter at multiple levels of granularity. 
+
+Token-Level We first examine the branch weights across token positions in Figure 3. The weights vary across tokens within the same layer, with particularly noticeable variation in Layer 17. This indicates that the Arbiter does not apply a single sequence-level weighting throughout generation. In-stead, it adjusts the relative contributions of the visual and code branches according to the evolving hidden representa-tions, providing fine-grained coordination over the genera-tion sequence. 
+
+Layer-Level Figure 3 also reveals distinct arbitration pat-terns across layers. Layer 7 is strongly dominated by the visual branch, whereas Layer 17 assigns a larger and more variable contribution to the code branch. At Layer 25, the allocation shifts back toward the visual branch. This non-monotonic yet structured pattern suggests stage-dependent coordination: shallow layers emphasize visual processing, 0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 0.00 0.50 1.00                      
+
+> Weight Layer 7 Code Visual
+> 010 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 0.00 0.50 1.00
+> Weight Layer 17
+> 010 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190
+> Token Index
+> 0.00 0.50 1.00
+> Weight Layer 25
+
+Figure 3: Visual and code branch weights across tokens at different layers (Layers 7, 17, and 25). 0 20 40 60 80 100 120 140 160 180 
+
+> Token Index
+> 04812 16 20 24
+> Layer Index
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+> Weight Difference
+
+Figure 4: Absolute differences in branch weights between two input samples across layers and tokens. intermediate layers increase the contribution of code gen-eration, and deeper layers may return to visual refinement. Overall, these observations suggest that the Arbiter learns structured coordination patterns across network depth rather than applying uniform or arbitrary branch weights. 
+
+Instance-Level Figure 4 shows the absolute differences in branch weights between two randomly selected Plot2Code inputs. The differences are relatively small in the early lay-ers but become more pronounced across several middle and deeper layers, with localized variations across token posi-tions. This provides qualitative evidence that the Arbiter produces instance-specific arbitration patterns rather than applying the same allocation to every input. Since the vi-sualization contains only one pair of samples, we interpret it as an illustrative case rather than a comprehensive measure of input adaptivity. 
+
+Ablation Study 
+
+Effectiveness of Two-Stage Model Training We analyze the complementary roles of SFT and RL in training MoCA. As shown in Table 2, MoCA without task-specific training Table 2: Ablation of SFT and RL for MoCA on Plot2Code. 
+
+Training Plot2Code SFT RL Code Pass Text Match GPT-4o Score 
+
+No No – – –Yes No 83.33 34.11 3.66 No Yes – – –Yes Yes 87.88 41.07 4.45 
+
+Table 3: Ablation results on Plot2Code evaluating the effects of two-stage training, branch initialization, static parameter merging, and input-conditioned arbitration. 
+
+Method Training Plot2Code Code Pass Text Match GPT-4o Score 
+
+Base (Qwen2.5-VL-7B) None 71.97 34.85 3.47 SFT 74.24 31.40 3.30 SFT + RL 84.10 36.11 3.87 Visual + Visual (w/o code) SFT 79.92 33.86 3.55 SFT + RL 85.26 37.48 3.94 Static merging (VisCodex) SFT 69.70 27.38 2.79 SFT + RL 70.45 31.86 3.15 Fixed branch weights (w/o Arbiter) SFT 84.32 35.20 3.21 SFT + RL 86.74 39.82 4.26 
+
+MoCA (Ours) SFT + RL 87.88 41.07 4.45 
+
+and MoCA trained with RL alone fail to produce valid struc-tured outputs, and their results are therefore denoted by “–”. In contrast, SFT establishes a stable mapping from visual inputs to executable code, achieving a Code Pass rate of 83.33, a Text Match score of 34.11, and a GPT-4o Score of 3.66 on Plot2Code. Building on the SFT model, RL with the multi-dimensional reward function further improves the Code Pass rate to 87.88, the Text Match score to 41.07, and the GPT-4o Score to 4.45, corresponding to absolute gains of 4.55, 6.96, and 0.79 points, respectively. These results indi-cate that SFT establishes reliable code generation, while RL further improves code executability, structural fidelity, and visual similarity. 
+
+Effect of Branch Initialization and Arbitration We in-vestigate the sources of MoCA’s improvement, including task-specific training, model capacity, branch initialization, and input-conditioned arbitration. Table 3 presents the re-sults on Plot2Code. We first compare MoCA with the original Qwen2.5-VL-7B backbone. After SFT and RL, the backbone achieves a Code Pass rate of 84.10, a Text Match score of 36.11, and a GPT-4o Score of 3.87. Although task-specific training substantially improves its performance, it remains inferior to MoCA across all three metrics, indicating that training alone is insufficient to effectively coordinate visual understanding and code generation. We next examine the effect of complementary branch ini-tialization. We construct a Visual + Visual variant that retains the same two-branch architecture as MoCA but initializes Case Case 1 Case 2 Case 3 Ground Truth GPT-4o-mini Qwen2.5-VL-32B 
+
+> Generation Failed
+> Our MoC A
+
+Figure 5: Comparison of MoCA with other LLM backbones. both branches from Qwen2.5-VL-7B. This variant achieves scores of 85.26, 37.48, and 3.94, whereas MoCA improves upon them by 2.62, 3.59, and 0.51 points, respectively. These results show that the gains arise from combining comple-mentary visual and coding expertise rather than merely in-creasing the number of parameters. We also compare MoCA with static parameter merging. The VisCodex-based base-line achieves Code Pass, Text Match, and GPT-4o scores of 70.45, 31.86, and 3.15, respectively, suggesting that directly merging visual and coding parameters is insufficient for in-tegrating heterogeneous capabilities. Finally, we evaluate the role of the Arbiter using a fixed-weight variant that retains the same branches and training configuration as MoCA but sets αvis = αcode = 0 .5 for every token and layer. This variant achieves scores of 86.74, 39.82, and 4.26, respectively. MoCA’s consistent improve-ments over fixed weighting demonstrate the effectiveness of input-conditioned arbitration. Overall, the ablation results show that MoCA’s gains cannot be attributed to task-specific training or increased model size alone, but instead arise from the joint contributions of complementary branch initializa-tion and input-conditioned arbitration. 
+
+Impact of Self-distilled SoT Data We evaluate the ef-fect of self-distillation by comparing the original teacher-generated SoT trajectories with self-distilled trajectories un-der the same SFT configuration. On Plot2Code, replacing the original SoT data with self-distilled SoT data increases the Code Pass rate from 80.30 to 83.33. This result suggests that self-distillation better aligns the training trajectories with the model’s own output distribution, thereby narrowing the training–inference gap and improving generalization. 
+
+## Case Study 
+
+To qualitatively evaluate our method, we present representa-tive outputs from different models in Figure 5. For the bar chart example, GPT-4o-mini fails to produce correct y-axis scales and misplaces the legend, which results in incomplete semantics. In contrast, MoCA correctly reconstructs the data distribution, dashed reference lines, and legend, while main-taining consistent color mapping. The stacked chart is more challenging due to the larger number of categories, complex color assignments, and the need for accurate value accu-mulation. Qwen2.5-VL-32B fails to generate a valid chart due to code errors. GPT-4o-mini produces a vertical lay-out instead of the original horizontal stacking, breaking the intended structure. MoCA preserves the stacking direction and better matches both color assignments and value propor-tions. For more complex structures such as the radar chart, MoCA preserves the overall topology and maintains correct alignment. Overall, MoCA produces more stable results in scale recovery, structural preservation, and multi-component coordination, suggesting more effective interaction between visual understanding and code generation. 
+
+## Conclusion 
+
+We present MoCA, a chart-to-code framework that coor-dinates a visual branch and a code branch to generate ex-ecutable code with faithful visual reconstruction. Through CAB, a lightweight Arbiter dynamically adjusts the relative contributions of the two branches for each token at every layer based on intermediate hidden representations. Com-bined with SFT on self-distilled SoT trajectories and RL with multi-dimensional rewards, MoCA achieves strong code exe-cutability and competitive visual fidelity across three bench-marks. Ablation results show that these improvements cannot be explained by additional training or model size alone, high-lighting the importance of complementary branch initializa-tion and input-conditioned arbitration over static parameter merging and fixed branch weighting. Future work will inves-tigate more parameter-efficient fusion paradigms, aiming to achieve effective visual-code integration without increasing model parameters. References 
+
+Alayrac, J.-B.; Donahue, J.; Luc, P.; Miech, A.; Barr, I.; Hasson, Y.; Lenc, K.; Mensch, A.; Millican, K.; Reynolds, M.; et al. 2022. Flamingo: a visual language model for few-shot learning. Advances in neural information processing systems , 35: 23716–23736. Bai, S.; Cai, Y.; Chen, R.; Chen, K.; Chen, X.; Cheng, Z.; Deng, L.; Ding, W.; Gao, C.; Ge, C.; et al. 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 .Gui, Y.; Li, Z.; Wan, Y.; Shi, Y.; Zhang, H.; Chen, B.; Su, Y.; Chen, D.; Wu, S.; Zhou, X.; et al. 2025. Webcode2m: A real-world dataset for code generation from webpage designs. In 
+
+Proceedings of the ACM on Web Conference 2025 , 1834– 1845. Han, Y.; Zhang, C.; Chen, X.; Yang, X.; Wang, Z.; Yu, G.; Fu, B.; and Zhang, H. 2023. Chartllama: A multimodal llm for chart understanding and generation. arXiv preprint arXiv:2311.16483 .Hong, W.; Yu, W.; Gu, X.; Wang, G.; Gan, G.; Tang, H.; Cheng, J.; Qi, J.; Ji, J.; Pan, L.; et al. 2025. Glm-4.5 v and glm-4.1 v-thinking: Towards versatile multimodal rea-soning with scalable reinforcement learning. arXiv preprint arXiv:2507.01006 .Hui, B.; Yang, J.; Cui, Z.; Yang, J.; Liu, D.; Zhang, L.; Liu, T.; Zhang, J.; Yu, B.; Lu, K.; et al. 2024. Qwen2.5-coder technical report. arXiv preprint arXiv:2409.12186 .Hurst, A.; Lerer, A.; Goucher, A. P.; Perelman, A.; Ramesh, A.; Clark, A.; Ostrow, A.; Welihinda, A.; Hayes, A.; Rad-ford, A.; et al. 2024. Gpt-4o system card. arXiv preprint arXiv:2410.21276 .Ilharco, G.; Ribeiro, M. T.; Wortsman, M.; Gururangan, S.; Schmidt, L.; Hajishirzi, H.; and Farhadi, A. 2023. Editing Models with Task Arithmetic. arXiv:2212.04089. Jiang, L.; Huang, S.; Wu, X.; Li, Y.; Zhang, D.; and Wei, F. 2025. Viscodex: Unified multimodal code generation via merging vision and coding models. arXiv preprint arXiv:2508.09945 .Kim, B. S.; Kim, J.; Lee, D.; and Jang, B. 2025. Visual ques-tion answering: A survey of methods, datasets, evaluation, and challenges. ACM Computing Surveys , 57(10): 1–35. Kuang, J.; Shen, Y.; Xie, J.; Luo, H.; Xu, Z.; Li, R.; Li, Y.; Cheng, X.; Lin, X.; and Han, Y. 2025. Natural language understanding and inference with mllm in visual question answering: A survey. ACM Computing Surveys , 57(8): 1–36. Li, J.; Li, D.; Savarese, S.; and Hoi, S. 2023. Blip-2: Boot-strapping language-image pre-training with frozen image en-coders and large language models. In International confer-ence on machine learning , 19730–19742. PMLR. Liao, W.; Wang, J.; Li, H.; Wang, C.; Huang, J.; and Jin, L. 2025. Doclayllm: An efficient multi-modal extension of large language models for text-rich document understanding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 4038–4049. Liu, H.; Li, C.; Wu, Q.; and Lee, Y. J. 2023. Visual instruction tuning. Advances in neural information processing systems ,36: 34892–34916. OpenAI. 2024. GPT-4o mini. Qwen; :; Yang, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Li, C.; Liu, D.; Huang, F.; Wei, H.; Lin, H.; Yang, J.; Tu, J.; Zhang, J.; Yang, J.; Yang, J.; Zhou, J.; Lin, J.; Dang, K.; Lu, K.; Bao, K.; Yang, K.; Yu, L.; Li, M.; Xue, M.; Zhang, P.; Zhu, Q.; Men, R.; Lin, R.; Li, T.; Tang, T.; Xia, T.; Ren, X.; Ren, X.; Fan, Y.; Su, Y.; Zhang, Y.; Wan, Y.; Liu, Y.; Cui, Z.; Zhang, Z.; and Qiu, Z. 2025. Qwen2.5 Technical Report. arXiv:2412.15115. Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Bi, X.; Zhang, H.; Zhang, M.; Li, Y.; Wu, Y.; et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open lan-guage models. arXiv preprint arXiv:2402.03300 .Tan, W.; Cao, Q.; Xue, C.; Zhan, Y.; Ding, C.; and He, X. 2025. Chartmaster: Advancing chart-to-code generation with real-world charts and chart similarity reinforcement learning. 
+
+arXiv preprint arXiv:2508.17608 .Tang, A.; Shen, L.; Luo, Y.; Yin, N.; Zhang, L.; and Tao, D. 2024. Merging Multi-Task Models via Weight-Ensembling Mixture of Experts. arXiv:2402.00433. Tang, J.; Zhao, H. H.; Wu, L.; Tao, Y.; Mao, D.; Wan, Y.; Tan, J.; Zeng, M.; Li, M.; and Wang, A. J. 2025. From Charts to Code: A Hierarchical Benchmark for Multimodal Models. 
+
+arXiv preprint arXiv:2510.17932 .Wang, W.; Gao, Z.; Gu, L.; Pu, H.; Cui, L.; Wei, X.; Liu, Z.; Jing, L.; Ye, S.; Shao, J.; et al. 2025. Internvl3. 5: Advancing open-source multimodal models in versatility, reasoning, and efficiency. arXiv preprint arXiv:2508.18265 .Wortsman, M.; Ilharco, G.; Gadre, S. Y.; Roelofs, R.; Gontijo-Lopes, R.; Morcos, A. S.; Namkoong, H.; Farhadi, A.; Carmon, Y.; Kornblith, S.; and Schmidt, L. 2022. Model soups: averaging weights of multiple fine-tuned mod-els improves accuracy without increasing inference time. arXiv:2203.05482. Wu, C.; Liang, Z.; Ge, Y.; Guo, Q.; Lu, Z.; Wang, J.; Shan, Y.; and Luo, P. 2025. Plot2code: A comprehensive bench-mark for evaluating multi-modal large language models in code generation from scientific plots. In Findings of the Association for Computational Linguistics: NAACL 2025 ,3006–3028. Xia, R.; Ye, H.; Yan, X.; Liu, Q.; Zhou, H.; Chen, Z.; Shi, B.; Yan, J.; and Zhang, B. 2025. Chartx & chartvlm: A versatile benchmark and foundation model for complicated chart reasoning. IEEE Transactions on Image Processing .Yadav, P.; Tam, D.; Choshen, L.; Raffel, C.; and Bansal, M. 2023. TIES-Merging: Resolving Interference When Merging Models. arXiv:2306.01708. Yang, C.; Shi, C.; Liu, Y.; Shui, B.; Wang, J.; Jing, M.; Xu, L.; Zhu, X.; Li, S.; Zhang, Y.; et al. 2024a. Chartmimic: Eval-uating lmm’s cross-modal reasoning capability via chart-to-code generation. arXiv preprint arXiv:2406.09961 .Yang, E.; Shen, L.; Guo, G.; Wang, X.; Cao, X.; Zhang, J.; and Tao, D. 2026. Model merging in llms, mllms, and beyond: Methods, theories, applications, and opportunities. 
+
+ACM Computing Surveys , 58(8): 1–41. Yang, E.; Wang, Z.; Shen, L.; Liu, S.; Guo, G.; Wang, X.; and Tao, D. 2024b. AdaMerging: Adaptive Model Merging for Multi-Task Learning. arXiv:2310.02575. Yang, Z.; Hong, W.; Xu, M.; Fan, X.; Wang, W.; Cheng, J.; Gu, X.; and Tang, J. 2025. UI2Code N : A Visual Lan-guage Model for Test-Time Scalable Interactive UI-to-Code Generation. arXiv preprint arXiv:2511.08195 .Yang, Z.; Zhou, Z.; Wang, S.; Cong, X.; Han, X.; Yan, Y.; Liu, Z.; Tan, Z.; Liu, P.; Yu, D.; et al. 2024c. Matplotagent: Method and evaluation for llm-based agentic scientific data visualization. In Findings of the Association for Computa-tional Linguistics: ACL 2024 , 11789–11804. Ye, P.; Huang, C.; Shen, M.; Chen, T.; Huang, Y.; and Ouyang, W. 2025. Dynamic model merging with mixture of weights. IEEE Transactions on Circuits and Systems for Video Technology .Yu, L.; Yu, B.; Yu, H.; Huang, F.; and Li, Y. 2024. Lan-guage Models are Super Mario: Absorbing Abilities from Homologous Models as a Free Lunch. arXiv:2311.03099. Zeng, X.; Li, K.; Wang, C.; Li, X.; Jiang, T.; Yan, Z.; Li, S.; Shi, Y.; Yue, Z.; Wang, Y.; et al. 2024. Timesuite: Improving mllms for long video understanding via grounded tuning. 
+
+arXiv preprint arXiv:2410.19702 .Zhang, Z.; Cao, Y.; and Liao, L. 2025. Boosting Chart-to-Code Generation in MLLM via Dual Preference-Guided Refinement. arXiv:2504.02906. Zhao, X.; Liu, X.; Haoyue, Y.; Luo, X.; Zeng, F.; Li, J.; Shi, Q.; and Chen, C. 2025a. Chartedit: How far are mllms from automating chart analysis? evaluating mllms’ capability via chart editing. In Findings of the Association for Computa-tional Linguistics: ACL 2025 , 3616–3630. Zhao, X.; Luo, X.; Shi, Q.; Chen, C.; Wang, S.; Liu, Z.; and Sun, M. 2025b. Chartcoder: Advancing multimodal large language model for chart-to-code generation. In Proceedings of the 63rd Annual Meeting of the Association for Computa-tional Linguistics (Volume 1: Long Papers) , 7333–7348. Zhu, D.; Chen, J.; Shen, X.; Li, X.; and Elhoseiny, M. 2023. Minigpt-4: Enhancing vision-language understand-ing with advanced large language models. arXiv preprint arXiv:2304.10592 .

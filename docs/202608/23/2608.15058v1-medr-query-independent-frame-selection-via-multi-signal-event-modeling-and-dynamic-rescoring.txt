@@ -1,0 +1,256 @@
+Title: MEDR: Query-Independent Frame Selection via Multi-Signal Event Modeling and Dynamic Rescoring
+
+URL Source: https://arxiv.org/pdf/2608.15058v1
+
+Published Time: Tue, 18 Aug 2026 00:27:24 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# MEDR: Query-Independent Frame Selection via Multi-Signal Event Modeling and Dynamic Rescoring 
+
+# Xinlei Pu 1, Weijie Shi 2, Wen Yang 1, Yi Cao 1, Hao Chen 3, Yuanjun Liu 1, Wenwei Ding 4, Jia Zhu 5,Jiajie Xu 1
+
+> 1
+
+School of Computer Science and Technology, Soochow University 
+
+> 2
+
+The Hong Kong University of Science and Technology 
+
+> 3
+
+FiT, Tencent 
+
+> 4
+
+Suzhou Rural Commercial Bank 
+
+> 5
+
+School of Education, Zhejiang Normal University 
+
+Abstract 
+
+Frame selection is a fundamental component of multimodal large language models, enabling long videos to be processed under limited visual-token and computational budgets. Uni-form sampling preserves temporal coverage but may miss in-formative content that appears only briefly. To alleviate this limitation, query-dependent methods can retrieve question-relevant frames. However, because the selected frames depend on the current question, the same visual input cannot be di-rectly shared across different questions, and frame selection must be repeated in multi-turn video dialogue. This motivates us to seek a query-independent frame selection method that preserves the reusability of a fixed visual input while improv-ing the coverage of informative events beyond uniform sam-pling. We propose Multi-Signal Event Modeling and Dynamic 
+
+Rescoring (MEDR), a training-free and query-independent frame selection method. Multi-Signal Event Modeling orga-nizes complementary visual, motion, and text signals into signal-specific temporal events. Dynamic Rescoring then it-eratively reevaluates each candidate relative to the current se-lected set, updating its score according to frame-level signal strength, additional event coverage, and temporal proximity. The resulting fixed frame set is constructed without observing the query and can be reused across different questions. On the standard benchmark evaluations, MEDR improves model ac-curacy by 0.63%–0.89% on Video-MME. On the long-video subset of LongVideoBench, it improves accuracy by up to 
+
+1.23% with Qwen3-VL-8B. MEDR further improves overall accuracy by 0.53% , while reusing exactly the same frame set for every question about a video. 
+
+# 1 Introduction 
+
+Multimodal large language models (MLLMs) have achieved strong performance in video understanding by extending image-based architectures to temporal inputs (Lin et al. 2024; Li et al. 2024; Jin et al. 2024). However, long videos often contain far more frames than these models can process. In-creasing the number of input frames raises the costs of visual encoding, prefill, memory, and attention. Frame selection is therefore a fundamental component of video MLLMs, enabling long videos to be processed under limited visual-token and computational budgets. This is particularly impor-tant for benchmarks such as Video-MME, LongVideoBench, MLVU, and EgoSchema, which evaluate models over long and diverse temporal contexts (Fu et al. 2025; Wu et al. 2024; Zhou et al. 2025; Mangalam, Akshulakov, and Malik 2023). Uniform sampling preserves broad temporal coverage, but under a limited frame budget it may repeatedly sample sim-ilar content while missing informative moments that appear only briefly. Query-dependent methods alleviate this lim-itation by retrieving frames relevant to the current ques-tion. However, because the selected frames depend on the question, different questions about the same video may pro-duce different visual inputs. The frame set must therefore be reconstructed for each new question rather than directly reused across multiple questions about the same video. We instead study query-independent frame selection, where a fixed frame set is constructed before any query is observed and reused across different questions about the same video. Our goal is to improve the coverage of informative content while preserving a reusable visual input. Achieving this goal presents two main challenges. First, in-formative video content follows different temporal patterns. Visual changes may delineate coherent intervals, short mo-tion bursts may indicate brief actions, and on-screen text may appear or change independently of visual motion. A single global similarity or importance measure does not explicitly distinguish these complementary patterns. Second, assigning each frame a fixed score ignores how its value changes as the selected set grows. A candidate that is useful at an early stage may become less informative once a related event or nearby temporal region has already been represented. Consequently, a fixed ranking may select multiple frames that cover similar content or are concentrated within a short temporal interval. To address these challenges, we propose MEDR, atraining-free and query-independent frame selection method. MEDR consists of two modules. Multi-Signal Event Model-ing identifies signal-specific temporal intervals from comple-mentary visual, motion, and text signals, capturing visually coherent segments, brief motion bursts, and the appearance or change of on-screen text. Building on these intervals, Dy-namic Rescoring iteratively reevaluates the remaining candi-dates after each selection. Each candidate is scored accord-ing to its frame-level signal strength, the additional event coverage it provides, and its temporal proximity to the cur-rent selected set. As the selected set grows, the scores of the remaining candidates are updated accordingly. MEDR there-arXiv:2608.15058v1 [cs.CV] 15 Aug 2026 fore constructs a fixed frame set without observing the query, and the resulting visual input can be reused across multiple questions about the same video. Our contributions are summarized as follows: 
+
+• We propose MEDR, a training-free and query-independent frame selection method that constructs a fixed visual input before any question is observed. It preserves cross-question reusability while improving the coverage of sparsely distributed video content under a limited frame budget. 
+
+• We introduce Multi-Signal Event Modeling to capture complementary visual, motion, and text events, together with Dynamic Rescoring to update candidate scores ac-cording to the evolving selected set. 
+
+• Experiments on Video-MME and LongVideoBench show that MEDR consistently improves query-independent frame selection on Video-MME and achieves stronger long-video accuracy with Qwen3-VL. A fixed-set multi-question evaluation further shows that one MEDR frame set remains effective across different questions without query-specific reselection. 
+
+# 2 Related Work 
+
+2.1 Video MLLMs and Training-Free Video Processing 
+
+Video MLLMs commonly encode sampled frames or short clips and connect the resulting visual features to a language model through projection, pooling, or learned bridge mod-ules. Video-LLaVA aligns image and video representations, MVBench introduces the VideoChat2 model and a broad temporal benchmark, and Chat-UniVi uses unified dynamic visual tokens for image and video inputs (Lin et al. 2024; Li et al. 2024; Jin et al. 2024). Long-video systems further em-ploy sparse memory, timestamp-aware encoding, key-frame conditioning, or adaptive spatiotemporal compression (Song et al. 2024; Ren et al. 2024; Tan et al. 2024; Shen et al. 2025). Agentic and hierarchical approaches such as VideoAgent and VideoTree can actively localize query-relevant evidence, but their visual processing is conditioned on the current task or question (Fan et al. 2024; Wang et al. 2025). Several training-free approaches reuse pretrained im-age or multimodal models without additional video train-ing. FreeVA directly applies image MLLMs to multiple frames, IG-VLM arranges ordered frames into an image grid, SlowFast-LLaVA combines complementary temporal path-ways, and TS-LLaVA mixes a global thumbnail with sam-pled visual tokens (Wu 2024; Kim et al. 2024; Xu et al. 2024; Qu et al. 2024). Other work reduces computation by jointly selecting keyframes and visual tokens or by pruning redun-dant visual tokens during inference (Song et al. 2026; Chen et al. 2024; Zhang et al. 2025). These methods improve video processing through model adaptation, input reorganization, multi-rate sampling, or token reduction. In contrast, MEDR leaves the underlying MLLM and its visual-token processing unchanged, and focuses on constructing the input frame set under a fixed frame budget. 
+
+2.2 Frame Selection for Video Understanding 
+
+Classical video summarization formulates representative-frame selection as a diversity-aware subset optimization problem, including sequential determinantal point processes and learned submodular objectives (Gong et al. 2014; Gygli, Grabner, and Gool 2015). These methods establish useful principles for balancing representativeness and diversity, but they are not designed to construct a reusable visual input for modern video MLLMs. Uniform sampling is widely used because it provides broad temporal coverage without additional selection cost. However, under a limited frame budget, it may repeatedly sample similar content while missing informative moments that appear only briefly. Query-dependent methods instead select frames according to a given question. MLLM-based frame selectors estimate question–frame relevance, Adaptive Keyframe Sampling combines prompt relevance and tempo-ral coverage, Flexible Frame Selection learns both the num-ber and identities of selected frames, and MDP 3 performs list-wise training-free selection (Hu et al. 2025; Tang et al. 2025; Buch et al. 2025; Sun et al. 2025). Such methods often rely on visual–language matching from pretrained encoders, for which CLIP is a widely used foundation (Radford et al. 2021). Their frame sets may change with the question, so query–frame matching and selection must be repeated for each new query. Query-independent methods construct a fixed frame set using only the video. Uniform sampling provides a simple baseline, while MaxInfo selects diverse frames by maximiz-ing the geometric volume of pretrained frame embeddings (Li et al. 2026). MEDR studies a complementary direction. Rather than relying only on fixed temporal positions or global embedding diversity, it organizes visual, motion, and text sig-nals into signal-specific temporal events. It then dynamically rescores the remaining candidates according to the current selected set, allowing the value of a frame to change as event coverage and temporal distribution evolve. 
+
+# 3 Method 
+
+3.1 Problem Setting and Overview 
+
+Let a video be represented by T sampled source frames and their timestamps, 
+
+V = {(vi, t i)}Ti=1 . (1) Given a frame budget B, we construct a query-independent frame set 
+
+S ⊆ { 1, . . . , T }, |S| = B′ = min( B, T ), (2) before any question is observed. The selected frames are restored to chronological order before being passed to the video MLLM. Since S depends only on the video, the same visual input can be used for different questions about that video. As shown in Figure 1, MEDR contains two stages. Multi-Signal Event Modeling organizes visual, motion, and text sig-nals into temporal events and frame-level scores, from which uniform, event-representative, and high-scoring frames form a compact candidate set. Dynamic Rescoring then constructs Figure 1: MEDR consists of two stages. Multi-Signal Event Modeling converts visual, motion, and text signals into type-specific temporal events and frame-level scores, from which a compact candidate set is constructed. Dynamic Rescoring evaluates each candidate relative to the current selected set and updates the remaining scores after every selection. the final set iteratively by considering each candidate’s infor-mation, additional event coverage, and temporal redundancy relative to the current selected set. The remaining candidates are rescored after every selection. 
+
+3.2 Multi-Signal Event Modeling 
+
+Video evidence is heterogeneous in both content and tempo-ral behavior. Objects, scenes, and fine-grained visual details often remain stable for a period of time and are best rep-resented by clear frames within that interval. Actions may instead appear as short motion bursts, while titles, subtitles, and numerical states can appear or change without strong visual motion. These patterns are complementary and may become informative at different moments. Therefore, MEDR models visual stability, motion, and text separately rather than compressing them into a single global signal. An event is a consecutive interval detected from one signal and does not require a semantic action label. We represent it as 
+
+e = ( Ie, c e, s e), (3) where Ie localizes the signal pattern, ce provides a represen-tative candidate frame, and se determines the event priority during candidate construction. 
+
+Visual events. We compute an adjacent-frame visual-change signal di from color-histogram differences, structural similarity (Wang et al. 2004), and perceptual-hash differ-ences. Strong local changes separate consecutive visual in-tervals. Because a boundary frame may not clearly represent the interval, we define 
+
+pi = 1 − Norm( di), (4) and select the frame with the largest pi inside each interval as its representative. 
+
+Motion events. A motion signal mi is computed from dense optical-flow statistics (Farnebäck 2003). Consecutive frames with motion signals above a robust video-specific threshold form a motion event, represented by the frame with the largest mi.
+
+Text events. The text signal xi combines OCR quality with the appearance or change of recognized content. Consecu-tive OCR-bearing frames form one text event when their normalized text remains similar and their numerical state is unchanged. A substantial text change, disappearance, or numerical-state change starts a new event. The frame with the strongest text signal is used as the representative. The resulting event bank is 
+
+E = Ev ∪ E m ∪ E x. (5) Visual-event strength reflects interval length and visual stability, motion-event strength accumulates motion above the background level, and text-event strength reflects the strongest OCR signal in the interval. MEDR directly com-pares them after applying the same logarithmic compression: 
+
+ℓe = log(1 + max( se, 0)) . (6) The compression reduces the influence of unusually large raw values, and ℓe is used as a heuristic event priority for candidate construction and event weighting. In addition to events, each frame receives a multi-signal score 
+
+fi = mean( R(pi), R(mi), R(xi)) , (7) where R(·) denotes rank normalization within the video. This places the three signals on a comparable relative scale. 
+
+3.3 Dynamic Rescoring 
+
+A fixed ranking cannot account for how the value of a can-didate changes after related events or nearby temporal re-gions have already been selected. MEDR therefore recom-putes candidate utilities after every set update. 
+
+Candidate-frame construction. Let M be the maximum candidate-set size and 
+
+L = min  T, max( M, B ′). (8) If T ≤ L, all source frames are retained. Otherwise, the can-didate set C is formed by first adding B′ uniformly spaced frames, then event representatives in descending ℓe, and fi-nally the remaining frames in descending fi until |C| = L.These three sources preserve global temporal coverage, de-tected events, and strong local signals. 
+
+Event–frame affinity. An event representative provides a direct candidate for its interval, but other nearby frames may describe the same event more clearly. The affinity between event e and candidate i is therefore computed as 
+
+eae,i = τe,i ϕe,i ztype( e) 
+
+> i
+
+, (9) where temporal compatibility is given by 
+
+τe,i = exp 
+
+
+
+− d(ti, Ie)
+
+σe
+
+
+
+. (10) The distance d(ti, Ie) is zero when candidate i lies inside the event interval and otherwise equals the distance to its nearest boundary. The scale σe is the larger of the event duration and the source-frame sampling interval. Frames inside the event consequently receive full temporal compatibility, whereas nearby frames are retained with a smoothly decaying weight. Content compatibility is represented by ϕe,i . For visual and motion events, it measures the maximum lightweight visual similarity between candidate i and the frames inside 
+
+Ie, using perceptual-hash and color-histogram similarity. For text events, it indicates valid OCR content associated with the event interval. The type-specific signal ztype( e) 
+
+> i
+
+is pi, mi, or the OCR-presence signal for visual, motion, and text events. A high affinity therefore requires temporal association, com-patible content, and a strong value of the corresponding sig-nal type. Affinity values are normalized independently within each event: 
+
+ae,i = eae,i 
+
+max j∈C eae,j 
+
+, (11) with ae,i = 0 when no candidate has positive affinity to event 
+
+e. Such events are excluded from the active event set Eact .The remaining event priorities are normalized as 
+
+we = ℓe
+
+P 
+
+> e′∈E act
+
+ℓe′
+
+. (12) 
+
+Additional event coverage. After k iterations, the selected set Sk represents event e to the degree 
+
+ce(Sk) = max 
+
+> j∈S k
+
+ae,j , ce(∅) = 0 . (13) The additional event coverage contributed by an unselected candidate i is 
+
+gi(Sk) = X
+
+> e∈E act
+
+we [ae,i − ce(Sk)] + . (14) Only improvements beyond the current representation are rewarded. A candidate receives a large gain when it covers an absent or weakly represented event, but little gain when another selected frame already represents that event equally well. 
+
+Temporal redundancy. Event coverage alone cannot pre-vent different events from producing several selected frames within a short temporal region. Denoting the temporal span of the candidate set by 
+
+D = max  
+
+> i∈C
+
+ti − min  
+
+> i∈C
+
+ti, (15) the temporal similarity between two candidates is 
+
+kt(i, j ) = exp 
+
+
+
+− B′
+
+D |ti − tj |
+
+
+
+. (16) The redundancy of candidate i relative to the current set is then 
+
+ri(Sk) = max 
+
+> j∈S k
+
+kt(i, j ), ri(∅) = 0 . (17) A larger value indicates that candidate i lies close to an already selected frame. Event coverage and temporal redun-dancy therefore address different forms of repetition: the former suppresses repeated representation of the same event, whereas the latter discourages concentration within the same temporal region. 
+
+Dynamic score and set update. Candidate utility com-bines frame-level information, additional event coverage, and temporal redundancy: 
+
+ui(Sk) = [ ρf i + (1 − ρ)gi(Sk)] η + (1 − η) 1 − ri(Sk) .
+
+(18) The first factor balances the information of an individual frame against the new event evidence it contributes. The second factor softly reduces the value of candidates close to the current selected set, while the lower bound η prevents temporal proximity from becoming a hard exclusion rule. Starting from S0 = ∅, the next frame is selected according to 
+
+i∗ = arg max 
+
+> i∈C\S k
+
+ui(Sk), Sk+1 = Sk ∪ { i∗}, (19) until |S k| = B′. Signals, events, and the event–frame affinity matrix are computed once for each video, while event cover-age and temporal redundancy are updated as the selected set grows. The remaining candidates are consequently rescored after every iteration. 
+
+# 4 Experiments 
+
+4.1 Experimental Setup 
+
+Datasets and evaluation. We evaluate MEDR on Video-MME and LongVideoBench (Fu et al. 2025; Wu et al. 2024). The two benchmarks provide complementary tests for query-independent frame selection. Video-MME contains diverse video durations and question types, so it evaluates whether one fixed frame set preserves broadly useful content rather than cues tailored to one question. LongVideoBench places greater emphasis on long-context understanding. In addition to overall accuracy, we report results for videos of at most 
+
+60 s and at least 180 s . The two duration groups reveal how a method behaves when the same frame budget provides dense coverage of a short video but sparse coverage of a much longer timeline. 
+
+Multi-question reuse protocol. For each Video-MME video, we treat its three associated questions as a multi-question sequence. One frame set is selected before the first question and is reused unchanged for all three questions. To avoid drawing conclusions from one arbitrary question order, we evaluate six shared order seeds for every method. We re-port overall turn accuracy, first-turn accuracy, and follow-up accuracy, where follow-up aggregates the second and third questions. This protocol directly tests the intended use case of MEDR: the visual input is constructed once and remains useful when later questions ask about different parts of the same video. 
+
+Models and baselines. We use Qwen2.5-VL-7B-Instruct (Bai et al. 2025b) and Qwen3-VL-8B-Instruct (Bai et al. 2025a) as the underlying video MLLMs. Uniform sam-pling is the standard query-independent baseline and pre-serves broad temporal spacing. MaxInfo (Li et al. 2026) is a query-independent baseline that selects diverse frames from pretrained visual embeddings. We also report Adap-tive Keyframe Sampling (AKS) (Tang et al. 2025), which observes the current question and is therefore shown as a query-dependent reference rather than a reusable-frame-set baseline. Together, these comparisons distinguish gains over fixed temporal positions, global embedding diversity, and question-conditioned selection. 
+
+Implementation details and fairness. For MEDR, videos are decoded at 1 frame per second before event construction and frame selection. The final frame budgets are set to 32 and 64. The candidate-set limit is M = 512 , and all available source frames are retained when the 1-fps sequence is smaller than the candidate or output budget. Uniform directly samples B evenly spaced frames from the original video. MaxInfo follows its original dense candi-date construction before reducing the sequence to the target budget. For AKS, we use the provided query-conditioned frame-selection sequences. All methods use the same final frame budget, backbone model, input resolution, prompt, and model decoding settings. We use (ρ, η ) = (0 .5, 0.1) for B = 32 and (ρ, η ) = (0 .8, 0.2) for B = 64 , and keep each budget-specific con-figuration unchanged across both datasets and both video MLLMs. All model inference experiments are conducted on a single NVIDIA A100 80GB GPU. MEDR is training-free, and its visual, motion, and text signals are computed without observing any question. The main and ablation re-sults are obtained from one deterministic evaluation run, while the fixed-set multi-question results are averaged over six question-order seeds. All MLLMs use deterministic de-coding. 
+
+4.2 Main Results 
+
+Table 1 compares MEDR with both query-independent and query-dependent frame selection methods. On Video-MME, MEDR achieves the best result among the evaluated query-independent methods under all four combinations of back-bone model and frame budget. With Qwen2.5-VL, MEDR improves over the evaluated query-independent methods by 0.89% at B = 32 and 0.63% at B = 64 . With Qwen3-VL, the corresponding gains are 0.63% and 0.74%. The improve-ment therefore remains consistent when both the backbone and frame budget change, rather than appearing only in one isolated setting. This result is consistent with the motivation of Multi-Signal Event Modeling. Video-MME contains questions in-volving objects, actions, temporal changes, and on-screen text. Uniform sampling primarily preserves temporal spac-ing, while MaxInfo emphasizes global visual diversity. MEDR additionally preserves representatives of stable vi-sual intervals, short motion events, and changing text states. The consistent gains suggest that these signal types provide complementary evidence for constructing a fixed frame set before the question is known. On LongVideoBench, the effect depends more strongly on video duration and the downstream backbone. With Qwen3-VL, MEDR achieves the best query-independent result on the ≥ 180 s subset at both budgets. It reaches 53.89% at B =32 , improving over the better of Uniform and MaxInfo by 0.92%, and reaches 55.43% at B = 64 , with a gain of 1.23%. These results indicate that MEDR is most effective when a limited frame budget must represent informative content distributed over a long and sparse temporal sequence. In this setting, additional event coverage rewards candidates from unrepresented events, while temporal redundancy prevents the selected set from concentrating in a small region. The LongVideoBench result is not equally consistent with Qwen2.5-VL, indicating that the usefulness of a selected frame set also depends on how the downstream MLLM in-tegrates sparse visual evidence. Qwen3-VL benefits more clearly from the event-oriented frame set on long videos, whereas Qwen2.5-VL remains stronger with Uniform or Qwen2.5-VL-7B Qwen3-VL-8B Method B V-MME LongVideoBench V-MME LongVideoBench Overall ≤ 60 s ≥ 180 s Overall ≤ 60 s ≥ 180 s                                                                         
+
+> AKS †32 61.11 60.58 66.20 58.50 64.00 61.18 69.81 57.99 AKS †64 62.52 60.21 65.93 58.09 67.00 62.38 69.81 59.63 Uniform 32 58.56 57.14 68.70 52.87 62.22 58.94 75.07 52.97 Uniform 64 61.67 57.22 70.08 52.46 64.93 59.99 76.45 53.89 MaxInfo 32 59.33 55.27 67.87 50.61 62.74 57.74 73.13 52.05 MaxInfo 64 61.70 59.16 73.96 53.69 65.26 59.69 74.52 54.20
+> MEDR 32 60.22 55.57 67.87 51.02 63.37 58.04 69.25 53.89
+> MEDR 64 62.33 56.17 67.87 51.84 66.00 59.61 70.91 55.43
+
+Table 1: Accuracy (%) on Video-MME (V-MME) and LongVideoBench. Bold values indicate the best query-independent result under each frame budget. AKS † is query-dependent and is included as a reference rather than a reusable-frame-set baseline. MaxInfo in several settings. AKS also achieves higher ac-curacy in several LongVideoBench columns, but it observes the current question during frame selection. It is therefore re-ported as a query-dependent reference rather than a directly reusable fixed-frame baseline. On the ≤ 60 s subset, Uniform and MaxInfo remain stronger in most settings. Short videos are easier to cover temporally under the evaluated frame budgets, which re-duces the benefit of explicitly rewarding additional event coverage. MaxInfo may also benefit from its emphasis on global visual diversity, which can preserve fine-grained ap-pearance variations when the temporal span is limited. In contrast, MEDR shows clearer advantages on longer videos, where informative events are more sparsely distributed and both event coverage and redundancy control become more important. 
+
+4.3 Fixed-Set Multi-Question Evaluation 
+
+The standard benchmark evaluates one question at a time and does not test whether a fixed frame set remains useful when the question changes. We therefore reuse one frame set for all three questions associated with each Video-MME video. This protocol evaluates how well a frame set selected once transfers across different questions about the same video. For AKS, we use the frame-selection sequence associ-ated with the first-turn question and keep it unchanged for the following questions. Rerunning AKS for every question would no longer satisfy the fixed-set protocol. All methods are evaluated under the same question orders, so the compar-ison measures the cross-question usefulness of each initially constructed frame set. Table 2 shows that the best first-turn frame set is not neces-sarily the most effective one for later questions. AKS achieves the highest first-turn accuracy of 66.87% because its frames are selected using that question. However, its follow-up ac-curacy is 66.65%, indicating that a frame set focused on the first question may omit evidence required by later questions. MEDR achieves 67.12% overall accuracy and 67.65% follow-up accuracy, both the highest among the compared methods. It improves over MaxInfo by 0.53% overall and 0.51% on follow-up questions. Compared with AKS, MEDR                
+
+> Method Overall First Turn Follow-up Uniform 65.93 ±0.27 65.39 ±1.35 66.20 ±0.46 MaxInfo 66.59 ±0.27 65.50 ±1.22 67.14 ±0.76 AKS †66.72 ±0.59 66.87 ±1.34 66.65 ±0.80
+> MEDR 67.12 ±0.26 66.07 ±1.76 67.65 ±0.61
+
+Table 2: Fixed-set multi-question accuracy (%) on Video-MME with Qwen3-VL-8B and a frame budget of 64. Results are reported as mean ±standard deviation over six shared order seeds.                 
+
+> Variant Acc. ∆
+> Full MEDR 62.33 –Fixed Scoring 60.26 -2.07 w/o Event Coverage 61.93 -0.40 w/o Temporal Redundancy 60.81 -1.52 w/o Visual Signal 61.78 -0.55 w/o Motion Signal 62.07 -0.26 w/o Text Signal 60.96 -1.37
+
+Table 3: Component analysis on Video-MME using Qwen2.5-VL-7B with a frame budget of 64. ∆ denotes the accuracy change relative to Full MEDR. is 0.80% lower on the first turn but 0.40% higher overall and 1.00% higher on follow-up questions. The overall standard deviation is also limited to 0.26% across the six question-order seeds. These results directly support the query-independent ob-jective. MEDR does not optimize the frame set for one observed question. Instead, it constructs a broader event-oriented representation before the question sequence begins. The stronger overall and follow-up results show that the same selected visual input retains useful evidence when later ques-tions refer to different objects, actions, or temporal regions of the video. Figure 2: Qualitative examples of MEDR on Video-MME. Yellow stars indicate informative frames selected by MEDR. Red and green denote incorrect and correct answers. 
+
+4.4 Ablation Study 
+
+Table 3 evaluates the main components of MEDR on Video-MME using Qwen2.5-VL-7B and a frame budget of 64. For each signal ablation, the corresponding signal is removed from both the frame-level score fi and its event set. The ablation therefore measures the contribution of that signal throughout the full selection pipeline. Fixed Scoring com-putes ui(∅) once and keeps the resulting candidate order unchanged, while the other variants retain iterative selection and remove only the specified component. Replacing Dynamic Rescoring with Fixed Scoring causes the largest accuracy drop, reducing performance from 62.33% to 60.26%. Both variants use the same frame-level signals, event bank, and candidate set; the main difference is whether candidate values are updated as the selected set grows. The 2.07% decrease therefore shows that a fixed rank-ing cannot fully account for changes in event representation and temporal distribution during iterative selection. Temporal redundancy and the text signal are also impor-tant. Removing temporal redundancy decreases accuracy by 1.52%, indicating that event coverage alone does not prevent selected frames from concentrating within a short temporal region. Removing the text signal results in a 1.37% decrease, showing that OCR-related events preserve information that is not reliably captured by visual appearance or motion alone. The remaining components provide smaller but consistent improvements. Removing the visual signal reduces accuracy by 0.55%, while removing additional event coverage causes a 0.40% decrease. These results support the use of stable visual intervals and set-dependent event representation. Re-moving the motion signal produces a smaller decrease of 0.26%, suggesting that motion events are less frequent but still provide complementary evidence for brief actions. 
+
+4.5 Qualitative Analysis 
+
+Figure 2 illustrates how the frames selected by MEDR cor-respond to the three modeled signal types. In the waiting-time example, the answer depends on a brief textual cue, and MEDR retains the frame displaying “20 minutes.” The protective-equipment and leash-color examples rely on sta-ble visual details that may be missed when the frame budget is spent on transitional or redundant views. In the final ex-ample, the relevant object appears during a short action, so preserving a motion-active frame is necessary for answering correctly. Together, these cases show that text, visual, and motion events capture complementary forms of evidence. They also illustrate the role of Dynamic Rescoring: infor-mative frames are retained not only because they have high frame-level scores, but also because they add evidence that is not sufficiently represented by the current selected set. Although these examples are illustrative rather than quanti-tative evidence, they provide an intuitive connection between the modeled signals, the selected frames, and the resulting answers. 
+
+# 5 Conclusion 
+
+MEDR is a training-free and query-independent frame se-lection method that combines Multi-Signal Event Modeling with Dynamic Rescoring. It organizes visual, motion, and text signals into signal-specific temporal events and updates candidate scores as the selected set grows, producing a fixed visual input that can be reused across questions. Experiments show consistent gains on Video-MME across two video MLLMs and two frame budgets, improved long-video perfor-mance with Qwen3-VL, and the best overall and follow-up accuracy in the fixed-set multi-question evaluation. Future work may explore duration-adaptive source-frame sampling to better preserve brief events while maintaining the effi-ciency of frame selection. References 
+
+Bai, S.; Cai, Y.; Chen, R.; Chen, K.; Chen, X.; Cheng, Z.; Deng, L.; Ding, W.; Gao, C.; Ge, C.; Ge, W.; Guo, Z.; Huang, Q.; Huang, J.; Huang, F.; Hui, B.; Jiang, S.; Li, Z.; Li, M.; Li, M.; Li, K.; Lin, Z.; Lin, J.; Liu, X.; Liu, J.; Liu, C.; Liu, Y.; Liu, D.; Liu, S.; Lu, D.; Luo, R.; Lv, C.; Men, R.; Meng, L.; Ren, X.; Ren, X.; Song, S.; Sun, Y.; Tang, J.; Tu, J.; Wan, J.; Wang, P.; Wang, P.; Wang, Q.; Wang, Y.; Xie, T.; Xu, Y.; Xu, H.; Xu, J.; Yang, Z.; Yang, M.; Yang, J.; Yang, A.; Yu, B.; Zhang, F.; Zhang, H.; Zhang, X.; Zheng, B.; Zhong, H.; Zhou, J.; Zhou, F.; Zhou, J.; Zhu, Y.; and Zhu, K. 2025a. Qwen3-VL Technical Report. arXiv preprint arXiv:2511.21631 .Bai, S.; Chen, K.; Liu, X.; Wang, J.; Ge, W.; Song, S.; Dang, K.; Wang, P.; Wang, S.; Tang, J.; Zhong, H.; Zhu, Y.; Yang, M.; Li, Z.; Wan, J.; Wang, P.; Ding, W.; Fu, Z.; Xu, Y.; Ye, J.; Zhang, X.; Xie, T.; Cheng, Z.; Zhang, H.; Yang, Z.; Xu, H.; and Lin, J. 2025b. Qwen2.5-VL Technical Report. arXiv preprint arXiv:2502.13923 .Buch, S.; Nagrani, A.; Arnab, A.; and Schmid, C. 2025. Flexible Frame Selection for Efficient Video Reasoning. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , 29071–29082. Chen, L.; Zhao, H.; Liu, T.; Bai, S.; Lin, J.; Zhou, C.; and Chang, B. 2024. An Image is Worth 1/2 Tokens After Layer 2: Plug-and-Play Inference Acceleration for Large Vision-Language Models. In Computer Vision – ECCV 2024 , 19–35. Springer. Fan, Y.; Ma, X.; Wu, R.; Du, Y.; Li, J.; Gao, Z.; and Li, Q. 2024. VideoAgent: A Memory-augmented Multimodal Agent for Video Understanding. In Computer Vision – ECCV 2024 , volume 15080 of Lecture Notes in Computer Science ,75–92. Springer. Farnebäck, G. 2003. Two-Frame Motion Estimation Based on Polynomial Expansion. In Image Analysis: 13th Scan-dinavian Conference, SCIA 2003 , volume 2749 of Lecture Notes in Computer Science , 363–370. Springer. Fu, C.; Dai, Y.; Luo, Y.; Li, L.; Ren, S.; Zhang, R.; Wang, Z.; Zhou, C.; Shen, Y.; Zhang, M.; Chen, P.; Li, Y.; Lin, S.; Zhao, S.; Li, K.; Xu, T.; Zheng, X.; Chen, E.; Shan, C.; He, R.; and Sun, X. 2025. Video-MME: The First-Ever Comprehen-sive Evaluation Benchmark of Multi-modal LLMs in Video Analysis. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 24108–24118. Gong, B.; Chao, W.-L.; Grauman, K.; and Sha, F. 2014. Diverse Sequential Subset Selection for Supervised Video Summarization. In Advances in Neural Information Pro-cessing Systems , volume 27, 2069–2077. Gygli, M.; Grabner, H.; and Gool, L. V. 2015. Video Sum-marization by Learning Submodular Mixtures of Objectives. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 3090–3098. Hu, K.; Gao, F.; Nie, X.; Zhou, P.; Tran, S.; Neiman, T.; Wang, L.; Shah, M.; Hamid, R.; Yin, B.; and Chilimbi, T. 2025. M-LLM Based Video Frame Selection for Efficient Video Understanding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,13702–13712. Jin, P.; Takanobu, R.; Zhang, W.; Cao, X.; and Yuan, L. 2024. Chat-UniVi: Unified Visual Representation Empowers Large Language Models with Image and Video Understanding. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , 13700–13710. Kim, W.; Choi, C.; Lee, W.; and Rhee, W. 2024. An Image Grid Can Be Worth a Video: Zero-Shot Video Question An-swering Using a VLM. IEEE Access , 12: 193057–193075. Li, K.; Wang, Y.; He, Y.; Li, Y.; Wang, Y.; Liu, Y.; Wang, Z.; Xu, J.; Chen, G.; Luo, P.; Wang, L.; and Qiao, Y. 2024. MVBench: A Comprehensive Multi-modal Video Under-standing Benchmark. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,22195–22206. Li, P.; Abdullaeva, I.; Gambashidze, A.; Kuznetsov, A.; and Oseledets, I. 2026. MaxInfo: A Training-Free Key-Frame Selection Method Using Maximum Volume for Enhanced Video Understanding. In Proceedings of the IEEE/CVF Win-ter Conference on Applications of Computer Vision , 7198– 7207. Lin, B.; Ye, Y.; Zhu, B.; Cui, J.; Ning, M.; Jin, P.; and Yuan, L. 2024. Video-LLaVA: Learning United Visual Represen-tation by Alignment Before Projection. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , 5971–5984. Mangalam, K.; Akshulakov, R.; and Malik, J. 2023. EgoSchema: A Diagnostic Benchmark for Very Long-form Video Language Understanding. In Advances in Neural In-formation Processing Systems , volume 36, 46212–46244. Qu, T.; Li, M.; Tuytelaars, T.; and Moens, M.-F. 2024. TS-LLaVA: Constructing Visual Tokens through Thumbnail-and-Sampling for Training-Free Video Large Language Models. arXiv preprint arXiv:2411.11066 .Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; Krueger, G.; and Sutskever, I. 2021. Learning Transferable Visual Models From Natural Language Supervision. In Pro-ceedings of the 38th International Conference on Machine Learning , volume 139 of Proceedings of Machine Learning Research , 8748–8763. PMLR. Ren, S.; Yao, L.; Li, S.; Sun, X.; and Hou, L. 2024. TimeChat: A Time-sensitive Multimodal Large Language Model for Long Video Understanding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,14313–14323. Shen, X.; Xiong, Y.; Zhao, C.; Wu, L.; Chen, J.; Zhu, C.; Liu, Z.; Xiao, F.; Varadarajan, B.; Bordes, F.; Liu, Z.; Xu, H.; Kim, H. J.; Soran, B.; Krishnamoorthi, R.; Elhoseiny, M.; and Chandra, V. 2025. LongVU: Spatiotemporal Adaptive Com-pression for Long Video-Language Understanding. In Pro-ceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , 54582–54599. PMLR. Song, B.; Peng, J.; Zhang, Y.; Chen, G.; Yang, F.; and Guo, J. 2026. KTV: Keyframes and Key Tokens Selection for Effi-cient Training-Free Video LLMs. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 9060–9068. Song, E.; Chai, W.; Wang, G.; Zhang, Y.; Zhou, H.; Wu, F.; Chi, H.; Guo, X.; Ye, T.; Zhang, Y.; Lu, Y.; Hwang, J.-N.; and Wang, G. 2024. MovieChat: From Dense Token to Sparse Memory for Long Video Understanding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 18221–18232. Sun, H.; Lu, S.; Wang, H.; Chen, Q.-G.; Xu, Z.; Luo, W.; Zhang, K.; and Li, M. 2025. MDP3: A Training-free Ap-proach for List-wise Frame Selection in Video-LLMs. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 24090–24101. Tan, R.; Sun, X.; Hu, P.; Wang, J.-h.; Deilamsalehy, H.; Plum-mer, B. A.; Russell, B.; and Saenko, K. 2024. Koala: Key Frame-Conditioned Long Video-LLM. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 13581–13591. Tang, X.; Qiu, J.; Xie, L.; Tian, Y.; Jiao, J.; and Ye, Q. 2025. Adaptive Keyframe Sampling for Long Video Under-standing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 29118–29128. Wang, Z.; Bovik, A. C.; Sheikh, H. R.; and Simoncelli, E. P. 2004. Image Quality Assessment: From Error Visibility to Structural Similarity. IEEE Transactions on Image Process-ing , 13(4): 600–612. Wang, Z.; Yu, S.; Stengel-Eskin, E.; Yoon, J.; Cheng, F.; Bertasius, G.; and Bansal, M. 2025. VideoTree: Adaptive Tree-based Video Representation for LLM Reasoning on Long Videos. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 3272–3283. Wu, H.; Li, D.; Chen, B.; and Li, J. 2024. LongVideoBench: A Benchmark for Long-context Interleaved Video-Language Understanding. In Advances in Neural Information Process-ing Systems , volume 37, 28828–28857. Wu, W. 2024. FreeVA: Offline MLLM as Training-Free Video Assistant. arXiv preprint arXiv:2405.07798 .Xu, M.; Gao, M.; Gan, Z.; Chen, H.-Y.; Lai, Z.; Gang, H.; Kang, K.; and Dehghan, A. 2024. SlowFast-LLaVA: A Strong Training-Free Baseline for Video Large Language Models. arXiv preprint arXiv:2407.15841 .Zhang, Y.; Fan, C.-K.; Ma, J.; Zheng, W.; Huang, T.; Cheng, K.; Gudovskiy, D. A.; Okuno, T.; Nakata, Y.; Keutzer, K.; and Zhang, S. 2025. SparseVLM: Visual Token Sparsification for Efficient Vision-Language Model Inference. In Proceedings of the 42nd International Conference on Machine Learning ,volume 267 of Proceedings of Machine Learning Research ,74840–74857. PMLR. Zhou, J.; Shu, Y.; Zhao, B.; Wu, B.; Liang, Z.; Xiao, S.; Qin, M.; Yang, X.; Xiong, Y.; Zhang, B.; Huang, T.; and Liu, Z. 2025. MLVU: Benchmarking Multi-task Long Video Understanding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 13691–13701.
