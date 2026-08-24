@@ -6,100 +6,89 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-23
-- 运行时间：2026-08-23 20:52:43 UTC
+- 最新运行日期：2026-08-24
+- 运行时间：2026-08-24 20:36:21 UTC
 - 运行状态：成功
-- 本次总论文数：26
-- 精读区：12
+- 本次总论文数：23
+- 精读区：9
 - 速读区：14
 
 ### 今日简报（AI）
-今日精读26篇，多模态对齐与遥感检测两篇9.0高分领跑。  
-最值得看：视觉非万能桥，模态异步需修正；光学—SAR检测借边界对齐路由提升鲁棒性。  
-普通读者可顺带扫一眼PaSTel、MetaReason等速读，把握交叉方向新动态。
-- 详情：[/202608/23/README](/202608/23/README)
+今日共读23篇论文，9篇精读，聚焦多模态对齐与问答证据获取。最值得关注的是物理语言认证和视觉问答的证据获取机制。下一步建议探索多模态情感分析及超图检索增强生成的增量优化。
+- 详情：[/202608/24/README](/202608/24/README)
 
 ### 精读区论文标签
-1. [Why Vision Fails as a Universal Bridge: Rectifying Modality Asynchrony in Multilingual MLLMs](/202608/23/2608.15085v1-why-vision-fails-as-a-universal-bridge-rectifying-modality-asynchrony-in-multilingual-mllms)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：针对MLLM中视觉与语言模态异步/不平衡问题进行机制分析与纠正
-2. [Boundary-Aligned Contribution Routing for Robust Optical--SAR Object Detection](/202608/23/2608.15261v1-boundary-aligned-contribution-routing-for-robust-optical--sar-object-detection)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：学习任务条件的贡献路由，在融合前调节每个模态的贡献
-3. [Who Leads Now? Token-Level Modality Arbitration for Chart-to-Code Generation](/202608/23/2608.15510v1-who-leads-now-token-level-modality-arbitration-for-chart-to-code-generation)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：在token级别仲裁视觉与代码分支的贡献，平衡模态学习
-4. [GLaQ: Grounding Latent Queries in Visual Evidence for Multimodal Reasoning](/202608/23/2608.15517v1-glaq-grounding-latent-queries-in-visual-evidence-for-multimodal-reasoning)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：将潜在查询锚定到视觉证据以支持多模态推理
-5. [GLaQ: Grounding Latent Queries in Visual Evidence for Multimodal Reasoning](/202608/23/2608.15517v2-glaq-grounding-latent-queries-in-visual-evidence-for-multimodal-reasoning)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：多模态推理，视觉证据锚定
-6. [What You Ask is What You Ground: Bridging Question Intent to Temporal Evidence for Grounded VideoQA](/202608/23/2608.15708v1-what-you-ask-is-what-you-ground-bridging-question-intent-to-temporal-evidence-for-grounded-videoqa)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：视频问答定位中通过问题条件化视觉-语言交互连接问题意图与时间证据
-7. [ViTaR: Visuo-Tactile Residual Adaptation for Foundation VLA Manipulation](/202608/23/2608.15816v1-vitar-visuo-tactile-residual-adaptation-for-foundation-vla-manipulation)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：将触觉输入重构为有界残差调制器，平衡其与视觉-语义先验的作用
-8. [Which Source Wins? Task-Dependent Reliance in Vision-Language Models](/202608/23/2608.17205v1-which-source-wins-task-dependent-reliance-in-vision-language-models)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：实证研究VLM在冲突下如何在图像与文本之间调整依赖
-9. [CL4D: Contrastive Language-4D Pretraining for Vision-Language Reasoning in Dynamic Scenes](/202608/23/2608.18734v1-cl4d-contrastive-language-4d-pretraining-for-vision-language-reasoning-in-dynamic-scenes)  
+1. [Beyond Multimodal Alignment: Certifying Physical Language through Response Substitution and Ordered Execution](/202608/24/2608.19492v1-beyond-multimodal-alignment-certifying-physical-language-through-response-substitution-and-ordered-execution)  
    标签：评分：9.0/10、query:native-multi
-   evidence：通过对比学习对齐时空4D表示与自然语言，支持视觉语言推理
-10. [GRACE: Grounded Reasoning via Adapter Composition and Evidence-Aware Calibration for Educational Visual Question Answering](/202608/23/2608.19355v1-grace-grounded-reasoning-via-adapter-composition-and-evidence-aware-calibration-for-educational-visual-question-answering)  
+   evidence：认证独立训练的模态编译器在不同传感器间是否对齐并可互换
+2. [Question-Guided Evidence Acquisition for Multimodal Visual Question Answering](/202608/24/2608.19739v1-question-guided-evidence-acquisition-for-multimodal-visual-question-answering)  
    标签：评分：9.0/10、query:mm-reasoning
-   evidence：教育VQA需同时使用语言和视觉证据回答课程化选择题
-11. [Scaffolding Minds: Optimizing Latent Visual Target Representations for Multimodal Reasoning](/202608/23/2608.19669v1-scaffolding-minds-optimizing-latent-visual-target-representations-for-multimodal-reasoning)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：优化潜在视觉表示以提升多模态推理能力
-12. [Dynamic Gated Cross-Modal Fusion with Sarcastic-aware Contrastive Regularization for Multimodal Sarcasm Detection](/202608/23/2608.19942v1-dynamic-gated-cross-modal-fusion-with-sarcastic-aware-contrastive-regularization-for-multimodal-sarcasm-detection)  
+   evidence：面向文档VQA的基于问题的证据采集方法
+3. [SuppreSensing: Expert-Guided Feature Recalibration and Discrepancy Augmentation for Multimodal Object Detection](/202608/24/2608.20944v1-suppresensing-expert-guided-feature-recalibration-and-discrepancy-augmentation-for-multimodal-object-detection)  
    标签：评分：9.0/10、query:balanced-mml
-   evidence：提出动态门控跨模态融合以适应不同样本的模态贡献差异
+   evidence：专家引导的输入自适应重校准缓解多模态融合中的对称陷阱
+4. [COMET: Contrastive Motion-Enhanced Temporal Reasoning for Video Multimodal Large Language Models](/202608/24/2608.21030v1-comet-contrastive-motion-enhanced-temporal-reasoning-for-video-multimodal-large-language-models)  
+   标签：评分：9.0/10、query:mm-reasoning
+   evidence：视频多模态时序推理，融合外观与运动并做方向感知优化
+5. [TF-CADE: Foreground-Concentrated Text-Video Alignment for Zero-Shot Temporal Action Detection](/202608/24/2608.17422v1-tf-cade-foreground-concentrated-text-video-alignment-for-zero-shot-temporal-action-detection)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：面向零样本时序动作检测的文本-视频对齐
+6. [FM Synthesizer Audio-Parameter Shared Embeddings](/202608/24/2608.18226v1-fm-synthesizer-audio-parameter-shared-embeddings)  
+   标签：评分：8.0/10、query:native-multi
+   evidence：通过多模态目标学习音频与FM合成器参数的联合嵌入
+7. [TTSD-FAR: Test-Time Self-Distillation with Fisher-Anchored Restoration for Missing-Modality Emotion Recognition in LVLMs](/202608/24/2608.18386v1-ttsd-far-test-time-self-distillation-with-fisher-anchored-restoration-for-missing-modality-emotion-recognition-in-lvlms)  
+   标签：评分：8.0/10、query:balanced-mml
+   evidence：针对多模态情绪识别中缺失模态不平衡的测试时恢复方法
+8. [UMER: Unifying Embedding and Ranking via Pair-Aware Discriminative Reasoning for Universal Multimodal Retrieval](/202608/24/2608.18504v1-umer-unifying-embedding-and-ranking-via-pair-aware-discriminative-reasoning-for-universal-multimodal-retrieval)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：面向通用多模态检索，用成对判别推理统一嵌入与排序
+9. [MOSAIC: Modality-agnostic Spectral Alignment for Federated Image-level Weakly Supervised Tumor Segmentation under Client-specific Missing Modalities](/202608/24/2608.19788v1-mosaic-modality-agnostic-spectral-alignment-for-federated-image-level-weakly-supervised-tumor-segmentation-under-client-specific-missing-modalities)  
+   标签：评分：8.0/10、query:balanced-mml
+   evidence：面向客户端专属模态缺失的模态无关联邦弱监督分割框架
 
 ### 速读区论文标签
-1. [PaSTel: Anchoring Histology in Spatial Transcriptomics via Multi-Scale Hierarchical Bio-Prior Contrastive Pretraining](/202608/23/2608.14924v1-pastel-anchoring-histology-in-spatial-transcriptomics-via-multi-scale-hierarchical-bio-prior-contrastive-pretraining)  
+1. [Multi-Granularity Sentiment Integration for LLM-Based Multimodal Sentiment Analysis](/202608/24/2608.16201v1-multi-granularity-sentiment-integration-for-llm-based-multimodal-sentiment-analysis)  
    标签：评分：8.0/10、query:unified-mm
-   evidence：利用生物先验进行层级多模态预训练，对齐组织学图像与基因表达
-2. [MetaReason: Precise Interleaved Multimodal Reasoning via Editing Meta Information for Solving Geometry Problems](/202608/23/2608.15006v1-metareason-precise-interleaved-multimodal-reasoning-via-editing-meta-information-for-solving-geometry-problems)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：通过编辑元信息合成视觉状态，实现几何问题的多模态推理
-3. [CineDub: Scaling End-to-End Video Dubbing to Multi-Speaker Dialogues with Coherent Sound Effects](/202608/23/2608.15734v1-cinedub-scaling-end-to-end-video-dubbing-to-multi-speaker-dialogues-with-coherent-sound-effects)  
-   标签：评分：8.0/10、query:native-multi
-   evidence：端到端统一扩散模型，跨视觉与音频模态进行视频配音
-4. [Beyond Visual CoT: Internalized Visual Thinking for Proactive Video Reasoning](/202608/23/2608.15869v1-beyond-visual-cot-internalized-visual-thinking-for-proactive-video-reasoning)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：通过内化视觉思维预测未来帧嵌入的多模态视频推理
-5. [GaussianDWM++: Language-Grounded 3D Gaussian Driving World Model for Unified Scene Understanding, Editing, and Multi-Modal Generation](/202608/23/2608.16234v1-gaussiandwm-language-grounded-3d-gaussian-driving-world-model-for-unified-scene-understanding-editing-and-multi-modal-generation)  
+   evidence：文本、音频、视觉的多粒度融合方法
+2. [Hypergraph-based Multimodal Retrieval-Augmented Generation with Incremental Refinement](/202608/24/2608.16628v1-hypergraph-based-multimodal-retrieval-augmented-generation-with-incremental-refinement)  
    标签：评分：8.0/10、query:unified-mm
-   evidence：统一了场景理解、语言推理、编辑与多模态生成的单一框架
-6. [MEDR: Query-Independent Frame Selection via Multi-Signal Event Modeling and Dynamic Rescoring](/202608/23/2608.15058v1-medr-query-independent-frame-selection-via-multi-signal-event-modeling-and-dynamic-rescoring)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：面向多模态大语言模型视频推理的查询无关帧选择
-7. [MODAL: Multi-Modal Object Re-ID via Model-Driven Sparse Decoupling and Text-Image Differential Filtering](/202608/23/2608.15096v1-modal-multi-modal-object-re-id-via-model-driven-sparse-decoupling-and-text-image-differential-filtering)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：多模态重识别中通过稀疏解耦与差分滤波应对跨模态冲突和模态缺失
-8. [ProjFormer: Point Cloud Completion via Geometric-Projective Transformer and Cross-Modal Semantic Constraints](/202608/23/2608.15104v1-projformer-point-cloud-completion-via-geometric-projective-transformer-and-cross-modal-semantic-constraints)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：跨模态2D-3D框架采用自适应特征路由实现几何一致的融合
-9. [CrossView: Can Vision-Language Models Reason Across Cameras?](/202608/23/2608.15539v1-crossview-can-vision-language-models-reason-across-cameras)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：面向视觉语言模型的多摄像头视频推理基准
-10. [ConceptFormer: Learning Adaptive Latent Concepts for Query-Document Alignment in Visual Document Retrieval](/202608/23/2608.15698v1-conceptformer-learning-adaptive-latent-concepts-for-query-document-alignment-in-visual-document-retrieval)  
+   evidence：利用高阶超图融合图表、文本和数值等多模态数据
+3. [Where a New Concept Must Enter: Entry Point Gates Cross-Task Usability in Unified Multimodal Models](/202608/24/2608.17564v1-where-a-new-concept-must-enter-entry-point-gates-cross-task-usability-in-unified-multimodal-models)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：通过入口点控制研究统一多模态模型架构与跨任务可用性
+4. [Vision-Language Models for Egocentric Video: From Hand-Object Interaction to Embodied AI](/202608/24/2608.18671v1-vision-language-models-for-egocentric-video-from-hand-object-interaction-to-embodied-ai)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：面向第一视角视频理解与推理的VLM综述
+5. [Robust Cross-Modal Foundation Model Perception for Underwater Robots under Degraded Visual Conditions](/202608/24/2608.19710v1-robust-cross-modal-foundation-model-perception-for-underwater-robots-under-degraded-visual-conditions)  
+   标签：评分：8.0/10、query:balanced-mml
+   evidence：在视觉退化条件下跨模态鲁棒性研究，声纳补充视觉基础模型
+6. [Audio-Visual Segmentation via Depth-Guided Collaborative Modeling](/202608/24/2608.16285v1-audio-visual-segmentation-via-depth-guided-collaborative-modeling)  
    标签：评分：7.0/10、query:unified-mm
-   evidence：学习潜在概念以在文本和视觉结构之间实现查询-文档对齐
-11. [VibeWorlding: Can Multimodal Agents Construct 3D Open Worlds End-to-End?](/202608/23/2608.15265v1-vibeworlding-can-multimodal-agents-construct-3d-open-worlds-end-to-end)  
+   evidence：音频-视觉-深度三模态融合框架用于声音目标分割
+7. [Listen, Reason, and Segment: Aligning LALMs with Editorial Judgment for Media Chapterization](/202608/24/2608.16539v1-listen-reason-and-segment-aligning-lalms-with-editorial-judgment-for-media-chapterization)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：让大音频语言模型与编辑判断对齐，在长声学上下文上顺序推理实现音频章节切分
+8. [Emotion Across Speech and Faces: Shared Affective Mechanisms in Multimodal Foundation Models](/202608/24/2608.17102v1-emotion-across-speech-and-faces-shared-affective-mechanisms-in-multimodal-foundation-models)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：探究多模态基础模型中语音与人脸情感处理的共享与特异性机制
+9. [Expressivity In Multimodal Contrastive Learning](/202608/24/2608.17203v1-expressivity-in-multimodal-contrastive-learning)  
+   标签：评分：7.0/10、query:native-multi
+   evidence：分析多模态对比学习跨模态表示对齐的表达能力
+10. [NeuroPath: Brain-Inspired Dual-Pathway Graph Convolutional Networks for Skeleton-Based Action Recognition](/202608/24/2608.17487v1-neuropath-brain-inspired-dual-pathway-graph-convolutional-networks-for-skeleton-based-action-recognition)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：双通路架构应对骨架模态间的性能不平衡
+11. [UniFed-VLM: Federated Instruction Tuning for Vision-Language Models with Multiple Heterogeneity](/202608/24/2608.15516v1-unifed-vlm-federated-instruction-tuning-for-vision-language-models-with-multiple-heterogeneity)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：面向异构客户端的VLM联邦指令微调，实现多模态模型的联合训练
+12. [AlloEgo-VLM: Disambiguating Allocentric and Egocentric Reference Frames in Vision-Language Models](/202608/24/2608.15605v1-alloego-vlm-disambiguating-allocentric-and-egocentric-reference-frames-in-vision-language-models)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：提出多模态智能体基准，构建和理解文本与视觉3D世界信息
-12. [VibeWorlding: Can Multimodal Agents Construct 3D Open Worlds End-to-End?](/202608/23/2608.15265v2-vibeworlding-can-multimodal-agents-construct-3d-open-worlds-end-to-end)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：多模态代理结合用户文本意图与视觉3D反馈进行端到端世界构建
-13. [Efficient Audio-Visual Generation via Synchrony-Aware Cross-Modal Sparse Attention](/202608/23/2608.15522v1-efficient-audio-visual-generation-via-synchrony-aware-cross-modal-sparse-attention)  
+   evidence：通过数据集与分析消除图像-文本推理中空间参考框架的歧义
+13. [ConceptFormer: Learning Adaptive Latent Concepts for Query-Document Alignment in Visual Document Retrieval](/202608/24/2608.15698v2-conceptformer-learning-adaptive-latent-concepts-for-query-document-alignment-in-visual-document-retrieval)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：用于音视频生成的同步感知跨模态稀疏注意力
-14. [SEER: Long-Context Reasoning via Selective Visual-Text Compression](/202608/23/2608.15962v1-seer-long-context-reasoning-via-selective-visual-text-compression)  
+   evidence：面向文档检索中多模态证据融合的统一潜概念
+14. [Beyond Single Object: Learning 3D Relations with Large Language Models](/202608/24/2608.15710v1-beyond-single-object-learning-3d-relations-with-large-language-models)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：基于视觉-文本选择性压缩的长上下文推理，使用视觉语言模型
+   evidence：结合3D感知与语言进行多物体关系推理
 
 
 <div class="dpr-home-promo-card">

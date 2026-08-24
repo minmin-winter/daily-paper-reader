@@ -1,0 +1,711 @@
+Title: Robust Cross-Modal Foundation Model Perception for Underwater Robots under Degraded Visual Conditions
+
+URL Source: https://arxiv.org/pdf/2608.19710v1
+
+Published Time: Fri, 21 Aug 2026 00:36:56 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Robust Cross-Modal Foundation Model Perception for Underwater Robots under Degraded Visual Conditions 
+
+Mohammad Arif Ul Alam a  
+
+> aCollege of Science and Technology, North Carolina A &T State University, , Lowell, , MA, USA
+
+Abstract 
+
+Reliable underwater robotic perception remains challenging because optical imagery can deteriorate substantially under turbidity, wavelength-dependent attenuation, low illumination, scattering, and blur. Although sonar provides complementary information that is less sensitive to optical visibility, existing visual-sonar studies have primarily emphasized multimodal feature alignment and nominal detection performance. In this work, we investigate cross-modal robustness under changing visual reliability and examine whether a pretrained visual foundation model can provide robust representations while complementary sonar information compen-sates when optical evidence becomes severely degraded. Specifically, we employ frozen DINOv2 as the visual foundation-model encoder and construct a controlled five-level degradation benchmark ranging from clean to extreme visual conditions. We evaluate conventional visual detection, frozen foundation-model representations, sonar context, fixed multimodal fusion, clean-trained adap-tive gating, and degradation-aware gated fusion. Our degradation-aware strategy explicitly exposes the fusion mechanism to the complete range of visual reliability conditions while keeping the foundation-model and sonar encoders frozen, enabling modality contributions to adapt without task-specific fine-tuning of the pretrained backbone. Under the most severe combined degradation, the DINOv2 visual foundation-model baseline achieves a balanced accuracy of 0 .4610, whereas degradation-aware visual-sonar fusion reaches 0 .6152, corresponding to a 33 .5% relative improvement. Concurrently, the learned sonar contribution increases from 14 .2% under clean conditions to 41 .3% under extreme degradation, indicating a systematic redistribution of cross-modal reliance as visual evidence deteriorates. Degradation-specific analysis further reveals the largest fusion benefits under severe turbidity and blur, while color attenuation alone provides little additional gain. These findings indicate that pretrained foundation-model repre-sentations provide substantial visual robustness but remain insu ffi cient under severe information loss, and that robust underwater multimodal perception benefits from explicitly training the fusion mechanism to adapt to changes in modality reliability. This preliminary study provides a foundation for future end-to-end, degradation-aware visual-sonar perception systems for underwater robots. 
+
+Keywords: Underwater robotics, multimodal perception, visual–sonar fusion, foundation models, degradation-aware fusion. 
+
+1. Introduction 
+
+Reliable visual perception remains challenging for under-water robots because the propagation of light through water is strongly a ff ected by absorption and scattering Zhu et al. (2026). As visibility deteriorates, optical imagery can exhibit wavelength-dependent color attenuation, reduced illumination, loss of contrast, scattering-induced veiling, and blur Akkay-nak and Treibitz (2018, 2019); Anwar and Li (2020). These eff ects can substantially alter the visual evidence available to perception models and create a distribution shift between fa-vorable training imagery and more di ffi cult deployment con-ditions Grimaldi et al. (2023). Sonar provides a complemen-tary sensing modality because acoustic measurements are not directly a ff ected by optical visibility Sørensen et al. (2023). However, sonar generally provides less appearance and texture information than optical imagery and introduces its own sens-ing limitationsShen et al. (2025). Consequently, optical and sonar sensing are better viewed as complementary rather than interchangeable modalities Wu et al. (2026). This motivates a central question for underwater autonomy: how should a per-ception system respond when the reliability of its visual modal-ity progressively decreases? Existing visual-sonar research has primarily focused on learning e ff ective representations across heterogeneous sens-ing modalities He et al. (2026); Qiao et al. (2026); Aydogmus and Erer (2026); Fitzpatrick et al. (2023); Zhu et al. (2026). On UMOD, for example, VSAFDet addresses visual-sonar fea-ture heterogeneity and spatial misalignment through special-ized cross-modal feature interaction Wu et al. (2026). Impor-tantly, its experiments also show that simple multimodal ad-dition or concatenation does not necessarily improve perfor-mance, indicating that the availability of complementary sen-sors alone is insu ffi cient for e ff ective fusion. In this work, we study a related but di ff erent problem: multimodal robustness under changing sensor reliability . Rather than evaluating fu-sion only under nominal conditions, we progressively degrade the visual observations while leaving the paired sonar measure-ments unchanged. This allows us to examine whether multi-modal perception remains useful as optical reliability deterio-rates and whether the fusion mechanism learns to increase its reliance on acoustic information when visual evidence becomes  
+
+> Preprint submitted to Elsevier August 21, 2026 arXiv:2608.19710v1 [cs.CV] 20 Aug 2026
+
+unreliable. We use DINOv2 as a frozen visual foundation-model en-coder because large-scale self-supervised representations pro-vide a useful means of studying whether general visual features remain discriminative under underwater degradation Oquab et al. (2024). Rather than fine-tuning the foundation model, we keep its parameters fixed and evaluate how its represen-tations change across controlled degradation levels. We then combine the visual representation with paired sonar context us-ing lightweight fusion mechanisms. In particular, we compare fixed fusion, gating trained only under clean conditions, and 
+
+degradation-aware gating trained across the full degradation range. The latter explicitly exposes the fusion mechanism to changes in visual reliability, allowing us to investigate whether acoustic contribution increases as optical conditions deteriorate. In this paper, we investigate three questions: (i) how visual perception deteriorates under progressive underwater degrada-tion, (ii) whether sonar context can preserve perception when visual information becomes unreliable, and (iii) whether ex-plicit degradation-aware training enables the fusion mechanism to adapt its modality reliance. The main contributions are: 
+
+• A controlled five-level ( D0-D4) benchmark incorporating illumination loss, wavelength-dependent attenuation, scat-tering, and blur; 
+
+• An empirical comparison of conventional visual detec-tion, frozen DINOv2 representations, sonar context, and lightweight visual-sonar fusion under progressive degra-dation; 
+
+• A degradation-aware gated fusion strategy that learns to redistribute visual and sonar contributions as optical relia-bility changes; and 
+
+• An analysis of modality reliance and degradation type, showing that acoustic assistance is particularly beneficial under severe turbidity and blur. The experiments show that degradation-aware fusion pre-serves substantially more recognition performance under severe visual degradation than visual-only or nominally trained fusion models. These results provide preliminary evidence that robust underwater multimodal perception depends not only on com-bining complementary sensors, but also on exposing the fusion mechanism to changes in sensor reliability during training. 
+
+2. Related Work 
+
+2.1. Underwater Object Perception 
+
+Underwater optical perception is commonly addressed through image enhancement and task-specific detection archi-tectures designed to mitigate low contrast, color distortion, blur, and small-object appearance. Recent deep detectors increas-ingly employ multi-scale feature aggregation, attention, and specialized convolutional modules to improve recognition in challenging underwater scenes Jiang and Wang (2022); Yang et al. (2024). Nevertheless, optical sensing remains intrinsi-cally sensitive to visibility and illumination. Acoustic sensing provides an alternative when optical observations become un-reliable, and learning-based sonar methods have demonstrated improved extraction of structural and geometric target infor-mation from noisy acoustic imagery Liu et al. (2024); Qin et al. (2024). These complementary characteristics motivate joint optical-acoustic perception rather than reliance on either modality alone. 
+
+2.2. Visual-Sonar Multimodal Fusion 
+
+Multimodal underwater perception has increasingly explored visual-sonar fusion for target recognition and detection. Prior studies have combined optical imagery with synthetic-aperture or side-scan sonar for underwater target classification, demon-strating that acoustic measurements can provide complemen-tary information under poor visibility Myers and Midtgaard (2023); Tang et al. (2023). More recent detection architectures perform feature-level fusion between synchronized visual and sonar streams. UAMFDet, for example, employs adaptive mul-timodal feature alignment for underwater detection Chen et al. (2025). A persistent di ffi culty is that visual and sonar mea-surements di ff er substantially in resolution, imaging geometry, and information density, making direct feature correspondence unreliable. Attention-based and cross-modal interaction mech-anisms have therefore become important alternatives to sim-ple feature aggregation. Notably, experiments on UMOD show that direct addition or concatenation can introduce inter-modal interference rather than improve detection, further motivating adaptive fusion mechanisms. 
+
+2.3. Robust and Adaptive Multimodal Perception 
+
+Robust multimodal learning requires more than maximizing nominal fusion performance. When one modality becomes cor-rupted or unreliable, a fixed fusion strategy can propagate de-graded features into the joint representation. Research on mul-timodal robustness has therefore considered modality dropout, missing-modality learning, and reliability-aware fusion to re-duce dependence on consistently available high-quality inputs Neverova et al. (2016); Ma et al. (2022). Related work in mul-timodal autonomous perception has also shown that comple-mentary sensing can improve robustness under adverse envi-ronmental conditions when cross-modal interactions are explic-itly modeled Shaojie (2023). However, underwater visual-sonar research has largely emphasized feature alignment and detec-tion accuracy rather than systematically measuring how learned modality reliance changes as optical quality progressively dete-riorates. This work addresses that distinction by explicitly ex-posing the fusion model to multiple degradation severities and evaluating whether it learns to shift reliance toward sonar as visual evidence becomes less reliable. 
+
+2.4. Foundation Models under Distribution Shift 
+
+Large pretrained visual models provide transferable repre-sentations that can support downstream tasks with limited task-specific supervision. Recent studies have examined the robust-ness of self-supervised and vision-transformer representations 2under common corruptions and distribution shifts, often finding stronger representation stability than conventional supervised models Hendrycks et al. (2021); Paul and Chen (2022). Such robustness is particularly relevant to underwater perception, where deployment conditions can di ff er substantially from ter-restrial pretraining data. Nevertheless, foundation-model rep-resentations alone cannot recover information that is physically lost under severe scattering, blur, or visibility reduction. This motivates our use of a frozen foundation-model representation together with complementary sonar context, while placing the primary emphasis on degradation-aware cross-modal adapta-tion rather than foundation-model fine-tuning. 
+
+3. Problem Formulation 
+
+We formulate underwater cross-modal perception as a recog-nition problem in which an optical observation may undergo a progressive loss of reliability while its temporally paired sonar observation remains unchanged. The objective is not merely to determine whether visual and acoustic information are com-plementary, but to characterize how perception performance changes as the quality of one modality deteriorates and whether a multimodal model can adapt its reliance on the remaining information. This formulation separates modality availabil-ity from modality reliability : both modalities remain present throughout the experiment, but the information carried by the optical modality is systematically degraded. 
+
+3.1. Cross-Modal Underwater Observation 
+
+Let a synchronized visual-sonar observation be represented as 
+
+x = (xv, xs) , (1) where xv ∈ X v denotes an optical image and xs ∈ X s denotes its temporally synchronized sonar observation. Each annotated visual object is associated with a class label 
+
+y ∈ Y = {1, . . . , C}, (2) where C is the number of target classes retained for evaluation. The two observations should not be interpreted as pixel-wise registered views of the same scene. Optical cameras form per-spective images in an image plane, whereas forward-looking sonar represents acoustic returns in a range-azimuth geometry. Consequently, corresponding visual and sonar observations can exhibit substantial di ff erences in spatial coordinates, resolution, appearance, and information density. The UMOD acquisition system nevertheless provides synchronized observations from the two sensors, making it possible to study their complemen-tary information without assuming direct pixel-level correspon-dence Wu et al. (2026). For the recognition experiments considered in this study, the visual input associated with an annotated object is denoted by 
+
+x(o) 
+
+> v
+
+= C(xv, b), (3) where b is the ground-truth visual bounding box and C(·) de-notes the object-cropping operation. The corresponding sonar input is the synchronized sonar frame xs. Thus, the multimodal prediction problem is ˆy = Fx(o) 
+
+> v
+
+, xs
+
+ , (4) where F(·) denotes a visual-sonar recognition model. This for-mulation deliberately treats sonar as paired acoustic context 
+
+rather than as a geometrically registered object crop. It there-fore allows us to isolate whether synchronized acoustic infor-mation can compensate for a loss of discriminative visual ev-idence without requiring an explicit visual-to-sonar coordinate transformation. 
+
+3.2. Controlled Visual Degradation Model 
+
+To study robustness under changing optical reliability, degra-dation is applied only to the visual observation. Let ˜x(s) 
+
+> v
+
+= D(xv; s) , s ∈ { 0, 1, 2, 3, 4}, (5) where D(·; s) is a degradation operator and s denotes its sever-ity. We define five ordered operating conditions, 
+
+D0, D1, D2, D3, D4, (6) corresponding respectively to clean, mild, moderate, severe, and extreme visual degradation. The sonar observation is held fixed: ˜x(s) 
+
+> s
+
+= xs ∀s. (7) This construction creates a controlled reliability shift in which increasing s reduces the quality of the optical evidence while preserving the paired acoustic observation. The combined degradation operator models four common manifestations of adverse underwater optical conditions: illu-mination loss, wavelength-dependent attenuation, scattering or turbidity, and blur. These transformations are intended as con-trolled perturbations for robustness evaluation rather than as a complete physical simulation of underwater image formation. 
+
+3.2.1. Illumination Attenuation 
+
+Reduction in available illumination is represented by an intensity-scaling operation 
+
+Iill (p) = αs I(p), 0 < α s ≤ 1, (8) where I(p) is the original pixel intensity at location p and αs
+
+decreases with degradation severity. This transformation pro-gressively suppresses visual contrast and low-intensity details. 
+
+3.2.2. Wavelength-Dependent Attenuation 
+
+Light attenuation underwater is wavelength dependent; in particular, longer wavelengths such as red are generally atten-uated more strongly than shorter blue-green wavelengths. We approximate this e ff ect by applying severity-dependent channel coe ffi cients, 
+
+Ic
+
+> att
+
+(p) = βc,s Ic(p), c ∈ { R, G, B}, (9) with 
+
+βR,s < β G,s < β B,s (10) for degraded conditions. The coe ffi cients become progressively stronger with increasing s, producing increasing color distor-tion and loss of wavelength-dependent visual information. 3D0 Clean          
+
+> D1 Mild
+> D2 Moderate
+> D3 Severe
+> D4 Extreme Figure 1: Illustration of the controlled visual degradation sequence used in the robustness benchmark. From left to right, the optical observation progresses from D0
+> (clean) through D1(mild), D2(moderate), D3(severe), and D4(extreme) degradation. The paired sonar observation is held unchanged across all degradation levels.
+
+3.2.3. Turbidity and Scattering 
+
+Scattering and suspended particles reduce scene contrast while introducing veiling light. We approximate this behavior using the standard attenuation-backscatter form 
+
+Iturb (p) = J(p)ts + As(1 − ts), (11) where J(p) represents the undegraded scene radiance, ts ∈ [0 , 1] is a severity-dependent transmission coe ffi cient, and As rep-resents ambient or veiling illumination. As degradation be-comes stronger, ts decreases, causing the observed image to contain progressively less scene information and a larger scat-tering component. 
+
+3.2.4. Blur 
+
+Loss of fine spatial structure is represented using Gaussian smoothing, 
+
+Iblur = Gσs ∗ I, (12) where Gσs is a Gaussian kernel with standard deviation σs, ∗
+
+denotes convolution, and σs increases with severity. The op-eration suppresses high-frequency information such as object edges, texture, and fine structural details. The combined benchmark applies severity-dependent in-stances of these transformations to produce the sequence D0-
+
+D4. Figure 1 provides a representative example of the resulting degradation sequence. The progression is intended to create an ordered loss of useful optical evidence rather than to map each level to a specific physical visibility distance or water type. This formulation does not claim that a single scalar severity corre-sponds to a specific physical water condition or visibility dis-tance. Instead, the ordered levels provide a reproducible means of evaluating how rapidly di ff erent perception strategies lose performance as optical evidence is progressively corrupted. 
+
+3.3. Robustness Objective 
+
+Let Fm denote a perception strategy m and let Mm(s) denote its evaluation score under degradation level Ds. For visual-only perception, ˆy(s) 
+
+> v
+
+= Fv
+
+˜x(s)
+
+> v
+
+ , (13) whereas cross-modal perception is represented by ˆy(s) 
+
+> vs
+
+= Fvs 
+
+˜x(s) 
+
+> v
+
+, xs
+
+ . (14) Absolute performance alone does not distinguish clean-condition capability from degradation sensitivity. We therefore define the retained performance of model m at severity s relative to its clean-condition score as 
+
+Rm(s) = Mm(s)
+
+Mm(0) , s ∈ { 1, 2, 3, 4}. (15) A value Rm(s) = 1 indicates that the measured performance is unchanged relative to D0, while values below one indicate degradation relative to the clean condition. To summarize behavior over the complete degradation range, we define the mean relative robustness (MRR) as MRR m = 14
+
+> 4
+
+X
+
+> s=1
+
+Rm(s) = 14
+
+> 4
+
+X
+
+> s=1
+
+Mm(s)
+
+Mm(0) . (16) MRR measures average performance retention rather than ab-solute predictive accuracy and is therefore interpreted together with the underlying task metric. In particular, an MRR close to or slightly greater than one should be interpreted as approx-imate preservation of clean-condition performance across the tested perturbations, rather than evidence that visual degrada-tion itself improves perception. The central robustness objective is consequently to learn a cross-modal predictor whose performance degrades more slowly than its visual-only counterpart: 
+
+Rvs (s) > Rv(s) as s increases , (17) particularly under severe conditions D3 and D4. More specifi-cally, we seek a fusion function whose use of the two modali-ties is conditional on their available evidence rather than fixed across operating conditions. If g(s) 
+
+> v
+
+and g(s) 
+
+> s
+
+denote the learned visual and sonar contributions, respectively, with 
+
+g(s) 
+
+> v
+
++ g(s) 
+
+> s
+
+= 1, (18) the desired qualitative behavior under increasing visual degra-dation is 
+
+g(s) 
+
+> s
+
+↑ as visual evidence becomes less informative , (19) when the acoustic representation provides useful complemen-tary evidence. The expected aggregate behavior is an increased contribution from sonar under severe visual degradation; strict monotonicity across adjacent severity levels is neither imposed nor required. Importantly, these coe ffi cients are treated as learned fusion weights rather than calibrated probabilities of sensor reliability. This formulation leads to the principal hypothesis examined in the remainder of the paper: robust cross-modal perception 
+
+4requires not only complementary modalities, but also a fusion mechanism exposed during training to changes in modality re-liability . The subsequent experiments therefore distinguish be-tween fixed fusion, adaptive fusion learned only from clean observations, and degradation-aware adaptive fusion learned across D0-D4.
+
+4. Dataset and Experimental Protocol 
+
+4.1. Dataset and Problem Setup 
+
+We conduct our experiments using the Underwater Multi-modal Object Detection (UMOD) dataset introduced by Wu et al. Wu et al. (2026). UMOD was designed specifically for studying multimodal underwater perception using tempo-rally synchronized optical and acoustic observations. The data were collected using a remotely operated vehicle (ROV) in a 7 m × 6 m × 5 m testing pool at the Sanya Ocean Research Insti-tute in Hainan Province, China. The sensing platform combines a BlueView M900 two-dimensional forward-looking sonar with a ZED2 underwater stereo optical camera. The sonar provides a 130 ◦ field of view, a reported resolution of 6 .25 cm, and a maximum sensing range of 100 m, while the optical camera supports image resolutions of 1280 × 800 and 640 × 400 at up to 60 frames per second. Optical and sonar observations were acquired simultaneously using synchronized timestamps, and frames were extracted from the synchronized streams at five-frame intervals to construct paired multimodal observations Wu et al. (2026). Representative synchronized observations are shown in Fig. 2. The examples illustrate both the complemen-tarity and the substantial representational di ff erence between the two sensing modalities. Optical imagery provides compar-atively rich appearance information, whereas forward-looking sonar represents the scene through acoustic returns in a distinct range-azimuth geometry. Accordingly, the paired observations are treated as temporally corresponding but not pixel-wise reg-istered. After removal of redundant observations and the preprocess-ing procedure described by the dataset authors, UMOD con-tains 4 ,000 synchronized visual-sonar image pairs, correspond-ing to 8 ,000 modality-specific images. The dataset contains nine stationary and moving underwater target categories: cage ,
+
+frame , hook , anchor , tire , ROV , plastic bucket , fish , and oil drums . The original UMOD benchmark was divided by its au-thors into training, validation, and test sets using a 7:2:1 ratio Wu et al. (2026). In addition to providing temporally corre-sponding observations, the dataset captures the substantial het-erogeneity between the two sensing modalities: optical imagery contains comparatively rich appearance, color, and texture in-formation, whereas forward-looking sonar primarily represents acoustic structure in range-azimuth coordinates. UMOD is therefore particularly suitable for studying whether acoustic in-formation can complement optical representations as visual re-liability deteriorates. Our experiments formulate the problem at two related lev-els. First, we use visual object detection to quantify the e ff ect of progressive degradation on a conventional detector. Second, the primary cross-modal experiments formulate object recogni-tion using the ground-truth visual object crop and its temporally paired sonar frame, as defined in Section 3.1. This separation allows detection-level degradation sensitivity to be measured while isolating the behavior of visual foundation-model rep-resentations and visual-sonar fusion from errors introduced by object localization. For the recognition and fusion experiments, we retain five target categories corresponding to the original UMOD class identifiers {0, 1, 3, 4, 5}. These classes are remapped to con-tiguous labels {0, . . . , 4} for model training and evaluation. The same class definition is maintained across the visual-only, sonar-context, fixed fusion, and adaptive-fusion experiments so that changes in performance reflect di ff erences in representa-tion and modality use rather than changes in the prediction task. Because UMOD observations are extracted from synchro-nized video sequences, randomly assigning individual frames to di ff erent data partitions can place temporally adjacent and visually similar observations in both training and evaluation sets. Such a split can inflate measured generalization perfor-mance by introducing sequence-level leakage. We therefore construct a fixed grouped split before model training. Con-tiguous sample identifiers are partitioned into non-overlapping blocks of 40 identifiers, and entire blocks, rather than individ-ual observations, are assigned to the training, validation, or test partition. Block assignment is performed while considering the retained class distribution so that all evaluated classes remain represented as consistently as possible across partitions. Once generated, the split is locked and reused for every model and every degradation condition. This protocol is especially important for the degradation ex-periments. All transformed versions of a given clean visual ob-servation remain in the same partition as their corresponding 
+
+D0 observation. Thus, if xv belongs to the test set, each D(xv; s)for s ∈ { 0, . . . , 4} also belongs exclusively to the test set. Like-wise, the synchronized sonar observation xs never crosses par-tition boundaries. Consequently, the degradation benchmark changes only the reliability of the visual evidence while pre-serving sample identity, class label, sonar context, and train-validation-test membership. This enables paired comparisons across D0-D4 and prevents degraded variants of an evaluation observation from being encountered during training. 
+
+4.2. Evaluation Metrics 
+
+The experiments include both object detection and object recognition, and we therefore report metrics appropriate to each task. For the visual detection experiments, performance is eval-uated using mean average precision (mAP), consistent with standard underwater object detection evaluation and the orig-inal UMOD study Wu et al. (2026). For a class c, average pre-cision is computed from its precision-recall curve as AP c =
+
+Z 10
+
+Pc(r) dr , (20) where Pc(r) denotes precision as a function of recall. Mean average precision over C evaluated classes is 5Visual Pair 282 Sonar Pair 282          
+
+> Visual Pair 366 Sonar Pair 366
+> Visual Pair 613 Sonar Pair 613
+> Visual Pair 919 Sonar Pair 919
+
+Figure 2: Representative synchronized visual-sonar observations from the UMOD subset used in this study. The optical images contain annotated visual objects, while the paired forward-looking sonar frames provide acoustic scene context. The modalities are temporally synchronized but are not assumed to be pixel-wise or geometrically registered. 
+
+mAP = 1
+
+C
+
+> C
+
+X
+
+> c=1
+
+AP c. (21) We report mAP@0 .5, in which a predicted bounding box is matched to a ground-truth object using an intersection-over-union (IoU) threshold of 0 .5, together with the more stringent mAP@0 .5:0 .95, which averages AP over IoU thresholds from 0.50 to 0 .95 in increments of 0 .05. The former emphasizes suc-cessful object detection under a moderate localization criterion, whereas the latter is more sensitive to localization quality across a range of overlap requirements. Precision and recall are addi-tionally used where useful for interpreting detector behavior. For the object-level foundation-model and cross-modal recognition experiments, we report classification accuracy and balanced accuracy. For N evaluation objects, classification ac-curacy is Acc = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+I(ˆ yi = yi) , (22) where I(·) is the indicator function. Because the frequency of target categories is not necessarily uniform, overall accuracy can be dominated by more frequent classes. We therefore use 6balanced accuracy as the primary recognition metric: BAcc = 1
+
+C
+
+> C
+
+X
+
+> c=1
+
+TP c
+
+TP c + FN c
+
+, (23) where TP c and FN c denote the true-positive and false-negative counts for class c, respectively. Balanced accuracy assigns equal importance to the recall of each target category and is therefore better suited to comparisons in which the class distribution is imbalanced. Robustness is evaluated by measuring each model under the complete ordered degradation sequence D0-D4. In addition to the absolute task metric at each severity, we report retained per-formance relative to the corresponding clean condition using 
+
+Rm(s) and summarize performance retention over the degraded conditions using the mean relative robustness (MRR) defined in Section 3.3. For recognition experiments, Mm(s) is instanti-ated using balanced accuracy, whereas for the visual detector it is instantiated using the corresponding mAP metric. This dis-tinction is necessary because detection and object-level recog-nition constitute di ff erent prediction tasks; their absolute scores are therefore not interpreted as directly comparable measures of model quality. Instead, comparisons across these tasks em-phasize the rate at which each perception strategy loses perfor-mance relative to its own clean-condition baseline. Finally, all models are evaluated on identical sample parti-tions and, within each task, on identical degradation realiza-tions. The clean condition D0 serves as the reference operat-ing point, while D1-D4 represent progressively stronger pertur-bations. This paired evaluation design allows changes in per-formance to be attributed to controlled changes in visual reli-ability rather than di ff erences in test composition. Together, absolute task performance, balanced accuracy, retained perfor-mance, and MRR characterize both predictive capability and sensitivity to progressive visual degradation. 
+
+5. Method 
+
+The proposed framework is designed to isolate the e ff ect of changing visual reliability on cross-modal underwater percep-tion. Rather than constructing an end-to-end visual-sonar de-tector, we decouple representation learning from multimodal fusion. An annotated optical object is first represented using a frozen visual foundation model, while its synchronized sonar frame is encoded independently as acoustic context. The re-sulting modality-specific representations are then combined us-ing either fixed feature fusion or a lightweight adaptive gat-ing mechanism. This design is motivated by the substantial heterogeneity and spatial misalignment between optical and forward-looking sonar observations in UMOD Wu et al. (2026), while allowing the fusion process to be studied independently of object-localization errors. Let ˜ x(s,o) 
+
+> v
+
+denote the visual crop associated with an annotated object after applying degradation level Ds, and let xs denote its synchronized sonar frame. The complete cross-modal recogni-tion pipeline can be written as 
+
+z(s) 
+
+> v
+
+= fv
+
+˜x(s,o)
+
+> v
+
+ , zs = fs(xs) , (24) followed by ˆy(s) = hΦz(s) 
+
+> v
+
+, zs
+
+ , (25) where fv(·) and fs(·) are the visual and sonar encoders, respec-tively, Φ(·) denotes the fusion operation, and h(·) is the down-stream classifier. Only the optical observation varies across D0-
+
+D4; the corresponding sonar representation remains unchanged for a given synchronized sample. This construction enables changes in the learned fusion behavior to be attributed specifi-cally to changes in visual evidence. 
+
+5.1. Visual Foundation-Model Representation 
+
+We use DINOv2 as the visual representation backbone. DI-NOv2 is a self-supervised visual foundation model trained to produce transferable representations without requiring task-specific labels during pretraining Oquab et al. (2024). Its use in this study serves two purposes. First, it provides a strong pretrained representation that is not learned specifically from the relatively small underwater subset used in our experiments. Second, freezing the encoder permits the robustness of the rep-resentation itself to be evaluated as visual quality changes, with-out confounding this behavior with degradation-specific fine-tuning. For an object with ground-truth visual bounding box b, the corresponding crop is extracted from the optical image with a small amount of surrounding context. In our implementation, the bounding box is expanded by 10% before cropping, subject to the image boundaries. The resulting object image is resized and normalized according to the DINOv2 input preprocessing procedure and passed through a frozen DINOv2-small encoder. The visual representation is therefore 
+
+z(s) 
+
+> v
+
+= fDINOv2 
+
+C ˜x(s) 
+
+> v
+
+, b , (26) where C(·) denotes the padded cropping operation. The result-ing embedding is 
+
+z(s) 
+
+> v
+
+∈ R384 . (27) The DINOv2 parameters remain fixed throughout all recog-nition and fusion experiments. Consequently, the same vi-sual encoder is used for clean and degraded observations, and no degradation-specific adaptation occurs inside the foundation model. This is important to the experimental design: any vari-ation in z(s) 
+
+> v
+
+arises from the changing optical input rather than from changes to the encoder parameters. A lightweight classifier is trained on top of these frozen em-beddings to establish the visual foundation-model baseline. Let 
+
+hv(·) denote this classifier. Visual-only prediction is given by ˆy(s) 
+
+> v
+
+= hv
+
+z(s)
+
+> v
+
+ . (28) The same representation is subsequently used by the multi-modal models, ensuring that di ff erences between visual-only and fused recognition originate from the incorporation of sonar information and the fusion strategy rather than from di ff erent visual backbones. 7Figure 3: Overview of the proposed degradation-aware cross-modal perception framework. The visual object crop is progressively degraded from D0 to D4 
+
+> and encoded using a frozen DINOv2 backbone, while the synchronized sonar frame is represented by a frozen ResNet-18 encoder. The projected modality representations are combined through learned adaptive gating, allowing their relative contributions to vary with the available visual evidence.
+
+5.2. Sonar Context Representation 
+
+The acoustic branch is intentionally constructed as a con-textual representation rather than as a geometrically regis-tered object-level feature. As discussed in Section 3.1, visual and forward-looking sonar observations are formed in di ff er-ent imaging geometries. UMOD’s optical and sonar sensors provide temporally synchronized measurements, but their im-age coordinates are not directly interchangeable; visual obser-vations are represented in an image plane, whereas the forward-looking sonar encodes acoustic returns in range-azimuth coor-dinates Wu et al. (2026). The original UMOD study similarly identifies cross-modal spatial misalignment as a central di ffi -culty for visual-sonar feature fusion. We therefore do not trans-fer a visual bounding box directly into the sonar image. Instead, the complete synchronized sonar frame is encoded to obtain an acoustic context vector: 
+
+zs = fsonar (xs) . (29) The sonar encoder is an ImageNet-pretrained ResNet-18 used as a frozen feature extractor. Its final classification layer is re-moved, and the pooled representation preceding the classifier is retained, yielding 
+
+zs ∈ R512 . (30) The sonar encoder is held fixed in the same manner as the vi-sual encoder. Furthermore, because the degradation benchmark modifies only the optical modality, 
+
+z(0)  
+
+> s
+
+= z(1)  
+
+> s
+
+= · · · = z(4)  
+
+> s
+
+(31) for all degradation variants derived from the same synchronized observation. Thus, the acoustic representation serves as a con-trolled source of complementary information whose input qual-ity is not altered by the visual degradation procedure. This design should be distinguished from object-level visual-sonar alignment. The sonar feature may contain information from the target, surrounding scene structure, background acous-tic returns, or other contextual characteristics of the synchro-nized observation. Accordingly, the present study evaluates whether paired acoustic context can compensate for deteriorat-ing visual evidence. Explicit object correspondence and spa-tially aligned visual-sonar feature extraction are left to future end-to-end extensions. 
+
+5.3. Fixed Cross-Modal Fusion 
+
+We first establish a fixed multimodal baseline to determine whether the availability of sonar information alone is su ffi cient to improve robustness. A straightforward feature-level fusion strategy is constructed by concatenating the frozen visual and sonar embeddings: 
+
+z(s)cat = hz(s) 
+
+> v
+
+; zs
+
+i , (32) where [ ·; ·] denotes vector concatenation. Given the 384-dimensional visual representation and 512-dimensional sonar representation, 
+
+z(s)cat ∈ R896 . (33) A downstream classifier hfix (·) maps the concatenated repre-sentation to the retained target classes: ˆy(s)fix = hfix 
+
+z(s)cat 
+
+ . (34) The fixed-fusion baseline provides no explicit mechanism for modifying the contribution of either modality as visual condi-tions change. Consequently, features extracted from a severely degraded optical observation are presented to the classifier in the same manner as features extracted under clean conditions. 8This baseline is particularly relevant because previous experi-ments on UMOD demonstrate that direct addition or concate-nation of heterogeneous visual and sonar features can introduce inter-modal interference rather than guarantee an improvement over unimodal perception Wu et al. (2026). The fixed model therefore tests whether complementary acoustic information is intrinsically su ffi cient for robustness or whether explicit adap-tation of modality contributions is required. 
+
+5.4. Adaptive Gated Fusion 
+
+To permit the model to vary its reliance on each sensing modality, we introduce a lightweight adaptive gated fusion mechanism. Because the DINOv2 and sonar encoders produce representations with di ff erent dimensions and feature statistics, the two embeddings are first mapped into a common latent space. Let Pv(·) and Ps(·) denote learnable modality-specific projection functions. The projected representations are ¯z(s) 
+
+> v
+
+= Pv
+
+z(s)
+
+> v
+
+ , ¯zs = Ps(zs) , (35) with ¯z(s) 
+
+> v
+
+, ¯zs ∈ Rd, (36) where d denotes the shared fusion dimension. The projected representations are concatenated and passed to a gating network G(·): 
+
+a(s) = G h ¯z(s) 
+
+> v
+
+; ¯ zs
+
+i , (37) where 
+
+a(s) = ha(s) 
+
+> v
+
+, a(s)
+
+> s
+
+i . (38) A softmax operation converts these logits into normalized modality weights: 
+
+hg(s) 
+
+> v
+
+, g(s)
+
+> s
+
+i = softmax a(s) , (39) such that 
+
+g(s) 
+
+> v
+
+≥ 0, g(s) 
+
+> s
+
+≥ 0, g(s) 
+
+> v
+
++ g(s) 
+
+> s
+
+= 1. (40) The fused representation is then constructed as a weighted combination of the two projected embeddings: 
+
+z(s) 
+
+> g
+
+= g(s) 
+
+> v
+
+¯z(s) 
+
+> v
+
++ g(s) 
+
+> s
+
+¯zs. (41) Finally, the class prediction is obtained from ˆy(s) 
+
+> g
+
+= hg
+
+z(s)
+
+> g
+
+ , (42) where hg(·) is the learned classification head. Unlike fixed concatenation, the gated formulation makes the eff ective contribution of each modality sample dependent. In particular, changes in the visual representation caused by degra-dation can alter the gating function and thereby change the rela-tive contribution assigned to the acoustic branch. The model is not explicitly supplied with the degradation level s as an input; instead, the gate must infer an appropriate weighting from the representations themselves. The learned coe ffi cients should not be interpreted as cali-brated probabilities that a physical sensor is reliable. Rather, 
+
+g(s) 
+
+> v
+
+and g(s) 
+
+> s
+
+quantify the relative contribution assigned by the learned fusion mechanism to the two projected representations. Their variation across degradation levels nevertheless provides a useful diagnostic for determining whether the model changes its use of acoustic information as the visual observation be-comes less informative. 
+
+5.5. Degradation-Aware Fusion Training 
+
+Adaptive gating alone does not ensure robustness to changes in modality reliability. If the gating mechanism is optimized ex-clusively on clean visual observations, the training distribution provides little incentive to learn how modality contributions should change when the optical representation becomes unreli-able. We therefore distinguish between clean-trained adaptive fusion and degradation-aware adaptive fusion .For clean-trained fusion, the gating network, projection lay-ers, and classifier are optimized using only the original D0 vi-sual observations: 
+
+Tclean = n z(0)  
+
+> v,i
+
+, zs,i, yi
+
+o Ntr  
+
+> i=1
+
+, (43) where Ntr denotes the number of object-level training exam-ples. This model has access to both modalities during training but does not explicitly observe systematic reductions in visual quality. For degradation-aware training, every training object is eval-uated across the complete visual degradation sequence. The training set becomes 
+
+TDA =
+
+> 4
+
+[
+
+> s=0
+
+n z(s) 
+
+> v,i
+
+, zs,i, yi
+
+o Ntr  
+
+> i=1
+
+. (44) Importantly, all five visual variants associated with a training object are paired with the same sonar representation and class label. The procedure therefore varies the reliability of the opti-cal evidence while preserving sample identity and acoustic con-text. No degraded version of a validation or test observation is introduced into the training set, consistent with the grouped par-titioning procedure described in Section 4.1. The trainable parameters of the projection layers, gating net-work, and classification head are optimized using the multiclass cross-entropy objective 
+
+Lcls = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+> C
+
+X
+
+> c=1
+
+I(yi = c) log pi,c, (45) where pi,c denotes the predicted probability that observation 
+
+i belongs to class c. The parameters of the DINOv2 and sonar encoders remain frozen during this optimization. Thus, degradation-aware learning acts specifically on the mapping and fusion components rather than modifying the underlying pretrained representations. The distinction between the two gating regimes constitutes an important ablation. Both models have identical access to vi-sual and sonar information and use the same adaptive fusion 9formulation; they di ff er only in whether the fusion mechanism is exposed to changing visual reliability during optimization. Consequently, a robustness advantage for degradation-aware gating can be attributed to training across reliability conditions rather than to the existence of a gating architecture alone. More generally, degradation-aware training can be viewed as learning a conditional fusion function 
+
+ΦDA : z(s) 
+
+> v
+
+, zs
+
+ 7 → z(s) 
+
+> g
+
+(46) whose behavior is allowed to vary with the evidence contained in each modality. The desired behavior is not to force mono-tonically increasing sonar weight as a hard constraint, but to allow such a shift to emerge when acoustic context becomes more useful relative to the degraded visual representation. The resulting modality weights are therefore analyzed empirically across D0-D4 in the experiments that follow. Overall, the proposed methodology separates three questions that would otherwise be confounded in a fully end-to-end mul-timodal architecture: whether a frozen foundation-model rep-resentation retains discriminative information under underwa-ter degradation, whether synchronized sonar context provides complementary information, and whether exposure to chang-ing visual reliability is necessary for an adaptive fusion mech-anism to exploit that complementarity. This controlled design provides the basis for the robustness comparisons presented in the following section. 
+
+6. Experiments and Results 
+
+This section evaluates the robustness of visual and cross-modal underwater perception under the controlled degradation protocol introduced in Section 3.2. The experiments are orga-nized to progressively address three questions: (i) how rapidly conventional detection and frozen foundation-model represen-tations deteriorate as visual quality decreases, (ii) whether the availability of synchronized sonar context is by itself su ffi cient to improve robustness, and (iii) whether explicitly exposing an adaptive fusion mechanism to changes in visual reliability en-ables more e ff ective cross-modal compensation. Unless oth-erwise stated, recognition results are reported using balanced accuracy on the fixed test partition, while visual detection is evaluated using mAP. As discussed in Section 4.2, the absolute scores of the detection and recognition tasks are not directly comparable; comparisons across these tasks therefore empha-size their relative degradation trends. 
+
+6.1. Visual Perception under Progressive Degradation 
+
+We first characterize the behavior of visual-only perception before introducing acoustic information. Two complementary baselines are considered: YOLO11n operating as an end-to-end object detector and frozen DINOv2-small representations evaluated through object-crop classification. The former mea-sures the combined sensitivity of localization and classification to visual corruption, whereas the latter isolates the robustness of pretrained visual representations when object localization is provided by the ground-truth annotation. Under the clean D0 condition, YOLO11n achieves an mAP@0 .5 of 0 .7020 and an mAP@0 .5:0 .95 of 0 .5063. Per-formance decreases progressively as degradation becomes stronger. As shown in Table 1, mAP@0 .5 decreases from 0.7020 at D0 to 0 .6215, 0 .5676, and 0 .3359 at D1, D2, and D3,respectively. Under the extreme D4 condition, the detector re-tains only 0 .0281 mAP@0 .5, corresponding to approximately 4.0% of its D0 performance. Recall similarly decreases from 0.5127 at D0 to 0 .0215 at D4, indicating that the principal fail-ure mode under extreme degradation is the loss of detectable visual evidence rather than merely reduced localization preci-sion. 
+
+> Table 1: YOLO11n visual detection performance under progressive combined degradation.
+
+Condition mAP@0.5 mAP@0.5:0.95 Precision Recall 
+
+D0 0.7020 0.5063 0.8299 0.5127 
+
+D1 0.6215 0.4538 0.6860 0.5606 
+
+D2 0.5676 0.4319 0.6777 0.5001 
+
+D3 0.3359 0.2366 0.8492 0.2952 
+
+D4 0.0281 0.0219 0.8000 0.0215 The frozen DINOv2 representation exhibits substantially greater relative stability. Its balanced accuracy is 0 .6210 at D0,increases slightly to 0 .6495 at D1, and remains at 0 .6095 un-der D2. More substantial degradation appears at D3 and D4,where balanced accuracy decreases to 0 .4952 and 0 .4610, re-spectively. Thus, even at the most severe combined degrada-tion level, the foundation-model representation retains approx-imately 74 .2% of its clean-condition balanced accuracy. This result is consistent with the motivation for using large-scale self-supervised representations as a comparatively stable vi-sual feature space under distribution shift Oquab et al. (2024); Hendrycks et al. (2021); Paul and Chen (2022). Nevertheless, the decline from 0 .6210 to 0 .4610 also demonstrates that rep-resentation robustness does not eliminate the e ff ects of severe information loss. D0 Clean D1 Mild D2 Moderate D3 Severe D4 Extreme Visual degradation severity 0.0 0.2 0.4 0.6 0.8 1.0 Retained performance relative to D0      
+
+> Visual-Only Robustness Under Progressive Degradation
+> YOLO11n detector Frozen DINOv2 representation
+> Figure 4: Relative robustness of visual-only perception under progressive degradation. Each curve is normalized to its own D0performance because YOLO11n and DINOv2 are evaluated on di ff erent tasks and metrics. The de-tector exhibits a sharp degradation at D3-D4, whereas the frozen DINOv2 rep-resentation retains substantially more of its clean-condition performance.
+
+10 Figure 4 summarizes the normalized degradation behavior of the two visual approaches. YOLO11n obtains an MRR of 0.5531, whereas the frozen DINOv2 representation obtains an MRR of 0 .8919 under the final evaluation protocol. These val-ues should be interpreted as performance retention within each task rather than as a direct comparison between detection ac-curacy and object-level classification accuracy. In particular, YOLO11n must localize degraded objects in addition to recog-nizing them, while the DINOv2 experiment uses ground-truth object crops. The result therefore supports the narrower conclu-sion that the frozen foundation-model representation is compar-atively invariant to the tested perturbations once object localiza-tion is supplied. 
+
+6.2. E ff ect of Sonar Context and Fixed Fusion 
+
+We next examine whether the presence of synchronized sonar information automatically improves robustness. Three object-level recognition configurations are compared: the visual DI-NOv2 baseline, sonar context alone, and fixed visual-sonar fea-ture concatenation. Because only the optical observation is modified across D0-D4, the sonar-only classifier provides a con-stant reference point with balanced accuracy 0 .3581 across all five conditions. Table 2 reports the complete cross-modal comparison. Un-der clean conditions, fixed fusion achieves a balanced accuracy of 0 .6457, modestly exceeding the visual-only score of 0 .6210. At D1, the fixed-fusion score increases to 0 .7143, compared with 0 .6495 for the visual representation. This advantage, how-ever, is not preserved as visual reliability becomes severely de-graded. At D3, fixed fusion reaches 0 .5162, only slightly above the visual-only result of 0 .4952. At D4, its balanced accuracy decreases to 0 .4343, below the visual-only score of 0 .4610. The behavior of fixed concatenation is important because it demonstrates that complementary sensing does not imply com-plementary representations at every operating condition. The sonar feature is available at D4, yet direct concatenation fails to exploit it su ffi ciently to o ff set the deteriorating visual represen-tation. This observation is consistent with previous findings on UMOD, where simple addition and concatenation of heteroge-neous visual and sonar features reduced detection performance relative to a unimodal visual baseline, motivating more struc-tured cross-modal interaction Wu et al. (2026). In the present setting, the same general issue appears under a di ff erent ex-perimental condition: as the reliability of the visual modality changes, a fusion rule learned without an explicit mechanism for reliability adaptation can become less e ff ective than the vi-sual representation alone. The result also clarifies the role of the sonar-only baseline. Although its balanced accuracy of 0 .3581 is below the clean visual score, its performance is invariant to the imposed opti-cal degradation. Consequently, the acoustic representation be-comes relatively more informative as the visual modality de-teriorates. The central problem is therefore not whether sonar alone is more discriminative than vision, but whether the fusion mechanism can recognize when the relative utility of the two modalities has changed. 
+
+6.3. Degradation-Aware Adaptive Fusion 
+
+To determine whether adaptive weighting alone is su ffi cient, we compare fixed fusion with two instances of the gated model described in Section 5.4. The clean-trained gate is optimized using only D0 visual observations, whereas the degradation-aware gate is optimized using visual representations spanning the complete D0-D4 range. The two gated models otherwise employ the same fusion formulation, allowing the e ff ect of degradation-aware training to be isolated. The clean-trained gate performs competitively under mild and moderate conditions. Its balanced accuracy increases from 0.6210 at D0 to 0 .6610 at D1 and 0 .7010 at D2. However, this behavior does not extend to severe reliability shifts. Perfor-mance falls to 0 .5010 at D3 and 0 .3752 at D4. The latter is lower than both the visual-only baseline (0 .4610) and fixed fu-sion (0 .4343). Therefore, the existence of a learnable gating architecture does not by itself guarantee robustness to a modal-ity condition absent from its training distribution. In contrast, degradation-aware fusion remains substantially more stable as visual reliability decreases. Its balanced accu-racy is 0 .6343 under clean conditions and 0 .6743 under both D1
+
+and D2. More importantly, it maintains 0 .6438 at D3 and 0 .6152 at D4. Relative to the visual-only foundation-model baseline, the D4 improvement is 0.6152 − 0.4610 = 0.1543 , (47) corresponding to a relative improvement of 0.6152 − 0.4610 0.4610 × 100 ≈ 33 .5% . (48) At D3, the improvement is similarly substantial: degradation-aware fusion reaches 0 .6438 compared with 0 .4952 for the visual-only model. Notably, the degradation-aware model also exceeds both fixed fusion (0 .5162) and the clean-trained gate (0 .5010) at this severity. Figure 5 illustrates this divergence as the degradation becomes severe. The robustness summary in Table 3 further emphasizes this behavior. Fixed fusion retains approximately 67 .3% of its clean balanced accuracy at D4, while the clean-trained gate retains approximately 60 .4%. The degradation-aware gate retains ap-proximately 97 .0% of its D0 score and obtains an MRR of 1.0278. The latter should not be interpreted as evidence that degradation improves the underlying observations. Rather, as discussed in Section 3.3, MRR is normalized to the model’s own D0 performance, and small non-monotonic variations can occur on the limited test set. The relevant observation is that degradation-aware fusion exhibits substantially less perfor-mance loss across the tested reliability shift. The distinction be-comes particularly evident under severe degradation. As shown in Fig. 5, the performance trajectories of the nominally trained models begin to diverge sharply from degradation-aware fusion at D3. At D4, degradation-aware fusion maintains a balanced accuracy of 0 .6152, compared with 0 .4610 for the Visual FM, 0.4343 for fixed fusion, and 0 .3752 for the clean-trained gate. Taken together, these results support the principal hypothe-sis of this study: adaptive architecture and multimodal avail-11 Table 2: Balanced accuracy of object-level visual, acoustic, and cross-modal recognition models under progressive combined degradation. 
+
+Condition Visual FM Sonar Context Fixed Fusion Clean-Trained Gate Degradation-Aware Gate 
+
+D0 0.6210 0.3581 0.6457 0.6210 0.6343 
+
+D1 0.6495 0.3581 0.7143 0.6610 0.6743 
+
+D2 0.6095 0.3581 0.6152 0.7010 0.6743 
+
+D3 0.4952 0.3581 0.5162 0.5010 0.6438 
+
+D4 0.4610 0.3581 0.4343 0.3752 0.6152 D0 Clean D1 Mild D2 Moderate D3 Severe D4 Extreme Visual degradation severity 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 Balanced accuracy 
+
+> Cross-Modal Robustness Under Degraded Visual Conditions
+> Visual FM Sonar Context Fixed Fusion Clean-Trained Gate Degradation-Aware Gate
+
+Figure 5: Cross-modal recognition performance under progressive visual degra-dation. Fixed fusion and clean-trained adaptive gating provide inconsistent ro-bustness as visual reliability decreases. In contrast, degradation-aware gating maintains substantially higher balanced accuracy under severe ( D3) and ex-treme ( D4) degradation while preserving competitive clean-condition perfor-mance. Table 3: Robustness summary for the object-level recognition models. 
+
+Model D4 BAcc D4 Retained MRR Visual FM 0.4610 0.7423 0.8919 Sonar Context 0.3581 1.0000 1.0000 Fixed Fusion 0.4343 0.6726 0.8827 Clean-Trained Gate 0.3752 0.6043 0.9011 Degradation-Aware Gate 0.6152 0.9700 1.0278 
+
+ability are insu ffi cient when the fusion model has not experi-enced changes in modality reliability. Robustness emerges most clearly when the fusion mechanism is trained across the relia-bility conditions on which it is expected to operate. This ob-servation is closely related to broader findings in robust multi-modal learning, where explicit exposure to missing or corrupted modalities improves the ability of multimodal models to avoid dependence on a consistently high-quality input Neverova et al. (2016); Ma et al. (2022). 
+
+6.4. Adaptation of Modality Reliance 
+
+The previous experiment establishes that degradation-aware fusion improves predictive robustness. We next examine whether this improvement is accompanied by the expected change in modality use. For each degradation level, we aver-age the learned visual and sonar gating coe ffi cients over the test objects. These coe ffi cients represent the relative contributions assigned by the learned fusion mechanism and, as emphasized D0 Clean D1 Mild D2 Moderate D3 Severe D4 Extreme Visual degradation severity 0.0 0.2 0.4 0.6 0.8 1.0 Mean learned modality weight 
+
+> Adaptive Modality Reliance Under Visual Degradation
+> Visual weight Sonar weight
+
+Figure 6: Mean modality weights learned by degradation-aware gated fusion. The model remains predominantly visual under clean and mildly degraded con-ditions but progressively increases the contribution of sonar as optical degrada-tion becomes severe. The coe ffi cients represent learned fusion contributions and should not be interpreted as calibrated sensor-reliability probabilities. 
+
+in Section 5.4, should not be interpreted as calibrated sensor-reliability probabilities. Table 4 shows a clear shift toward acoustic information as the visual degradation becomes severe. Under D0, the average vi-sual and sonar weights are 0 .8576 and 0 .1424, respectively. The gate remains strongly vision dominated under mild degradation, assigning a sonar weight of 0 .1363 at D1. At D2, the sonar con-tribution increases modestly to 0 .1713. A much larger redistri-bution occurs at D3 and D4: the average sonar weight rises to 0.2907 and 0 .4133, respectively, while the corresponding visual weight decreases to 0 .7093 and 0 .5867. 
+
+Table 4: Average modality weights learned by the degradation-aware gate. 
+
+Condition Visual Weight Sonar Weight 
+
+D0 0.8576 0.1424 
+
+D1 0.8637 0.1363 
+
+D2 0.8287 0.1713 
+
+D3 0.7093 0.2907 
+
+D4 0.5867 0.4133 From D0 to D4, the mean sonar contribution therefore in-creases by approximately 0 .271, or 27 .1 percentage points. Im-portantly, monotonic behavior was not imposed as a training constraint, nor was the degradation severity supplied explicitly to the gate. The small decrease in sonar weight between D0 and 
+
+D1 further confirms that the learned coe ffi cients are not simply a deterministic function of the predefined severity index. In-12 stead, the pronounced increase at D3 and D4 emerges from the representations presented to the fusion network. Figure 6 visualizes this transition. The result provides a mechanistic explanation for the robustness improvement ob-served in Section 6.3: when the visual representation becomes substantially less discriminative, the degradation-aware model does not continue to use the two modalities in approximately the same manner as under clean conditions. Instead, it increases the contribution of the unchanged acoustic context while still retaining a majority visual contribution. Thus, the model be-haves as a complementary fusion system rather than simply re-placing vision with sonar. 
+
+6.5. Degradation-Type Ablation 
+
+The combined D0-D4 benchmark changes several optical properties simultaneously. To determine which perturbations are primarily responsible for the benefit of acoustic assistance, we separately evaluate illumination reduction, wavelength-dependent color attenuation, turbidity, and blur at moderate (D2) and extreme ( D4) severity. Table 5 compares the visual foundation-model baseline with degradation-aware fusion. The largest cross-modal benefit occurs under severe turbidity. At D4, the visual-only balanced accuracy is 0 .4667, whereas degradation-aware fusion reaches 0 .5638, yielding an absolute gain of 0 .0971 and a relative improvement of 20 .8%. Severe blur exhibits the second-largest benefit: balanced accuracy in-creases from 0 .6190 to 0 .7143, corresponding to a 15 .4% rel-ative improvement. These perturbations directly suppress spa-tial structure, object boundaries, contrast, and fine-scale visual evidence, which are important cues for object recognition. Be-cause acoustic sensing is not a ff ected by optical scattering or image-plane blur, the synchronized sonar representation can provide complementary information when such visual structure becomes unreliable. Brightness degradation produces a smaller but consistent benefit. At D4, fusion improves balanced accuracy from 0 .6095 to 0 .6457, a relative increase of approximately 5 .9%. Color at-tenuation behaves di ff erently. Although fusion improves the D2
+
+result from 0 .6210 to 0 .6743, both models obtain 0 .7295 under the isolated D4 color perturbation. Thus, no measurable fusion gain is observed in that condition. The relatively strong visual-only performance suggests that the frozen DINOv2 represen-tation remains discriminative when the perturbation primarily changes channel statistics without equivalently destroying spa-tial structure. These degradation-specific results refine the interpretation of the combined benchmark. Sonar assistance is not uniformly ad-vantageous for every type of optical shift. Instead, its largest contribution appears when the perturbation removes or ob-scures structural visual evidence, particularly under turbidity and blur. This distinction is consistent with the complementary sensing characteristics of optical and acoustic imagery: optical observations provide rich appearance information but are sen-sitive to visibility, whereas sonar preserves acoustic structural information under conditions in which optical propagation is compromised Wu et al. (2026). 
+
+6.6. Qualitative Failure Recovery 
+
+Finally, we examine individual D4 test objects to determine whether the aggregate improvement of degradation-aware fu-sion corresponds to concrete recovery of visual-only failures. Across the extreme combined-degradation test set, eight objects that are incorrectly classified by the visual foundation-model baseline are correctly classified after degradation-aware visual-sonar fusion. These cases provide qualitative evidence for the behavior observed quantitatively in the preceding experiments. Un-der extreme degradation, the visual crop may contain substan-tially reduced contrast, attenuated color information, scattering-induced veiling, and blurred object structure. The paired sonar observation remains unchanged, and the learned gate assigns substantially greater acoustic contribution under these condi-tions. In the illustrated recovery cases, this additional acoustic context is su ffi cient to alter the final decision toward the correct class. The qualitative examples should not be interpreted indepen-dently as statistical evidence of superiority, particularly given the limited size of the present test set. Rather, they illustrate how the quantitative D4 improvement manifests at the sample level. Together with the 33 .5% relative balanced-accuracy im-provement and the increase in mean sonar weight from 14 .2% to 41 .3%, the recovered examples support the interpretation that degradation-aware training enables the fusion mechanism to make productive use of acoustic context when visual evidence becomes severely compromised. 
+
+6.7. Summary of Experimental Findings 
+
+The experiments reveal three principal findings. First, pro-gressive underwater degradation strongly a ff ects conventional visual detection, while frozen DINOv2 representations exhibit substantially greater relative stability. However, the foundation-model representation still loses discriminative performance un-der severe and extreme degradation, indicating that pretrained visual invariance alone is insu ffi cient when optical information is substantially removed. Second, simply adding sonar information does not guarantee robustness. Fixed concatenation achieves useful gains under some mild conditions but falls below the visual-only baseline at D4. Similarly, an adaptive gate trained only on clean obser-vations deteriorates sharply under extreme degradation. These results reinforce the distinction between multimodal availabil-ity and multimodal robustness : a complementary modality can only be useful if the fusion mechanism learns how to exploit it when the reliability of the primary modality changes. Third, degradation-aware training substantially changes this behavior. The proposed gate maintains a balanced accuracy of 0 .6152 at D4, compared with 0 .4610 for visual-only recog-nition, while increasing the average sonar contribution from 14 .2% at D0 to 41 .3% at D4. The benefit is degradation de-pendent, with the largest isolated gains observed under severe turbidity (20 .8%) and blur (15 .4%). Collectively, these findings indicate that robust visual-sonar perception is determined not only by the complementarity of the sensing modalities, but also 13 Table 5: Degradation-type ablation. Relative improvement is computed with respect to the visual foundation-model balanced accuracy at the same degradation type and severity. 
+
+Degradation Severity Visual FM DA Fusion Absolute Gain Relative Gain (%) Brightness D2 0.6495 0.6743 0.0248 3.81 Brightness D4 0.6095 0.6457 0.0362 5.94 Color D2 0.6210 0.6743 0.0533 8.59 Color D4 0.7295 0.7295 0.0000 0.00 Turbidity D2 0.5924 0.6457 0.0533 9.00 Turbidity D4 0.4667 0.5638 0.0971 20.82 
+
+Blur D2 0.6629 0.7029 0.0400 6.03 Blur D4 0.6190 0.7143 0.0952 15.38 
+
+by whether the fusion mechanism is explicitly trained to operate across changes in their relative reliability. 
+
+7. Discussion 
+
+The experimental results provide several insights into robust underwater perception under changing optical reliability. The central finding is that robustness cannot be attributed solely to either a strong visual representation or the availability of a complementary sensing modality. Instead, the results indicate that reliable cross-modal perception depends on the interac-tion between representation robustness, modality complemen-tarity, and the conditions under which the fusion mechanism is trained. In particular, the degradation-aware gated model sub-stantially outperforms both visual-only perception and alterna-tive fusion strategies under severe degradation while maintain-ing competitive performance under clean and moderately de-graded conditions. This section discusses the implications of these findings, their relationship to prior work, and the princi-pal limitations of the present study. 
+
+7.1. Visual Foundation Models Improve Robustness but Do Not Eliminate Information Loss 
+
+A first observation is the markedly di ff erent degradation behavior of conventional end-to-end detection and frozen foundation-model representations. The YOLO11n detector ex-periences a substantial decrease in performance as the com-bined optical degradation progresses, with mAP@0 .5 decreas-ing from 0 .7020 under D0 to 0 .0281 under D4. By contrast, the frozen DINOv2 representation retains substantially more of its clean-condition recognition performance, achieving a balanced accuracy of 0 .4610 under extreme combined degradation com-pared with 0 .6210 under clean conditions. This result is consistent with previous evidence that large-scale self-supervised and transformer-based visual representa-tions can exhibit improved stability under distribution shift rel-ative to conventional task-specific representations Oquab et al. (2024); Hendrycks et al. (2021); Paul and Chen (2022). The DINOv2 encoder was not fine-tuned on the degradation bench-mark and therefore did not explicitly learn the perturbations considered in this work. Its relative stability consequently sug-gests that large-scale pretraining provides useful invariances that transfer, at least partially, to underwater imagery outside the original pretraining distribution. Nevertheless, the extreme-degradation results also identify an important limitation of foundation-model robustness. A pre-trained representation may suppress sensitivity to nuisance vari-ations, but it cannot reconstruct visual evidence that has been physically attenuated, scattered, or blurred beyond recoverabil-ity. Underwater image formation is fundamentally a ff ected by wavelength-dependent attenuation, backscatter, and distance-dependent transmission, and these e ff ects can remove informa-tion rather than merely alter its statistical appearance Akkaynak and Treibitz (2018, 2019). Accordingly, the observed reduction in DINOv2 balanced accuracy under D3 and D4 is not unex-pected. The result suggests that foundation models should be regarded as a strong component of robust underwater percep-tion rather than as a substitute for complementary sensing. This distinction is particularly relevant for marine robotics. Foundation models have been proposed as broadly transfer-able components capable of supporting perception and reason-ing across multiple downstream tasks Bommasani et al. (2021). However, the present results indicate that their deployment in underwater environments must account for sensor-specific physical limitations. Robust representation learning can reduce sensitivity to moderate domain shifts, but multimodal sensing remains important when one modality undergoes severe infor-mation loss. 
+
+7.2. Complementary Sensors Do Not Guarantee Robust Fusion 
+
+The original UMOD study demonstrated that simply adding or concatenating heterogeneous visual and sonar features can introduce inter-modal interference; our Fig. 5 extends that ob-servation to changing sensor reliability, showing that even adap-tive fusion can fail if it is trained only under nominal visual conditions. An important finding is that the availability of sonar does not automatically improve perception. The sonar-context representation remains una ff ected by the imposed opti-cal degradation, yet fixed feature concatenation performs below the visual-only foundation-model baseline under D4. Similarly, the adaptive gate trained only on clean observations performs well under moderate conditions but deteriorates sharply at the highest severity. These results demonstrate a distinction be-tween sensor complementarity and learned fusion robustness .Optical and acoustic sensing are naturally complementary in underwater environments. Optical imagery contains high-resolution appearance, texture, and color information but is 14 highly susceptible to turbidity, illumination loss, scattering, and attenuation. Sonar is considerably less sensitive to opti-cal visibility but generally provides lower spatial resolution and weaker appearance information. Consequently, neither sensing modality is uniformly superior across operating conditions Wu et al. (2026). E ff ective perception therefore requires a mecha-nism capable of exploiting this asymmetry rather than treating the modalities as equally reliable feature sources. The fixed-fusion results reinforce observations reported in previous multimodal underwater studies. In the original UMOD experiments, simple feature addition and concatenation did not consistently improve detection and could introduce inter-modal interference, whereas explicitly designed cross-modal interac-tion produced substantially better results Wu et al. (2026). Similar motivations underlie adaptive visual-sonar fusion ap-proaches developed for underwater recognition and detection Myers and Midtgaard (2023); Tang et al. (2023); Chen et al. (2025). The present work extends this perspective from nomi-nal multimodal accuracy to robustness under changing modal-ity quality. Even when two modalities are informative in prin-ciple, a fusion function optimized for one reliability regime may fail when the statistical relationship between the modal-ities changes. The poor D4 performance of the clean-trained gate is par-ticularly informative. Because this model already possesses a learnable mechanism for adjusting visual and sonar contribu-tions, its failure cannot be explained simply by insu ffi cient ar-chitectural flexibility. Instead, the training data provide little evidence from which the model can learn how the relationship between visual and acoustic information should change when optical reliability collapses. This result is consistent with mul-timodal robustness literature showing that explicit exposure to modality corruption or absence is often necessary for reliable adaptation Neverova et al. (2016); Ma et al. (2022). The im-portant implication is that adaptive fusion must be trained for adaptation; architectural adaptivity alone is not su ffi cient. 
+
+7.3. Degradation-Aware Training Enables Reliability-Dependent Modality Use 
+
+The strongest experimental result is obtained by degradation-aware gated fusion. Under D4, the model achieves a bal-anced accuracy of 0 .6152, compared with 0 .4610 for the vi-sual foundation-model baseline, corresponding to a 33 .5% rela-tive improvement. The same model also substantially improves performance under D3, reaching 0 .6438 compared with 0 .4952 for visual-only recognition. These improvements occur with-out modifying the frozen visual or sonar encoders. Instead, degradation-aware training acts only on the projection, fusion, and classification components. The learned modality weights provide evidence that the im-provement is associated with a systematic change in cross-modal reliance. Under clean conditions, the model is strongly vision dominated, assigning approximately 85 .8% of the aver-age contribution to the visual representation and 14 .2% to sonar. Under D4, the sonar contribution increases to approximately 41 .3%. Thus, the model does not adopt a uniformly sonar-heavy strategy merely because acoustic information is available during training. It preserves visual dominance when optical ob-servations remain informative and increases acoustic reliance only when severe degradation changes the available evidence. This behavior is desirable for underwater multimodal sys-tems because sensing reliability is inherently state dependent. A fixed assumption about modality quality is unlikely to re-main valid across changes in depth, illumination, turbidity, tar-get distance, and vehicle motion. The results therefore sup-port reliability-conditioned fusion as a more appropriate de-sign principle than constant multimodal weighting. Related observations have been made in multimodal autonomous per-ception, where adaptive cross-modal interaction improves ro-bustness when one sensor deteriorates under adverse operating conditions Shaojie (2023). The present results indicate that the same principle is particularly relevant for underwater optical-acoustic perception. Importantly, the degradation level itself is not provided to the gating network. The model must infer the appropriate feature contribution from the modality representations. The increase in sonar weight at severe degradation therefore suggests that the projected visual representation contains su ffi cient evidence of reduced informativeness for the gate to alter its fusion behav-ior. This is preferable to a manually defined severity-dependent weighting schedule because real deployments will generally not provide an explicit ground-truth degradation label. At the same time, the learned coe ffi cients should not be in-terpreted as calibrated estimates of physical sensor reliability. They are task-dependent weights optimized to improve classi-fication and may encode correlations involving scene context, object category, or representation geometry in addition to sens-ing quality. A more rigorous reliability interpretation would require explicit calibration or uncertainty modeling. Neverthe-less, their systematic redistribution across D0-D4 provides use-ful diagnostic evidence that degradation-aware training changes how the model utilizes the two modalities. 
+
+7.4. Fusion Benefits Depend on the Physical Nature of Degra-dation 
+
+The degradation-type ablation shows that acoustic assistance is not equally valuable for all forms of visual corruption. The largest relative gains occur under severe turbidity and blur, where degradation-aware fusion improves balanced accuracy by approximately 20 .8% and 15 .4%, respectively. In contrast, isolated color attenuation at D4 produces no measurable im-provement over the visual-only foundation-model representa-tion. This distinction is physically meaningful. Turbidity and scat-tering reduce contrast and obscure object boundaries through the interaction of attenuation and veiling light, while blur di-rectly suppresses high-frequency spatial structure. Both pro-cesses degrade geometric information that is important for dis-tinguishing underwater objects. Sonar, in contrast, forms obser-vations from acoustic returns and can preserve structural cues under conditions in which optical visibility is severely compro-mised. As a result, acoustic context provides genuinely com-plementary evidence in these cases. 15 Color attenuation produces a di ff erent type of distribution shift. Underwater propagation causes wavelength-dependent absorption, with longer wavelengths generally disappearing more rapidly with increasing path length Akkaynak and Treib-itz (2018, 2019). However, a representation learned through large-scale self-supervision may remain relatively invariant to substantial changes in channel statistics as long as object shape and spatial structure remain su ffi ciently visible. This interpre-tation is consistent with the strong visual-only performance ob-served for the isolated color degradation. The absence of addi-tional fusion benefit in that condition therefore does not imply that sonar is uninformative; rather, it indicates that the visual representation already contains adequate discriminative infor-mation for the evaluated objects. These results also emphasize why underwater degradation should not be represented by a single generic corruption. Sur-veys of underwater enhancement and restoration have docu-mented that illumination, scattering, attenuation, contrast re-duction, and blur arise from di ff erent physical processes and produce di ff erent consequences for downstream vision Anwar and Li (2020); Shuang et al. (2024). Evaluating robustness only under one synthetic corruption could therefore lead to incom-plete conclusions regarding multimodal benefit. The present ablation suggests that the value of an auxiliary sensor depends strongly on which visual information has been lost. 
+
+7.5. Implications for Underwater Robotic Perception 
+
+From a system-design perspective, the results suggest a hier-archical approach to robust underwater perception. Under fa-vorable optical conditions, a strong visual representation may remain the primary information source because it provides richer appearance information than sonar. Under moderate degradation, foundation-model representations may retain su ffi -cient invariance to avoid unnecessary dependence on the acous-tic modality. As conditions become severe, however, the system should progressively exploit sensing channels that remain phys-ically informative. Such behavior is particularly relevant to remotely operated and autonomous underwater vehicles, where environmental conditions can vary substantially within a single mission. Avehicle may transition from relatively clear water to regions af-fected by suspended particles, sediment disturbance, artificial-light limitations, or rapid motion. A fusion system optimized only for nominal imagery may therefore exhibit unpredictable behavior precisely when redundancy is most important. Train-ing with controlled variation in modality reliability provides a simple mechanism for encouraging more appropriate responses to these transitions. The findings also have implications for computationally con-strained marine platforms. The proposed approach does not re-quire end-to-end fine-tuning of the foundation model. Instead, frozen modality encoders are combined with lightweight pro-jection and gating components. This reduces the number of trainable parameters and makes the method conceptually com-patible with resource-constrained deployment, where continu-ously fine-tuning or executing multiple large multimodal mod-els may be infeasible. Although computational deployment is not explicitly evaluated in the present experiments, lightweight adaptive fusion provides a promising direction for combining foundation-model features with conventional sensor encoders. More broadly, the results indicate that multimodal perception systems should be evaluated not only by their peak accuracy un-der nominal conditions, but also by their response to changing sensor reliability. A model that produces a small improvement on clean data but preserves substantially more performance when a primary modality deteriorates may be more valuable for autonomous operation than a model optimized exclusively for nominal benchmark accuracy. This perspective complements recent underwater multimodal detection work, which has pri-marily emphasized cross-modal alignment and feature-fusion accuracy Wu et al. (2026); Chen et al. (2025), by introducing reliability shift as an additional evaluation dimension. 
+
+7.6. Limitations 
+
+Several limitations should be considered when interpreting the reported results. First, the study uses a relatively small syn-chronized subset of UMOD and retains five of the nine original target categories for the primary recognition experiments. Al-though grouped partitioning is used to reduce sequence-level leakage and all methods are evaluated on identical test objects, the limited number of independent test examples increases sen-sitivity to individual samples. Small non-monotonic changes, such as the increase in visual balanced accuracy between se-lected degradation levels, should therefore not be interpreted as evidence that degradation improves perception. A larger evaluation set and repeated sequence-level splits would provide tighter estimates of robustness and statistical variability. Second, the multimodal experiments formulate the task as object-level recognition using ground-truth visual crops rather than end-to-end multimodal detection. This design intention-ally isolates representation and fusion robustness from local-ization failure, but it also simplifies the perception problem. In a practical underwater detector, severe degradation may simul-taneously a ff ect object localization, classification, and cross-modal association. The dramatic degradation observed in the visual YOLO11n experiment demonstrates that localization it-self becomes a major failure source under poor visibility. Con-sequently, the recognition results should be interpreted as ev-idence regarding cross-modal feature utilization rather than as direct estimates of end-to-end detection performance. Third, the sonar representation is derived from the com-plete synchronized sonar frame rather than an explicitly aligned sonar object region. Optical and forward-looking sonar obser-vations have substantially di ff erent image geometries, and di-rect transfer of optical bounding boxes to the sonar image is not valid without geometric calibration or learned correspon-dence Wu et al. (2026). The current formulation therefore eval-uates acoustic context rather than precise object-level sonar fea-tures. Some of the improvement may arise from scene-level correlations contained in the synchronized acoustic frame. Fu-ture work should incorporate explicit cross-modal correspon-dence, learned spatial alignment, or attention-based association to determine how much additional benefit can be obtained from target-specific acoustic information. 16 Fourth, only the visual modality is degraded. This provides a controlled experimental design in which the sonar branch acts as a stable complementary source, but real underwater environ-ments may degrade both modalities simultaneously. Sonar can be a ff ected by reverberation, multipath propagation, acoustic noise, geometric distortion, and resolution limitations Liu et al. (2024); Qin et al. (2024); Wu et al. (2026). A complete mul-timodal robustness benchmark should therefore include inde-pendent and joint corruption of optical and acoustic sensing, as well as missing-modality conditions. Fifth, the current degradation functions are controlled ap-proximations of underwater image deterioration rather than complete simulations of underwater radiative transfer. Real un-derwater imagery depends on depth, water type, illumination spectrum, camera response, target distance, and spatially vary-ing scattering conditions. Physically based underwater image-formation models provide a more complete description of these eff ects Akkaynak and Treibitz (2018, 2019). Future bench-marks could use measured water parameters or physically cali-brated degradation models to improve correspondence between synthetic reliability shifts and field conditions. Finally, the present fusion method is intentionally lightweight. It does not perform token-level cross-attention, geometric correspondence learning, multi-scale fusion, or end-to-end adaptation of the encoders. More sophisticated architectures may achieve higher nominal performance or stronger robustness. The purpose of the current formulation is instead to isolate whether explicit training across modality-reliability changes is beneficial. The results indicate that this training principle is important even for a simple fusion mechanism and could therefore be incorporated into more advanced multimodal architectures. 
+
+7.7. Future Directions 
+
+The findings motivate several extensions. A natural next step is to integrate degradation-aware reliability modeling into an end-to-end visual-sonar detector. Cross-modal fusion mod-ules that address geometric misalignment, such as the attention-based mechanisms developed for UMOD, could be augmented with reliability-conditioned weighting so that both spatial cor-respondence and changing sensor quality are modeled jointly Wu et al. (2026). Such a system would permit direct evaluation using detection metrics under the full degradation sequence. A second direction is uncertainty-aware fusion. Instead of learning only deterministic modality coe ffi cients, each encoder could estimate predictive or representation uncertainty and ex-pose this information to the fusion mechanism. The resulting system could distinguish between cases in which a modality is merely unusual and cases in which its evidence is genuinely unreliable. This would also enable the fusion weights to be evaluated against calibrated uncertainty rather than interpreted only diagnostically. Third, robustness training should be extended to bidirec-tional and missing-modality settings. Visual degradation, sonar corruption, communication loss, and temporary sensor failure could be sampled independently during training. Strategies re-lated to modality dropout and severely missing-modality learn-ing Neverova et al. (2016); Ma et al. (2022) provide useful foundations for such experiments. An underwater perception system trained under these conditions could learn not only to in-crease sonar reliance when vision deteriorates, but also to revert toward optical evidence when acoustic measurements become unreliable. Finally, evaluation on larger datasets and real field deploy-ments is necessary to determine whether the learned reliabil-ity adaptation transfers beyond the controlled UMOD setting. Of particular interest is whether the increase in acoustic re-liance observed under synthetic turbidity and blur also appears naturally as visibility changes during an underwater mission. Demonstrating such behavior would provide stronger evidence that degradation-aware multimodal fusion can support robust perception for autonomous marine robots operating under dy-namic environmental conditions. Overall, the results indicate that robustness in under-water multimodal perception is fundamentally a reliability-adaptation problem. Strong pretrained visual representations delay performance degradation, and complementary acoustic sensing provides information that remains useful when optical visibility decreases. However, neither property alone is su ffi -cient. The most robust behavior emerges when the fusion mech-anism is explicitly exposed to changing modality quality and learns to redistribute its use of visual and acoustic evidence ac-cordingly. 
+
+8. Conclusion 
+
+This work investigated robust underwater cross-modal per-ception under progressively degraded visual conditions, with particular emphasis on how multimodal fusion should respond when the reliability of the optical modality changes. Us-ing a synchronized subset of UMOD, we introduced a con-trolled five-level degradation benchmark spanning illumination loss, wavelength-dependent attenuation, turbidity /scattering, and blur, and evaluated conventional visual detection, frozen DINOv2 representations, sonar context, fixed fusion, clean-trained gating, and degradation-aware gating. The results show that visual perception degrades substantially as optical qual-ity deteriorates, while pretrained foundation-model represen-tations retain a larger fraction of their clean-condition perfor-mance. However, simply introducing sonar does not guarantee robustness: fixed fusion and a gate trained only under nom-inal conditions become ine ff ective under severe degradation. In contrast, degradation-aware fusion preserves a balanced ac-curacy of 0 .6152 at D4, compared with 0 .4610 for the visual foundation-model baseline, corresponding to a 33 .5% relative improvement. This improvement is accompanied by a substan-tial redistribution of learned modality contributions, with the mean sonar weight increasing from 14 .2% under clean condi-tions to 41 .3% under extreme degradation. The degradation-specific analysis further shows that acoustic assistance is most beneficial when visual structure is strongly compromised, par-ticularly under severe turbidity and blur. Collectively, these findings support the central conclusion of this study: robust un-derwater multimodal perception depends not only on the avail-17 ability of complementary sensing modalities, but also on explic-itly training the fusion mechanism to operate across changes in their relative reliability. Several limitations constrain the scope of the present con-clusions. The experiments use a relatively small synchronized subset of UMOD and retain five target categories for the pri-mary recognition task, which limits statistical power and in-creases sensitivity to individual test examples. The cross-modal experiments are formulated as object-level recognition using ground-truth visual crops rather than end-to-end multimodal detection, and the sonar branch represents the complete syn-chronized acoustic frame rather than a geometrically aligned target region. In addition, the degradation benchmark applies controlled synthetic perturbations only to the visual modality; it does not reproduce the full complexity of underwater radia-tive transfer or account for corruption of sonar measurements. The learned modality weights should therefore be interpreted as task-dependent fusion coe ffi cients rather than calibrated es-timates of physical sensor reliability. These design choices are intentional in this preliminary study because they isolate the ef-fect of changing visual reliability, but they also mean that the reported gains should be viewed as evidence for the underlying reliability-adaptation principle rather than as a complete solu-tion to end-to-end underwater multimodal perception. Future work should extend this reliability-aware formulation toward full multimodal robotic perception. A natural next step is to integrate degradation-aware weighting into an end-to-end visual-sonar detector so that localization, cross-modal corre-spondence, and reliability adaptation are learned jointly. Such a model could combine the present degradation-aware mecha-nism with feature-alignment or attention-based fusion strategies designed specifically for the geometric heterogeneity of optical and forward-looking sonar sensing. Broader robustness stud-ies should additionally consider independent and joint corrup-tion of both modalities, missing-sensor conditions, uncertainty-aware fusion, repeated sequence-level evaluation, and physi-cally calibrated degradation models. Most importantly, eval-uation on the full UMOD benchmark and under real field con-ditions is needed to determine whether the observed increase in acoustic reliance transfers from controlled synthetic degrada-tion to naturally varying visibility during underwater missions. If this behavior generalizes, degradation-aware cross-modal fu-sion could provide a practical foundation for underwater robots that maintain reliable perception by dynamically redistributing sensing reliance as environmental conditions change. 
+
+References 
+
+Akkaynak, D., Treibitz, T., 2018. A revised underwater image formation model, in: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pp. 6723–6732. doi:10.1109 /CVPR.2018.00703. Akkaynak, D., Treibitz, T., 2019. Sea-thru: A method for removing water from underwater images, in: Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition, pp. 1682–1691. Anwar, S., Li, C., 2020. Diving deeper into underwater image enhance-ment: A survey. Signal Processing: Image Communication 89, 115978. doi:10.1016 /j.image.2020.115978. Aydogmus, M., Erer, I., 2026. Cross-modality object-level knowledge distil-lation for enhanced underwater sonar object detection. IEEE Access 14, 27339–27353. doi:10.1109 /ACCESS.2026.3666096. Bommasani, R., Hudson, D.A., Adeli, E., et al., 2021. On the opportunities and risks of foundation models. arXiv preprint arXiv:2108.07258 . Chen, H., Wang, Z., Qin, H., Mu, X., 2025. Uamfdet: Acoustic-optical fusion for underwater multi-modal object detection. Journal of Field Robotics 42, 970–983. doi:10.1002 /rob.22432. Fitzpatrick, A., Mathews, R.P., Singhvi, A., Arbabian, A., 2023. Multi-modal sensor fusion towards three-dimensional airborne sonar imaging in hydrody-namic conditions. Communications Engineering 2, 16. doi:10.1038 /s44172-023-00065-4. Grimaldi, M., Nakath, D., She, M., K¨ oser, K., 2023. Investigation of the chal-lenges of underwater-visual-monocular-slam. ArXiv abs /2306.08738. URL: 
+
+https://doi.org/10.48550/arXiv.2306.08738 .He, J., Pang, C., He, Z., Xu, H., Yu, Y., 2026. Scfusion: Cross-modality under-water object detection via vision guided sonar–camera feature fusion. Ocean Engineering 363, 126793. doi:10.1016 /j.oceaneng.2026.126793. Hendrycks, D., Basart, S., Mu, N., Kadavath, S., Wang, F., Dorundo, E., Desai, R., Zhu, T., Parajuli, S., Guo, M., Song, D., Steinhardt, J., Gilmer, J., 2021. The many faces of robustness: A critical analysis of out-of-distribution gen-eralization, in: Proceedings of the IEEE /CVF International Conference on Computer Vision. Jiang, Z., Wang, R.S., 2022. Underwater object detection based on improved single shot multibox detector, in: Proceedings of the International Confer-ence on Computer Engineering and Application. Liu, S., Yao, B., Wu, H., Lian, L., 2024. High-resolution forward-looking sonar imaging based on deconvolution for target detection. OCEANS 2026 Sanya .Ma, M., Ren, J., Zhao, L., Tulyakov, S., Wu, C., Peng, X., 2022. Smil: Multi-modal learning with severely missing modality, in: Proceedings of the AAAI Conference on Artificial Intelligence. Myers, V., Midtgaard, Ø., 2023. Fusion of contacts in synthetic aperture sonar imagery using performance estimates. Detection & Classification of Under-water Targets 2007 . Neverova, N., Wolf, C., Taylor, G., Nebout, F., 2016. Moddrop: Adaptive multi-modal gesture recognition, in: IEEE Transactions on Pattern Analysis and Machine Intelligence, Institute of Electrical and Electronics Engineers (IEEE). pp. 1692–1706. Oquab, M., Darcet, T., Moutakanni, T., Vo, H.V., Szafraniec, M., Khali-dov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., Assran, M., Ballas, N., Galuba, W., Howes, R., Huang, P., Li, S., Misra, I., Rab-bat, M., Sharma, V., Synnaeve, G., Xu, H., J´ egou, H., Mairal, J., La-batut, P., Joulin, A., Bojanowski, P., 2024. Dinov2: Learning robust vi-sual features without supervision. Trans. Mach. Learn. Res. 2024. URL: 
+
+https://openreview.net/forum?id=a68SUt6zFt .Paul, S., Chen, P.Y., 2022. Vision transformers are robust learners, in: Proceed-ings of the AAAI Conference on Artificial Intelligence. Qiao, Q., Liu, J., Liu, F., Hao, C., Ren, T., 2026. Lightweight underwater sonar object detection via rgb-guided heterogeneous distillation. Sensors 26, 4340. doi:10.3390 /s26144340. Qin, K.S., Liu, D., Wang, F., Zhou, J., Yang, J., Zhang, W., 2024. Im-proved yolov7 model for underwater sonar image object detection. Jour-nal of Visual Communication and Image Representation 100, 104124. doi:https: // doi.org /10.1016 /j.jvcir.2024.104124. Shaojie, W., 2023. Visual perception with object detection for autonomous driv-ing under complex weather conditions. International Conference on Com-puter Vision, Al, and Intelligent Automation (ICCVAA 2026) . Shen, H., Xu, S., Li, N., Yang, Y., 2025. Zero-shot lightweight submarine cable detection in side-scan sonar images. Ocean Engineering 338, 121929. doi:10.1016 /j.oceaneng.2025.121929. Shuang, X., Zhang, J., Tian, Y., 2024. Algorithms for improving the quality of underwater optical images: A comprehensive review. Signal Processing , 109408doi:10.1016 /j.sigpro.2024.109408. Sørensen, F.F., Mai, C., Olsen, O.M., Liniger, J., Pedersen, S., 2023. Commercial optical and acoustic sensor performances under varying tur-bidity, illumination, and target distances. Sensors 23, 6575. URL: 
+
+https://doi.org/10.3390/s23146575 , doi:10.3390 /s23146575. Tang, Y., WANG, L., Zhao, J., JIN, S., HUANG, C., 2023. Auv-based side-scan sonar real-time method for underwater-target detection. Remote Sensing . Wu, Y., Wang, W., Lin, C., Hou, M., Liu, M., 2026. Towards multimodal 
+
+18 underwater object detection: A bidirectional feature recomposition network and visual-sonar dataset. Expert Systems with Applications 316, 131710. doi:10.1016 /j.eswa.2026.131710. Yang, C., Zhang, C., Jiang, L., Zhang, X., 2024. Underwater image object detection based on multi-scale feature fusion. Ocean Engineering . Zhu, R., Sheng, L., Wu, K., Boukerche, A., Long, L., Yang, Q., 2026. To-ward e ffi cient underwater visual perception through image enhancement, compression, and understanding. ACM Computing Surveys 58. URL: 
+
+https://doi.org/Zhu , doi:Zhu. 
+
+19
