@@ -6,89 +6,95 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-24
-- 运行时间：2026-08-24 20:36:21 UTC
+- 最新运行日期：2026-08-29
+- 运行时间：2026-08-29 23:02:34 UTC
 - 运行状态：成功
-- 本次总论文数：23
-- 精读区：9
+- 本次总论文数：25
+- 精读区：11
 - 速读区：14
 
 ### 今日简报（AI）
-今日共读23篇论文，9篇精读，聚焦多模态对齐与问答证据获取。最值得关注的是物理语言认证和视觉问答的证据获取机制。下一步建议探索多模态情感分析及超图检索增强生成的增量优化。
-- 详情：[/202608/24/README](/202608/24/README)
+今日精读11篇、速读14篇，聚焦多模态学习与情感分析，其中《CAT-GS》以满分10分成为核心亮点。最值得关注的是多模态平衡融合新方法CAT-GS，以及速读中《Projector Is All You Train》等8分工作，均指向高效多模态对齐与鲁棒处理。建议普通读者优先从CAT-GS的校准门控思路入手，再延伸至投影器训练与空间规划等实用方向。
+- 详情：[/202608/29/README](/202608/29/README)
 
 ### 精读区论文标签
-1. [Beyond Multimodal Alignment: Certifying Physical Language through Response Substitution and Ordered Execution](/202608/24/2608.19492v1-beyond-multimodal-alignment-certifying-physical-language-through-response-substitution-and-ordered-execution)  
-   标签：评分：9.0/10、query:native-multi
-   evidence：认证独立训练的模态编译器在不同传感器间是否对齐并可互换
-2. [Question-Guided Evidence Acquisition for Multimodal Visual Question Answering](/202608/24/2608.19739v1-question-guided-evidence-acquisition-for-multimodal-visual-question-answering)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：面向文档VQA的基于问题的证据采集方法
-3. [SuppreSensing: Expert-Guided Feature Recalibration and Discrepancy Augmentation for Multimodal Object Detection](/202608/24/2608.20944v1-suppresensing-expert-guided-feature-recalibration-and-discrepancy-augmentation-for-multimodal-object-detection)  
+1. [CAT-GS: Balanced Multimodal Learning via Calibrated Gating and Fusion Surgery](/202608/29/2608.24947v1-cat-gs-balanced-multimodal-learning-via-calibrated-gating-and-fusion-surgery)  
+   标签：评分：10.0/10、query:balanced-mml
+   evidence：通过校准门控与融合手术实现平衡多模态学习，直接解决模态不平衡与融合干扰
+2. [CAT-GS: Balanced Multimodal Learning via Calibrated Gating and Fusion Surgery](/202608/29/2608.24947v2-cat-gs-balanced-multimodal-learning-via-calibrated-gating-and-fusion-surgery)  
+   标签：评分：10.0/10、query:balanced-mml
+   evidence：CAT-GS明确处理模态不平衡、不稳定门控和融合干扰，实现平衡多模态学习。
+3. [Mitigating Strong-Modality Collapse in Multimodal Learning via Inverted Asymmetric Fusion](/202608/29/2608.26879v1-mitigating-strong-modality-collapse-in-multimodal-learning-via-inverted-asymmetric-fusion)  
+   标签：评分：10.0/10、query:balanced-mml
+   evidence：提出倒置非对称融合以避免强模态在融合中退化，实现模态贡献平衡
+4. [Adaptive Hierarchical Representation Alliance for Multimodal Learning](/202608/29/2608.22863v1-adaptive-hierarchical-representation-alliance-for-multimodal-learning)  
    标签：评分：9.0/10、query:balanced-mml
-   evidence：专家引导的输入自适应重校准缓解多模态融合中的对称陷阱
-4. [COMET: Contrastive Motion-Enhanced Temporal Reasoning for Video Multimodal Large Language Models](/202608/24/2608.21030v1-comet-contrastive-motion-enhanced-temporal-reasoning-for-video-multimodal-large-language-models)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：视频多模态时序推理，融合外观与运动并做方向感知优化
-5. [TF-CADE: Foreground-Concentrated Text-Video Alignment for Zero-Shot Temporal Action Detection](/202608/24/2608.17422v1-tf-cade-foreground-concentrated-text-video-alignment-for-zero-shot-temporal-action-detection)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：面向零样本时序动作检测的文本-视频对齐
-6. [FM Synthesizer Audio-Parameter Shared Embeddings](/202608/24/2608.18226v1-fm-synthesizer-audio-parameter-shared-embeddings)  
-   标签：评分：8.0/10、query:native-multi
-   evidence：通过多模态目标学习音频与FM合成器参数的联合嵌入
-7. [TTSD-FAR: Test-Time Self-Distillation with Fisher-Anchored Restoration for Missing-Modality Emotion Recognition in LVLMs](/202608/24/2608.18386v1-ttsd-far-test-time-self-distillation-with-fisher-anchored-restoration-for-missing-modality-emotion-recognition-in-lvlms)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：针对多模态情绪识别中缺失模态不平衡的测试时恢复方法
-8. [UMER: Unifying Embedding and Ranking via Pair-Aware Discriminative Reasoning for Universal Multimodal Retrieval](/202608/24/2608.18504v1-umer-unifying-embedding-and-ranking-via-pair-aware-discriminative-reasoning-for-universal-multimodal-retrieval)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：面向通用多模态检索，用成对判别推理统一嵌入与排序
-9. [MOSAIC: Modality-agnostic Spectral Alignment for Federated Image-level Weakly Supervised Tumor Segmentation under Client-specific Missing Modalities](/202608/24/2608.19788v1-mosaic-modality-agnostic-spectral-alignment-for-federated-image-level-weakly-supervised-tumor-segmentation-under-client-specific-missing-modalities)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：面向客户端专属模态缺失的模态无关联邦弱监督分割框架
+   evidence：直接处理语言-视觉-音频多模态学习中的模态不平衡与语义粒度失配
+5. [Adaptive Hierarchical Representation Alliance for Multimodal Learning](/202608/29/2608.22863v2-adaptive-hierarchical-representation-alliance-for-multimodal-learning)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：通过层次共享-私有专家框架处理模态不平衡与语义粒度错配
+6. [EchoWM: Open and Enterable Omnimodal World Models](/202608/29/2608.23189v1-echowm-open-and-enterable-omnimodal-world-models)  
+   标签：评分：9.0/10、query:native-multi
+   evidence：全模态世界模型，统一生成视频、声音、音乐和语音
+7. [Native Multimodal Representation Learning for Click-Through Rate Prediction in E-Commerce Scenarios](/202608/29/2608.24091v1-native-multimodal-representation-learning-for-click-through-rate-prediction-in-e-commerce-scenarios)  
+   标签：评分：9.0/10、query:native-multi
+   evidence：面向端到端CTR预测的原生多模态表示学习，解决预训练与目标任务不一致问题
+8. [NeoTriFuse: Reliability-Aware Multimodal Fusion under Missingness Heterogeneity for Neonatal Mortality Risk Prediction](/202608/29/2608.26436v1-neotrifuse-reliability-aware-multimodal-fusion-under-missingness-heterogeneity-for-neonatal-mortality-risk-prediction)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：可靠性感知的多模态融合方法，通过动态调节模态贡献应对缺失异质性
+9. [Omni-Interactive Universal Embedder](/202608/29/2608.27044v1-omni-interactive-universal-embedder)  
+   标签：评分：9.0/10、query:unified-mm
+   evidence：跨文本、视频、音频的统一嵌入空间与全交互查询
+10. [DINOcular: Self-Supervised Visuospatial Representations](/202608/29/2608.27226v1-dinocular-self-supervised-visuospatial-representations)  
+   标签：评分：9.0/10、query:unified-mm
+   evidence：通过块间与块内融合将深度几何先验与视觉骨干结合
+11. [MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework](/202608/29/2608.27286v1-mm-spectrum-multimodal-multi-spectral-molecular-structural-elucidation-with-a-stable-moe-framework)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：显式处理多模态间不平衡，提出模态感知路由的专家混合框架
 
 ### 速读区论文标签
-1. [Multi-Granularity Sentiment Integration for LLM-Based Multimodal Sentiment Analysis](/202608/24/2608.16201v1-multi-granularity-sentiment-integration-for-llm-based-multimodal-sentiment-analysis)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：文本、音频、视觉的多粒度融合方法
-2. [Hypergraph-based Multimodal Retrieval-Augmented Generation with Incremental Refinement](/202608/24/2608.16628v1-hypergraph-based-multimodal-retrieval-augmented-generation-with-incremental-refinement)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：利用高阶超图融合图表、文本和数值等多模态数据
-3. [Where a New Concept Must Enter: Entry Point Gates Cross-Task Usability in Unified Multimodal Models](/202608/24/2608.17564v1-where-a-new-concept-must-enter-entry-point-gates-cross-task-usability-in-unified-multimodal-models)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：通过入口点控制研究统一多模态模型架构与跨任务可用性
-4. [Vision-Language Models for Egocentric Video: From Hand-Object Interaction to Embodied AI](/202608/24/2608.18671v1-vision-language-models-for-egocentric-video-from-hand-object-interaction-to-embodied-ai)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：面向第一视角视频理解与推理的VLM综述
-5. [Robust Cross-Modal Foundation Model Perception for Underwater Robots under Degraded Visual Conditions](/202608/24/2608.19710v1-robust-cross-modal-foundation-model-perception-for-underwater-robots-under-degraded-visual-conditions)  
+1. [Projector Is All You Train](/202608/29/2608.19726v1-projector-is-all-you-train)  
+   标签：评分：8.0/10、query:native-multi
+   evidence：研究多模态大模型端到端训练是否需要调整主干，证明仅训练投影器即可获得强性能
+2. [Robust Incomplete Multimodal Sentiment Analysis via Iterative Proxy Correction](/202608/29/2608.19971v1-robust-incomplete-multimodal-sentiment-analysis-via-iterative-proxy-correction)  
    标签：评分：8.0/10、query:balanced-mml
-   evidence：在视觉退化条件下跨模态鲁棒性研究，声纳补充视觉基础模型
-6. [Audio-Visual Segmentation via Depth-Guided Collaborative Modeling](/202608/24/2608.16285v1-audio-visual-segmentation-via-depth-guided-collaborative-modeling)  
-   标签：评分：7.0/10、query:unified-mm
-   evidence：音频-视觉-深度三模态融合框架用于声音目标分割
-7. [Listen, Reason, and Segment: Aligning LALMs with Editorial Judgment for Media Chapterization](/202608/24/2608.16539v1-listen-reason-and-segment-aligning-lalms-with-editorial-judgment-for-media-chapterization)  
+   evidence：通过迭代代理修正补偿多模态融合中缺失模态信息，增强鲁棒性
+3. [Rule-Compliant Visual Spatial Planning for Multimodal Large Language Models](/202608/29/2608.20237v1-rule-compliant-visual-spatial-planning-for-multimodal-large-language-models)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：多模态大模型基准，联合视觉感知、自然语言规则理解与动作规划
+4. [StateSight: Benchmarking Latent Spatial-State Reconstruction in Vision-Language Models](/202608/29/2608.20414v1-statesight-benchmarking-latent-spatial-state-reconstruction-in-vision-language-models)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：用于视觉推理的基准，结合单图与文本提示回答空间问题
+5. [EviRank: Structured Relevance Evidence for Multimodal Image Re-ranking](/202608/29/2608.20886v1-evirank-structured-relevance-evidence-for-multimodal-image-re-ranking)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：面向组合检索的结构化多模态查询融合
+6. [PUMA: A Polish Benchmark for Culturally Grounded Multimodal Understanding](/202608/29/2608.21853v1-puma-a-polish-benchmark-for-culturally-grounded-multimodal-understanding)  
    标签：评分：7.0/10、query:mm-reasoning
-   evidence：让大音频语言模型与编辑判断对齐，在长声学上下文上顺序推理实现音频章节切分
-8. [Emotion Across Speech and Faces: Shared Affective Mechanisms in Multimodal Foundation Models](/202608/24/2608.17102v1-emotion-across-speech-and-faces-shared-affective-mechanisms-in-multimodal-foundation-models)  
+   evidence：面向波兰文化语境的多模态理解与推理基准
+7. [VIG: Visual Information Gain as a Reward Signal for Multimodal Chain-of-Thought Compression](/202608/29/2608.21883v2-vig-visual-information-gain-as-a-reward-signal-for-multimodal-chain-of-thought-compression)  
    标签：评分：7.0/10、query:mm-reasoning
-   evidence：探究多模态基础模型中语音与人脸情感处理的共享与特异性机制
-9. [Expressivity In Multimodal Contrastive Learning](/202608/24/2608.17203v1-expressivity-in-multimodal-contrastive-learning)  
-   标签：评分：7.0/10、query:native-multi
-   evidence：分析多模态对比学习跨模态表示对齐的表达能力
-10. [NeuroPath: Brain-Inspired Dual-Pathway Graph Convolutional Networks for Skeleton-Based Action Recognition](/202608/24/2608.17487v1-neuropath-brain-inspired-dual-pathway-graph-convolutional-networks-for-skeleton-based-action-recognition)  
+   evidence：多模态思维链推理，使用视觉信息增益奖励
+8. [Multimodal Prompt Learning with Irregular EHRs for Robust Monitoring of Critical Care Patients](/202608/29/2608.21941v1-multimodal-prompt-learning-with-irregular-ehrs-for-robust-monitoring-of-critical-care-patients)  
    标签：评分：7.0/10、query:balanced-mml
-   evidence：双通路架构应对骨架模态间的性能不平衡
-11. [UniFed-VLM: Federated Instruction Tuning for Vision-Language Models with Multiple Heterogeneity](/202608/24/2608.15516v1-unifed-vlm-federated-instruction-tuning-for-vision-language-models-with-multiple-heterogeneity)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：面向异构客户端的VLM联邦指令微调，实现多模态模型的联合训练
-12. [AlloEgo-VLM: Disambiguating Allocentric and Egocentric Reference Frames in Vision-Language Models](/202608/24/2608.15605v1-alloego-vlm-disambiguating-allocentric-and-egocentric-reference-frames-in-vision-language-models)  
+   evidence：针对多模态EHR的缺失模态场景，用提示学习缓解模态不完整导致的性能退化。
+9. [When Does Visual Generation Help Visual Understanding in Unified Multimodal Models?](/202608/29/2608.22174v1-when-does-visual-generation-help-visual-understanding-in-unified-multimodal-models)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：面向统一多模态模型中视觉生成辅助理解的细粒度评测框架
+10. [OVIBench: Benchmarking Online Video Question Answering under Interruption](/202608/29/2608.22279v1-ovibench-benchmarking-online-video-question-answering-under-interruption)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：提出中断条件下的在线视频问答基准，直接针对视频内容理解与推理
+11. [Recognition-Conditioned Reasoning: A Training-Free Multimodal-LLM Pipeline for Fine-Grained Micro-Action Understanding](/202608/29/2608.21022v1-recognition-conditioned-reasoning-a-training-free-multimodal-llm-pipeline-for-fine-grained-micro-action-understanding)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：通过数据集与分析消除图像-文本推理中空间参考框架的歧义
-13. [ConceptFormer: Learning Adaptive Latent Concepts for Query-Document Alignment in Visual Document Retrieval](/202608/24/2608.15698v2-conceptformer-learning-adaptive-latent-concepts-for-query-document-alignment-in-visual-document-retrieval)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：面向文档检索中多模态证据融合的统一潜概念
-14. [Beyond Single Object: Learning 3D Relations with Large Language Models](/202608/24/2608.15710v1-beyond-single-object-learning-3d-relations-with-large-language-models)  
+   evidence：提供免训练的多模态大模型流水线，对视频微动作进行细粒度理解与推理
+12. [ViSMoE: Visual-Aware Sparse Mixture-of-Experts for Embodied Referring Expression Grounding](/202608/29/2608.21878v1-vismoe-visual-aware-sparse-mixture-of-experts-for-embodied-referring-expression-grounding)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：结合3D感知与语言进行多物体关系推理
+   evidence：具身指代表达定位结合视觉与语言，推理视图和目标物体
+13. [VIG: Visual Information Gain as a Reward Signal for Multimodal Chain-of-Thought Compression](/202608/29/2608.21883v1-vig-visual-information-gain-as-a-reward-signal-for-multimodal-chain-of-thought-compression)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：通过打分token级视觉接地并压缩思维链来改善多模态推理
+14. [Query-Driven Multimodal Information Extraction from Long Documents](/202608/29/2608.22214v1-query-driven-multimodal-information-extraction-from-long-documents)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：结合长文档中文本与图像证据进行联合抽取
 
 
 <div class="dpr-home-promo-card">

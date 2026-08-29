@@ -1,0 +1,1233 @@
+Title: MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework
+
+URL Source: https://arxiv.org/pdf/2608.27286v1
+
+Published Time: Fri, 28 Aug 2026 01:29:15 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Hai-tao Yu 1 Nan Min 2 Zheng Fang 1 Hongyu Zhan 1 Yusen Tan 1 Yuhan Wang 3 Jun Xia 1 4 
+
+## Abstract 
+
+Inferring molecular structures from multimodal spectroscopic measurements requires integrating complementary yet highly heterogeneous signals. However, the common paradigm of directly con-catenating multispectral sequences can exhibit anomalous performance degradation, primarily due to pronounced heterogeneity and the result-ing multimodal imbalance across modalities. As a remedy, we propose MM-Spectrum , a sparse Mixture-of-Experts framework tailored for mul-timodal multispectral spectra-to-structure eluci-dation. To better match the information char-acteristics under multispectral imbalance, MM-Spectrum introduces an explicit modality-aware routing mechanism that exposes spectral identity to the router in addition to token content rep-resentations. Moreover, it incorporates shared 
+
+and interaction experts, together with heteroge-neous expert capacities, to extract multispectral modality-unique and cross-modal synergistic in-formation while suppressing noise-induced in-terference. Across full-modality, bimodal, and missing-modality settings on molecular struc-tural elucidation, MM-Spectrum achieves con-sistent and substantial improvements, supported by ablation studies and interpretability analyses. Code is available at https://github.com/ HHHTTY/MM-Spectrum .
+
+## 1. Introduction 
+
+Spectroscopy-driven molecular structural elucidation is a foundational capability for chemical discovery (Alberts et al., 2024). In learning-based elucidation, the key chal-lenge is often not whether a single modality can predict 
+
+> 1
+
+The Hong Kong University of Science and Technology (Guangzhou) 2Southeast University 3Fudan University 4The Hong Kong University of Science and Technology. Correspondence to: Jun Xia <junxia@hkust-gz.edu.cn >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). Input Data  
+
+> NMR IR MS
+> Modality Embedding & Concatenation Transformer Encoder
+> Gradient Conflict Modality Imbalance Transformer Decoder Distorted Molecule SMILES
+
+(a) Mechanism of Failure: the naive concatenation baseline leading to MultiSpectral Imbalance. MS IR NMR MS+IR NMR+MS NMR+IR NMR+MS+IR   
+
+> 020 40 60 80 100
+> Top-1 Accuracy (%)  Best Single-Modal (NMR) Baseline
+> Collapse -25.5%
+> Ours +31.8% Single-Modal Dual-Modal Full-Modal
+> Single-Modal Baseline (Dual) Ours (Dual) Baseline (Full) Ours (Full)
+
+(b) Empirical Consequence: Full-modality inputs cause a per-formance “collapse” in the naive concatenation baseline, while MM-Spectrum achieves synergy. 
+
+Figure 1. The Challenge of Multispectral Elucidation: Mechanism and Consequence. In contrast, MM-Spectrum resolves this imbal-ance, effectively utilizing all modalities to achieve state-of-the-art performance. 
+
+molecular structures, but whether multiple modalities can achieve stable synergy (Liang et al., 2024). Unlike generic multimodal learning settings, spectroscopic modalities ex-hibit complementarity with clear physical meaning. Nu-clear magnetic resonance ( NMR ) provides high-resolution constraints on local atomic environments and molecular topology, yet its nonlinear peak patterns lead to complex symbolic structures (Klukowski et al., 2025). Infrared spec-troscopy ( IR ) offers coarse evidence of functional groups, but is typically noisy and low in information density, requir-ing long fragments to form stable semantics (Yang et al., 2021). Mass spectrometry ( MS ) contributes strong global constraints through molecular mass and fragmentation, but 1arXiv:2608.27286v1 [cs.LG] 27 Aug 2026 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+is limited in distinguishing many stereoisomers and consti-tutional isomers (D¨ uhrkop et al., 2015). In molecular structural elucidation, multispectral sequences are concatenated into a long input and mapped to molecular structures in an end-to-end manner. We focus on a counter-intuitive phenomenon in multispectral modeling: providing full-modality inputs does not necessarily outperform uni-modal settings and can even lead to substantial degradation. As illustrated in Figure 1, naive full-modality concatenation can underperform strong unimodal or bimodal baselines, and the full-modality model may drop sharply compared to the NMR-only setting. We attribute this failure primarily to the heterogeneity and imbalance of multispectral data (Wu et al., 2022). Specifically, modality distributions differ drastically, and simple concatenation makes “long but weak” modalities dominate attention: IR sequences are often ex-tremely long with strong token autocorrelation, whereas NMR is shorter but has much higher semantic density. Meanwhile, modalities also differ structurally: NMR often contains structured symbols, while MS and IR are closer to peak lists or locally correlated continuous statistics. During optimization, different modalities can induce competing gra-dient directions. Low-density modalities may dominate the update process, and such gradient dominance can force the model toward a suboptimal compromise among competing objectives (Yu et al., 2020). To address these issues, we reconstruct multispectral fusion from naive concatenation into a structured system of expert division of labor. Multispectral fusion should not be treated as a crude additive aggregation of evidence, but rather as a structured allocation and coordination process over het-erogeneous sources. Mixture-of-Experts ( MoE ) provides a natural path: via sparse activation, each modality invokes only a small subset of experts, increasing effective capacity while enabling specialization. However, the balancing as-sumptions in standard MoE do not automatically match the severe imbalance in multispectral elucidation, and MoE can introduce new instabilities (Fedus et al., 2022). We therefore propose MM-Spectrum , a stable MoE framework designed specifically for multispectral imbalance and information synergy. We view multispectral fusion as a problem of 
+
+structured allocation and information decomposition under imbalance constraints . To better fit the imbalanced char-acteristics of multispectral signals, we design an explicit modality-aware routing mechanism, allowing the router to access not only token content representations but also ex-plicit spectral modality identities, which reduces routing difficulty and stabilizes specialization (Zhou et al., 2022). Moreover, multispectral modalities are not simply com-plementary, they involve both redundancy and synergy (Williams & Beer, 2010). This property also explains why naive concatenation fails, as weaker modalities may be un-able to contribute effectively to molecular structural eluci-dation. MM-Spectrum introduces shared experts and inter-action experts to capture cross-modality redundancy and synergy, and further incorporates heterogeneous expert ca-pacities with computation-cost regularization (Du et al., 2022). Under multispectral inputs, this design encourages the model to extract modality-unique and synergistic infor-mation while suppressing interference from noise. As a re-sult, MM-Spectrum not only improves performance but also provides interpretable evidence for mitigating multispectral imbalance, supporting a synergistic learning mechanism for multispectral complementarity. 
+
+Contributions. MM-Spectrum makes the following con-tributions: • We are the first to identify multimodal imbalance induced by heterogeneity in multispectral spectra-to-structure elucidation, and to interpret it through information-density disparity and gradient conflicts. • We propose MM-Spectrum , a spectroscopy-oriented stable sparse MoE framework with modality-aware routing and a structured expert space that separates redundant, unique, and synergistic information path-ways. We further introduce heterogeneous experts with computation-cost regularization to improve accuracy while reducing training and inference overhead. • We demonstrate consistent improvements in full-modality, bimodal, and missing-modality settings, sup-ported by ablation studies and interpretability analyses. 
+
+## 2. Related Work 
+
+2.1. Spectra-to-Structure Elucidation 
+
+Computational molecular structural elucidation has evolved from database-driven search to generative modeling. Classi-cal approaches typically rely on retrieving candidates from large molecular databases using spectral fingerprints. Rep-resentative systems such as CSI:FingerID (D¨ uhrkop et al., 2015) and SIRIUS 4 (D¨ uhrkop et al.) utilize kernel sup-port vector machines to predict molecular fingerprints from tandem mass spectrometry (MS/MS) data. Complemen-tary to MS, NMR-based elucidation has traditionally de-pended on axiomatic construction algorithms or database lookups to assemble structures from chemical shift con-straints (Klukowski et al., 2025). Recently, deep generative models have been increasingly applied to this task. For mass spectrometry, autoregres-sive models such as MassGenie (Shrivastava et al., 2021) and Spec2Mol (Litsa et al., 2023) generate molecular struc-tures from mass spectra, while diffusion-based approaches such as DiffMS (Bohde et al., 2025) explore alternative 2MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+conditional generation mechanisms. Similarly, for NMR, approaches range from token-based generation (Klukowski et al., 2025) and multitask frameworks like NMR2Struct (Hu et al., 2024) to graph neural networks that reconstruct atomic environments from chemical shifts (Guan et al., 2021). Fur-thermore, for IR spectroscopy, contrastive learning frame-works such as Spectra-to-Structure (Kanakala et al., 2024) have been explored. In the multimodal regime, however, the prevailing baseline remains naive early-fusion, where heterogeneous modalities are concatenated or pooled before processing (Yang et al., 2021), although some recent works explore contrastive alignment to improve cross-modal con-sistency (Liang et al., 2024). While architecturally simple, the concatenation paradigm implicitly assumes that token semantics and information densities are comparable across modalities. Recent studies in multimodal learning suggest this assumption is often violated: modalities with differ-ent convergence rates or noise levels can lead to negative transfer or greedy optimization behavior, where a dominant modality suppresses the learning of others due to gradient conflicts (Wang et al., 2020; Yu et al., 2020; Wu et al., 2022). 
+
+2.2. Mixture-of-Experts and Balancing Mechanisms 
+
+Sparse Mixture-of-Experts (MoE) models scale model ca-pacity without a proportional increase in computational cost by conditionally activating a subset of parameters. The sparsely-gated MoE layer (Shazeer et al., 2017) introduced a learnable gating network to route tokens to top-k experts, a design later scaled to trillion-parameter regimes by GShard (Lepikhin et al., 2021) and Switch Transformers (Fedus et al., 2022). To prevent ”expert collapse”—where the router trivially assigns all tokens to a single expert—these models universally employ auxiliary balancing losses based on ex-pert importance and load statistics (Fedus et al., 2022; Du et al., 2022). Such conditional computation has also been successfully adapted to other domains, such as vision, to handle patch-level redundancy (Riquelme et al., 2021). However, standard balancing formulations are predicated on the assumption that tokens are relatively homogeneous in information content and should be distributed uniformly. Strict uniform balancing often hinders specialization by misallocating high-capacity experts to low-utility noise to-kens(Zhou et al., 2022; Lewis et al., 2021). MM-Spectrum introduces a spectrum-specific inductive bias, leveraging modality-aware routing and cost-regularization to align ex-pert specialization with the physical nature of spectrum. 
+
+## 3. Methodology 
+
+3.1. Preliminaries Task Definition We consider multimodal spectroscopy-based Molecular Structural Elucidation with M modalities (in this work M = 3 , corresponding to NMR, IR, and MS). For modality m ∈ { 1, . . . , M }, the input is a token sequence: 
+
+x(m) =  x(m)1 , x (m)2 , . . . , x (m)
+
+> Lm
+
+. (1) The multimodal observation is denoted by X =
+
+{x(m)}Mm=1 , and the target molecular structure is repre-sented as a discrete sequence y = ( y1, . . . , y T ) ∈ Y (e.g., a SMILES string). Using an encoder–decoder Transformer, the encoder produces contextual representations and the decoder generates y autoregressively. The complete autore-gressive likelihood formulation and training objective are provided in Section A.1 of the appendix. 
+
+Standard Sparse Mixture-of-Experts To scale model capacity without proportional computational costs, Sparse Mixture-of-Experts (MoE) replaces the dense feed-forward network (FFN) with a set of E experts {FFN e}Ee=1 . For an input token representation h, a learnable router Wr com-putes a probability distribution p(h) and activates only the top-k experts. While efficient, standard MoE routing relies solely on token content h. In multimodal spectroscopy, this design is prone to failure due to extreme sequence imbal-ance: abundant, low-density tokens (long IR sequences) of-ten numerically dominate the routing statistics, causing the model to neglect sparse but constraint-rich signals (NMR). We address this limitation in MM-Spectrum by introducing modality-aware routing and structured expert subspaces. 
+
+3.2. Spectrum-Aware Representation 
+
+As illustrated in Figure 2, MM-Spectrum restructures the spectra-to-structure generation pipeline to address the in-trinsic statistical imbalance where long, low-density modali-ties (MS and IR) numerically dominate short, high-density constraints (NMR). The framework integrates three design principles: (i) aligning token statistics via compression, (ii) exposing modality identity for routing, and (iii) decoupling information flow via structured expert subspaces. To mitigate the mismatch between sequence length Lm and semantic density ρm, we formalize data preprocessing as modality-specific operators ϕm that map raw inputs x(m) to compressed representations ˜x(m):
+
+˜x(m) = ϕm(x(m)), ˜X = {˜x(m)}Mm=1 . (2) We instantiate ϕm to balance information retention against computational cost based on signal topology. For High-Density Modalities (NMR), we set ϕNMR ≈ Identity to preserve discrete, constraint-rich topology signals without smoothing. Conversely, for High-Redundancy Modali-ties (IR/MS), we apply adaptive compression—specifically local binning for autocorrelated IR and top-k filtering for noisy MS—to excise background noise. This preprocessing 3MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework PID-Guided Information Decoupling Strategy End-to-End Multi-Modal Generation Task 
+
+> NMR Spectra (¹H, ¹³C) MS Spectra [NMR_TAG][NMR_Token]  [MS_TAG][MS_Token] [IR_TAG][IR_Token]
+> Training Constrain:
+> Gradient Isolation / Modality-Specific Loss enforcing Unique Information extraction.
+
+Transformer Encoder Block( 𝐀 Layers) 
+
+> Layer Normalization Interaction-Aware Gating Mechanism (Uses Modality Tags) Structured Expert Assembly( 𝐀 )
+
+A. B. 
+
+C. 
+
+> 𝐀 𝐀𓐀𝐀
+> (Heavy Expert)
+> 𝐀 𝐀𝐀
+> (Light Expert)
+> 𝐀 𓐀𓀀
+> (Light Expert)
+> Shared Experts (
+
+𝐀 𝐀𛀀𝐀𘐀𝐀𖠀 )Synergistic/Redundant Experts ( 𝐀 𝐀𛀀𝐀 )      
+
+> Modality-Specific Experts 𝐀 𝐀𛀀𝐀𚐀
+> Complex Interaction
+> Data Preprocessing & Tokenization Layer
+> NMR
+> IR
+> MS
+> Modality Tags Module
+> Input Embedding & Positional Encoding
+> Layer Normalization
+> Multi-Head Self-Attention (MHSA)
+> Structured MoE Mechanism
+> Layer Normalization
+> Smiles String Final Output Transformer Decoder Layer
+> 𝐀 𝐀 = 𝐀 𝐀 + 𝐀 𝐀 𝐀 + 𝐀 𝐀 𝐀
+
+Curriculum Schedule (training time t)             
+
+> Stage I: Coverage / Exploration Low 𝐀 , Low 𝐀 𝐀𰰀𝐀
+> Cost-driven capacity allocation
+> 𝐀 𝐀 ↓,𝐀 𝐀𰰀𝐀 ↓
+> Modality-aware routing stabilizes High 𝐀 , high 𝐀 𝐀𰰀𝐀
+> Prevent dead experts Modality: Expert Types: Shared / Modality Specific / Interaction
+> Capacity ties: NMR MS IR Heavy Light IR Spectra
+> Multi-Modal Input
+> Stage I I : Alignment Stage I I I : Specialization
+
+Figure 2. MM-Spectrum overview: PID-guided information decoupling with structured MoE and curriculum scheduling. We formulate multimodal spectra-to-structure generation as an end-to-end encoder–decoder task, where each modality is tokenized with explicit Modality Tags . The encoder block follows LayerNorm → MHSA → Structured MoE → LayerNorm, where an interaction-aware gating mechanism leverages modality tags to route tokens into a structured expert assembly .
+
+effectively aligns the effective density ρm across modalities, preventing attention dilution and ensuring stable gradient statistics for the subsequent MoE layers. Detailed modality-specific tokenization, compression operators, and sequence configurations are provided in Section B.1 of the appendix. 
+
+3.3. Spectrum-Aware Routing 
+
+Standard content-based routing requires the gate to implic-itly infer signal origin from noisy token statistics, which is suboptimal for heterogeneous spectroscopy. MM-Spectrum explicitly injects modality information into the routing latent space, decoupling identity from content (see Figure 4). For a token i with content representation hi ∈ Rd and modality index m(i), we introduce a learnable tag embedding em(i)
+
+(Vaswani et al., 2017) and a modality bias bm(i) to construct the router input ˜hi:
+
+˜hi = hi + em(i) + bm(i). (3) The gating network then computes expert probabilities and performs Top-k selection: 
+
+pi,e = softmax 
+
+ w⊤ 
+
+> e
+
+˜hi
+
+τ
+
+
+
+> e
+
+,oi = X
+
+> e∈TopK( pi, :,k )
+
+pi,e · FFN e(hi). (4) Geometrically, Eq. (3) induces a translation-like bias in the router’s decision space. The term bm(i) encodes a disen-tangled modality preference, stabilizing early-stage coarse differentiation while preserving the metric space of hi for fine-grained content matching. Crucially, this mechanism promotes Soft Specialization .Unlike hard-coding specific experts to modalities (which causes gradient blocking and limits synergy), MM-Spectrum allows specialization to emerge dynamically. Guided by the explicit cues in ˜hi and constrained by computation-aware regularization, the router learns to direct tokens to appropriate experts—allocating unique constraints to spe-cific experts and cross-modal patterns to interaction ex-perts—without forfeiting the flexibility to exploit shared parameters when beneficial. Additional derivations of the modality-conditioned routing formulation and the associ-ated stability-to-specialization schedule are given in Sec-tions A.4 and A.6 of the appendix. 
+
+3.4. Structured Expert Space 
+
+To effectively disentangle heterogeneous signals, we adopt Partial Information Decomposition (PID) (Williams & Beer, 2010) as a theoretical inductive bias. As conceptualized in Figure 3, we posit that the mutual information between multimodal spectra X and structure y decomposes into re-4MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework Redundancy Information 
+
+## 𝐀 NMR 𝐀 IR 
+
+## 𝐀 MS 
+
+> 𝐀 NMR,IR
+
+𝐀 ALL 
+
+𝐀 MS,IR 𝐀 UMR,MS 
+
+> 𝐀 𝐀 : Unique Information(Modality-specific features)
+> 𝐀 𓐀𝐀 : Pairwise Interaction (Synergistic Constraints)
+> 𝐀 𰰀𝐀𝐀 : Redundancy (Shared background knowledge)
+
+Interaction Information   
+
+> 𝐀 NMR 𝐀 IR
+> 𝐀 NMR,IR
+> 𝐀 IR
+> 𝐀 NMR 𝐀 MS
+> 𝐀 MS
+> 𝐀 MS,IR
+> 𝐀 NMR,MS
+
+Figure 3. Decomposition of multimodal spectral information. 
+
+The diagram enumerates modality subsets (single, pairwise, and all-modal combinations) and associates them with the dominant information type (unique vs. synergistic vs. redundant). 
+
+dundant ( R), unique ( Um), and synergistic ( S) components: 
+
+I( X; y) ≈ R +
+
+> M
+
+X
+
+> m=1
+
+Um + S. (5) Guided by this formulation and multi-task routing paradigms (Ma et al., 2018), we partition the expert pool 
+
+C into three functionally distinct subsets: C = Csh ∪
+
+(S 
+
+> m
+
+Cm) ∪ C int . Here, Shared experts (Csh ) capture redun-dancy R; Modality-specific experts (Cm) extract unique constraints Um; and crucially, Interaction experts (Cint )model synergy S, processing cross-modal dependencies that emerge only under joint consideration. To operationalize this structure without intractable PID es-timation, we impose lightweight regularizers that enforce the principle “redundant-consistent, unique-separable.” We apply a consistency loss Lsh to encourage shared experts to produce invariant representations across modalities, and a separability loss Lsep to maintain the distinctiveness of modality-specific features: 
+
+Lstruct = E
+
+h X 
+
+> e∈C sh
+
+Dist( o(e) 
+
+> i
+
+, o (e) 
+
+> j
+
+)
+
+i
+
++ E
+
+h MX
+
+> m=1
+
+X
+
+> e∈C m
+
+Sep( o(e) 
+
+> im
+
+, {o(e)}m′̸ =m)
+
+i
+
+.
+
+(6) This formulation ensures that the router aligns token alloca-tion with the physical nature of the evidence (as visualized in Figure 4), preventing parameter entanglement while pre-serving synergistic pathways. Further discussion of the PID-inspired expert partition and the corresponding structural regularizers is included in Section A.7 of the appendix. 𝐀 NMR           
+
+> NMR Emb. IR Emb. MS Emb. 𝐀 𝐀 𝐀 𝐀 𝐀 𝐀
+> Modality-Aware Gating Network Probability distributions 𝐀 𝐀|𝐀
+> 𝐀 𝐀|𝐀
+> Redundancy Channel (Shared)
+> Shared Expert (R)
+> Captures common information
+> Synergy Channel(Interaction)
+> Interaction Expert (𝐀 𝐀𲠀𝐀 )
+> 𝐀 𝐀 𝐀 𝐀
+> Path R Path U(Unique) Path S(Synergistic)
+> Unique Channel(Specific Flows)
+> NMR Expert 𝐀 NMR
+> IR Expert 𝐀 𝐀R
+> MS Expert 𝐀 𝐀𝐀
+> Control Lines 𝐀 𝐀
+> Transformer Decoder
+> 𝐀 𝐀𝐀 𝐀 𝐀𝐀
+
+Figure 4. Channelized modality-aware routing aligned with redundancy/unique/synergy pathways. A modality-aware gat-ing network consumes modality-conditioned representations (e.g., NMR/IR/MS embeddings) and produces routing distributions. 
+
+3.5. Heterogeneous Experts Heterogeneous Expert Spectrum. To address the dis-parity in information density—where constraint-rich NMR tokens demand high nonlinearity while redundant IR tokens require only shallow processing—MM-Spectrum moves be-yond homogeneous expert pools. We diversify the expert space into Heavy and Light experts, parameterized by vary-ing capacities κe (e.g., hidden dimensions). This design constructs a capacity spectrum, theoretically enabling the model to allocate computational resources proportional to the marginal utility of each token ∆i.
+
+Computation-Aware Regularization. Standard routing does not spontaneously align expert capacity with token dif-ficulty. To enforce a “Heavy-for-hard, Light-for-easy” spe-cialization logic, we introduce a computation cost penalty. Let ce ∝ κe be the cost assigned to expert e. The expected computational budget for a batch is minimized via: 
+
+Lcost = 1
+
+B
+
+> B
+
+X
+
+> i=1
+> E
+
+X
+
+> e=1
+
+pi,e ce. (7) This soft constraint compels the router to activate Heavy experts only when the reduction in task loss Ltask out-weighs the incurred cost ce, effectively inducing a Pareto-efficient resource allocation. Figure 5 visually demonstrates this capacity–utility alignment, where expensive computa-5MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Table 1. Modality-combination study. Top-K SMILES elucidation accuracy (%) under single-modality, bimodal, and full-modality. 
+
+Modality Setting Top-K Accuracy (%) Top-1% Top-2% Top-3% Top-4% Top-5% Top-6% Top-7% Top-8% Top-9% Top-10% 
+
+Single-modality 
+
+NMR (1H + 13C) 69.83 ± 0.24 77.88 ± 0.16 80.86 ± 0.11 82.38 ± 0.38 83.35 ± 0.29 84.03 ± 0.34 84.52 ± 0.26 84.89 ± 0.32 85.08 ± 0.46 85.18 ± 0.12 
+
+MS (all MS spectra) 17.35 ± 0.30 23.82 ± 0.22 27.80 ± 0.41 30.08 ± 0.29 31.73 ± 0.15 32.90 ± 0.18 33.81 ± 0.40 34.52 ± 0.46 35.04 ± 0.17 35.31 ± 0.35 
+
+IR (binned spectrum) 23.22 ± 0.47 30.90 ± 0.42 35.01 ± 0.17 37.65 ± 0.14 39.44 ± 0.27 40.72 ± 0.21 41.73 ± 0.22 42.44 ± 0.29 42.88 ± 0.21 43.07 ± 0.19 
+
+Dual-modality 
+
+NMR + MS (Baseline) 59.15 ± 0.41 67.52 ± 0.46 70.75 ± 0.33 72.34 ± 0.20 73.34 ± 0.20 74.01 ± 0.33 74.58 ± 0.37 75.02 ± 0.25 75.35 ± 0.18 75.52 ± 0.25 
+
+NMR + MS (MM-Spectrum) 72.98 ± 0.18 83.02 ± 0.18 85.18 ± 0.20 86.14 ± 0.49 86.33 ± 0.29 86.60 ± 0.49 87.10 ± 0.18 87.24 ± 0.41 87.51 ± 0.38 87.66 ± 0.23 
+
+NMR + IR (Baseline) 64.88 ± 0.34 74.57 ± 0.32 78.76 ± 0.21 80.96 ± 0.12 82.40 ± 0.46 83.40 ± 0.16 84.09 ± 0.40 84.62 ± 0.11 84.96 ± 0.21 85.08 ± 0.19 
+
+NMR + IR (MM-Spectrum) 71.96 ± 0.18 81.50 ± 0.37 83.83 ± 0.48 84.91 ± 0.17 85.52 ± 0.48 85.99 ± 0.43 86.30 ± 0.12 86.55 ± 0.30 86.80 ± 0.20 86.99 ± 0.46 
+
+MS + IR (Baseline) 31.22 ± 0.11 39.68 ± 0.28 44.10 ± 0.18 46.77 ± 0.28 48.65 ± 0.32 50.06 ± 0.11 51.20 ± 0.12 52.10 ± 0.49 52.65 ± 0.30 52.93 ± 0.31 
+
+MS + IR (MM-Spectrum) 37.90 ± 0.34 47.08 ± 0.45 52.03 ± 0.15 54.90 ± 0.48 56.88 ± 0.25 58.48 ± 0.39 59.61 ± 0.14 60.43 ± 0.37 60.98 ± 0.21 61.26 ± 0.40 
+
+Tri-modality 
+
+NMR + MS + IR (Baseline) 44.29 ± 0.35 52.71 ± 0.28 56.17 ± 0.27 58.11 ± 0.24 59.39 ± 0.31 60.25 ± 0.48 60.97 ± 0.21 61.52 ± 0.31 61.82 ± 0.18 62.04 ± 0.47 
+
+NMR + MS + IR (MM-Spectrum) 76.04 ± 0.12 83.08 ± 0.11 85.65 ± 0.20 86.98 ± 0.13 87.83 ± 0.25 88.66 ± 0.24 89.31 ± 0.17 89.74 ± 0.40 90.01 ± 0.30 90.26 ± 0.13 
+
+Improvement 31.75 ± 0.39 30.37 ± 0.27 29.48 ± 0.37 28.87 ± 0.14 28.44 ± 0.41 28.41 ± 0.32 28.34 ± 0.31 28.22 ± 0.43 28.19 ± 0.29 28.22 ± 0.39 Heavy Experts ( NMR )       
+
+> Mechanism Visualization
+> Cost-Utility Landscape Computation-Aware Regularization
+> Medium Experts ( Shared /Iteraction )Light Experts ( IR &MS )
+> NMR Input
+> High Bias
+> MS Input
+> Global/Fragment
+> IR Input
+> High Variance
+> Heavy Light
+> Router Router Router
+
+Figure 5. Computation-aware regularization with heteroge-neous experts: allocating expensive capacity to high-utility to-kens. MM-Spectrum instantiates an explicit cost–utility principle in conditional computation. This mechanism prevents long, low-density modalities from monopolizing compute, while preserving the ability to allocate high-capacity processing to decision-critical evidence, improving both stability and full-modality performance. 
+
+tion is reserved for high-utility tokens. The constrained-optimization interpretation of this objective and the result-ing parameter and computation complexity are discussed in Sections A.8 and A.9 of the appendix. 
+
+Curriculum-Scheduled Objective. Standard MoE train-ing faces a dilemma: strong balancing prevents collapse but hinders specialization, while weak balancing invites degen-eracy (Zoph et al., 2022). We resolve this via a Stability-to-Specialization Curriculum (Bengio et al., 2009). The total objective is defined as: 
+
+Ltotal = Ltask + λcost Lcost + λ(t) Lbal + Lent 
+
+, (8) where Lbal and Lent correspond to standard load balancing (squared coefficient of variation) and entropy maximization regularizers (Shazeer et al., 2017; Fedus et al., 2022). Cru-cially, the regularization weight λ(t) and router temperature 
+
+τ (t) are annealed over training steps t. This schedule engen-ders a dynamic optimization trajectory: initially, the training begins with a coverage phase , where high regularization enforces broad expert utilization to prevent early degenerate collapse; subsequently, as constraints decay, the process enters an alignment phase where the explicit modality bias (Sec. 3.3) guides tokens toward structurally appropriate sub-spaces; finally, the curriculum culminates in a specialization phase where Ltask and Lcost dominate, driving the router toward precise, Pareto-efficient capacity allocation. Defi-nitions of the balancing and entropy terms, together with the explicit schedules for λ(t) and τ (t), are provided in Sections A.5 and A.6 of the appendix. 
+
+## 4. Experiments 
+
+4.1. Benchmark, Data, and Evaluation Protocol Benchmark and Modalities. We evaluate MM-Spectrum on the multimodal spectroscopic benchmark introduced by Alberts et al. (2024), a standard testbed for Molecular Structural Elucidation . The dataset provides paired molec-ular structures and measurements across three modalities: 
+
+NMR (1H and 13 C), IR , and MS . We adopt the canonical train/validation/test splits and preprocessing conventions to ensure comparability. Inputs are tokenized into modality-specific sequences and processed by an encoder–decoder architecture to predict SMILES strings. And all compared methods share the same backbone capacity and optimiza-tion budget, isolating the performance differences to the fusion and conditional-computation mechanisms. Supple-mentary cross-dataset evaluations are also conducted on the experimental SDBS database (Saito & Kinugasa, 2011) and the large-scale MMST dataset (Priessner et al., 2026) (see Appendix C). 
+
+Metric. We report Top-K accuracy for SMILES-based elucidation (Weininger, 1988): for each input, the model 6MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Table 2. Missing-modality robustness. Top-K accuracy (%) under test-time missing-modality settings (S0–S6).                                                                                                                                                                                                                                  
+
+> Setting Missing ratio Baseline MM-Spectrum Improvement
+> NMR MS IR Top-1% Top-5% Top-10% Top-1% Top-5% Top-10% Top-1% Top-5% Top-10%
+> S0 0.0 0.0 0.0 44.29 ±0.50 59.39 ±0.17 62.04 ±0.44 76.04 ±0.18 87.83 ±0.28 90.26 ±0.16 31.75 ±0.49 28.44 ±0.34 28.22 ±0.41
+> S1 0.1 0.1 0.1 33.42 ±0.45 44.79 ±0.47 46.80 ±0.49 65.01 ±0.47 75.11 ±0.37 76.43 ±0.19 31.59 ±0.30 30.33 ±0.37 29.63 ±0.17
+> S2 0.3 0.3 0.3 17.29 ±0.12 23.24 ±0.10 24.31 ±0.37 45.91 ±0.26 54.21 ±0.17 55.40 ±0.19 28.62 ±0.33 30.97 ±0.16 31.09 ±0.44
+> S3 0.6 0.6 0.6 4.28 ±0.14 5.77 ±0.24 6.05 ±0.48 21.38 ±0.41 26.20 ±0.42 27.04 ±0.46 17.10 ±0.32 20.42 ±0.47 21.00 ±0.34
+> S4 0.6 0.1 0.1 14.88 ±0.46 20.02 ±0.17 20.94 ±0.17 28.96 ±0.47 33.47 ±0.21 34.02 ±0.29 14.09 ±0.40 13.44 ±0.47 13.09 ±0.28
+> S5 0.1 0.6 0.1 14.89 ±0.28 19.97 ±0.34 20.89 ±0.35 62.16 ±0.25 72.68 ±0.49 74.11 ±0.29 47.28 ±0.18 52.71 ±0.17 53.22 ±0.12
+> S6 0.1 0.1 0.6 21.37 ±0.48 28.82 ±0.37 30.10 ±0.11 54.56 ±0.35 65.84 ±0.20 67.63 ±0.50 33.19 ±0.38 37.03 ±0.18 37.53 ±0.49
+
+produces K candidate SMILES and a prediction is counted as correct if the ground-truth appears in the top K list. Top-
+
+1 measures ranking sharpness and single-shot correctness, while larger K reflects candidate coverage and recoverabil-ity under downstream filtering or re-ranking. 
+
+Compared methods. We compare: Dense concatenation 
+
+(the standard baseline employing naive concatenation of multimodal token sequences under a standard Transformer) (Alberts et al., 2024), and MM-Spectrum (our modality-aware sparse MoE encoder with structured expert subspaces, heterogeneous capacities, and computation-cost regulariza-tion). For a fair comparison, the decoder and non-MoE components are kept identical across methods. 
+
+Implementation Details. We implement all models using PyTorch on NVIDIA A40 (40GB) GPUs . The backbone is a standard Transformer Encoder-Decoder with L = 6 
+
+layers, H = 8 attention heads, and hidden dimension 
+
+dmodel = 512 . For the MM-Spectrum encoder, we config-ure the MoE layers with a total of E = 8 experts (partitioned into shared, specific, and interaction groups as described) and employ Top-k = 2 gating with a capacity factor of 
+
+C = 1 .25 to balance load. During inference, we use beam search with a beam width of 10 . Complete architectural hyperparameters, routing configurations, preprocessing set-tings, and decoding details are reported in Sections B.2, B.4 and C.1 of the appendix. 
+
+4.2. Modality Combination Study 
+
+To investigate whether MM-Spectrum mitigates negative transfer induced by spectral heterogeneity, we evaluate elu-cidation accuracy across all seven combinations of NMR, IR, and MS (unimodal, bimodal, and full-modality). We com-pare our method against a standard Dense baseline that uses early concatenation, keeping backbone capacities identical. As shown in Table 1, the single-modality baseline reveals significant imbalance, with NMR providing the strongest standalone constraints (69.83%). Crucially, the Dense con-catenation baseline exhibits catastrophic negative trans-fer in the full-modality regime: instead of benefiting from additional evidence, its performance collapses to 44.29%, significantly underperforming the unimodal NMR baseline. This confirms our hypothesis that naive fusion allows long, low-density modalities (IR/MS) to overwhelm optimization and dilute high-fidelity signals. In contrast, MM-Spectrum yields consistent Pareto im-provements across all settings. Most notably, it successfully reverses the full-modality collapse (44.29% → 76.04%), transforming the additional noisy modalities from a source of interference into a source of synergy. The substantial gains in Top-1 accuracy indicate that our structured expert allocation effectively disentangles conflicting gradients, al-lowing the model to sharpen ranking precision by selectively integrating complementary evidence rather than succumbing to attention dilution. Additional comparisons against cross-attention, contrastive-alignment, and gradient-modulation baselines are provided in Section C.2 of the appendix. And the large-scale evaluation on MMST is reported in Sec-tion C.3. 
+
+4.3. Missing-Modality Robustness 
+
+To evaluate model reliability under realistic instrumenta-tion failures, we test elucidation performance across seven inference-time missingness settings (S0–S6), ranging from balanced dropout to heavy single-modality loss, without any test-time adaptation. As detailed in Table 2, the baseline exhibits brittle behavior with sharp performance drops as missingness increases, suggesting implicit co-adaptation that fails when specific inputs are absent. In contrast, MM-Spectrum demonstrates smoother degradation and superior candidate recoverability (Top-10). This resilience indicates that our modality-aware routing successfully establishes re-configurable inference pathways, capable of dynamically re-allocating computational budget to the remaining reliable evidence rather than collapsing under distribution shift. 
+
+4.4. Generalization to Experimental Spectra 
+
+To evaluate the robustness and practical applicability of 
+
+MM-Spectrum on empirical laboratory measurements, we conduct extensive evaluations on the Spectral Database for Organic Compounds (SDBS) (Saito & Kinugasa, 2011). We 7MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Table 3. Stratified evaluation by molecular complexity. Top-K accuracy (%) across Heavy Atom Count (HAC) bins. MM-Spectrum yields larger relative improvements on more complex molecules.                                                                                                       
+
+> Bucket HAC range #Samples Baseline MM-Spectrum Improvement
+> Top-1% Top-5% Top-10% Top-1% Top-5% Top-10% Top-1% Top-5% Top-10%
+> HAC S (Small) ≤15 14821 63.46 ±0.22 78.48 ±0.37 81.44 ±0.28 82.28 ±0.42 91.30 ±0.35 92.45 ±0.32 18.82 ±0.30 12.82 ±0.38 11.01 ±0.12
+> HAC M (Medium) 16–25 35985 46.89 ±0.29 63.16 ±0.16 66.04 ±0.39 77.52 ±0.32 88.03 ±0.37 89.19 ±0.44 30.63 ±0.34 24.87 ±0.25 23.15 ±0.32
+> HAC L (Large) ≥26 28635 29.93 ±0.35 43.56 ±0.35 46.48 ±0.45 69.44 ±0.29 81.50 ±0.23 82.86 ±0.38 39.51 ±0.31 37.94 ±0.33 36.38 ±0.16
+
+Table 4. Generalization to real-world experimental spectra. 
+
+Top-K SMILES elucidation accuracy (%) on the SDBS database under from-scratch and pre-training & fine-tuning (FT) protocols. 
+
+Protocol Setting Top-K Accuracy (%) Top-1% Top-5% Top-10% 
+
+Scratch 
+
+NMR 18.15 ± 0.31 31.74 ± 0.25 33.69 ± 0.42 
+
+MS 5.38 ± 0.18 11.07 ± 0.22 13.92 ± 0.15 
+
+IR 13.21 ± 0.29 25.48 ± 0.34 26.61 ± 0.27 
+
+Baseline (Full) 14.10 ± 0.33 27.13 ± 0.41 31.53 ± 0.38 
+
+Ours (Full) 26.67 ± 0.24 38.91 ± 0.19 47.37 ± 0.26 
+
+Pretrain & FT Baseline (Full) 37.56 ± 0.36 57.15 ± 0.28 59.84 ± 0.31 
+
+Ours (Full) 59.52 ± 0.21 73.95 ± 0.25 76.32 ± 0.19 
+
+benchmark our model under two distinct paradigms: (1) training from scratch directly on the experimental dataset, and (2) utilizing a pre-training and fine-tuning protocol, where the network is initialized on simulated spectra and subsequently adapted to real laboratory observations. As summarized in Table 4, the single-modality baselines trained from scratch reveal the inherent complexity of uncu-rated experimental signals, with NMR remaining the most constraint-rich channel. Crucially, when combining all channels under full-modality inputs, the naive dense con-catenation baseline exhibits a notable performance degra-dation compared to the standalone NMR setup, dropping from 18 .15% to 14 .10% Top-1 accuracy. In contrast, MM-Spectrum successfully circumvents this multi-source inter-ference. When training from scratch, it completely reverses the full-modality degradation, boosting Top-1 accuracy to 
+
+26 .67% and outperforming the dense multi-spectral base-line. Furthermore, under the pre-training and fine-tuning protocol, MM-Spectrum capitalizes on the large-scale prior representations to achieve a substantial performance leap. 
+
+4.5. Stratified Evaluation by Molecular Complexity 
+
+To probe performance beyond aggregate metrics, we stratify test molecules by Heavy Atom Count (HAC), a proxy for structural complexity and search-space ambiguity. We par-tition the data into small (HAC S ), medium (HAC M ), and large (HAC L) bins based on ground-truth structures. Re-sults in Table 3 reveal a clear complexity-dependent degra-dation for the Dense concatenation baseline. In contrast, 
+
+MM-Spectrum achieves consistent improvements across all strata, with the most substantial relative gains observed on HAC M and HAC L. This trend corroborates the efficacy 
+
+Figure 6. Representation evolution over training. Dense con-catenation (top row) vs. MM-Spectrum (bottom row) at multiple training steps. MM-Spectrum exhibits more coherent and stable structure in the learned representation space, consistent with re-duced cross-modal interference. 
+
+Figure 7. Layer-wise expert utilization. 100% stacked bar charts of Top-1 expert fractions per layer. Different layers display distinct utilization profiles, indicating layer-dependent specialization rather than trivial collapse or uniform routing. 
+
+of our capacity–utility principle: difficult instances trigger high-capacity and interaction-specific experts, effectively scaling computational resources to resolve greater posterior uncertainty. Complementary sensitivity analyses of expert capacity and routing sparsity are reported in Section C.5 of the appendix. 
+
+4.6. Interpretability and Training Dynamics Representation Evolution. Visualizing encoder represen-tations (Figure 6) reveals that while the Dense concate-nation baseline exhibits progressive mixing and instabil-ity—indicative of entanglement—MM-Spectrum develops a stable, well-separated organization. This confirms that 8MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Figure 8. Routing dynamics (Layer ×Expert heatmaps). Top-1
+
+expert occupancy across layers at multiple training steps. The routing pattern transitions from early exploration to structured spe-cialization and stabilizes at later stages, providing direct evidence of emergent expert division of labor. 
+
+modality-aware routing and structured subspaces effectively reduce interference and support disentangled evidence ag-gregation. 
+
+Routing Dynamics and Specialization. We further ana-lyze expert behavior via occupancy heatmaps (Figure 8) and layer-wise profiles (Figure 7). Routing trajectories evolve from diffuse early exploration to stable, persistent hotspots, validating our curriculum-driven transition from coverage to specialization. Crucially, expert utilization varies dis-tinctively across depths without degenerating into collapse or uniformity, implying that different layers autonomously acquire distinct functional roles (feature alignment vs. deci-sion transformation) driven by the capacity–utility principle. 
+
+4.7. Ablation Studies 
+
+Table 5. Ablation: routing signals. Impact of Router-aware signals and Tag routing on Top-K accuracy (%).                                             
+
+> Router-aware Tag-routing Top-K Accuracy (%) Top-1% Top-5% Top-10%
+> ✓✓76.04 ±0.20 87.83 ±0.39 90.26 ±0.13
+> ×✓72.57 ±0.26 86.39 ±0.48 88.93 ±0.39
+> ✓×71.23 ±0.25 86.06 ±0.16 88.83 ±0.15
+> ××70.11 ±0.30 84.43 ±0.31 86.06 ±0.34
+
+Routing signals: Router-aware and Tag routing. We first assess how making modality cues explicit affects spe-cialization. Table 5 shows that removing either Router-aware signals or Tag routing consistently reduces Top-K,with the largest relative degradation at Top-1. This pattern indicates that explicit routing supervision improves not only candidate coverage but also ranking precision, consistent with faster and cleaner formation of expert responsibilities. 
+
+Expert Subspaces and Dynamic Activation. Decompos-ing the expert space (Table 6) demonstrates that Interaction 
+
+Table 6. Ablation: expert subspaces and dynamic activation. 
+
+Effects of Shared experts, Interaction experts, and Dynamic activa-tion on Top-K accuracy (%).                                                            
+
+> Shared Interaction Dynamic Top-K Accuracy (%) Top-1% Top-5% Top-10%
+> ✓✓✓76.04 ±0.15 87.83 ±0.32 90.26 ±0.21
+> ✓✓×74.41 ±0.28 86.54 ±0.41 88.83 ±0.19
+> ✓×✓74.39 ±0.35 86.34 ±0.22 88.63 ±0.45
+> ×✓✓75.01 ±0.12 86.90 ±0.33 89.20 ±0.27
+> ××✓72.70 ±0.40 84.65 ±0.18 87.05 ±0.36
+
+experts are pivotal for capturing cross-modal synergy, vali-dating the need for dedicated parameter pathways over naive fusion. Shared experts concurrently facilitate redundant ev-idence transfer, while Dynamic activation further boosts robustness, confirming the benefit of adaptive computation allocation under sample-level variability. 
+
+Table 7. Ablation: heterogeneous experts and regularization. 
+
+Effects of heterogeneous capacities (Hetero) and computation-aware regularization on Top-K accuracy (%). 
+
+Hetero. Regularizer Top-K Accuracy (%) Top-1% Top-5% Top-10% 
+
+✓ ✓ 76.04 ± 0.14 87.83 ± 0.29 90.26 ± 0.18 
+
+✓ × 74.81 ± 0.35 86.61 ± 0.22 89.21 ± 0.41 
+
+× ✓ 74.07 ± 0.19 85.93 ± 0.38 88.65 ± 0.26 
+
+× × 74.24 ± 0.44 86.08 ± 0.15 88.65 ± 0.32 
+
+Heterogeneous Capacities and Regularization. Finally, Table 7 substantiates the synergy between heterogeneous ex-pert capacities and computation-aware regularization. The combined improvement indicates that meaningful capac-ity diversity enables the regularizer to effectively match computational budget to token complexity. These findings strongly corroborate our proposed capacity–utility principle for conditional computation in multispectral elucidation. 
+
+## 5. Conclusion 
+
+We presented MM-Spectrum , a sparse MoE framework tailored to resolve the optimization instability in multimodal 
+
+Molecular Structural Elucidation arising from severe spec-tral heterogeneity. By synergizing spectroscopy-aware com-pression, explicit modality routing, and structured expert subspaces with curriculum-driven heterogeneous compu-tation, MM-Spectrum enforces Pareto-efficient specializa-tion. This design mitigates imbalance-induced conflicts and successfully resolves full-modality collapse. While not in-tended to outcompete highly specialized single-modality models, MM-Spectrum yields substantial gains in the full-modality regime, establishing a principled paradigm for extracting faithful cross-spectral synergy. 9MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+## Acknowledgements 
+
+We sincerely thank the anonymous reviewers for their in-sightful comments and constructive suggestions. This re-search is supported by the National Natural Science Foun-dation of China Project (No. 623B2086), Sponsored by CCF-GHFund (No. OF 2026005), Sponsored by CIPS-SMP-Zhipu Large Model Fund, Ant Group, and TeleAI of China Telecom. 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of multimodal machine learning for scientific discovery, specifically in chemical structure elucidation. Potential soci-etal consequences include accelerating drug discovery and materials science research. We do not foresee any negative ethical impacts or adverse societal consequences from this work. 
+
+## References 
+
+Alberts, M., Schilter, O., Zipoli, F., Hartrampf, N., and Laino, T. Unraveling molecular structure: A multimodal spectroscopic dataset for chemistry. Advances in Neu-ral Information Processing Systems , 37:125780–125808, 2024. Bengio, Y., Louradour, J., Collobert, R., and Weston, J. Curriculum learning. In Proceedings of the 26th annual international conference on machine learning , pp. 41–48, 2009. Bohde, M., Manjrekar, M., Wang, R., Ji, S., and Coley, C. W. Diffms: Diffusion generation of molecules conditioned on mass spectra. arXiv preprint arXiv:2502.09571 , 2025. Du, N., Huang, Y., Dai, A. M., Tong, S., Lepikhin, D., Xu, Y., Krikun, M., Zhou, Y., Yu, A. W., Firat, O., et al. Glam: Efficient scaling of language models with mixture-of-experts. In International Conference on Machine Learn-ing , pp. 5547–5569. PMLR, 2022. D¨ uhrkop, K., Fleischauer, M., Ludwig, M., Aksenov, A., Melnik, A., Meusel, M., Dorrestein, P., Rousu, J., and SIRIUS, S. B. 4: A rapid tool for turning tandem mass spectra into metabolite struc-ture information., 2019, 16. DOI: https://doi. org/10.1038/s41592-019-0344-8. PMID: https://www. ncbi. nlm. nih. gov/pubmed/30886413 , pp. 299–302. D¨ uhrkop, K., Shen, H., Mechtler, M., B¨ ocker, S., and Rousu, J. Searching molecular structure databases with tandem mass spectra using csi: Fingerid. Proceedings of the National Academy of Sciences , 112(41):12580–12585, 2015. Fedus, W., Zoph, B., and Shazeer, N. Switch transformers: Scaling to trillion parameter models with simple and ef-ficient sparsity. Journal of Machine Learning Research ,23(120):1–39, 2022. Guan, Y., Sowndarya, S. V. S., Gallegos, L. C., St. John, P. C., and Paton, R. S. Real-time prediction of 1h and 13c chemical shifts with dft accuracy using a 3d graph neural network. Chemical Science , 12(36):12012–12026, 2021. Hu, F., Chen, M. S., Rotskoff, G. M., Kanan, M. W., and Markland, T. E. Accurate and efficient structure eluci-dation from routine one-dimensional nmr spectra using multitask machine learning. ACS Central Science , 10(11): 2162–2170, 2024. Kanakala, G. C., Sridharan, B., and Priyakumar, U. D. Spec-tra to structure: contrastive learning framework for library ranking and generating molecular structures for infrared spectra. Digital Discovery , 3(12):2417–2423, 2024. Klukowski, P., Riek, R., and G¨ untert, P. Machine learn-ing in nmr spectroscopy. Progress in Nuclear Magnetic Resonance Spectroscopy , pp. 101575, 2025. Lepikhin, D., Lee, H., Xu, Y., Chen, D., Firat, O., Huang, Y., Krikun, M., Shazeer, N., and Chen, Z. GShard: Scaling giant models with conditional computation and automatic sharding. In Proceedings of the 9th International Confer-ence on Learning Representations (ICLR) , 2021. Lewis, M., Bhosale, S., Dettmers, T., Goyal, N., and Zettle-moyer, L. Base layers: Simplifying training of large, sparse models. In International Conference on Machine Learning , pp. 6265–6274. PMLR, 2021. Liang, P. P., Zadeh, A., and Morency, L.-P. Foundations & trends in multimodal machine learning: Principles, challenges, and open questions. ACM computing surveys ,56(10):1–42, 2024. Litsa, E. E., Chenthamarakshan, V., Das, P., and Kavraki, L. E. An end-to-end deep learning framework for translat-ing mass spectra to de-novo molecules. Communications Chemistry , 6(1):132, 2023. Ma, J., Zhao, Z., Yi, X., Chen, J., Hong, L., and Chi, E. H. Modeling task relationships in multi-task learning with multi-gate mixture-of-experts. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining , pp. 1930–1939, 2018. Priessner, M., Lewis, R. J., Lemurell, I., Johansson, M. J., Goodman, J., Janet, J. P., and Tomberg, A. Advanc-ing structure elucidation with a flexible multi-spectral ai model. Angewandte Chemie , 138(2):e17611, 2026. 10 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Riquelme, C., Puigcerver, J., Mustafa, B., Neumann, M., Jenatton, R., Susano Pinto, A., Keysers, D., and Houlsby, N. Scaling vision with sparse mixture of experts. In 
+
+Advances in Neural Information Processing Systems , vol-ume 34, pp. 8583–8595, 2021. Saito, T. and Kinugasa, S. Development and release of a spectral database for organic compounds-key to the continual services and success of a large-scale database. 
+
+Synthesiology English edition , 4(1):35–44, 2011. Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G., and Dean, J. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. In International Conference on Learning Representations ,2017. Shrivastava, A. D., Swainston, N., Samanta, S., Roberts, I., Wright Muelas, M., and Kell, D. B. Massgenie: a transformer-based deep learning method for identifying small molecules from their mass spectra. Biomolecules ,11(12):1793, 2021. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., and Polosukhin, I. Atten-tion is all you need. In Advances in neural information processing systems , pp. 5998–6008, 2017. Wang, W., Tran, D., and Feiszli, M. What makes training multi-modal classification networks hard? In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 12695–12705, 2020. Weininger, D. Smiles, a chemical language and information system. 1. introduction to methodology and encoding rules. Journal of chemical information and computer sciences , 28(1):31–36, 1988. Williams, P. L. and Beer, R. D. Nonnegative decom-position of multivariate information. arXiv preprint arXiv:1004.2515 , 2010. Wu, N., Jastrzebski, S., Cho, K., and Geras, K. J. Charac-terizing and overcoming the greedy nature of learning in multi-modal deep neural networks. In International Con-ference on Machine Learning , pp. 24043–24055. PMLR, 2022. Yang, Y. et al. Deep learning for vibrational spectral analy-sis: Recent progress and a practical guide. TrAC Trends in Analytical Chemistry , 143:116377, 2021. Yu, T., Kumar, S., Gupta, A., Levine, S., Hausman, K., and Finn, C. Gradient surgery for multi-task learning. In Advances in Neural Information Processing Systems ,volume 33, pp. 5824–5836, 2020. Zhou, Y., Lei, T., Liu, H., Du, N., Huang, Y., Zhao, V., Dai, A. M., Le, Q. V., Laudon, J., et al. Mixture-of-experts with expert choice routing. In Advances in Neural Information Processing Systems , volume 35, pp. 7103– 7114, 2022. Zoph, B., Bello, I., Kumar, S., Du, N., Huang, Y., Dean, J., Shazeer, N., and Fedus, W. St-moe: Designing stable and transferable sparse expert models. arXiv preprint arXiv:2202.08906 , 2022. 11 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+## Appendix: MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework A. Theoretical Background and Derivations 
+
+A.1. Notation and Task Objective 
+
+We consider multimodal spectra-to-structure generation with M modalities. For each modality m ∈ { 1, . . . , M }, the tokenized spectral sequence is x(m) = ( x(m)1 , . . . , x (m) 
+
+> Lm
+
+) with length Lm. Let X = {x(m)}Mm=1 denote the multimodal input and y = ( y1, . . . , y T ) ∈ Y the target SMILES sequence. An encoder–decoder model parameterized by θ defines 
+
+pθ (y | X) = 
+
+> T
+
+Y
+
+> t=1
+
+pθ (yt | y<t , X ), Ltask (θ) = −E(X,y )∼D 
+
+h TX
+
+> t=1
+
+log pθ (yt | y<t , X )
+
+i
+
+. (9) (a) Existing Methods: Naive Concatenation (b) Our Method: MM-Spectrum with MoE-Encoder   
+
+> Input (Unbalanced Raw Data)
+> NMR IR MS
+> Input (Balanced Raw Data)
+> NMR IR MS
+> Modality Embedding & Concatenation Standard Transformer Encoder Internal Chaos Modality Collapse Modality Collapse Entangled lines Transformer Decoder Blurred/Distorted Molecule Failure
+> Modality Embedding & Tagging Structured MoE Transformer Encoder
+> Gating Mechanism
+> 𝐀 𝐀
+> Experts (The MoE Layer) Aggregation
+> MoE Encoder: Dynamically routes modality embeddings to specialized experts via gating.
+> Final Output Transformer Decoder SMILES Sequence
+> Heavy Expert (High Capacity)
+> Light Expert (Low Capacity)
+> Iteraction Expert
+
+Figure 9. Visualizing the mechanism of failure versus the mechanism of synergy. (a) The Pathology of Naive Concatenation: 
+
+Treating heterogeneous signals (NMR/IR/MS) as a uniform sequence leads to Modality Collapse . The shared parameter space succumbs to gradient conflicts (visualized as “Internal Chaos”), where high-redundancy modalities overwhelm high-density constraints, resulting in entangled representations and distorted molecular predictions. (b) The Solution via MM-Spectrum: We resolve this by introducing a 
+
+Structured MoE Encoder . Through a modality-aware gating mechanism G(x), the model dynamically disentangles information flows by routing tokens to functionally specialized modules—allocating Heavy Experts for complex topology inference and Light Experts for noise filtering—thereby restoring optimization stability and generation precision. 
+
+In this appendix we formalize: (i) why naive early-fusion concatenation can degrade in the full-modality regime, (ii) how modality-aware routing stabilizes specialization, and (iii) how structured experts and cost-aware regularization yield a Pareto-efficient allocation under multispectral imbalance. 
+
+A.2. A Multi-Objective View of Multispectral Training 
+
+A useful lens is to treat multispectral learning as optimizing a sum of modality-induced objectives. Let Cm(θ) be the expected loss contribution “attributable” to modality m (e.g., the loss induced when modality m is present and the others are treated as nuisance factors). A generic multi-objective surrogate can be written as 
+
+C(θ) = 
+
+> M
+
+X
+
+> m=1
+
+wm Cm(θ), wm ≥ 0, X
+
+> m
+
+wm = 1 . (10) 12 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Let gm = ∇θ Cm(θ). Gradient compatibility between modalities i and j can be measured by cosine similarity 
+
+cos( gi, g j ) = ⟨gi, g j ⟩∥gi∥ ∥ gj ∥ . (11) Negative transfer occurs when cross-modal updates conflict, i.e., cos( gi, g j ) < 0, so that improving one modality tends to degrade the other. In multispectral spectroscopy, conflicts are exacerbated by imbalance : modalities can differ by orders of magnitude in length ( Lm), noise, and per-token semantic density. 
+
+A.3. Why Naive Concatenation Can Collapse Under Multispectral Imbalance 
+
+The standard baseline forms a single early-fusion sequence 
+
+x(cat) = Concat  x(1) , . . . , x (M ), L =
+
+> M
+
+X
+
+> m=1
+
+Lm. (12) This design implicitly allocates attention budget and gradient updates roughly in proportion to token counts. When Lm is severely imbalanced, “long but weak” modalities can dominate the training signal even if their marginal utility per token is low. 
+
+A density-weighted intuition. Let ρm be an abstract (unobserved) measure of per-token information density for modality 
+
+m with respect to the task. Under early fusion, the effective contribution of modality m to the overall update is influenced by both its token count and density. A simplified heuristic is that the expected magnitude of gradients contributed by modality 
+
+m scales with the number of tokens that backpropagate through shared parameters: 
+
+E∥gm∥ ∝ Lm · ¯δm, (13) where ¯δm summarizes average per-token backprop signal strength. In multispectral spectroscopy, it is common that 
+
+LIR ≫ LNMR but ¯δIR < ¯δNMR , so Lm can dominate even when ρm is low. This yields attention dilution (high-density constraints become “background”) and can also amplify cross-modal gradient conflicts, pushing the optimizer toward a suboptimal compromise solution. 
+
+Key implication. Full-modality improvement is not guaranteed by simply adding modalities. Instead, stable synergy requires an explicit mechanism that can (i) prevent low-density tokens from monopolizing updates, and (ii) structurally separate conflicting gradient components so that specialization can emerge. 
+
+A.4. Modality-Aware Routing as an Explicit “Identity + Content” Decomposition Standard MoE routing. A sparse MoE layer replaces the dense FFN with experts {FFN e}Ee=1 and a router that produces gating probabilities pi,e for each token representation hi ∈ Rd:
+
+pi,e = softmax 
+
+ w⊤ 
+
+> e
+
+hi
+
+τ
+
+
+
+> e
+
+, oi = X
+
+> e∈TopK( pi, :,k )
+
+pi,e FFN e(hi). (14) In heterogeneous spectroscopy, content-only routing forces the router to infer modality identity from token statistics, which is unnecessary and unstable when modalities have drastically different distributions. 
+
+MM-Spectrum: additive modality injection. For each token i, let m(i) be its modality index. We inject explicit modality information via a learnable tag embedding em(i) and a modality bias bm(i):
+
+˜hi = hi + em(i) + bm(i). (15) The router then gates on ˜hi:
+
+pi,e = softmax 
+
+ w⊤ 
+
+> e
+
+˜hi
+
+τ
+
+
+
+> e
+
+, oi = X
+
+> e∈TopK( pi, :,k )
+
+pi,e FFN e(hi). (16) 13 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Interpretation: logit bias and stabilized coarse separation. Define logits zi,e = w⊤ 
+
+> e
+
+˜hi. Then 
+
+zi,e = w⊤ 
+
+> e
+
+hi + w⊤ 
+
+> e
+
+(em(i) + bm(i)). (17) The second term is a modality-dependent expert preference that is disentangled from content. Geometrically, Eq. (15) induces a translation in the router input space, so tokens from different modalities become separable even when their content features overlap early in training. This yields a stable “coverage” behavior in early optimization (reducing collapse risk), while still allowing fine-grained content-based routing within each modality. 
+
+A.5. Load Balancing and Entropy Regularization 
+
+Sparse MoE typically uses auxiliary losses to avoid expert collapse. Let Ki = TopK( pi, :, k ) be the activated set for token i
+
+in a minibatch of B tokens. Define expert importance and load :
+
+Imp e =
+
+> B
+
+X
+
+> i=1
+
+pi,e , Load e =
+
+> B
+
+X
+
+> i=1
+
+1[e ∈ K i]. (18) We use the squared coefficient of variation (CV 2) to penalize concentration: 
+
+Lbal = CV 2(Imp) + CV 2(Load) = Var(Imp) (E[Imp]) 2 + Var(Load) (E[Load]) 2 . (19) Additionally, to encourage exploration early in training, we regularize router entropy: 
+
+Lent = − 1
+
+B
+
+> B
+
+X
+
+> i=1
+> E
+
+X
+
+> e=1
+
+pi,e log pi,e . (20) 
+
+A.6. Stability-to-Specialization Curriculum: Scheduling λ(t) and τ (t)
+
+In multispectral settings, strong balancing is beneficial early (preventing collapse) but can become harmful late (preventing specialization and synergy). We therefore schedule the strength of auxiliary regularizers and the router temperature over training steps t:
+
+Ltotal = Ltask + λcost Lcost + λ(t) Lbal + Lent 
+
+, (21) where λ(t) is annealed from a large value to a small value. We use a smooth cosine decay (other monotone decays are valid): 
+
+λ(t) = λ0 · 12
+
+
+
+1 + cos( π · min(1 , t/T λ)) 
+
+
+
+. (22) Similarly, we anneal temperature to move from exploration to confident routing: 
+
+τ (t) = max 
+
+
+
+τmin , τ 0 · exp( −t/T τ )
+
+
+
+. (23) 
+
+Three-phase dynamics. This induces an interpretable trajectory: (i) coverage phase : large λ(t) and higher τ (t) encourage broad usage; (ii) alignment phase : decreasing λ(t) allows modality bias to form stable channels; (iii) specialization phase :
+
+Ltask and Lcost dominate, yielding sharp and cost-effective routing. 
+
+A.7. Structured Expert Space via PID-Induced Inductive Bias 
+
+We adopt Partial Information Decomposition (PID) as an inductive bias to structure expert roles. Let R denote redundant information shared across modalities, Um unique information of modality m, and S synergistic information: 
+
+I( X; y) ≈ R +
+
+> M
+
+X
+
+> m=1
+
+Um + S. (24) Guided by Eq. (24), we partition experts into three families: 
+
+C = Csh ∪
+
+ M[
+
+> m=1
+
+Cm
+
+
+
+∪ C int , (25) where Csh are shared experts (redundancy), Cm are modality-specific experts (unique constraints), and Cint are interaction 
+
+experts (synergy). 14 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Lightweight structural regularizers. We impose weak, implementation-friendly constraints that encourage “redundant-consistent, unique-separable” behavior without explicitly estimating PID: 
+
+Lstruct = Lsh + Lsep . (26) For shared experts, we encourage cross-modality consistency for representations associated with the same molecule: 
+
+Lsh = E
+
+h X 
+
+> e∈C sh
+
+μ(e)NMR − μ(e)IR  
+
+> 22
+
++ μ(e)NMR − μ(e)MS 
+
+> 22
+
+i
+
+, (27) where μ(e) 
+
+> m
+
+denotes the mean pooled expert-e output for modality m (within a sample or minibatch). For modality-specific experts, we enforce separability by a margin objective: 
+
+Lsep = E
+
+h MX
+
+> m=1
+
+X
+
+> e∈C m
+
+max  0, γ − d(μ(e) 
+
+> m
+
+, μ (e)
+
+> ¬m
+
+)i
+
+, (28) where μ(e) 
+
+> ¬m
+
+is the mean pooled output over other modalities and d(·, ·) can be cosine distance or ℓ2 distance. In practice, 
+
+Lstruct is assigned a small weight so it shapes the geometry without overriding the main task loss. 
+
+A.8. Heterogeneous Experts and Computation-Aware Regularization Heterogeneous capacity spectrum. Different spectral tokens have different marginal utilities. We instantiate a spectrum of expert capacities via a per-expert descriptor κe (e.g., hidden width in FFN), allowing “heavy” and “light” experts: 
+
+FFN e(h) = W (e)2 σ W (e)1 h, κe := dim( W (e)1 h). (29) 
+
+Cost-aware routing as a soft constrained optimization. Associate each expert with a cost ce ∝ κe. We penalize the 
+
+expected routing mass sent to expensive experts: 
+
+Lcost = 1
+
+B
+
+> B
+
+X
+
+> i=1
+> E
+
+X
+
+> e=1
+
+pi,e ce. (30) Then minimizing Ltask + λcost Lcost is a Lagrangian relaxation of a constrained problem: 
+
+min  
+
+> θ
+
+Ltask (θ) s.t. E
+
+h X 
+
+> e
+
+pi,e ce
+
+i
+
+≤ B , (31) which encourages a Pareto-efficient allocation: high-utility tokens are allowed to use heavy experts, while low-utility redundant tokens are discouraged from monopolizing expensive capacity. 
+
+A.9. Compute and Parameter Complexity 
+
+We provide a simple comparison between a dense Transformer FFN and a Top-k MoE FFN. Let the dense FFN cost per token be Cffn (FLOPs). In MoE, only k experts are executed, so ignoring dispatch overhead: 
+
+Cmoe ≈ k · ¯Cexpert + Crouter , (32) where ¯Cexpert is the average cost of an expert and Crouter is small. If experts are heterogeneous, ¯Cexpert becomes routing-dependent; in that case Lcost (Eq. (30)) directly regularizes the expected compute. Parameter-wise, MoE increases capacity approximately linearly with E:
+
+Pmoe ≈ Pshared + E · Pexpert , (33) while keeping per-token compute controlled by k (not E). 15 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+## B. Additional Implementation Details and Reproducibility 
+
+B.1. Tokenization and Compression Operators 
+
+To align sequence statistics across modalities, we apply modality-specific preprocessing ϕm:
+
+˜x(m) = ϕm(x(m)), ˜X = {˜x(m)}Mm=1 . (34) For high-density NMR, we preserve discrete constraints ( ϕNMR ≈ Id ). For high-redundancy IR/MS, we use local binning (IR) and peak filtering (MS) to suppress background tokens. Modality tags are appended (or added as embeddings) so each token retains explicit modality identity.   
+
+> Table 8. Modality preprocessing and sequence configuration (illustrative). Operators are chosen to reduce redundancy while preserving chemically critical evidence.
+
+Modality Token type Compression ϕm Max length 
+
+NMR ( 1H/ 13 C) symbolic / constraint-rich identity / conservative parsing LNMR max 
+
+IR dense / autocorrelated local binning / aggregation LIR max 
+
+MS sparse peaks + noise tail top-k peak filtering LMS max 
+
+B.2. MoE Configuration and Routing Schedules 
+
+We use Top-k gating and a capacity factor to reduce dispatch overflow. The router temperature τ (t) and regularizer strength 
+
+λ(t) follow Eqs. (22)–(23). All ablations keep the decoder and non-MoE components fixed.  
+
+> Table 9. Key MoE hyperparameters.
+
+Hyperparameter Value 
+
+#experts E 8Top-k 2Capacity factor C 1.25 Aux losses Lbal , Lent , Lcost 
+
+Schedules λ(t) (cosine), τ (t) (exp or cosine) Expert families shared / modality-specific / interaction 
+
+B.3. Missing-Modality Protocol 
+
+For missing-modality evaluation, we fix a trained model and only alter test-time inputs. Given missing ratios 
+
+(rNMR , r MS , r IR ), we randomly drop (mask) the corresponding fraction of each modality’s tokens (or remove the modality channel), while preserving modality tags for remaining tokens. This evaluates whether routing can re-allocate compute to reliable evidence under distribution shift, without any test-time adaptation. 
+
+B.4. Evaluation: Top-K Accuracy with Beam Search 
+
+We decode with beam search (beam width B) and report Top-K accuracy: a prediction is correct if the ground-truth SMILES appears among the top K candidates. Top-1 reflects single-shot ranking accuracy, whereas larger K values measure whether the correct structure remains recoverable within a candidate set. 
+
+B.5. Data Preprocessing Details 
+
+For the dataset from Alberts et al. (2024), we applied the following modality-specific preprocessing: • NMR: Discretized into symbolic tokens representing chemical shift ranges (0.1 ppm bins) and multiplicities. Max length truncated to 256. • IR: Binned into 1024 distinct frequency intervals. Intensities are normalized to [0 , 1] .• MS: Top-100 peak filtering is applied based on relative intensity. 16 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+## C. Detailed Experimental Setup and Results 
+
+C.1. Hyperparameter Configuration 
+
+To facilitate full reproducibility of our results, we provide the comprehensive hyperparameter configuration in Table 10. These parameters were selected based on grid search performance on the validation set. All experiments were conducted on a computational node equipped with 4 × NVIDIA A40 (40GB) GPUs .  
+
+> Table 10. Complete Hyperparameter Configuration. The settings cover model architecture, the specific MM-Spectrum MoE design, data preprocessing constraints, and optimization details.
+
+Category Parameter Value Backbone 
+
+Model Architecture Transformer Encoder-Decoder Layers ( L) 6 (Encoder) / 6 (Decoder) Hidden Dimension ( dmodel ) 512 Attention Heads ( H) 8Feed-Forward Dimension 2048 (in non-MoE layers) 
+
+MM-Spectrum MoE 
+
+Total Experts ( E) 8 (Partitioned: 2 Shared, 2 NMR, 2 IR/MS, 2 Interact) Experts per Token (Top-k) 2Expert Capacity Factor ( C) 1.25 
+
+Heavy Expert Hidden Dim 2048 (4 × expansion) 
+
+Light Expert Hidden Dim 512 (1 × expansion) Router Type Modality-Aware Dense Router 
+
+Data Preprocessing 
+
+NMR Max Length 256 (Symbolic tokens) IR/MS Max Length 1024 (Compressed continuous tokens) IR Compression Local Binning (Window=4, Stride=4) 
+
+Optimization 
+
+Hardware 4× NVIDIA A40 (40GB) Optimizer AdamW ( β1 = 0 .9, β 2 = 0 .999 , ϵ = 1 e − 8)Learning Rate Peak 5 × 10 −4 with Cosine Decay Weight Decay 0.01 Batch Size 64 per GPU (Global Batch = 256) 
+
+C.2. Comparison with Alternative Multimodal Fusion Baselines 
+
+To verify that the massive improvements of MM-Spectrum stem from its structural conditional computation rather than generic multi-objective training or optimization tweaks, we benchmark our framework against several representative alternative fusion strategies. These include Cross-Attention Fusion, Contrastive Alignment (Liang et al., 2024), and gradient modulation algorithms such as PCGrad (Yu et al., 2020), Gradient Blending (Wang et al., 2020), and OGM-GE (Wu et al., 2022). All models are evaluated under the identical tri-modality (NMR + MS + IR) setup on the reference benchmark. As illustrated in Table 11, optimization-level methods (e.g., Gradient Blending and OGM-GE) deliver marginal improvements over the naive Dense Concatenation baseline by alleviating gradient conflicts. However, representation alignment and generic gradient modulation alone remain insufficient to fundamentally counteract the severe multimodal imbalance induced by spectral scale and redundancy disparities. By contrast, MM-Spectrum achieves a decisive gain of +31 .75% in Top-1% accuracy over the baseline, establishing the clear architectural necessity of physically grounded expert partitioning and modality-aware routing pathways. 
+
+C.3. Large-Scale Generalization on the MMST Dataset 
+
+To rigorously assess the structural scalability of our model, we extend our experiments to the MultiModalSpectralTransformer (MMST) dataset (Priessner et al., 2026). This dataset presents an immense simulated corpus containing approximately 
+
+5, 997 , 971 multi-spectral samples partitioned into 5, 275 , 360 training examples, 659 , 420 validation samples, and 63 , 191 
+
+test observations. The quantitative results for models trained from scratch are detailed in Table 12. Mirroring the empirical trajectory 17 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Table 11. Comparison with alternative fusion baselines. Evaluation of Top-K SMILES elucidation accuracy (%) under full tri-modality inputs on the canonical benchmark dataset. 
+
+Method Top-1% Top-5% Top-10% 
+
+Dense Concatenation (Alberts et al., 2024) 44.29 ± 0.35 59.39 ± 0.31 62.04 ± 0.47 
+
+Cross-Attention Fusion 42.15 ± 0.41 56.45 ± 0.38 61.91 ± 0.52 
+
+Contrastive Alignment (Liang et al., 2024) 39.01 ± 0.28 52.74 ± 0.44 57.06 ± 0.39 
+
+OGM-GE (Wu et al., 2022) 44.87 ± 0.30 60.93 ± 0.27 63.32 ± 0.41 
+
+PCGrad (Yu et al., 2020) 44.73 ± 0.34 61.24 ± 0.49 64.92 ± 0.36 
+
+Gradient Blending (Wang et al., 2020) 46.78 ± 0.25 63.45 ± 0.33 67.82 ± 0.45 
+
+MM-Spectrum (Ours) 76.04 ± 0.12 87.83 ± 0.25 90.26 ± 0.13 
+
+observed on previous benchmarks, single-modality evaluations confirm that NMR delivers the most definitive chemical structure mappings, while IR and MS suffer from severe semantic sparsity when modeled independently. Under early-fusion concatenation, the dense baseline falls victim to severe optimization interference, causing its full-modality performance to slide to 65 .71% , well below its standalone NMR counterpart ( 79 .41% ). Conversely, MM-Spectrum successfully circumvents this scaling pathology, optimizing multi-spectral parameters harmoniously to yield a peak accuracy of 87 .35% 
+
+Top-1, establishing a strict margin of +21 .64% over the dense multi-modal equivalent. 
+
+Table 12. SMILES elucidation performance on the large-scale MMST dataset. All models are trained from scratch directly on the simulated data splits. 
+
+Modality Configuration Method Top-1% Top-5% Top-10% 
+
+NMR-only ( 1H + 13 C) Dense Baseline 79.41 ± 0.16 89.45 ± 0.22 94.71 ± 0.11 
+
+MS-only Dense Baseline 25.13 ± 0.42 28.42 ± 0.35 31.28 ± 0.51 
+
+IR-only Dense Baseline 19.35 ± 0.38 23.60 ± 0.29 27.04 ± 0.34 
+
+Full-Modality Concatenation Dense Baseline 65.71 ± 0.50 85.07 ± 0.34 89.02 ± 0.46 
+
+Full-Modality (Ours) MM-Spectrum 87.35 ± 0.19 95.87 ± 0.14 98.72 ± 0.12 
+
+C.4. Robustness to the Complete Absence of an Entire Modality 
+
+In practical chemical discovery pipelines, complete spectral portfolios may be unavailable due to high instrument acquisition costs or sample-state incompatibilities. To evaluate the extreme bounds of robustness, we subject models trained on full tri-modality spectra to an unfavorable testing environment where one complete physical modality channel is entirely zeroed out during test-time inference. As detailed in Table 13, the early-fusion Dense baseline demonstrates brittle co-dependency, showing massive performance degradation when any information pillar is dropped. Strikingly, when the pivotal NMR spectrum is completely removed, the baseline drops catastrophically to 18 .65% Top-1 accuracy. Under identical missingness constraints, MM-Spectrum 
+
+maintains a massive performance envelope, securing 39 .24% Top-1 accuracy when NMR is missing, and holding above 
+
+73% accuracy when either MS or IR is fully omitted. This behavior indicates that our modality-aware router dynamically isolates degraded coordinate axes and safely re-routes tokens across unaffected specialized parameters. 
+
+Table 13. Inference evaluation under the complete absence of a single modality. Models are optimized on full modalities and evaluated with one modality entirely omitted at test time.                                                              
+
+> Omitted Modality Channel Method Top-1% Top-5% Top-10%
+> Mass Spectrometry (MS) Removed Dense Baseline 25.71 ±0.49 28.52 ±0.36 30.84 ±0.41
+> MM-Spectrum 73.94 ±0.22 86.12 ±0.15 88.47 ±0.18
+> Infrared (IR) Removed Dense Baseline 31.52 ±0.38 35.78 ±0.42 37.79 ±0.35
+> MM-Spectrum 74.81 ±0.17 86.79 ±0.20 89.05 ±0.24
+> Nuclear Magnetic Resonance (NMR) Removed Dense Baseline 18.65 ±0.52 20.46 ±0.47 23.17 ±0.55
+> MM-Spectrum 39.24 ±0.31 59.36 ±0.28 63.41 ±0.39
+
+18 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework              
+
+> Table 14. Sensitivity to the number of experts E(Top-k= 2 ). We fix Top-k= 2 and vary the expert pool size. Best values are bold. The results show a consistent improvement from small Eto a moderate regime, with performance saturating (or slightly degrading) when
+> Ebecomes too large due to routing dilution. This supports our choice of E= 8 as the default setting.
+
+E Top-1 ↑ Top-3 ↑ Top-5 ↑ Top-10 ↑ Latency ↓ Throughput ↑
+
+2 73.15 85.02 87.10 89.05 19.8 ms 50.2 s/sample 
+
+4 74.82 86.95 88.45 90.12 20.1 ms 49.5 s/sample 
+
+8 76.04 87.83 90.26 91.80 21.3 ms 46.8 s/sample 16 75.88 87.60 90.15 91.75 24.5 ms 40.5 s/sample             
+
+> Table 15. Sensitivity to Top-krouting (fix E= 8 ). We fix E= 8 and vary Top-k. Best trade-off is achieved at Top-k= 2 . Top-k= 1
+> limits expert composition capacity, while larger kincreases compute and routing congestion without commensurate accuracy gains.
+
+Top-k Top-1 ↑ Top-3 ↑ Top-5 ↑ Top-10 ↑ Latency ↓ Throughput ↑ Activated Cost ↓
+
+1 73.50 85.20 87.35 89.20 13.5 ms 74.0 s/sample 1.0 ×
+
+2 76.04 87.83 90.26 91.80 21.3 ms 46.8 s/sample 2.0 ×
+
+4 76.12 87.85 90.30 91.85 38.6 ms 25.8 s/sample 4.0 ×
+
+C.5. Sensitivity Analysis on Expert Capacity and Top-k Routing Experimental protocol. To study the sensitivity of conditional computation in MM-Spectrum , we vary (i) the number of experts E and (ii) the routing parameter Top-k while keeping all other hyperparameters fixed (optimizer, learning rate schedule, dropout, total steps, decoding settings, and data splits). Unless otherwise specified, we use the same training budget and evaluation protocol as in the main experiments. For efficiency, we additionally report resource-related statistics (e.g., inference latency/throughput and the relative compute proxy such as activated FFN FLOPs) to characterize the performance–efficiency trade-off. 
+
+Metrics. We report Top-K accuracy for K ∈ { 1, 3, 5, 10 } (higher is better), and inference efficiency measured by through-put (samples/s) or latency (ms/sample) (lower is better). When applicable, we also report the fraction of dropped/overflow tokens induced by limited expert capacity (capacity factor C) as an indicator of routing congestion. 
+
+Effect of expert pool size E. Table 14 reveals that increasing the expert pool size improves accuracy up to a saturation point. Concretely, moving from a small pool (e.g., E = 2 or 4) to a moderate pool (default E = 8 ) consistently improves Top-K performance, indicating that the multispectral elucidation task benefits from richer conditional capacity and stronger specialization. However, further increasing E beyond this regime (e.g., E = 16 ) yields diminishing returns and may even slightly degrade performance. We attribute this to two factors: (1) under-utilization and routing noise : with too many experts, the router must allocate probability mass across a larger set, making load balancing harder and increasing the chance of unstable or noisy assignments; (2) optimization and regularization pressure : larger expert pools intensify the burden of auxiliary balancing constraints and may lead to over-partitioning of representation space, which is undesirable under modality imbalance and limited training budget. Overall, these findings justify choosing E = 8 as the default configuration, which achieves the best accuracy while maintaining favorable inference efficiency. 
+
+Effect of Top-k. Table 15 demonstrates that Top-k directly controls the composition degree of conditional computation. With Top-k = 1 , each token is restricted to a single expert, which reduces compute but also limits the model’s ability to combine complementary expertise across modalities (e.g., assigning shared/specific/interaction experts jointly for ambiguous spectral fragments). As a result, Top-k = 1 typically underperforms configurations that allow limited expert composition. Increasing Top-k improves accuracy initially, and Top-k = 2 achieves the best overall trade-off: it allows mild compositionality while keeping overhead small. In contrast, larger Top-k (e.g., k = 4 ) substantially increases activated expert computations, aggravates routing congestion under finite capacity factor C, and tends to introduce redundancy (multiple experts receiving similar tokens). Empirically, the additional compute does not translate into consistent Top-K
+
+gains, leading to a worse accuracy–efficiency frontier. Therefore, we adopt Top-k = 2 as the default setting throughout the paper. 19 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Takeaway: a stable “capacity–utility” operating point. Combining Tables 14 and 15, we identify a stable operating point (E = 8 , Top-k = 2 ) that maximizes utility under modality imbalance. This operating point aligns with our capacity–utility 
+
+principle: conditional capacity should be sufficient to enable meaningful specialization, yet constrained enough to avoid routing instability and unnecessary compute. These observations are consistent with the synergy discussed in Table 7, where heterogeneous capacities become most effective when the expert pool is neither under-parameterized nor excessively fragmented, enabling computation-aware regularization to allocate budget according to token complexity. 
+
+C.6. Computational Cost and Complexity Analysis Motivation. While multispectral inputs provide complementary structural evidence, they also increase computational burden due to longer concatenated sequences and heterogeneous noise densities across modalities. A naive early-fusion baseline (Dense concatenation Transformer) treats all tokens uniformly and therefore (i) pays quadratic attention cost on the concatenated length and (ii) wastes capacity on low-utility/noisy tokens. In contrast, MM-Spectrum introduces conditional computation via MoE routing, enabling selective capacity allocation and compute–utility trade-offs that are particularly important under modality imbalance. 1
+
+C.6.1. T HEORETICAL TIME /S PACE COMPLEXITY 
+
+Notation. Let the input token lengths for NMR/MS/IR be LN, L M, L I, respectively, and the concatenated length be 
+
+Lall = LN + LM + LI. For a Transformer layer with model dimension d and FFN hidden dimension dff , we denote the self-attention cost as O(L2d) and FFN cost as O(Ldd ff ).
+
+Dense concatenation baseline. In early fusion, attention is computed on the full concatenated sequence, leading to per-layer time complexity 
+
+TDense = O L2all d + O(Lall dd ff ) , (35) and activation memory scaling (dominantly from attention maps and intermediate activations) as 
+
+MDense ≈ O  L2all 
+
+ + O(Lall d) . (36) This becomes unfavorable when multispectral sequences are long and modality imbalance introduces many low-utility tokens. 
+
+MM-Spectrum with conditional computation. MM-Spectrum replaces uniform FFN computation with a sparse MoE block. Let there be E experts and Top-k routing. Each token is processed by at most k experts. Denote the expert cost as 
+
+cost( e) (e.g., proportional to expert FLOPs or parameter size). Then the expected MoE compute per token is 
+
+E [cost] = 
+
+> E
+
+X
+
+> e=1
+
+p(e | x) cost( e), (37) and the total MoE compute scales with Lall · E[cost] . To further encourage compute-aware specialization , we introduce a cost regularizer that penalizes routing probability mass on expensive experts, so that the router learns to spend heavy computation only when it yields sufficient marginal utility. This directly operationalizes a “performance vs. compute” accounting mechanism and tends to route low-density/noisy tokens to light experts while reserving heavy experts for hard tokens. 
+
+Capacity–utility principle. The above formulation suggests a capacity–utility principle: given a fixed budget, the model should allocate high-capacity computation to tokens/modalities with higher structural ambiguity or stronger cross-modal constraints, while using light computation for tokens that are either redundant or noisy. This principle is particularly compatible with multispectral elucidation, where token utility varies substantially across modalities and across molecule complexity regimes. 
+
+> 1Dense baseline: direct concatenation of multimodal spectral sequences and feeding into a standard Transformer without explicit routing or expert specialization.
+
+20 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+C.6.2. E MPIRICAL PROFILING PROTOCOL 
+
+Metrics. We report: (i) #Params (total parameters); (ii) #Active Params (parameters effectively activated per token under Top-k); (iii) training throughput (tokens/sec); (iv) peak GPU memory (GB); (v) decoding latency (ms/sample) under fixed decoding configuration; and (vi) task performance (Top-1 / Top-10, %). All measurements are collected on the same hardware and software stack to ensure comparability. 
+
+Measurement settings (recommendation). Unless otherwise specified, we profile training with the same batch size and sequence truncation used in the main experiments, and profile inference with identical beam size, max decode length, and candidate set size. We recommend reporting mean ±std over 3 runs and discarding the first several warm-up iterations for stable throughput. C.6.3. R ESOURCE –A CCURACY TRADE -OFF                                     
+
+> Table 16. Resource consumption and efficiency comparison. MM-Spectrum achieves significantly better accuracy while maintaining a favorable compute/memory profile compared to the Dense concatenation baseline. Note that while Total Parameters increase due to the expert pool, the Active Parameters (computational cost) remain comparable.
+> Model Top-1 ↑Top-10 ↑#Params ↓#Active Params ↓Throughput ↑Peak Mem. ↓Latency ↓
+> Dense (Concat) 44.29 62.04 110M 110M 4,850 tok/s 16.5 GB 18.2 ms
+> MM-Spectrum (MoE, Top-k=2) 76.04 90.26 450M 135M 4,210 tok/s 22.4 GB 21.3 ms
+> Profiling details. Hardware: 4×NVIDIA A40 (40GB) ; optimizer and training schedule follow Table 10. Throughput is measured during training with effective batch size 256. Latency is measured during inference with beam size 5.
+
+Discussion. Accuracy. As shown in Table 16, MM-Spectrum outperforms the Dense concatenation baseline in both Top-1 and Top-10 accuracy. This indicates that the proposed conditional-computation mechanism not only improves the best-guess generation quality (Top-1), but also increases the recoverability of correct structures within a candidate set (Top-10), which is crucial in practical elucidation pipelines. 
+
+Efficiency. Despite introducing more total parameters, MM-Spectrum activates only a sparse subset per token under Top-k
+
+routing, leading to a favorable active-parameter and compute footprint. Moreover, compute-aware regularization discourages unnecessary activation of heavy experts, thereby controlling the active computational footprint despite the increased total parameter capacity. 
+
+Why early fusion is inefficient under modality imbalance. In multispectral inputs, modality imbalance implies a skewed utility distribution: strong modalities (e.g., NMR) often dominate, while weaker modalities (e.g., MS/IR) contribute sparse but critical evidence. Dense concatenation is forced to process all tokens uniformly, paying quadratic attention cost on Lall and risking negative transfer due to indiscriminate fusion. In contrast, MM-Spectrum can route tokens to modality-specialized or interaction experts, suppressing noisy token influence and allocating heavy computation primarily to ambiguous/hard regions, consistent with the capacity–utility principle. 
+
+Takeaway. Overall, MM-Spectrum provides a better Pareto frontier than Dense early fusion: it achieves higher elucidation accuracy while maintaining a more efficient resource profile in terms of activated capacity, memory footprint, and inference latency. 
+
+## D. Algorithmic Workflow 
+
+Algorithm 1 summarizes the complete training procedure of MM-Spectrum . It details the modality-specific preprocessing, the structured routing mechanism with explicit modality bias, and the multi-objective optimization strategy involving curriculum scheduling. 
+
+## E. Efficiency Analysis and Heterogeneous Experts 
+
+Why Heterogeneous Experts? In standard MoE, all experts share the same architecture (i.e., identical parameter count). However, in multispectral elucidation, processing a token from IR background noise requires significantly less computation than inferring a complex NMR coupling splitting. MM-Spectrum introduces two types of experts: Heavy ( df f n = 2048 )21 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Algorithm 1 Training Procedure of MM-Spectrum 
+
+1: Input: Multimodal dataset D = {(X(m), y )}Mm=1 , where m ∈ { NMR, IR, MS }.
+
+2: Parameters: Encoder-Decoder θ, Router parameters {Wr , e m, b m}, Experts {FFN e}Ee=1 .
+
+3: Hyperparameters: Total steps Tmax , Expert costs {ce}, Capacity factor C, Top-k.
+
+4: Initialization: Randomly initialize θ, router, and experts. Define expert sets Csh , Cm, Cint .
+
+5: for step t = 1 to Tmax do 
+
+6: 1. Spectrum-Aware Representation: 
+
+7: for each modality m do 
+
+8: Apply compression ϕm: ˜x(m) ← ϕm(x(m)) {Eq. 2: Binning/Filtering/Identity }
+
+9: end for 
+
+10: Concatenate to form batch input ˜X = [˜ x(NMR ), ˜x(IR ), ˜x(MS )].
+
+11: 2. Spectrum-Aware Routing: 
+
+12: for each token i in ˜X do 
+
+13: Get content hi and modality index m(i).
+
+14: Inject modality bias: ˜hi ← hi + em(i) + bm(i) {Eq. 3 }
+
+15: Compute logits: si,e ← w⊤ 
+
+> e
+
+˜hi.
+
+16: Anneal temperature: τ ← τ (t) {Curriculum Schedule }
+
+17: Calculate probabilities: pi,e ← softmax (si,e /τ ).
+
+18: Select experts: Ki ← TopK (pi, :, k ).
+
+19: Compute MoE output: oi ← P 
+
+> e∈K i
+
+pi,e · FFN e(hi).
+
+20: end for 
+
+21: 3. Multi-Objective Loss Calculation: 
+
+22: Compute task loss (Cross-Entropy): Ltask .
+
+23: Compute auxiliary losses: • Balancing: Lbal ← CV 2(Imp ) + CV 2(Load ).• Structural (PID): Lstruct ← L sh + Lsep {Eq. 6 }
+
+• Cost-Aware: Lcost ← 1
+
+> B
+
+P 
+
+> i,e
+
+pi,e ce {Eq. 7 }
+
+24: Update curriculum weights λbal (t).
+
+25: Total Loss: Ltotal ← L task + λcost Lcost + λbal (t)( Lbal + Lent ) + λpid Lstruct .
+
+26: 4. Optimization: 
+
+27: Compute gradients ∇L total .
+
+28: Update parameters using AdamW. 
+
+29: end for 
+
+30: Output: Trained MM-Spectrum model. and Light ( df f n = 512 ). 
+
+Effect of Computation-Aware Regularization: By incorporating Lcost = 1
+
+> B
+
+P pi,e ce into the loss function, the model learns ”budget management.” Our experimental observations indicate: • In the late stages of training, Heavy Expert activation is concentrated on NMR tokens and the fingerprint region of IR spectra. • Light Experts primarily process low-intensity MS fragment peaks and smooth IR baseline regions. This mechanism allows MM-Spectrum to achieve an average inference FLOPs of only ∼ 40% compared to a Dense model of equivalent parameter scale, significantly reducing inference latency while improving accuracy. 22 MM-Spectrum: Multimodal Multi-spectral Molecular Structural Elucidation with a Stable MoE Framework 
+
+Figure 10. Routing Evolution Dashboard. The top panel shows routing Uniformity (Entropy H), while the bottom panel shows Imbalance (Max/Mean load). Observation: A clear phase transition is visible at the end of the warmup. Imbalance drops initially (Coverage Phase) and then stabilizes at a non-zero level, indicating that the router has moved from ”random exploration” to ”structured specialization” rather than collapsing to a trivial solution. 
+
+Figure 11. Expert Composition Over Time. Stacked area plot of Top-1 expert usage. Different colors represent different experts. The emergence of stable bands (yellow/green/purple) confirms that distinct experts have successfully captured stable roles (e.g., Heavy vs. Light) driven by the capacity-utility principle. Figure 12. Thermodynamics of Routing. Scatter plot of Entropy (H) vs. Imbalance, colored by training step (purple →yellow). The trajectory shows a strong negative correlation ( ρ = −0.889 ): as training progresses, the router trades high-entropy exploration for lower-entropy, imbalanced (specialized) allocation, consistent with Pareto optimization. 
+
+23
