@@ -1,0 +1,536 @@
+Title: Contribution-Aware Bandwidth Allocation for Multimodal Split Learning
+
+URL Source: https://arxiv.org/pdf/2609.01406v1
+
+Published Time: Wed, 02 Sep 2026 01:35:10 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Contribution-Aware Bandwidth Allocation for Multimodal Split Learning 
+
+Iason Ofeidis, Leandros Tassiulas 
+
+Department of Electrical and Computer Engineering, Yale University, New Haven, CT, USA 
+
+Abstract —Multimodal models are increasingly the default option for perception at the network edge, yet they are trained almost entirely in the datacenter, because a client holding several sensor streams cannot host an encoder per modality. Split Learning makes such training feasible by keeping only the first layers on the device, at the cost of an uplink that must carry smashed activations for every modality at every step. Existing compression schemes give each modality the same keep-ratio, so the shared budget is divided in proportion to smashed-activation dimension, a quantity unrelated to how much each modality contributes to the fused prediction. We make that division an explicit decision and call it inter-modality allocation :under a fixed uplink budget, every policy transmits the same expected payload and differs only in how that payload is split across modalities. Our allocator, ModalShare , sets each modality’s keep-ratio from a Shapley contribution score that the server computes over coalitions of activations it has already received. Measuring this score adds no uplink traffic and no client-side computation, and needs no prior knowledge of which stream is which. ModalShare improves accuracy over equal keep-ratios by 
+
+15 .4 and 12 .4 percentage points on CREMA-D and MVSA at matched payload in 5× compression, with strong performance across three compressors, three datasets, and four budgets. We show that existing compressors underperform in multimodal settings, with ModalShare recovering what gains are left behind. 
+
+Index Terms —split learning, multimodal split learning, communication-efficiency, resource allocation, edge computing. 
+
+I. I NTRODUCTION 
+
+Artificial intelligence is increasingly multimodal. Frontier models now match or exceed human baselines on multimodal reasoning, while the sensors that feed such models (e.g. cameras, microphones, accelerometers) are already standard on the devices people carry. Emotion recognition from speech and facial expression, sentiment analysis over paired image and text, and activity recognition from inertial streams all depend on combining modalities rather than choosing among them. Yet the models that do this combining are trained and served almost entirely in the cloud, while the data that would train them best originates at the edge. Closing that gap means running multimodal learning where the sensors are, and that is precisely where the deployment assumptions break down: an encoder per modality multiplies memory and compute against a budget that was already tight before the second stream arrived. Federated Learning [1] keeps raw data on the device, but leaves this problem unaddressed, since the full model must still fit locally. Split Learning (SL) [2] removes the constraint by partitioning the model at a cut layer: the client runs only the 0 20 40 60 80 100            
+
+> Epoch
+> 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45
+> Acc
+> (a) Acc under different modality allocations symmetric (equal KR) audio-heavy video-heavy
+> 0.00 0.25 0.50 0.75 1.00
+> Keep-ratio share KR m/( KR A+KR B)
+> 5% 95% 75% 25% 50% 50%
+> audio-heavy video-heavy symmetric (equal KR)
+> (b) Keep-ratio split video audio Same TX (transmission) budget, different modality allocation
+
+Fig. 1: Fixed-budget keep-ratio allocations across modalities (CREMA-D, 5× compression). All three arms transmit the same total payload under the same compressor and differ only in how it is divided (b); the resulting accuracy differs by a wide margin (a). Allocation, not only budget and compression, determines what a fixed uplink buys. first few layers and transmits the resulting smashed activations to a server that completes the forward and backward passes. The client-side share of the model can then be made as small as the deployment demands, the scheme composes with federated aggregation, and it appears repeatedly in 6G edge architectures for exactly this reason [3], [4]. This gain comes from trading on-device compute for band-width, and the cost concentrates on the uplink, the more constrained of the two directions. The cut-layer uplink carries per-batch activations for the entire training run, and their size is the dominant cost of the system [3], [5]. Uplink is also the scarce direction in practice: most operators now measure uplink traffic growing faster than downlink, and AI services are expected to drive uplink volumes to roughly three times their 2025 level by 2031 [6]. A substantial literature therefore compresses what crosses the cut: Top-K sparsification [7], randomized selection that reduces index overhead [8], progres-sive pruning of the representation over training [9], channel-wise rate adaptation [10], and adaptive feature-wise dropout at the cut [5]. Each of these decides how a single tensor (e.g. activations) is represented within its budget, which is the only decision available when a node holds one tensor. Applied to a multimodal client, they are modality-agnostic by construction: one policy, and the same keep-ratio handed to every stream. A multimodal client, however, holds several tensors that share one uplink, and that raises a second decision the com-pression literature does not expose: how the shared budget is divided among them. Equal keep-ratios divide the transmitted payload in proportion to the cut dimensions, so a modality arXiv:2609.01406v1 [cs.LG] 1 Sep 2026 whose smashed activations are four times larger silently re-ceives four times the bandwidth: equal compression severity is not equal bandwidth. For example, on MVSA-Single, an image-text sentiment dataset, the image cut is roughly four times the text cut, so image takes 80% of the budget be-fore anything about the task is measured. Additionally, no evidence suggests that a dimension-based division matches how the modalities contribute; in fact, modalities are weighted unequally in fused models and degrade differently under constraint [11]–[13]. Under a fixed budget, floats spent on a stream the fused prediction barely uses are floats taken from one it depends on. Figure 1 indicates that the difference is not marginal even when dimension skew is absent: on CREMA-D, an audio-video emotion recognition task whose two cuts are nearly equal in dimension, holding the transmitted payload and the compressor fixed and varying only how the budget is split, an audio-heavy allocation converges well above the equal-keep-ratio default while a video-heavy one falls below it. Only the allocation differs. This motivates the question we study: under a fixed to-tal uplink budget, does allocating bandwidth asymmetrically across modalities outperform uniform allocation, and under what conditions? We make the decision explicit as inter-modality allocation and design a policy for it. Our allocator, 
+
+ModalShare , estimates each modality’s marginal contribution with a Shapley probe evaluated at the server over coalitions of smashed activations the server already holds, and maps those scores to per-modality keep-ratios that preserve the total transmitted payload. Because the coalitions are formed by masking activations that have already crossed the cut, the measurement consumes no uplink, has no client-side computation overhead, and requires no auxiliary channel; its cost is only server-side compute. Allocation sits above the compressor rather than replacing it: ModalShare determines how much budget each stream receives, while the existing compressor still determines which coordinates within that stream survive. We find the resulting gains to be substantial: largest at moderate compression on cuts where contribution is skewed, diminishing as the budget approaches the trivial floor, and near zero where the modalities genuinely contribute equally, which is the behaviour a measurement-driven policy should exhibit. The main contributions of this work are:  
+
+> •
+
+We show that modality-agnostic compression is not neu-tral: equal keep-ratios allocate transmitted payload in proportion to cut dimension, a quantity unrelated to a modality’s role in the fused prediction. To our knowledge, this is the first work to treat the division of a shared cut budget across modalities as a decision in its own right, which we formulate as inter-modality allocation : an iso-budget problem in which every policy transmits the same expected payload and differs only in its split.  
+
+> •
+
+We propose ModalShare , which sets per-modality keep-ratios from a fusion-level contribution score measured at the server over coalitions of already-received smashed activations, adding no uplink traffic and assuming no modality-identity prior. Under SplitFC at β=0 .2 it im-proves accuracy over equal keep-ratios by 15 .4 pp on CREMA-D and 12 .4 pp on MVSA at matched payload, with the advantage persisting across three compressors, three datasets, and four budgets; existing SL compressors leave these gains unclaimed in multimodal settings, and allocation recovers them.  
+
+> •
+
+We attribute the gain to contribution rather than to di-mension skew. On MVSA the contribution component exceeds the skew component that any fixed rule could recover, and on CREMA-D, whose cut dimensions are balanced, it accounts for the whole effect; where the measured gap is small, as on UCI HAR, allocation stays near-uniform and the gain vanishes.  
+
+> •
+
+We show cut-local proxies do not substitute for a fusion-level score: activation and gradient norms cannot observe how modalities combine, and standalone utility measures a modality in isolation rather than its marginal value, so none recovers the gain. II. R ELATED WORK 
+
+Split Learning & Compression. SL partitions a model so that clients transmit intermediate activations to a server that completes the forward and backward passes [2], and the size of those intermediates is the dominant cost [3], [5]. Communication-efficient variants of SL compress the transmit-ted tensor: Top-K sparsification [7], randomized variants that reduce selection and index cost [8], progressive pruning of the representation over training [9], adaptive feature-wise dropout at the cut [5], channel-wise compression that adapts the rate across channels of a single tensor [10], batch-wise packing of multiple smashed vectors into one [14], and learned autoen-coder bottlenecks at the cut [15], [16]. Each of these decides how a single tensor is represented: a sparsity level, a schedule, a channel-wise rate or a learned bottleneck. Multimodality adds a second: when several streams share one uplink, the budget must also be divided among them. That division is the subject of this work. 
+
+Asymmetric Multimodal Learning. Modality imbalance in centralized training has received increasing attention in re-cent years. Gradient-balancing methods such as on-the-fly gradient modulation (OGM) [13] equalize optimization effort across modalities. Wei et al. [12] argue that balanced op-timization is not optimal and instead align each modality’s optimization dependency with the inverse of its variance ratio. Xu et al. [11] guide asymmetry by an explicit contribution score, using it both to accelerate gradients and to set aper-modality information-bottleneck strength; greedy modality selection [17] makes the coarser decision of which modalities to admit at all. Modality-balanced quantization [18] makes a related observation at the level of numerical precision, calibrating vision and language tokens separately because a single quantization objective serves them unequally. These works reallocate optimization effort, representation capacity, or numerical precision across modalities. We reallocate a TABLE I: Notation.                                
+
+> Symbol Meaning
+> Mnumber of modalities
+> Dmflattened cut dimension of modality mzmsmashed activations of modality mrmkeep-ratio of modality m(the allocated quantity)
+> βuplink budget as a fraction of full cut payload, TX /P
+> kDk
+> qmpayload share of modality m,Dmrm/TX
+> Cintra-modality compressor (SplitFC primary)
+> u(S)coalition utility (server true-label log-prob with only modalities S)
+> ϕmShapley contribution score of modality msmEMA-smoothed contribution share of modality mπmnormalized allocation weight from sm
+> τallocation temperature
+> rmin keep-ratio floor
+> gcontribution confidence gap
+> γfreeze confidence threshold
+> Kconsecutive confident epochs required to freeze
+> emin earliest epoch at which freezing is allowed
+
+communication budget at the split-learning cut, where the constraint is a transmitted payload rather than a regularizer. 
+
+Contribution Scoring. Shapley-style attribution quantifies how much each modality drives a prediction, and has been used to audit vision-language transformers [19], to separate unimodal from cross-modal contributions [20], and to report diagnostic weight in clinical models [21]. Closest in estimator, Wei et al. [22] compute Shapley-based contributions per sam-ple and resample data for the weaker modality. Contribution is consistently found to be dataset- and task-dependent, which is what makes a fixed budget split unsatisfactory and an online estimate useful. The question also arises in federated learning, where contribution estimates have been applied to communica-tion [23] and to modality imbalance across clients [24]; there the network carries aggregated model updates rather than per-batch activations at a fixed cut, so the allocation decision we study does not arise. We evaluate the same coalitions during training and spend the resulting scores on transmitted payload: the estimator is shared, the actuator is the uplink budget. To our knowledge, this is the first use of a Shapley-based contribution score to allocate communication resources across modalities in multimodal learning. III. M ETHOD 
+
+We consider multimodal SL between one multimodal client and one server: the client holds the early modality encoders, the server holds the remaining backbone, fusion, and classifier. Because attribution and allocation act only on that client’s cut and uplink, the same policy applies independently on every client–server link in a multi-client deployment. We formu-late sharing the client–server cut as an iso-budget allocation problem and give a contribution-aware policy for setting per-modality budgets. 
+
+A. Multimodal Split Learning 
+
+Let D = {(x(1)  
+
+> i
+
+, . . . , x (M ) 
+
+> i
+
+, y i)}Ni=1 be a training set with modality index set M = {1, . . . , M }. A single client hosts M
+
+modality encoders; for modality m, encoder gm with param-eters θm maps its input to intermediate activations (smashed activations) at a fixed cut, 
+
+zm = gm(x(m); θm) ∈ RDm , (1) where Dm is the flattened smashed-activation dimension. The server model h with parameters θs receives the smashed activations, completes any remaining modality-specific layers, fuses the modalities, and predicts 
+
+ˆy = h({zm}m∈M ; θs). (2) For each mini-batch the client uploads {zm}; the server evaluates the task loss, backpropagates through h, and returns the cut gradients ∇zm ℓ. All communication crosses this cut. 
+
+B. Compression of smashed activations 
+
+Let C denote a modality-level compressor with budget parameter rm ∈ (0 , 1] ,
+
+ˆzm = C(zm, r m), (3) where the keep-ratio rm is the expected payload of ˆzm as a fraction of Dm. This interface separates two decisions: the compressor determines how to represent modality m within its budget, and the allocator determines how much budget that modality receives. Our allocation rule is therefore independent of the internal selection rule used by C.Budget is accounted in transmitted smashed-activation floats, 
+
+TX = X
+
+> m∈M
+
+Dmrm, (4) per sample and per direction. The compressed representa-tion also defines the units the server can differentiate with respect to, so the return path carries gradients in that same representation: coordinates the client did not send receive no gradient, and total cut traffic is 2 · TX . Two allocations at equal TX therefore exchange the same expected payload in both directions, and whatever side information C carries with it (e.g., masks and indices for a sparsifier, scales for a quantizer), is matched along with it. 
+
+C. Inter-modality allocation 
+
+Existing compression of smashed activations applies one rule to concatenated smashed activations or assigns the same keep-ratio to every modality. Neither asks how a shared budget should be divided according to the modalities’ roles in the fused prediction. We expose that decision as inter-modality allocation. We define the normalized communication budget as: 
+
+β = TX 
+
+P 
+
+> m
+
+Dm
+
+. (5) All policies compared at budget β satisfy the iso-budget constraint X
+
+> m
+
+Dmrm = β X
+
+> m
+
+Dm, (6) /               
+
+> gimg
+> gtext
+> Crimg himg
+> htext
+> Fusion Head ƶ𝑦
+> Contribution Probe
+> ∅,{image}, {text}, {image, text}
+> Allocator
+> 𝑠 𝑚 ↦𝑟 𝑚
+> iso-𝛽
+> Image
+> Text
+> Level 1 – ModalShare (inter-modality)
+> Level 2 –Compression
+> 𝑟 𝑚 ∙every 𝑇 𝑝𝑟𝑜𝑏𝑒 ∙no extra uplink
+> : ModalShare kept
+> : uniform kept
+> Client Server Network
+> …
+> 𝐷 𝑖𝑚𝑔 ≈ 4𝐷 𝑡𝑒𝑥𝑡
+> ƶ𝑧 𝑖𝑚𝑎𝑔𝑒
+> ƶ𝑧 text
+> 𝜷 = 𝟎. 𝟐 : 5 of 25 units transmitted
+> - uniform: 4 (image) + 1 (text)
+> - ModalShare: 1 (image) + 4 (text)
+> Crtext
+> : dropped
+
+Fig. 2: ModalShare allocates a fixed cut budget across modalities . Prior compression operates within a modality (Level 2); ModalShare divides the shared payload between them (Level 1) using a server-side Shapley probe on already-received activations, so no extra uplink is consumed. Strip lengths follow the MVSA cut dimensions; cell counts are illustrative at 
+
+β = 0 .2, where both policies transmit 5 of 25 units and differ only in the split. so they exchange the same expected payload and differ only in its division. The payload share of modality m is 
+
+qm = Dmrm
+
+TX , X
+
+> m
+
+qm = 1 , (7) and q lies on the probability simplex, giving a dimension-aware description of allocation along an iso-budget surface. Equal keep-ratios, rm = β, give 
+
+quni  
+
+> m
+
+= Dm
+
+P 
+
+> k
+
+Dk
+
+. (8) Equal compression severity therefore does not imply equal transmitted floats: a modality with four times the smashed-activation dimension receives four times the payload. Our objective is to choose q from fusion-level contribution while preserving (6). 
+
+D. ModalShare: Contribution-aware allocation 
+
+Here, we introduce ModalShare , a contribution-aware al-locator that divides a fixed uplink budget into per-modality keep-ratios based on a server-side contribution score, leaving the intra-modality compressor unchanged (Figure 2). 
+
+Server-side contribution probe. We define the coalition utility u(S) as the mean true-label log-probability produced by the server when only modalities S ⊆ M are present, with absent modalities replaced by zeros, a masking convention used also in modality valuation [22]. Coalition marginals are aggregated by the Shapley value [25], 
+
+ϕm = X
+
+> S⊆M\{ m}
+
+|S|! ( M − | S| − 1)! 
+
+M ! [u(S ∪ { m}) − u(S)] ,
+
+(9) evaluated exactly with 2M coalitions, or by sampling coalition orderings for large M . For example, when M = 2 the four coalitions are ∅, {1}, {2}, {1, 2}.Because batch-level utilities are noisy, negative contribu-tions are floored, renormalized to a share, and then smoothed, 
+
+˜ϕ(t) 
+
+> m
+
+= [ϕ(t) 
+
+> m
+
+]+
+
+P
+
+> k
+
+[ϕ(t) 
+
+> k
+
+]+ + ε , s(t) 
+
+> m
+
+= α ˜ϕ(t) 
+
+> m
+
++ (1 − α)s(t−1)  
+
+> m
+
+,
+
+(10) with the probe evaluated every Tprobe batches and cached scores used in between. 
+
+From contribution to keep-ratios. Given scores {sm},temperature-controlled weights 
+
+wm = s1/τ m , πm = wm
+
+P 
+
+> k
+
+wk
+
+, (11) convert contribution into a share of the residual payload after a keep-ratio floor rmin reserves Dmrmin units per modality. With TX sur = TX − rmin 
+
+P 
+
+> k
+
+Dk > 0,
+
+cm = Dmrmin + πmTX sur , rm = cm
+
+Dm
+
+, (12) followed by projection to rm ∈ [rmin , 1] that preserves the total budget (6). Smaller τ sharpens (11). The empty-coalition utility sets the scale of {ϕm}: for M =2 , ϕ1 − ϕ2 =
+
+u({1})−u({2}) is independent of u(∅), while efficiency gives P 
+
+> m
+
+ϕm = u(M)−u(∅), so the baseline controls how sharply the weights separate the modalities. When the keep-ratio floor vanishes, a decisive contribution gap can place the allocation at a simplex corner rather than a smooth interior reweighting. Hard modality selection is the limiting case τ → 0 of this map; the floor rmin and the temperature τ interpolate between it and uniform allocation. 
+
+Confidence and freeze. Live allocation follows (12) without gating keep-ratios on the contribution gap: while unfrozen, ModalShare remains adaptive. Confidence is measured sepa-rately by the normalized gap between the leading and runner-up scores, 
+
+g = s(1) − s(2) 
+
+P 
+
+> k
+
+sk + ε , (13) Algorithm 1 ModalShare iso-budget allocation. 1) Compute smashed activations zm ← gm(x(m)), m ∈M.2) Every Tprobe batches while unfrozen: evaluate server coalitions, update {sm}, and map to {rm} under (12). 3) If the freeze criterion on g is met, hold {rm} fixed and skip further probes; otherwise continue adapting. 4) The client compresses and uploads ˆzm ← C (zm, r m).5) Complete server forward/backward, return cut gradients, and update {θm} and θs.
+
+where s(1) ≥ s(2) are the top two values in {sm}. For 
+
+M =2 this reduces to g = |s1 − s2|/(s1 + s2 + ε). After epoch emin , if g ≥ γ favors the same winning modality for 
+
+K consecutive epochs, ModalShare freezes the current keep-ratios {rm}, preserves (6), and discontinues probing. A drop of g below γ, or a change of winner, resets the streak. The threshold γ therefore controls only when to stop adapting, not the online map itself. 
+
+E. Training procedure and communication cost 
+
+Algorithm 1 embeds the probe, map, and freeze rule in the training loop. During early training the uplink budget is ramped from full keep-ratios ( rm=1 ) to the target fraction β;schedules appear in Section IV. While unfrozen, ModalShare refreshes {rm} via (12) on the probe schedule of Section III-D, including during the compression ramp. At fixed β, compared policies share the same expected TX and differ only in q.The probe adds no client–server messages: coalitions are formed by masking smashed activations already held at the server, so attribution consumes no part of (4) and needs no auxiliary channel. Its cost is 2M forward evaluations of the server submodel (four for M =2 ) every Tprobe batches while allocation remains unfrozen. Freezing removes that overhead for the remainder of training once the confidence criterion is met. Section V-G compares the frozen policy to continued online allocation. IV. E XPERIMENTAL SETUP 
+
+Our evaluation tests an allocation hypothesis rather than a new feature compressor. At a fixed uplink budget β (5), we ask whether replacing modality-agnostic keep-ratios with contribution-aware keep-ratios improves accuracy when the expected transmitted payload is held constant. Every con-trolled comparison holds fixed the intra-modality compressor C
+
+and the training protocol, and changes only the mapping from budget to per-modality keep-ratios {rm}. Budget is accounted in expected kept smashed-activation floats, TX = P 
+
+> m
+
+Dmrm,together with the matched cut-gradient support (Section III-B). 
+
+A. Baselines 
+
+To the best of our knowledge, no prior method allocates a shared payload budget across modalities, whether in SL or otherwise: existing communication-efficient methods com-press each transmitted tensor independently and leave the division of a shared budget among modalities unspecified. Our central comparison is therefore between ModalShare and the modality-agnostic default it replaces, uniform allocation, which assigns every modality the same keep-ratio ( rm = β
+
+for all m) and represents the existing practice of compressing each modality independently. Both satisfy the iso-budget con-straint (6) and differ only in how the shared payload is split. Crucially, equal keep-ratios are not equal bandwidth: when the smashed dimensions differ, uniform allocation already sends a fraction quni  
+
+> m
+
+= Dm/ P 
+
+> k
+
+Dk of the payload to modality 
+
+m (8), so a modality with a larger cut silently receives a larger share. ModalShare instead sets {rm} from the server-side contribution probe of Section III-D, under the same total budget. 
+
+B. Datasets 
+
+CREMA-D [26] is an audio-visual emotion recognition dataset containing synchronized speech and facial expression data. It comprises 7, 442 video clips spanning six emotion categories. The dataset is split into 6, 698 training samples and 744 testing samples. 
+
+MVSA-Single [27] is an image-text dataset used for sen-timent analysis. It includes a stratified subsample of 2,592 
+
+pairs split 60 /20 /20 into 1,555 training, 518 validation, and 
+
+519 held-out pairs, with the validation partition reported as test accuracy. 
+
+UCI HAR [28] is a six-class human activity recognition dataset from smartphone inertial sensors, collected from 30 volunteers. It comprises 10 , 299 samples, split into 7, 352 
+
+training and 2, 947 testing samples. Each sample provides two synchronized streams: accelerometer and gyroscope. 
+
+C. Models 
+
+Encoders. All experiments use the multimodal SL setup of Section III-A: each modality has a client-side encoder trun-cated at a fixed early cut, and the server completes the remain-ing modality-specific layers, fusion, and classification. Visual streams (CREMA-D video; MVSA image) use a ResNet-18 backbone. MVSA text uses DistilBERT, fine-tuned end-to-end. CREMA-D audio is encoded from the waveform as an STFT log-magnitude spectrogram ( 22 ,050 Hz, tiled to three seconds, 
+
+nfft =512 , hop length 353 ), giving a single-channel 257 ×188 
+
+input to a ResNet-18 encoder trained from scratch. UCI HAR uses a small 1D CNN per inertial stream. 
+
+Fusion. Fusion is concatenation followed by a linear classifier head, with no cross-modal attention. Unlike attention-based fusion, concatenation does not reweight streams after the cut, so an accuracy difference between allocations at matched β is attributable to the allocation itself. 
+
+Splitting point. In realistic SL scenarios, edge clients cannot host most of the model locally: computation relies mostly on the server, and the client only transmits smashed activations from an early cut. That is also where the smashed-activation payload is large enough for an uplink budget to bind and for per-modality keep-ratios to matter. Based on this, we decide to use the early split (layer-1) as the default, unless otherwise TABLE II: Flattened cut dimensions at the early split and the payload share induced by equal keep-ratios, quni  
+
+> m
+
+=
+
+Dm/ P 
+
+> k
+
+Dk.                  
+
+> Dataset Modality Dmquni
+> m
+> CREMA-D video 200 ,704 50 .7%
+> audio 195 ,520 49 .3%
+> MVSA image 200 ,704 80 .3%
+> text 49 ,152 19 .7%
+> UCI HAR accel 32 50 .0%
+> gyro 32 50 .0%
+
+specified. Concretely, the client holds only the first stage of each encoder: ResNet-18 stem plus the first residual block for CREMA-D video/audio and MVSA image; DistilBERT layers 
+
+0–1 for MVSA text; the first 1D-CNN block for UCI HAR; and the server runs the remaining modality-specific layers, pooling, fusion, and the classifier. A late split instead keeps the full encoder on the client and exchanges only pooled embeddings ( 256 –512 dimensions per modality), leaving little payload to allocate. Table II lists the cut dimensions and the payload share that equal keep-ratios induce for early split. CREMA-D is nearly balanced; on MVSA the image stream already receives four-fifths of the transmitted payload under the modality-agnostic default. 
+
+D. Hyperparameters and evaluation 
+
+CREMA-D is trained with SGD (learning rate 10 −3, weight decay 10 −4, momentum 0.9) for 100 epochs with a 5-epoch learning-rate warmup and a 5-epoch compression ramp. MVSA is trained with AdamW (learning rate 3×10 −4, weight decay 10 −3) for 30 epochs with one-epoch warmups. Batch size is 64 in both cases. Allocation uses floor rmin =0 , probe period Tprobe =10 , EMA coefficient α=0 .3, and temperature 
+
+τ =1 , each shared across all datasets, budgets, and compres-sors. Freezing uses confidence threshold γ=0 .90 , streak length 
+
+K=3 , and earliest freeze epoch emin =10 , likewise shared. For the underlying compressor, we use SplitFC [5], unless otherwise specified. Final test accuracy is averaged over N =12 
+
+seeds. 
+
+Experimental Environment. We implemented our framework and all baselines using the PyTorch library [29]. All experi-ments were conducted on a server equipped with a 32-core AMD Ryzen Threadripper PRO CPU, 504 GB of memory and an NVIDIA GeForce RTX 4090 GPU. V. E VALUATION RESULTS 
+
+A. Same budget, better accuracy 
+
+Table IIIa reports accuracy against uplink compression 1/β 
+
+under SplitFC with early split at matched total payload. ModalShare strongly outperforms uniform on CREMA-D and MVSA at every compression level. UCI HAR is milder but still favours the allocator at 5/6 budgets: it settles at a slight keep-ratio imbalance rather than a corner, and that mild reallocation 0.04 0.08 0.16 0.32 0.48 0.63                
+
+> Uplink payload (MB / sample / direction)
+> 20 25 30 35 40 45 50 55
+> Test accuracy (%)
+> no compression (53.1)
+> CREMA-D
+> uniform ModalShare
+> 0.02 0.05 0.10 0.20 0.30 0.40
+> Uplink payload (MB / sample / direction)
+> 40 45 50 55 60 65
+> no compression (61.8)
+> MVSA
+> 0.025 0.05 0.1 0.2 0.3 0.4
+> β
+> 0.025 0.05 0.1 0.2 0.3 0.4
+> β
+
+Fig. 3: Accuracy (%) versus uplink payload. Left: CREMA-D; right: MVSA. Red dotted: no-compression reference. Top axis: bandwidth budget β.yields a small accuracy gain over equal keep-ratios, suggesting that the two sensor streams contribute roughly the same, so there is little asymmetry to be exploited. Figure 3 shows the same CREMA-D and MVSA com-parison against transmitted payload, so the horizontal axis is physical uplink cost rather than a keep-ratio label. Gains peak at moderate compression: the gap is largest near 5× and mainly shrinks toward the tightest budgets (near the trivial floor). Once the budget again carries usable signal, the same total payload is worth more under ModalShare than under equal keep-ratios. 
+
+Operating envelope. Table IIIa and Figure 3 show the same pattern: ∆ peaks near moderate compression (about +15 pp on CREMA-D and +12 pp on MVSA) and largely declines toward small budgets, approaching near zero at 40 ×. At 40 ×
+
+both arms approach the trivial floor, so allocation has little left to differentiate: CREMA-D sits just above six-class chance (16 .7), and MVSA uniform sits on the majority-class rate (≈40 ). This pattern suggests that reallocation pays when the budget binds but still carries signal. 
+
+B. Does the probe measure contribution? 
+
+The gains above raise a question: does ModalShare help 
+
+because it measures contribution, or would any aggressive asymmetric split have helped on these datasets? On CREMA-D and MVSA the two are observationally identical, so Ta-ble IIIb places the probe’s measurement beside the allocation it produces. We summarise each dataset by the contribution gap g of (13), i.e. the normalized separation of the smoothed scores {sm} that feed the keep-ratio map (for M =2 , g =
+
+|sA − sB |/(sA + sB + ε)). Thus g is a property of the probe scores before they are mapped to {rm}, not a restatement of the allocation. The allocation follows it: on CREMA-D and MVSA the probe reads a large gap ( g≈1.0 and 0.90 )and concentrates the budget on the modality it scores as dominant (audio and text respectively) for double-digit ∆; on the balanced UCI HAR it reads a small gap ( g≈0.12 ) and splits near-evenly. UCI HAR is the discriminating case: a method that forced asymmetry regardless of the data would commit there too and would lose accuracy, whereas ModalShare stays TABLE III: ModalShare against uniform under SplitFC, early-split multimodal SL. (a) Accuracy (%) across compression rates, with the accuracy difference ∆; the shaded ∆ row is bold where the gain exceeds 1pp. (b) At β=0 .2, the modality the probe favors and the payload share q it receives ( qmod : ModalShare, quni : uniform), with the probe’s contribution gap g. The gain tracks the measured gap: large on CREMA-D and MVSA, near-zero on the balanced UCI HAR.                                                              
+
+> Dataset (no comp.) Allocation Compression rate
+> 2.5×3.3×5×10 ×20 ×40 ×
+> CREMA-D ( 53 .1)Uniform 46 .9±6.2 41 .1±6.4 32 .2±5.2 23 .4±2.5 19 .4±1.6 18 .5±1.6
+> ModalShare 55 .2±2.1 54 .5±3.5 47 .6±5.9 33 .5±6.5 25 .0±4.8 21 .0±4.4
+> ∆+8.3±4.9 +13 .4±4.1 +15 .4±4.3 +10 .1±5.1 +5.6±5.1 +2.5±4.9
+> MVSA ( 61 .8)Uniform 52 .5±2.5 49 .1±3.8 48 .0±2.1 42 .4±3.3 40 .6±2.5 40 .2±2.6
+> ModalShare 61 .7±2.8 60 .1±4.6 60 .4±6.3 51 .0±7.4 47 .7±4.7 41 .0±3.3
+> ∆+9.2±2.5 +11 .0±5.4 +12 .4±6.4 +8.6±8.1 +7.1±5.5 +0 .8±4.5
+> UCI HAR ( 63 .7)Uniform 51 .2±2.4 47 .3±2.6 43 .6±2.3 39 .4±2.1 39 .2±2.3 37 .3±2.2
+> ModalShare 51 .5±2.2 48 .0±2.5 44 .7±3.5 40 .2±3.1 39 .1±2.1 37 .5±2.1
+> ∆+0 .3±0.7 +0 .7±1.0 +1.1±1.3 +0 .8±1.7 −0.1±1.6 +0 .2±0.6
+
+(a) Accuracy versus uplink compression (no-compression in parentheses).                            
+
+> Dataset Modalities qmod quni Gap g∆
+> CREMA-D audio 0.99 0.49 1.00 +15 .4
+> video 0.01 0.51
+> MVSA text 0.88 0.20 0.90 +12 .4
+> image 0.12 0.80
+> UCI HAR accel 0.56 0.50 0.12 +1 .1
+> gyro 0.44 0.50
+
+(b) Probe contribution versus realised allocation. 
+
+near uniform because the probe finds little to reallocate. The allocation is thus a function of the measured contribution, not a fixed asymmetric prior, which is what ties the gains in Table IIIa to a property the probe reads in the data. 
+
+C. Contribution, dimension skew & modality selection 
+
+On MVSA the image cut dimension is roughly four times the text cut dimension (Table II), so equal keep-ratios already place 80 .3% of the transmitted payload on image. This intro-duces a possible alternative reading of the MVSA gain: that contribution plays no role and the allocator merely undoes a dimension-induced skew. To separate the two effects we compare against a fixed allocation that holds TX constant but divides it differently. Where uniform keep-ratios split the payload in proportion to each modality’s cut dimension, the 
+
+equal-payload control gives each modality half the transmitted floats, isolating the dimension-skew component; notably, it is itself an allocation that no existing compressor implements. ModalShare instead divides the payload according to each modality’s measured contribution. Table IV reports the com-parison at β=0 .20 .The gain decomposes into a skew component and a residual that no dimension-based rule can supply. Relative to uniform, moving to equal payload recovers 5.17 pp of accuracy due to the dimension-skew component, and moving from equal payload to ModalShare recovers a further 7.23 pp, for a total of 12 .40 pp. The larger share of the gain comes from the contribution component, a part no fixed, dimension-based rule can supply, and which is precisely what ModalShare provides. CREMA-D provides the complementary check (Table IIIb). Its two cut dimensions differ by about 1.4 percentage points in uniform payload share (Table II), so equal keep-ratios are already near equal payload and the dimension-skew compo-nent is absent by construction. Yet its contribution gain is the larger of the two datasets’, which establishes that the second component does not depend on unequal dimensions. The dimension-skew term is thus specific to datasets with TABLE IV: MVSA static allocation references at β=0 .20 .
+
+qimage /q text is the image/text float share. ∆ is relative to uniform. Equal payload (per modality) isolates dimension skew; the further gap to ModalShare is the contribution effect.              
+
+> Allocation qimage /q text Acc. (%) ∆(pp) Uniform 0.803 /0.197 48.00 ±2.1 —Equal payload 0.500 /0.500 53.17 ±3.9 +5.17 ModalShare 0.122 /0.878 60.40 ±6.3 +12.40
+
+unequal cut dimensions, while the contribution term is present in both. A third reading remains: that the gain requires only iden-tifying a winning modality, i.e. modality selection. Selection is in fact the τ → 0 limit of (11)-(12), so it is a point in the design space this formulation exposes rather than an alternative to it. Importantly, reaching that point still requires knowing which modality wins. Table V shows this is not readable at the cut: no per-stream signal recovers the allocation, and solo utility, which does see the fused model, moves the split by 
+
+0.02 on CREMA-D against the probe’s 0.50 . Selection also requires careful tuning, which the iso-budget map does not: the same allocation and freeze settings run unchanged across every dataset, budget, compressor, and split depth reported here, and on UCI HAR the map self-abstains at g≈0.12 where a forced commitment would cost accuracy. 
+
+D. Contribution proxies 
+
+ModalShare’s probe evaluates coalitions of modalities at the server, which costs a forward pass. A natural question is whether a local signal, one already available at the splitting point, can drive the same iso-budget map (12) and recover the gain. Table V screens three at β=0 .20 under the early-SplitFC protocol used elsewhere: the per-modality activation norm, the cut-gradient norm, and the solo utility u({m}), which is the server’s predictive utility when modality m is present and the other are zeroed. TABLE V: Proxy screen at β=0 .20 . For each dataset, ∆ is versus equal keep-ratios (pp) and q is the payload share of the superscripted modality; the uniform row is the ∆=0 reference.                                       
+
+> CREMA-D MVSA UCI HAR Allocator ∆qvideo ∆qimage ∆qaccel
+> Shapley (ModalShare) +15 .40.01 +12 .40.12 +1 .10.56
+> Activation-norm +4 .30.31 −1.50.55 +0 .10.50
+> Gradient-norm −0.30.58 −1.30.52 0.00.51
+> Solo utility +0 .30.50 −1.70.52 +0 .10.50
+> Uniform 0.00.51 0.00.80 0.00.50
+
+None moves the allocation to where it helps. On CREMA-D the strongest proxy, activation-norm, shifts only part way toward audio ( qvideo =0 .31 , against ModalShare’s 0.01 ) for a fraction of the gain ( +4 .3 vs +15 .4 pp); gradient-norm drifts the wrong way and solo utility barely moves. On MVSA the proxy scores barely separate, so the allocation reaches only near equal payload ( qimage ∈[0 .52 , 0.55] ) and stays at or below uniform accuracy, far from ModalShare’s text corner (0.12, +12.4 pp). UCI HAR is near-null for all arms, as expected when there is little to reallocate. The failures have two distinct causes. The activation and gradient norms are per-stream quantities computed before fusion; they cannot see how the modalities combine in the prediction, so they do not track fusion-level contribution at all. Solo utility does see the fused model, but measures each modality in isolation. Its standalone predictive value is not what should set the budget: a modality that is strong alone may be redundant once the other is present, or weak alone yet complementary. Contribution is the marginal value a modality adds on top of the others, which only the coalition difference in (9) captures. This is why ModalShare’s full probe recovers the gain where every cheaper signal falls short. 
+
+E. Allocation is orthogonal to the compressor 
+
+To test that the effect is not tied to one compressor, we re-run the identical uniform-versus-ModalShare comparison under two well established compressors in SL: Top-S [7] and RandTop-S [8], in addition to the adaptive SplitFC [5] used elsewhere. Allocation always selects the per-modality bud-gets; the compressor only selects which coordinates survive inside each modality. Table VI reports the accuracy difference directly. Across three compressors, three datasets, and four budgets, ModalShare beats matched uniform in 29 of 36 
+
+configurations. Most of the seven exceptions are within 1 pp on UCI HAR, where contribution is already near-balanced; the two large negatives are confined to CREMA-D at mild compression under hard column selection. This failure mode is specific and identifiable: CREMA-D at 5× compression ratio, where Top-S loses 5.11 pp and RandTop-S loses 2.51 pp relative to uniform. At tighter bud-gets on the same dataset both hard sparsifiers gain (+4 .97 
+
+to +9 .65 pp). Hard selection does not always leave a within-modality support that the allocator can exploit at mild com-TABLE VI: Effect of ModalShare across intra-modality compressors. Each cell is the accuracy difference ∆ =
+
+ModalShare − uniform (percentage points).                                            
+
+> Compressor Dataset Compression ratio
+> 5×10 ×20 ×40 ×
+> SplitFC [5] CREMA-D +15 .4+10 .1+5 .6+2 .5
+> MVSA +12 .4+8 .6+7 .1+0 .8
+> UCI HAR +1 .1+0 .8−0.1+0 .2
+> Top-S[7] CREMA-D −5.11 +7 .71 +7 .67 +4 .97
+> MVSA +6 .52 +13 .21 +9 .91 +7 .26
+> UCI HAR +0 .08 +1 .32 −0.21 −0.04
+> RandTop-S[8] CREMA-D −2.51 +4 .99 +9 .65 +8 .18
+> MVSA +4 .21 +11 .50 +10 .05 +8 .93
+> UCI HAR +0 .77 −0.40 −0.05 +0 .03
+
+pression, and the effect is confined to the dataset whose dimensions are already balanced. That is precisely where reallocation has least to recover and most to disturb when the sparsifier is lenient. Two further observations follow from the same table. First, the effect is not an artifact of the adaptive compressor. Under Top-S and RandTop-S on MVSA the gains are larger than un-der SplitFC at several budgets, reaching 13 .21 pp at 10 ×, and two of those Top-S configurations exceed the uncompressed reference, which could be attributed to the regularization effect of compression mechanisms, as already reported in [5], [8], [30], [31]. Second, the compressors themselves differ in strength: Top-S can exceed SplitFC on absolute accuracy in some cases. Compressor choice is an axis of its own, and every allocation comparison here is within-compressor at matched β. We chose SplitFC as the primary underlying compressor because its uniform arm has the highest absolute accuracy among the three compressors in most budgets. Lastly and more importantly, this result highlights that existing SL compressors leave behind significant accuracy gains on the table in multimodal scenarios, with ModalShare being able to recover them. 
+
+F. Dependence on split depth 
+
+The early split is the natural operating point for split learning: it keeps the client’s share of the model small, which is the setting SL targets in the first place, thus offloading most of the computation to the server. It is also where the cut carries the most data, and therefore where dividing the uplink across modalities is a decision at all. As the split moves server-ward the client does more work and the smashed activations shrink toward a pooled embedding, leaving less to allocate. We investigate the effect of varying the split depth at β=0 .20 
+
+and plot ∆ against depth in Figure 4. The two datasets behave differently with depth. On MVSA the gain is large at layer 1 and falls off quickly, and two effects fade together as it does: the payload shrinks, and the dimension skew ModalShare corrects shrinks with it. The uniform image share drops from 80 .3% at layer 1 to 33 .8% L1 L2 L3 L4 late                   
+
+> Cut depth
+> −5 0510 15 20
+> Accuracy Δ (pp)
+> MVSA, β= 0.20 (N= 12 )
+> Δ(ModalShare −uniform)
+> quni image
+> L1 L2 L3 L4 late
+> Cut depth
+> CREMA-D, β= 0.20 (N= 12 )
+> Δ(ModalShare −uniform)
+> quni video
+> 020 40 60 80 100
+> Uniform payload share (%)
+> 020 40 60 80 100
+> Uniform payload share (%)
+
+Fig. 4: Split-point ablation at β=0 .20 . Mean ± std of ∆ = 
+
+ModalShare − uniform. Left: MVSA; right: CREMA-D. Grey diamonds (right axis): uniform payload share of modality A. TABLE VII: Online versus early-freeze ModalShare at 
+
+β=0 .20 . Mean ± std of ∆ = ModalShare − uniform. The freeze arm adapts for a short post-ramp window, then locks 
+
+{rm} and stops probing.             
+
+> Dataset Uniform Online Freeze ∆f−o
+> CREMA-D 32 .2±5.241 .9±8.247 .6±5.9+5 .7±6.2
+> MVSA 48 .0±2.156 .9±6.460 .4±6.3+3 .5±6.9
+
+at layer 4 (Figure 4, diamonds), so there is progressively less skew to undo. CREMA-D, whose modality dimensions stay within 3% of equal at every depth, has no such skew to begin with, yet still gains through layer 3. Because the uniform split is already near-balanced there, that gain cannot be skew correction, therefore it is direct evidence that the effect is contribution-driven, isolated on the dataset where dimension skew is absent by construction. Both datasets converge to zero ∆ at the late embedding cut, where almost no payload crosses the boundary and there is nothing left to divide. Essentially, the gain tracks the size of the decision it is making, and disappears as that decision does. UCI HAR shows little depth dependence throughout, consistent with its near-balanced probe scores, and thus is not shown in the figure. Together these place ModalShare’s main operating regime at the early cut: the setting SL is built for, and the one where allocating the shared uplink is an important decision. 
+
+G. Freezing versus online 
+
+ModalShare’s probe costs only server-side compute: every 
+
+Tprobe batches the server evaluates 2M coalitions (four forward passes for M =2 ) to refresh {rm}. Once the allocation has settled on a stable split, those evaluations mostly reconfirm a decision already made. This raises a practical question: can the probe be switched off once the split is decided, and does doing so cost accuracy? Table VII compares three arms at β=0 .20 : uniform keep-ratios, an online ungated Shapley diagnostic that probes throughout, and the confidence-freeze ModalShare used in Table IIIa. Freezing locks {rm} and stops probing once the contribution gap stays decisive for K consecutive epochs after emin (Section III-D), removing the residual server-side coalition cost. Confidence freeze does not give up the gain. On both datasets the freeze arm matches or exceeds the online di-agnostic in absolute accuracy while using the same uniform reference as the main tables, and both beat uniform by a wide margin. CREMA-D separates early, so locking is cheap: the probe can stop once audio dominates without waiting for the rest of training. MVSA separates more slowly, which is why the deployed schedule waits for a sustained gap rather than a fixed post-ramp clock. Freezing only after evidence keeps the split from committing too early, while still cutting probe cost (server overhead) for the remainder of training. VI. D ISCUSSION 
+
+The formulation in Section III is defined for arbitrary M :the Shapley probe evaluates coalitions over any modality set, and the iso-budget map distributes payload across as many streams as the client holds. Our experiments cover M =2 ,where a shared uplink already has to be divided and the effect is cleanest to isolate. Evidence is likewise strongest at early splits, where the cut carries enough payload for allocation to be a decision at all; as the split moves server-ward the gap closes (Section V-F), both because the uplink shrinks and because the masking-based utility degrades once zeroing a modality produces an off-distribution input. The same link-local design places ModalShare under multi-client SL and Split Federated Learning [4], [32]: each client runs its own probe and keep-ratio map on its uplink, without changing how the server aggregates client updates. Cross-client contribution scoring and clients that hold different modality subsets remain outside this paper. We see multimodal contribution-aware allocation as an initial step towards a broader principle: a multimodal system should transmit only what the task needs, both in centralized and collaborative settings. Multimodal pipelines produce far more information than any uplink can carry, and much of it is redundant once the other streams are present. This is what a marginal-contribution score measures and a scalar compression rate cannot. Scaling to M ≥3 is the immediate step, where the allocation simplex has interior structure that two streams cannot exhibit. VII. C ONCLUSION 
+
+Multimodal SL inherits its compression from the unimodal case, where the only decision available is how a single tensor is represented. This leaves a second decision unmade: when several streams share one uplink, equal keep-ratios divide the budget by cut dimension, a quantity unrelated to what each modality contributes to the fused prediction. Formulating that division as an iso-budget problem makes it a tunable degree of freedom, and ModalShare shows that a contribution score measured at the server is enough to set it well: 15 .4 and 12 .4 pp over equal keep-ratios at matched payload, and near-uniform allocation where the measured gap is small. The formulation admits any number of modalities and any fusion-level score. Under a fixed link, how a multimodal system divides its budget is as consequential as how tightly it compresses. REFERENCES [1] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y Arcas, “Communication-efficient learning of deep networks from decentralized data,” in Artificial intelligence and statistics . Pmlr, 2017, pp. 1273– 1282. [2] P. Vepakomma, O. Gupta, T. Swedish, and R. Raskar, “Split learning for health: Distributed deep learning without sharing raw patient data,” 
+
+arXiv preprint arXiv:1812.00564 , 2018. [3] Z. Lin, G. Qu, X. Chen, and K. Huang, “Split learning in 6g edge networks,” IEEE Wireless Communications , vol. 31, no. 4, pp. 170–176, 2024. [4] H. Hafi, B. Brik, P. A. Frangoudis, A. Ksentini, and M. Bagaa, “Split federated learning for 6g enabled-networks: Requirements, challenges, and future directions,” IEEe Access , vol. 12, pp. 9890–9930, 2024. [5] Y. Oh, J. Lee, C. G. Brinton, and Y.-S. Jeon, “Communication-efficient split learning via adaptive feature-wise compression,” IEEE Transactions on Neural Networks and Learning Systems , vol. 36, no. 6, pp. 10 844– 10 858, 2025. [6] Ericsson, “Ericsson mobility report, june 2026,” Telefonaktiebolaget LM Ericsson, Stockholm, Sweden, Tech. Rep., 6 2026. [7] B. Yuan, S. Ge, and W. Xing, “A federated learning framework for healthcare iot devices,” arXiv preprint arXiv:2005.05083 , 2020. [8] F. Zheng, C. Chen, L. Lyu, and B. Yao, “Reducing communication for split learning by randomized top-k sparsification,” in Proceedings of the Thirty-Second International Joint Conference on Artificial Intelligence ,2023, pp. 4665–4673. [9] A. Mudvari, A. Vainio, I. Ofeidis, S. Tarkoma, and L. Tassiulas, “Adaptive compression-aware split learning and inference for enhanced network efficiency,” ACM Transactions on Internet Technology , vol. 24, no. 4, pp. 1–26, 2024. [10] Z. Lin, Z. Lin, M. Yang, J. Huang, Y. Zhang, Z. Fang, X. Du, Z. Chen, S. Zhu, and W. Ni, “Sl-acc: A communication-efficient split learning framework with adaptive channel-wise compression,” IEEE Transactions on Vehicular Technology , 2026. [11] Z. Xu, Y. Kou, K. Wu, and H. Liu, “Contribution-guided asymmetric learning for robust multimodal fusion under imbalance and noise,” arXiv preprint arXiv:2510.26289 , 2025. [12] S. Wei, C. Luo, and Y. Luo, “Improving multimodal learning via imbalanced learning,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2025, pp. 2250–2259. [13] X. Peng, Y. Wei, A. Deng, D. Wang, and D. Hu, “Balanced multimodal learning via on-the-fly gradient modulation,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2022, pp. 8238–8247. [14] C.-Y. Hsieh, Y.-C. Chuang, and A.-Y. Wu, “C3-sl: Circular convolution-based batch-wise compression for communication-efficient split learn-ing,” in 2022 IEEE 32nd International Workshop on Machine Learning for Signal Processing (MLSP) . IEEE, 2022, pp. 1–6. [15] B. Meuwissen, V. Tsouvalas, and N. Meratnia, “Autoencoder-compressed parallel split learning for pre-trained model fine-tuning,” 
+
+arXiv preprint arXiv:2607.17913 , 2026. [16] J. Shao and J. Zhang, “Bottlenet++: An end-to-end approach for feature compression in device-edge co-inference systems,” in 2020 IEEE Inter-national Conference on Communications Workshops (ICC Workshops) .IEEE, 2020, pp. 1–6. [17] Y. He, R. Cheng, G. Balasubramaniam, Y.-H. H. Tsai, and H. Zhao, “Ef-ficient modality selection in multimodal learning,” Journal of Machine Learning Research , vol. 25, no. 47, pp. 1–39, 2024. [18] S. Li, Y. Hu, X. Ning, X. Liu, K. Hong, X. Jia, X. Li, Y. Yan, P. Ran, G. Dai et al. , “Mbq: Modality-balanced quantization for large vision-language models,” in 2025 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2025, pp. 4167–4177. [19] L. Parcalabescu and A. Frank, “Mm-shap: A performance-agnostic metric for measuring multimodal contributions in vision and language models & tasks,” in Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,2023, pp. 4032–4059. [20] P. Hu, X. Li, and Y. Zhou, “Shape: An unified approach to evaluate the contribution and cooperation of individual modalities,” arXiv preprint arXiv:2205.00302 , 2022. [21] L. R. Soenksen, Y. Ma, C. Zeng, L. Boussioux, K. Villalobos Carballo, L. Na, H. M. Wiberg, M. L. Li, I. Fuentes, and D. Bertsimas, “Integrated multimodal artificial intelligence framework for healthcare applications,” 
+
+NPJ digital medicine , vol. 5, no. 1, p. 149, 2022. [22] Y. Wei, R. Feng, Z. Wang, and D. Hu, “Enhancing multimodal co-operation via sample-level modality valuation,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2024, pp. 27 338–27 347. [23] L. Yuan, D.-J. Han, S. Wang, D. Upadhyay, and C. G. Brinton, “Communication-efficient multimodal federated learning: Joint modality and client selection,” IEEE Transactions on Mobile Computing , 2026. [24] H. Amini, M. J. Mia, Y. Saadati, A. Imteaj, S. Nabavirazavi, U. Thakker, M. Z. Hossain, A. A. Fime, and S. Iyengar, “Distributed llms and multimodal large language models: A survey on advances, challenges, and future directions,” arXiv preprint arXiv:2503.16585 , 2025. [25] L. S. Shapley et al. , “A value for n-person games,” 1953. [26] H. Cao, D. G. Cooper, M. K. Keutmann, R. C. Gur, A. Nenkova, and R. Verma, “Crema-d: Crowd-sourced emotional multimodal actors dataset,” IEEE transactions on affective computing , vol. 5, no. 4, pp. 377–390, 2014. [27] T. Niu, S. Zhu, L. Pang, and A. El Saddik, “Sentiment analysis on multi-view social data,” in International conference on multimedia modeling .Springer, 2016, pp. 15–27. [28] D. Anguita, A. Ghio, L. Oneto, X. Parra, J. L. Reyes-Ortiz et al. , “A pub-lic domain dataset for human activity recognition using smartphones.” in Esann , vol. 3, no. 1, 2013, pp. 3–4. [29] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury, G. Chanan, T. Killeen, Z. Lin, N. Gimelshein, L. Antiga et al. , “Pytorch: An imperative style, high-performance deep learning library,” Advances in neural information processing systems , vol. 32, 2019. [30] G. E. Hinton, N. Srivastava, A. Krizhevsky, I. Sutskever, and R. R. Salakhutdinov, “Improving neural networks by preventing co-adaptation of feature detectors,” arXiv preprint arXiv:1207.0580 , 2012. [31] N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhut-dinov, “Dropout: a simple way to prevent neural networks from over-fitting,” The journal of machine learning research , vol. 15, no. 1, pp. 1929–1958, 2014. [32] C. Thapa, P. C. M. Arachchige, S. Camtepe, and L. Sun, “SplitFed: When federated learning meets split learning,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 36, no. 8, 2022, pp. 8485–8493.

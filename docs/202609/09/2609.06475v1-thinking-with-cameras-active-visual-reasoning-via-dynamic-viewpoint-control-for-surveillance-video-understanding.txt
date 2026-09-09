@@ -1,0 +1,518 @@
+Title: Thinking with Cameras: Active Visual Reasoning via Dynamic Viewpoint Control for Surveillance Video Understanding
+
+URL Source: https://arxiv.org/pdf/2609.06475v1
+
+Published Time: Wed, 09 Sep 2026 01:12:41 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Thinking with Cameras: Active Visual Reasoning via Dynamic Viewpoint Control for Surveillance Video Understanding 
+
+## Xiao Zhang 1,2 , Wang Zeng 2, Sheng Jin 2∗, Wentao Liu 2, Chen Qian 2, Shichao Kan 1†
+
+> 1
+
+School of Computer Science and Engineering, Central South University 
+
+> 2
+
+SenseTime Research and Tetras.AI xiaozhang@csu.edu.cn, {zengwang, jinsheng, liuwentao, qianchen}@tetras.ai, kanshichao@csu.edu.cn 
+
+Abstract 
+
+Large vision-language models (LVLMs) have recently achieved remarkable progress in general-purpose video un-derstanding. However, their application to surveillance videos remains challenging due to the lack of large-scale domain-specific datasets and the limitation of passive observation from fixed viewpoints. In surveillance scenarios, critical visual ev-idence can be easily missed when targets are distant, small, occluded, or move beyond the current camera view. In this work, we introduce CamVLM, a new framework for Thinking with Cameras, which enables LVLMs to actively acquire vi-sual evidence through dynamic viewpoint control rather than passively analyzing fixed video streams. We first construct CCTV-Anomaly, a large-scale surveillance video understand-ing dataset containing 14,459 videos across 10 anomaly cate-gories, with detailed captions and event annotations. We fur-ther formulate viewpoint control as an active visual perception problem and build CamTrack-53K, an object-centric view-point trajectory dataset for learning camera actions. Moreover, we propose a reinforcement learning based viewpoint policy optimization framework, which models camera control as a sequential decision-making process and learns long-horizon observation strategies beyond supervised trajectory imitation. Extensive experiments demonstrate that CamVLM achieves state-of-the-art performance under both passive observation and dynamic viewpoint settings, validating the effectiveness of active camera-based reasoning for surveillance video un-derstanding. Our datasets, model, and code will be available at https://github.com/xiaozhang79/CamVLM. 
+
+## 1 Introduction 
+
+Surveillance cameras are widely deployed in real-world ap-plications, including anomaly detection, behavior analysis, and traffic perception. Unlike general videos collected for human viewing, streaming surveillance videos usually cover wide fields of view and contain multiple moving and inter-acting objects. Due to long capture distances, target objects often occupy only small regions of the entire frame and may gradually move beyond the current camera viewpoint, lead-ing to incomplete and unreliable visual evidence. Therefore, effective surveillance video understanding requires not only recognizing what happens in a video, but also actively deter-
+
+> ∗
+
+Project Leader. 
+
+> †
+
+Corresponding Author. User What is the man in the white shirt doing? (a) (b) 
+
+> (c)
+> CamVLM Passive Viewpoint Video-o3 Video-o3 Dynamic Viewpoint Dynamic Viewpoint Dynamic Viewpoint
+> There is no man wearing a white shirt. He walks towards the white car, then turns around and leaves. He walks towards the white SUV, then kicks the vehicle and walks further down the driveway.
+
+Figure 1: Motivation of CamVLM. The full frame repre-sents the virtual panoramic space, while the bounding box denotes the camera viewpoint. (a) Passive viewpoints may miss critical cues. (b,c) Under dynamic viewpoint control, existing methods such as Video-o3 (Zeng et al. 2026) exhibit unstable visual focus, whereas CamVLM reliably captures fine-grained visual evidence. mining where to observe next by continuously adjusting the camera viewpoint to acquire informative visual evidence. Recent advances in large vision-language models (LVLMs) have significantly improved visual perception and reasoning. Early video understanding approaches (Feng et al. 2025; Li et al. 2025; Wang et al. 2025a) typically encode vi-sual contents globally and perform subsequent language rea-soning, which often overlooks fine-grained visual evidence. Inspired by OpenAI-o3 (OpenAI 2025), recent “thinking with images” approaches (Khayatkhoei et al. 2025; Zheng arXiv:2609.06475v1 [cs.CV] 6 Sep 2026 33.5% 10.4% 10.3% 10.4% 10.9% 11.0% 13.5%                                                   
+
+> (b) Camera action distribution on the CCTV-Anomaly test set
+> 10% 020% 30% 40% 50% 60% 70% 80% 90% 100% 10% 020% 30% 40% 50% 60% 70% 80% 90% 100% none none up up down down left left right right zoom-in zoom-in zoom-out zoom-out none up down left right zoom-in zoom-out
+> 48.7% 19.9% 31.4%
+> 25~50% 0~25%
+> (a) Viewpoint coverage distribution on the CCTV-Anomaly test set
+> 10% 020% 30% 40% 50% 60% 70% 80% 90% 100% 10% 020% 30% 40% 50% 60% 70% 80% 90% 100% 50~75% 50~75%
+
+Figure 2: Behavior statistics of the learned camera control policy on the CCTV-Anomaly test set. (a) Distribution of selected viewpoint coverage. Nearly half of the viewpoints remain within 25% of the full frame, indicating that the model avoids unnecessary zoom-out and adaptively adjusts the viewing scale according to scene context. (b) Distribu-tion of camera control actions. The high proportion of none actions and the balanced directional movements and zoom-ing operations demonstrate an efficient on-demand control strategy without directional or zooming bias. et al. 2026; Shen et al. 2025) introduce iterative evidence ac-quisition, where models actively retrieve informative regions and interleave visual perception with reasoning. Extending this idea, recent “thinking with videos” methods (Yang et al. 2026; Zhang et al. 2026; Zeng et al. 2026) further explore dynamic visual evidence acquisition from videos through it-erative frame sampling or tool-based interaction. However, existing thinking-based approaches still operate on fixed vi-sual streams. They can decide which frame or clip to in-spect, but cannot determine how the camera itself should move to acquire better observations. This limitation is par-ticularly critical for surveillance videos, where objects are often small, partially occluded, or follow unpredictable tra-jectories. As shown in Figure 1(a), once important objects leave the current viewpoint, passive video retrieval strategies cannot recover the missing fine-grained visual evidence. To address this challenge, we propose Thinking with Cam-eras, a new active visual reasoning paradigm that enables LVLMs to reason through camera actions. However, train-ing LVLMs to control real-world cameras is hindered by the lack of large-scale viewpoint-action trajectories collected from physical surveillance systems. To overcome this limi-tation, we introduce a virtual camera formulation by treat-ing each full video frame as a panoramic observation space and a local image region as the camera’s current field of view. Specifically, the model starts from an initial viewpoint within the frame and learns to perform camera-like opera-tions, including panning and zooming, to acquire informative visual evidence. Unlike treating surveillance videos as im-mutable visual streams, our formulation transforms visual understanding into an active perception process, where the model dynamically determines where to observe next. Unlike conventional visual reasoning, dynamic viewpoint control is inherently a sequential decision-making problem, since each camera action changes future observations and influences subsequent reasoning outcomes. Therefore, we further in-troduce a viewpoint policy optimization framework based on reinforcement learning, which enables LVLMs to learn long-horizon camera control strategies beyond supervised trajectory imitation. By jointly optimizing task completion and visual evidence acquisition, the learned policy can ex-plore more effective viewpoint trajectories and continuously maintain informative objects within the field of view. As shown in Figure 2, the learned camera control policy exhibits adaptive viewpoint selection and on-demand camera actions, suggesting that efficient surveillance understanding benefits from active and evidence-driven viewpoint reasoning. To support this paradigm, we construct two large-scale datasets. First, we introduce CCTV-Anomaly, a high-quality surveillance video understanding dataset containing 14,459 videos across 10 anomaly categories and 238 hours, with detailed captions and event category annotations. Second, we build CamTrack-53K, an object-centric viewpoint tra-jectory dataset for learning dynamic camera control. Based on these datasets and the proposed viewpoint policy opti-mization framework, we develop CamVLM, which actively controls camera viewpoints during reasoning and captures comprehensive fine-grained object-level spatiotemporal evi-dence, as illustrated in Figure 1(b,c). Overall, our contributions are summarized as follows: 
+
+• We propose Thinking with Cameras, a new active visual reasoning paradigm that enables LVLMs to actively con-trol camera viewpoints and acquire visual evidence for surveillance video understanding. 
+
+• We formulate dynamic viewpoint control as a sequential decision-making problem and introduce a reinforcement learning based viewpoint policy optimization framework, which learns long-horizon camera control strategies by jointly optimizing reasoning accuracy and visual evidence acquisition. 
+
+• We construct CCTV-Anomaly and CamTrack-53K, two large-scale datasets for surveillance video understanding and dynamic viewpoint control, respectively. 
+
+• We develop CamVLM, an LVLM with dynamic view-point control capability that actively determines where to observe next and achieves more reliable fine-grained surveillance video understanding. 
+
+## 2 Related Work 
+
+Thinking with Images and Videos. Recent advances in LVLM reasoning have explored iterative evidence acquisi-tion beyond conventional text-centric reasoning. Inspired by OpenAI-o3 (OpenAI 2025), “thinking with images” meth-ods (Lai et al. 2026; Khayatkhoei et al. 2025; Zheng et al. 2026; Shen et al. 2025) interleave visual perception with language reasoning by repeatedly retrieving fine-grained im-age evidence, improving detailed visual understanding. Ex-tending this idea to videos, recent “thinking with videos” approaches (Fu et al. 2025; Yang et al. 2026; Zhang et al. 2026; Zeng et al. 2026) enable LVLMs to iteratively access informative frames or clips through tool use and dynamic perception. However, these methods still operate on fixed vi-sual streams and focus on selecting existing visual evidence rather than actively controlling the camera viewpoint, mak-ing them insufficient for surveillance scenarios where targets may be distant, occluded, or leave the current field of view. 
+
+Surveillance Video Datasets. Existing surveillance video datasets mainly focus on anomaly detection, such as Subway Entrance, Subway Exit (Adam et al. 2008), UCSDPed1/2 (Li, Mahadevan, and Vasconcelos 2014), Avenue (Lu, Shi, and Jia 2013), and UCF-Crime (Sultani, Chen, and Shah 2018). However, these datasets are limited in scale, realism, or anno-tation richness, providing insufficient supervision for mod-ern LVLM-based surveillance understanding. Recent UD-VideoQA (Vishal et al. 2026) explores surveillance video question answering in traffic scenarios but contains limited video duration and domain coverage. In contrast, our CCTV-Anomaly provides 14,459 high-quality surveillance videos across diverse anomaly categories, with both detailed cap-tions and event-level annotations to support comprehensive surveillance video understanding. 
+
+Active Visual Perception. Active perception aims to im-prove visual understanding by dynamically adjusting sens-ing strategies according to task requirements. Existing works mainly focus on robotic perception (Zhang et al. 2025; Liu et al. 2026), object tracking (Wang et al. 2025b; Sun et al. 2025), and embodied agents (Qin et al. 2024; Liu et al. 2025), where sensors or cameras are controlled through predefined policies or reinforcement learning strategies. However, ap-plying active perception to LVLM-based surveillance under-standing remains largely unexplored. Different from existing approaches that passively analyze captured videos, we intro-duce a “thinking with cameras” paradigm, where LVLMs ac-tively control viewpoints and learn long-horizon camera poli-cies through reinforcement learning to acquire task-relevant visual cues. 
+
+## 3 Method 
+
+3.1 Overview 
+
+As illustrated in Figure 3, we propose CamVLM, a vision-language model that performs surveillance video understand-ing through active camera reasoning. Different from conven-tional LVLMs that passively analyze fixed visual streams, CamVLM treats viewpoint adjustment as an integral part of the reasoning process and actively acquires informative vi-sual evidence through camera actions. Given a video V and a user query Q, the model maintains a dynamic viewpoint state 
+
+vt at each timestep t. Based on the current visual observation and task requirements, CamVLM predicts a viewpoint action 
+
+at to determine how the camera should move or zoom. The executed action updates the viewpoint and provides a new observation vt+1 , enabling the model to progressively col-lect fine-grained evidence. After multiple interaction steps, the accumulated visual evidence is integrated to generate the final response A. Formally, the viewpoint interaction process can be represented as: 
+
+at = πθ (Q, v t), vt+1 = T (vt, a t), (1) where πθ denotes the viewpoint policy and T represents the viewpoint transformation operation. The complete interac-tion trajectory is defined as: 
+
+τ = ( Q, v 0, a 0, v 1, a 1, . . . , v T −1, a T −1, A). (2) The following subsections introduce the proposed dy-namic viewpoint control mechanism, the construction of CamTrack-53K for learning viewpoint policies, and the train-ing strategy including reinforcement learning based view-point policy optimization. 
+
+3.2 Dynamic Viewpoint Control 
+
+Dynamic viewpoint control aims to enable LVLMs to actively determine where to observe next in order to acquire task-relevant visual evidence. Ideally, such capability requires large-scale interaction data collected from physical cameras operating in real-world environments, which is difficult to obtain. Therefore, we simulate camera control within surveil-lance videos by treating each full-frame image as a virtual panoramic space and a local region as the current camera ob-servation. For each input video frame, the central 1/9 region is initially selected as the camera viewpoint v0. This setting provides a suitable balance between observation coverage and control necessity: a larger viewpoint reduces the need for active adjustment, while a smaller viewpoint may fail to capture sufficient target information. During inference, the model interacts with the video at one-second intervals. At timestep t, given the current view-point vt and query Q, the viewpoint policy predicts an action 
+
+at according to the spatial state of task-relevant objects and the current visual evidence. The action space contains both spatial movement and scale adjustment operations, allowing the model to actively explore the surrounding visual space. After executing the predicted action, the viewpoint is updated through the transformation function: 
+
+vt+1 = T (vt, a t). (3) Through iterative viewpoint adjustment, CamVLM can con-tinuously acquire complementary observations when objects become distant, partially visible, or leave the initial field of view. Unlike passive video sampling methods, the proposed mechanism enables the model to actively decide which visual evidence to acquire before producing the final answer. 
+
+3.3 CamTrack-53K: Viewpoint Trajectory Generation 
+
+Training dynamic viewpoint policies requires large-scale supervision of camera-object interactions. To this end, we construct CamTrack-53K, an object-centric viewpoint trajectory dataset for learning active camera control. Specifically, we collect videos from A2D (Xu et al. 2015), MeViS (Ding et al. 2023), and Refer-YouTube-VOS (Seo, Lee, and Han 2020) in VideoRefer-700K (Yuan et al. 2025). These datasets provide temporally aligned object masks and object-level question-answer annotations, enabling the construction of task-oriented viewpoint trajectories. For each video, object masks are first converted into bounding boxes. The viewpoint action space is defined as: 
+
+{none , up , down , left , right , zoom_in , zoom_out }.Panning actions are parameterized by offsets relative to the full frame, while zooming actions are represented by scale changes relative to the current viewpoint. Starting from the initial central 1/9 viewpoint, we generate trajectories at one-second intervals based on object-viewpoint relationships: Thinking with Cameras 
+
+> Action Prediction Viewpoint Action Space
+> {action: None} {action: up, offset: 0~1} {action: down, offset: 0~1} {action: left, offset: 0~1} {action: right, offset: 0~1} {action: zoom_in, scale: <1} {action: zoom_out, scale: >1} CamVLM Model
+
+## t sViewpoint Update  
+
+> Crop Action  ta
+> Viewpoint t
+
+v 
+
+> Video
+
+
+
+> Response
+> Fine-grained Visual Evidence
+> He climbs through the window and steals items from the room. User Query
+
+ 
+
+> Viewpoint 1t
+
+v 
+
+> What is the man doing? Final Answer
+
+Figure 3: Overview of CamVLM. Given a surveillance video and a user query, CamVLM iteratively predicts viewpoint actions based on the positions of task-relevant objects, updates the viewpoint to keep them clearly visible, accumulates fine-grained visual evidence, and produces the final answer. 
+
+• When the target object is outside the current viewpoint, the camera performs zoom-out and viewpoint adjustment actions to reacquire the object. 
+
+• When the object is visible but deviates from the opti-mal observation region, the camera performs panning and zooming actions to obtain a more informative view. 
+
+• When the object is already well observed, the camera maintains the current viewpoint. The generated trajectories provide an initial policy prior for supervised learning, while subsequent reinforcement learn-ing further optimizes viewpoint strategies beyond the prede-fined trajectory patterns. 
+
+3.4 Training Pipeline 
+
+Supervised Fine-Tuning. We adopt a mixed supervised fine-tuning (SFT) strategy on the constructed CCTV-Anomaly and CamTrack-53K datasets to jointly enhance the model’s surveillance video understanding and dynamic view-point control capabilities. For CCTV-Anomaly, the model is trained under the passive full-frame observation setting, where only the final event classification and video caption-ing responses are supervised. For CamTrack-53K, we follow the dynamic viewpoint interaction process described in Sec-tion 3.2. Specifically, the model is supervised to predict both the viewpoint control actions and the final reasoning response according to the generated viewpoint trajectories. The action space follows the definition in Section 3.3. When multiple viewpoint adjustments are required, the model predicts an ordered action sequence, such as {action : up , offset :
+
+0.1 ; action : zoom_in , scale : 0.8 }.
+
+Viewpoint Policy Optimization. Dynamic viewpoint con-trol is inherently a sequential decision-making problem. Each camera action determines the visual observations available at subsequent reasoning steps, making its quality dependent on long-term visual evidence acquisition rather than imme-diate supervision. Although supervised fine-tuning enables the model to imitate expert viewpoint trajectories, it cannot optimize viewpoint policies for downstream understanding, since multiple camera trajectories may lead to equally in-formative observations. To address this limitation, we fur-ther optimize CamVLM on CamTrack-53K using reinforce-ment learning (RL) with Group Relative Policy Optimization (GRPO) (Shao et al. 2024), allowing the model to actively explore more effective viewpoint control strategies. Unlike conventional reinforcement learning for large lan-guage models, where each sampled response consists only of textual outputs, each response in CamVLM contains an en-tire camera-control trajectory together with the final reason-ing result. Therefore, policy optimization jointly evaluates both visual exploration behaviors and downstream reason-ing performance. Specifically, given an input video V and a user query Q, we follow the interaction process described in Section 3.2 to generate a complete camera-control trajectory 
+
+τ = {a1, a 2, · · · , a T , y }, (4) where at denotes the viewpoint action at time step t, and y
+
+is the final answer. For each training sample (V, Q) ∈ D , we sample a group of G trajectories {o1, o 2, · · · , o G} from the policy model πθ ,compute their corresponding rewards {r1, r 2, · · · , r G}, and optimize the policy using GRPO: 
+
+LGRPO = −E(V,Q)∼D Eoi∼πθ [Ai log πθ (oi|V , Q)] , (5) where the relative advantage is computed as 
+
+Ai = ri − mean( {r1, · · · , r G})std( {r1, · · · , r G}) . (6) To jointly optimize surveillance understanding and active visual perception, we design a task-oriented reward com-posed of a task completion reward and a visual evidence reward: 
+
+R = Rtask + λRvisual , (7) where λ balances the two objectives. The task completion reward evaluates the correctness of the final result. For multiple-choice question answering, a correct prediction re-ceives 1, while an incorrect prediction receives 0:
+
+Rtask =
+
+1, if the predicted answer is correct ,
+
+0, otherwise . (8) The visual evidence reward evaluates the quality of the ob-servations acquired by the predicted camera policy. Instead of directly encouraging imitation of reference trajectories, it measures how well the predicted viewpoints continuously cover informative target objects throughout the interaction: 
+
+Rvisual = 1
+
+T
+
+1
+
+N 
+
+> T−1
+
+X
+
+> t=0
+> N
+
+X
+
+> i=1
+
+|vt+1 ∩ b(i)
+
+> t+1
+
+||b(i)
+
+> t+1
+
+| , (9) where T denotes the number of interaction steps, N is the number of target objects, vt+1 is the predicted camera view-port at the next step, and b(i) 
+
+> t+1
+
+is the ground-truth bounding box of the i-th object. By rewarding the quality of acquired observations rather than exact camera trajectories, the proposed policy optimiza-tion allows multiple valid viewpoint strategies to emerge during training. Consequently, CamVLM learns to actively determine where to observe next, continuously maintain in-formative objects within the field of view, and acquire richer visual evidence for downstream reasoning. 
+
+## 4 CCTV-Anomaly Dataset 
+
+Existing surveillance anomaly datasets mainly provide coarse event labels, which are insufficient for fine-grained LVLM reasoning. To address this limitation, we construct CCTV-Anomaly, a large-scale surveillance video under-standing dataset containing 14,459 real-world videos across 10 event categories. Each video is annotated with both an event category and a detailed natural language caption, en-abling joint evaluation of event classification and video cap-tioning. Table 1 compares CCTV-Anomaly with existing datasets, and Figure 4 presents representative examples. 
+
+4.1 Dataset Construction and Split 
+
+CCTV-Anomaly is built from both existing public surveil-lance datasets and newly collected real-world surveillance videos, covering diverse environments and viewpoints. Each video is annotated using an LLM-assisted pipeline followed by human verification. In addition to event categories and captions, we further annotate the test set with structured semantic labels, including location, time of day, subjects, ac-tivities, and objects, to support fine-grained evaluation. More details are provided in the supplementary material. The dataset is divided into 13,459 training videos and 1,000 testing videos, with 100 testing videos for each event 
+
+Dataset #Videos Duration Caption 
+
+Subway Entrance 1 1.5 h ✗
+
+Subway Exit 1 1.5 h ✗
+
+UCSD Ped1 70 5 min ✗
+
+UCSD Ped2 28 5 min ✗
+
+Avenue 37 30 min ✗
+
+UCF-Crime 1,900 128 h ✗
+
+CCTV-Anomaly (Ours ) 14,459 238 h ✓
+
+Table 1: Comparison of CCTV-Anomaly with existing surveillance anomaly video datasets. Theft Theft 
+
+> Normal Activity Normal Activity Violence Violence
+> Vehicle Incident Vehicle Incident Vandalism Vandalism
+> Suspicious Behavior Suspicious Behavior
+> Wild Animal Intrusion Wild Animal Intrusion
+> Personal Emergency Personal Emergency
+> Break-in Break-in
+> Fire hazard Fire hazard
+
+Figure 4: Examples of different anomalies in our CCTV-Anomaly dataset. category. CCTV-Anomaly supports two benchmark tasks: event classification and video captioning. Detailed evaluation protocols are described in Section 5. 
+
+## 5 Experiments 
+
+5.1 Experimental Setup 
+
+Implementation Details. We adopt Qwen3-VL-8B-Instruct (Bai et al. 2025) as the base LVLM. During training and evaluation, videos are uniformly sampled at 2 FPS, with a maximum of 14,336 video tokens and 448 frames. The visual encoder is frozen, while all remaining parameters are optimized. For supervised fine-tuning, we use a global batch size of 128 with a learning rate of 1 × 10 −5. For reinforce-ment learning, we employ GRPO-based viewpoint policy optimization with a batch size of 8 and 8 sampled trajecto-ries per prompt. The learning rate is set to 1 × 10 −6, the KL coefficient β is set to 0, and the viewpoint alignment reward weight λ is set to 0.6. All experiments are conducted on 8 NVIDIA A800 GPUs. 
+
+Benchmarks and Evaluation Metrics. We evaluate surveillance video understanding on two benchmarks: CCTV-Anomaly and UDVideoQA (Vishal et al. 2026). For CCTV-Anomaly, we report event classification accuracy and video captioning accuracy. Classification accuracy is ob-tained by extracting the predicted category using regular expressions and comparing it with the ground-truth label. Captioning accuracy is evaluated over five semantic compo-nents (location, time of day, subjects, activities, and objects), each contributing 20 points to a total score of 100. We use GPT-5.5 (OpenAI 2026b) to semantically evaluate whether the generated caption includes each ground-truth component, followed by manual verification, and report the average score over the test set. For UDVideoQA, since the official test split is unavailable, we construct UDVideoQA ∗ with permission from the original authors using Set 03 and Set 20 from the re-leased dataset, which provide the greatest question diversity. The resulting benchmark contains 1,190 QA pairs. Follow-ing the official evaluation protocol, we report accuracy across five question types and the weighted overall accuracy, where more complex reasoning types receive larger weights. The weights are 1.0 for Basic Understanding (BU), 1.2 for At-tribution (Atr), 1.3 for Event Reasoning (ER) and Reverse Reasoning (RR), and 1.5 for Counterfactual Inference (CI). 
+
+Evaluation Settings. To evaluate the effectiveness of ac-tive camera reasoning, we consider two complementary set-tings: passive viewpoint understanding and dynamic view-point control. 
+
+Passive Viewpoint Setting. The model receives the com-plete video frames or a fixed viewpoint without any camera adjustment. This setting evaluates conventional surveillance video understanding under passive observation. 
+
+Dynamic Viewpoint Setting. The model starts from the central 1/9 region of each frame and actively adjusts the viewpoint through predicted camera actions. Only the visual regions acquired through the dynamic viewpoint trajectory are provided for final answer generation. This setting eval-uates whether the model can actively acquire informative visual evidence and improve surveillance video understand-ing through camera control. 
+
+5.2 Experiment Results 
+
+Results on CCTV-Anomaly. Table 2 compares surveil-lance video understanding on CCTV-Anomaly under full-frame observation. CamVLM achieves the best performance, demonstrating strong surveillance video understanding ca-pability. Under dynamic viewpoints, CamVLM consistently outperforms existing passive-viewpoint methods on both event classification and video captioning (Table 3). Com-pared with the passive baseline, dynamic viewpoint control improves event classification by 33 .8% , while CamVLM achieves further gains by capturing fine-grained object-centric spatiotemporal evidence. 
+
+Generalization Results on UDVideoQA ∗. Table 3 reports zero-shot results on UDVideoQA ∗. CamVLM achieves the best performance across all question types under dynamic viewpoints. Compared with passive observation, dynamic viewpoint control improves the baseline by 15 .7% overall, demonstrating that active visual evidence acquisition gener-alizes well to unseen surveillance scenarios.                                   
+
+> Methods Sizes CCTV-Anomaly
+> Cls Avg Cap Avg Gemini-3.1-Flash-Lite-Preview -59.3 63.0 (Google 2026) GPT-5.6-Luna (OpenAI 2026a) -57.6 61.8 Doubao-Seed-2.0-Lite (Seed 2026) -56.5 65.4 Video-R1 (Feng et al. 2025) 7B 43.9 54.0 VideoZoomer (Ding et al. 2026) 7B 49.0 53.2 MiMo-VL (Yue et al. 2025) 7B 52.8 57.5 Video-o3 (Zeng et al. 2026) 7B 53.2 60.0 LLaVA-OneVision-2 (An et al. 2026) 8B 45.3 66.6 Qwen3-VL (Bai et al. 2025) 8B 46.0 61.8
+> CamVLM (Ours )8B 75.6 76.3
+
+Table 2: Performance comparisons on CCTV-Anomaly under the conventional full-frame passive observation setting. The best results are in bold. 
+
+5.3 Ablation Studies 
+
+To validate the effectiveness of our design, we conduct com-prehensive ablation studies on UDVideoQA ∗. Unless other-wise specified, passive viewpoints are fixed to the central 
+
+1/9 region, while dynamic viewpoints are initialized from the same region. All models use the 8B configuration. 
+
+Effect of Dynamic Viewpoint Control. Table 4 compares passive and dynamic viewpoint settings. Dynamic view-points improve both the baseline model and CamVLM, with substantially larger gains for CamVLM. This demonstrates that viewpoint control effectively directs the model to infor-mative regions, while CamVLM better exploits the resulting object-centric spatiotemporal evidence. We further evaluate CamVLM with viewpoints fixed to the central 1/9 region during inference. The significant performance drop confirms that the improvements mainly stem from effective viewpoint control rather than the video understanding capability learned during training. 
+
+Effect of Different Viewpoint Sizes. We further evaluate different viewpoint sizes by training CamVLM from scratch with initial viewpoints covering the central 1/4 and 1/6 of the full frame, and comparing it with the corresponding passive and dynamic baselines. As shown in Table 5, CamVLM con-sistently outperforms the baselines across all settings. Larger viewpoints often capture the target immediately, whereas smaller viewpoints may initially miss it. Nevertheless, SFT enables the model to first zoom out for target search and then perform precise tracking, recovering complete fine-grained visual evidence. 
+
+Effect of Different Training Pipelines. Table 6 com-pares different training pipelines. SFT alone already achieves strong performance, indicating that it effectively learns view-point control and surveillance video understanding. Applying RL directly to Qwen3-VL-8B-Instruct also brings substantial gains, showing that these capabilities can emerge through au-tonomous exploration. Combining SFT with RL achieves the best performance, demonstrating that SFT provides a strong initialization for subsequent RL refinement. CCTV-Anomaly UDVideoQA ∗
+
+Methods Sizes Settings Cls Avg Cap Avg BU Atr ER RR CI Avg Gemini-3.1-Flash-Lite-Preview (Google 2026) - Passive 45.0 52.3 61.3 17.6 44.1 67.2 79.0 54.9 GPT-5.6-Luna (OpenAI 2026a) - Passive 42.4 51.4 56.3 13.9 38.7 59.7 32.8 39.7 Doubao-Seed-2.0-Lite (Seed 2026) - Passive 37.2 51.0 55.9 21.0 48.3 51.3 66.8 49.3 Video-R1 (Feng et al. 2025) 7B Passive 37.0 46.1 52.5 11.8 36.6 41.2 69.8 43.3 VideoZoomer (Ding et al. 2026) 7B Passive 37.8 46.7 56.3 10.1 35.3 29.0 63.9 39.3 MiMo-VL (Yue et al. 2025) 7B Passive 38.8 47.1 55.5 10.5 39.9 52.9 51.3 42.2 Video-o3 (Zeng et al. 2026) 7B Passive 41.4 50.2 56.7 15.5 42.0 39.9 56.3 42.3 LLaVA-OneVision-2 (An et al. 2026) 8B Passive 37.3 55.6 57.6 14.3 40.8 55.9 45.0 42.5 Qwen3-VL (Bai et al. 2025) 8B Passive 36.7 51.3 57.1 10.5 41.2 46.2 51.3 41.3 Qwen3-VL (Bai et al. 2025) 8B Dynamic 44.0 57.2 67.2 17.2 44.5 51.3 51.3 45.9 
+
+CamVLM (Ours ) 8B Dynamic 70.5 69.7 70.6 29.4 46.2 64.7 72.7 57.0 
+
+Table 3: Performance comparisons on CCTV-Anomaly and UDVideoQA ∗ under passive and dynamic viewpoint settings. The terms “Passive” and “Dynamic” denote a passive viewpoint fixed to the central 1/9 region and a dynamic viewpoint initialized from the same region and adjusted over time, respectively. The best results are in bold. 
+
+UDVideoQA ∗
+
+Methods Settings BU Atr ER RR CI Avg Qwen3-VL Passive 57.1 10.5 41.2 46.2 51.3 41.3 Qwen3-VL Dynamic 67.2 17.2 44.5 51.3 51.3 45.9 CamVLM Passive 59.2 22.3 41.6 52.1 60.4 47.4 CamVLM Dynamic 70.6 29.4 46.2 64.7 72.7 57.0 
+
+Table 4: Ablation study of dynamic viewpoint control on UDVideoQA ∗. The best results are in bold. 
+
+UDVideoQA ∗
+
+Methods Settings BU Atr ER RR CI Avg Qwen3-VL 1/4, Passive 68.9 17.8 45.1 50.4 64.7 49.4 Qwen3-VL 1/4, Dynamic 75.6 22.3 46.2 53.4 71.0 53.7 CamVLM 1/4, Dynamic 76.2 28.3 47.4 66.0 75.2 58.8 
+
+Qwen3-VL 1/6, Passive 60.3 10.5 42.9 49.6 55.8 43.9 Qwen3-VL 1/6, Dynamic 64.4 19.8 45.4 53.0 58.9 48.3 CamVLM 1/6, Dynamic 67.6 30.7 47.8 67.2 76.9 58.6 
+
+Qwen3-VL 1/9, Passive 57.1 10.5 41.2 46.2 51.3 41.3 Qwen3-VL 1/9, Dynamic 67.2 17.2 44.5 51.3 51.3 45.9 CamVLM 1/9, Dynamic 70.6 29.4 46.2 64.7 72.7 57.0 
+
+Table 5: Ablation study of different viewpoint sizes on UDVideoQA ∗. The best results are in bold. 
+
+UDVideoQA ∗
+
+Methods Settings BU Atr ER RR CI Avg CamVLM (SFT) Dynamic 65.1 27.7 38.2 63.0 72.4 53.7 CamVLM (RL) Dynamic 71.8 25.2 54.2 54.6 72.7 56.0 CamVLM (SFT+RL) Dynamic 70.6 29.4 46.2 64.7 72.7 57.0 
+
+Table 6: Ablation study of different training pipelines on UDVideoQA ∗. The best results are in bold. 
+
+5.4 Qualitative Analysis 
+
+Figure 5 provides qualitative examples of CamVLM. In simple interaction scenarios, CamVLM accurately captures User Query: What is the person wearing a black shirt doing? GT: He runs across the lawn toward the right and then falls on the path. 
+
+> CamVLM: He walks across the lawn and then moves out of view.
+> User Query: What is the person wearing white doing?
+> GT: He walks up to the doorway, looks around, attempts to open the door, and then leaves. CamVLM: He approaches the door while looking around, attempts to open it, and then walks away.
+> User Query: What is the person wearing white doing?
+> GT: He walks up to the doorway, looks around, attempts to open the door, and then leaves. CamVLM: He approaches the door while looking around, attempts to open it, and then walks away.
+
+Figure 5: Qualitative analysis of CamVLM on fine-grained human action understanding. CamVLM accurately recog-nizes complete action sequences in straightforward scenarios (top), but may overlook subtle motion semantics and critical events in more challenging videos (bottom), highlighting re-maining challenges in detailed temporal reasoning. complete action sequences by actively tracking the target through dynamic viewpoint control. In more challenging cases involving subtle motion differences and unexpected events, the model may still miss critical actions or confuse similar motions, such as describing running as walking and overlooking falls. These examples demonstrate that dynamic viewpoint control substantially improves object-centric ev-idence acquisition while highlighting remaining challenges in fine-grained temporal reasoning. 
+
+## 6 Conclusion 
+
+In this work, we introduce CamVLM, an active visual rea-soning framework that enables LVLMs to acquire visual ev-idence through dynamic viewpoint control. By construct-ing CCTV-Anomaly and CamTrack-53K, and formulating viewpoint control as a sequential decision-making problem, CamVLM learns effective camera policies beyond super-vised trajectory imitation. Extensive experiments demon-strate that active camera-based reasoning improves fine-grained surveillance video understanding by acquiring more informative visual evidence. References 
+
+Acsintoae, A.; Florescu, A.; Georgescu, M.-I.; Mare, T.; Sumedrea, P.; Ionescu, R. T.; Khan, F. S.; and Shah, M. 2022. Ubnormal: New benchmark for supervised open-set video anomaly detection. In 2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 20143– 20153. IEEE. Adam, A.; Rivlin, E.; Shimshoni, I.; and Reinitz, D. 2008. Robust real-time unusual event detection using multiple fixed-location monitors. IEEE transactions on pattern anal-ysis and machine intelligence , 30(3): 555–560. An, X.; Xie, Y.; Tang, F.; Yan, Y.; Tan, H.; Zhu, D.; Chen, C.; Zhao, X.; Qin, B.; Yang, K.; et al. 2026. Llava-onevision-2: Towards next-generation perceptual intelligence. arXiv preprint arXiv:2605.25979 .Bai, S.; Cai, Y.; Chen, R.; Chen, K.; Chen, X.; Cheng, Z.; Deng, L.; Ding, W.; Gao, C.; Ge, C.; et al. 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 .Ding, H.; Liu, C.; He, S.; Jiang, X.; and Loy, C. C. 2023. Mevis: A large-scale benchmark for video segmentation with motion expressions. In 2023 IEEE/CVF International Con-ference on Computer Vision (ICCV) , 2694–2703. IEEE. Ding, Y.; Lai, X.; Zhang, Y.; Li, W.; Chu, R.; and Yang, Y. 2026. Videozoomer: Reinforcement-learned temporal focus-ing for long video reasoning. In International Conference on Learning Representations , volume 2026, 20087–20111. Feng, K.; Gong, K.; Li, B.; Guo, Z.; Wang, Y.; Peng, T.; Wu, J.; Zhang, X.; Wang, B.; and Yue, X. 2025. Video-r1: Reinforcing video reasoning in mllms. Advances in Neural Information Processing Systems , 38: 99114–99137. Fu, S.; Yang, Q.; Li, Y.-M.; Wei, X.; Xie, X.; and Zheng, W.-S. 2025. Love-r1: Advancing long video understanding with an adaptive zoom-in mechanism via multi-step reasoning. 
+
+arXiv preprint arXiv:2509.24786 .Google. 2026. Introducing Gemini 3.1 Flash-Lite. https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-1-flash-lite/. Khayatkhoei, M.; Chhikara, P.; Ilievski, F.; et al. 2025. Mllms know where to look: Training-free perception of small visual details with multimodal llms. In International Conference on Learning Representations , volume 2025, 68194–68213. Kim, S.; Ryu, S.; You, H.; and Hong, J. H. 2025. GTA-Crime: A Synthetic Dataset and Generation Framework for Fatal Violence Detection with Adversarial Snippet-Level Do-main Adaptation. In 2025 IEEE International Conference on Image Processing (ICIP) , 97–102. IEEE. Lai, X.; Li, J.; Li, W.; Liu, T.; Li, T.; and Zhao, H. 2026. Mini-o3: Scaling up reasoning patterns and interaction turns for visual search. In International Conference on Learning Representations , volume 2026, 76722–76746. Li, W.; Mahadevan, V.; and Vasconcelos, N. 2014. Anomaly detection and localization in crowded scenes. IEEE trans-actions on pattern analysis and machine intelligence , 36(1): 18–32. Li, X.; Yan, Z.; Meng, D.; Dong, L.; Zeng, X.; He, Y.; Wang, Y.; Qiao, Y.; Wang, Y.; and Wang, L. 2025. Videochat-r1: Enhancing spatio-temporal perception via reinforcement fine-tuning. arXiv preprint arXiv:2504.06958 .Liu, X.; Pesaranghader, A.; Kim, J.; Sadhu, T.; Jeon, H.; and Sanner, S. 2025. ActiveVOO: Value of observation guided active knowledge acquisition for open-world embodied lifted regression planning. Advances in Neural Information Pro-cessing Systems , 38: 106621–106647. Liu, Z.; Gu, Y.; Wang, Y.; Xue, X.; and Fu, Y. 2026. Ac-tiveVLA: Injecting active perception into vision-language-action models for precise 3D robotic manipulation. arXiv preprint arXiv:2601.08325 .Lu, C.; Shi, J.; and Jia, J. 2013. Abnormal event detection at 150 fps in matlab. In Proceedings of the IEEE international conference on computer vision , 2720–2727. OpenAI. 2025. Thinking with images. https://openai.com/ index/thinking-with-images. OpenAI. 2026a. GPT-5.6: Frontier intelligence that scales with your ambition. https://openai.com/index/gpt-5-6/. OpenAI. 2026b. Introducing GPT-5.5. https://openai.com/ index/introducing-gpt-5-5/. Perez, M.; Kot, A. C.; and Rocha, A. 2019. Detection of real-world fights in surveillance videos. In ICASSP 2019-2019 IEEE international conference on acoustics, speech and signal processing (ICASSP) , 2662–2666. IEEE. Qin, Y.; Zhou, E.; Liu, Q.; Yin, Z.; Sheng, L.; Zhang, R.; Qiao, Y.; and Shao, J. 2024. Mp5: A multi-modal open-ended embodied system in minecraft via active perception. In 
+
+2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 16307–16316. IEEE. Seed, B. 2026. Seed2. 0 model card: Towards intelli-gence frontier for real-world complexity. arXiv preprint arXiv:2607.00248 .Seo, S.; Lee, J.-Y.; and Han, B. 2020. Urvos: Unified refer-ring video object segmentation network with a large-scale benchmark. In European conference on computer vision ,208–223. Springer. Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Bi, X.; Zhang, H.; Zhang, M.; Li, Y.; Wu, Y.; et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open lan-guage models. arXiv preprint arXiv:2402.03300 .Shen, H.; Zhao, K.; Zhao, T.; Xu, R.; Zhang, Z.; Zhu, M.; and Yin, J. 2025. Zoomeye: Enhancing multimodal llms with human-like zooming capabilities through tree-based im-age exploration. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 6613– 6629. Sultani, W.; Chen, C.; and Shah, M. 2018. Real-world anomaly detection in surveillance videos. In 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition ,6479–6488. IEEE. Sun, H.; Hu, J.; Zhang, Z.; Tian, H.; Xie, X.; Wang, Y.; Xie, X.; Lin, Y.; Yu, Z.; and Tan, M. 2025. Open-world drone ac-tive tracking with goal-centered rewards. Advances in Neural Information Processing Systems , 38: 147712–147747. Vishal, J. R.; Poluri, N.; Naik, K.; Patil, R.; Kota, K. H.; Vinod, K.; Ramesh, P. J.; Farhadi, M.; Yang, Y.; and Chakravarthi, B. 2026. UDVideoQA: A Traffic Video Question Answering Dataset for Multi-Object Spatio-Temporal Reasoning in Urban Dynamics. arXiv preprint arXiv:2602.21137 .Wang, Q.; Yu, Y.; Yuan, Y.; Mao, R.; and Zhou, T. 2025a. Videorft: Incentivizing video reasoning capability in mllms via reinforced fine-tuning. Advances in neural information processing systems , 38: 4350–4376. Wang, S.; Zhang, J.; Li, M.; Liu, J.; Li, A.; Wu, K.; Zhong, F.; Yu, J.; Zhang, Z.; and Wang, H. 2025b. Trackvla: Embodied visual tracking in the wild. arXiv preprint arXiv:2505.23189 .Wu, P.; Liu, J.; Shi, Y.; Sun, Y.; Shao, F.; Wu, Z.; and Yang, Z. 2020. Not only look, but also listen: Learning multimodal violence detection under weak supervision. In European conference on computer vision , 322–339. Springer. Xu, C.; Hsieh, S.-H.; Xiong, C.; and Corso, J. J. 2015. Can humans fly? action understanding with multiple classes of actors. In Proceedings of the IEEE conference on computer vision and pattern recognition , 2264–2273. Yang, Z.; Wang, S.; Zhang, K.; Wu, K.; Leng, S.; Zhang, Y.; Li, B.; Qin, C.; Lu, S.; Li, X.; et al. 2026. Longvt: Incen-tivizing" thinking with long videos" via native tool calling. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 33816–33826. Yuan, Y.; Zhang, H.; Li, W.; Cheng, Z.; Zhang, B.; Li, L.; Li, X.; Zhao, D.; Zhang, W.; Zhuang, Y.; et al. 2025. Videorefer suite: Advancing spatial-temporal object understanding with video llm. In 2025 IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition (CVPR) , 18970–18980. IEEE. Yue, Z.; Lin, Z.; Song, Y.; Wang, W.; Ren, S.; Gu, S.; Li, S.; Li, P.; Zhao, L.; Li, L.; et al. 2025. Mimo-vl technical report. 
+
+arXiv preprint arXiv:2506.03569 .Zeng, X.; Zhang, Z.; Zhu, Y.; Li, X.; Wang, Z.; Ma, C.; Zhang, Q.; Huang, Z.; Ouyang, K.; Jiang, T.; et al. 2026. Video-o3: Native interleaved clue seeking for long video multi-hop reasoning. arXiv preprint arXiv:2601.23224 .Zhang, H.; Gu, X.; Li, J.; Ma, C.; Bai, S.; Zhang, C.; Zhang, B.; Zhou, Z.; He, D.; and Tang, Y. 2026. Thinking with videos: Multimodal tool-augmented reinforcement learning for long video reasoning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,32903–32914. Zhang, X.; Zou, L.; Lu, T.; Yao, Y.; Huang, Z.; and Wang, G. 2025. Instance-Adaptive Keypoint Learning with Local-to-Global Geometric Aggregation for Category-Level Object Pose Estimation. arXiv preprint arXiv:2504.15134 .Zheng, Z.; Yang, M.; Hong, J.; Zhao, C.; Xu, G.; Yang, L.; and Shen, C. 2026. Deepeyes: Incentivizing" thinking with images" via reinforcement learning. In International Confer-ence on Learning Representations , volume 2026, 126775– 126798. Thinking with Cameras: Active Visual Reasoning via Dynamic Viewpoint Control for Surveillance Video Understanding 
+
+## Supplementary Material A Evaluation Details on UDVideoQA ∗
+
+Since the original test split of UDVideoQA (Vishal et al. 2026) is no longer available, we construct UDVideoQA ∗
+
+with permission and approval from the original authors us-ing Set 03 and Set 20 from the released dataset, as these two subsets provide the greatest question diversity. The resulting benchmark contains five question types: Basic Understand-ing (BU), Attribution (Atr), Event Reasoning (ER), Reverse Reasoning (RR), and Counterfactual Inference (CI). Each question type contains 238 QA pairs, resulting in a total of 1,190 QA pairs. Following the standard evaluation protocol of UD-VideoQA, we employ an external large language model (LLM) as a semantic matching evaluator. Specifically, we use GPT-5.5 (OpenAI 2026b) as a text-only evaluator. To mitigate potential evaluation bias, all model judgments are further verified by human annotators, who independently assess the correctness of the generated answers. Each re-sponse is assigned a binary score SLLM ,i ∈ { 0, 1}, indicat-ing whether the predicted answer is semantically consistent with the ground-truth answer. We further adopt the weighted scoring scheme introduced by UDVideoQA to account for differences in cognitive com-plexity across reasoning categories. More challenging rea-soning types are assigned larger weights: 1.0 for BU, 1.2 for Atr, 1.3 for ER and RR, and 1.5 for CI. The final weighted score W is computed as 
+
+W = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+SLLM ,i · Wci , (10) where SLLM ,i denotes the correctness score of the i-th re-sponse, and Wci is the weight assigned to its reasoning cat-egory ci. This formulation places greater emphasis on suc-cessful predictions for cognitively demanding question types, particularly counterfactual inference, which is designed to re-duce hallucinations and encourage deeper causal understand-ing. We report the accuracy for each of the five question types together with the weighted overall accuracy. For all evaluations, we set the temperature to 0 and adopt greedy decoding to ensure deterministic outputs. All reported results are obtained from a single evaluation run using the final trained model checkpoint. 
+
+## B Details of CCTV-Anomaly Construction 
+
+B.1 Video Collection 
+
+CCTV-Anomaly is constructed from two complementary sources: publicly available surveillance anomaly datasets and newly collected real-world surveillance videos. To ensure data quality and suitability for LVLM training, we perform extensive data filtering to remove duplicate videos, manually edited clips, severely occluded scenes, and samples with am-biguous event descriptions. After filtering, the public subset contains 6,158 videos collected from existing datasets, in-cluding XD-Violence (Wu et al. 2020), CCTV-Fights (Perez, Kot, and Rocha 2019), GTA-Crime (Kim et al. 2025), and UBnormal (Acsintoae et al. 2022). The newly collected sub-set contains 8,301 videos obtained from diverse real-world surveillance resources, covering various environments, view-points, and event scenarios. 
+
+B.2 Multi-level Video Annotation 
+
+To support fine-grained surveillance video understanding, we develop a multi-level annotation pipeline consisting of event category annotation, detailed caption annotation, and struc-tured evaluation annotation. The annotation process adopts an LLM-assisted strategy with human verification to ensure annotation reliability. We use Doubao-Seed-2.0-Pro (Seed 2026) as the automatic annotator. 
+
+Event Category Annotation. Each video is assigned one event category according to our predefined taxonomy. For public datasets with existing labels, we inherit the original annotations when they are semantically consistent with our categories. For unlabeled public videos and newly collected samples, event categories are generated through video anal-ysis and subsequently verified by human annotators. 
+
+Event Caption Annotation. Each video is further anno-tated with a concise yet informative caption describing the key semantic information of the event, including involved subjects, major actions, and event outcomes. Instead of ex-haustively describing all visual contents, the captions focus on information relevant to surveillance reasoning. We adopt an LLM-assisted caption generation pipeline, followed by human inspection to correct inaccurate descriptions and en-sure consistency with the corresponding event category. 
+
+Structured Evaluation Annotation. To enable fine-grained evaluation of LVLM outputs, we randomly select 1,000 videos as the test set and construct structured semantic annotations from verified captions. Specifically, each video is annotated with five semantic components: location, time of day, subjects, activities, and objects. All structured an-notations are manually reviewed to ensure consistency and completeness. 
+
+## C Details of CamTrack-53K Construction 
+
+C.1 Viewpoint Trajectory Visualization 
+
+We visualize representative temporally ordered viewpoint trajectories from CamTrack-53K in Figure 6, where the yel-low boxes denote object bounding boxes and the blue boxes indicate the current viewpoints. As shown, the constructed viewpoints continuously and stably cover task-relevant ob-jects throughout their motion, while dynamically adjusting their positions and spatial extents according to object scale and spatial distribution. Meanwhile, they suppress excessive Question: How does the position of the child change over time during the climbing process? Answer: Initially, the child is standing on a small low chair, then lifts one leg up onto the adjacent higher chair, shifts their weight, pulls their full body onto the chair, and eventually settles to sit securely on the higher chair's seat. 
+
+Question: How does the competing player in the red jersey move as he plays this table tennis point? Answer: He makes dynamic, fast full-body movements across the court: he sprints, lunges, and dives low to the ground in an attempt to reach and return the ball. 
+
+Question: How does the interaction between the brown dog and the white-footed dog change over time? An sw er: Initially, the brown dog and the white-footed dog are mating, with one dog mounted on the other. After some time, they separate from the mating position, turn to face each other, and remain close to one another while continuing to interact closely. 
+
+Question: How do the two pandas interact with each other? Answer: The two pandas engage in playful wrestling, with the panda that started on the elevated wooden platform pulled down to the ground by the other panda, and they then roll around together and playfully bite each other. 
+
+Question: What interaction are the two tigers engaged in, and what visible physical difference exists between the pair? Answer: The two tigers are actively fighting, swiping at each other with their front paws. One of the tigers is noticeably larger than the other during this physical interaction. Figure 6: Visualization of viewpoint trajectories in CamTrack-53K. Yellow and blue bounding boxes denote object bounding boxes and current viewpoints, respectively. background content while preserving sufficient surrounding context and interaction cues, thereby yielding compact, co-herent, and informative fine-grained visual evidence. 
+
+C.2 Data Curation 
+
+We construct CamTrack-53K from the A2D (Xu et al. 2015), MeViS (Ding et al. 2023), and Refer-YouTube-VOS (Seo, Lee, and Han 2020) subsets of VideoRefer-700K (Yuan et al. 2025). The resulting dataset contains 53,059 samples, in-cluding 26,221 from A2D, 8,459 from MeViS, and 18,379 from Refer-YouTube-VOS. 
+
+C.3 Viewpoint Representation 
+
+The viewpoint is represented as a normalized rectangular region: 
+
+vt = [ x1,t , y 1,t , x 2,t , y 2,t ] , (11) where t denotes the viewpoint step, and (x1,t , y 1,t ) and 
+
+(x2,t , y 2,t ) denote the top-left and bottom-right coordinates of the viewpoint at step t, respectively. All coordinates are normalized to [0 , 1] .For our main experiments, the viewpoint is initialized at the center of the frame and covers 1/9 of the full-frame area: 
+
+v0 =
+
+ 13 , 13 , 23 , 23
+
+
+
+. (12) We additionally construct variants with initial viewpoint area ratios of 1/6 and 1/4 for ablation studies. 
+
+C.4 Viewpoint Construction 
+
+Each clip is associated with a viewpoint action derived from the spatial configuration of the task-relevant objects. For clips involving multiple objects, their bounding boxes are merged into the minimum enclosing box: 
+
+bt =
+
+h
+
+min  
+
+> i
+
+x(i)1,t , min  
+
+> i
+
+y(i)1,t , max  
+
+> i
+
+x(i)2,t , max  
+
+> i
+
+y(i)2,t 
+
+i
+
+. (13) Here, t denotes the viewpoint step, and i indexes the task-relevant objects. (x(i)1,t , y (i)1,t ) and (x(i)2,t , y (i)2,t ) denote the top-left and bottom-right coordinates of the bounding box of the i-th object, respectively. The resulting bt represents the aggregated target region at step t.The target viewpoint is designed to fully cover the task-relevant objects while preserving sufficient surrounding con-text. Let W and H denote the width and height of the video frame, respectively, and let w(bt), h(bt), and A(bt) denote the width, height, and area of the target bounding box. We adaptively determine the normalized side length of the view-point according to the size of the target box relative to the full frame: 
+
+svt = clip max 
+
+(s 
+
+A(bt)
+
+ρW H , κw (bt)
+
+W , κh (bt)
+
+H
+
+)
+
+, s min , s max 
+
+!
+
+,
+
+(14) where ρ = 0 .2 controls the desired proportion of the view-point occupied by the target, and κ = 1 .3 is a padding factor that preserves visual context around the target. The param-eters smin = 0 .2 and smax = 0 .8 constrain the minimum and maximum viewpoint scales, respectively. Consequently, smaller targets are associated with more compact viewpoints, whereas larger targets require broader viewpoints. The target viewpoint is centered on the target bounding box and appropriately shifted when approaching the frame boundaries, ensuring that it always remains within the valid image region. When the target is already fully covered, ap-proximately centered, and observed at a suitable scale, the current viewpoint is maintained to avoid unnecessary view-point adjustments. 
+
+## D Prompt Template 
+
+Prompt Template for Training and Passive Viewpoint Evaluation on CCTV-Anomaly. Figure 7 (top) illustrates the prompt template for training and passive viewpoint eval-uation on CCTV-Anomaly. 
+
+Prompt Template for Dynamic Viewpoint Evaluation on CCTV-Anomaly. Figure 7 (bottom) illustrates the prompt template for dynamic viewpoint evaluation on CCTV-Anomaly. 
+
+Prompt Template for LLM-Based Semantic Evaluation of Video Captioning on CCTV-Anomaly. Figure 8 illus-trates the prompt template for LLM-based semantic evalua-tion of video captioning on CCTV-Anomaly. 
+
+Prompt Template for Training on CamTrack-53K and Dynamic Viewpoint Evaluation on UDVideoQA ∗. Fig-ure 9 (top) illustrates the prompt template for training on CamTrack-53K and dynamic viewpoint evaluation on UDVideoQA ∗.
+
+Prompt Template for Passive Viewpoint Evaluation on UDVideoQA ∗. Figure 9 (bottom) illustrates the prompt template for passive viewpoint evaluation on UDVideoQA ∗.
+
+Prompt Template for LLM-Based Semantic Evaluation on UDVideoQA ∗. Figure 10 illustrates the prompt tem-plate for LLM-based semantic evaluation on UDVideoQA ∗.Prompt for Training and Passive Viewpoint Evaluation on CCTV-Anomaly Task: Analyze the video and: 1. Provide a concise but complete description of the main events in the video. 2. Identify ONE single best category that most accurately describes the primary event. Classification Rules: - Choose exactly ONE category only. - Select the category based on the dominant or most important event in the video. - Prioritize safety/security incidents over normal activity. - If multiple events occur, choose the most severe or highest-risk event. - Only use the category names exactly as listed below. - If none of the risk categories apply, use "normal activity". Categories: - break-in: Illegal entry or attempted intrusion into a property, home, room, or enclosed area. - theft: Taking or attempting to take any property without permission, including packages, car, or belongings. - suspicious behavior: Loitering, face occlude, peeping, casing a location, or other abnormal behavior suggesting intent to commit a crime. - violence: Physical assault, fighting, armed threat, visible weapon, shooting, or any aggressive act against a person. - vandalism: Intentional damage, graffiti, arson, scratching or defacement of property. 
+
+- fire hazard: Visible fire, smoke, explosion, or any fire-related danger. 
+
+- personal emergency: A person slips, falls, drowning, or shows urgent danger. - wild animal: Presence of a wild or potentially dangerous animal (e.g., wolf, bear, raccoon, deer) in the area. - vehicle incident: Vehicle collision or a vehicle striking a person or object. - normal activity: Ordinary daily activity with no safety or security risk. Output Format (strictly follow): Video category: <exact category name> Video description: <event summary> Prompt for Dynamic Viewpoint Evaluation on CCTV-Anomaly You are an expert in video tracking and security video analysis. In a continuous video, each second you can only see a cropped local window from the current video frame, not the full frame. Based on the visible content inside the window, decide whether to move or zoom the view to keep the 
+
+people involved in the primary anomalous event, the objects they interact with, and their actions and interactions 
+
+clearly visible across time. After the video ends, complete the final task using the window views observed throughout the process. During each second, output only the action JSON. Use this format: {"action": ...} Available actions: {"action": None} (no movement); {"action": left/right/up/down, "offset": 0-1} (move the view left/right/up/down, range 0-1); {"action": zoom_in, "scale": s}, where 0<s<1 (shrink the view by the direct scale factor); {"action": zoom_out, "scale": s}, where s>1 (enlarge the view by the direct scale factor). To apply multiple actions, separate them with semicolons, for example: 
+
+{"action": zoom_out, "scale": 1.5}; {"action": down, "offset": 0.12}. 
+
+When the user later indicates that the video has ended, stop tracking and follow the final task instructions. The video has ended. Stop tracking. +<Prompt for training and passive viewpoint evaluation on CCTV-Anomaly> Prompt for Dynamic Viewpoint Evaluation on CCTV-Anomaly You are an expert in video tracking and security video analysis. In a continuous video, each second you can only see a cropped local window from the current video frame, not the full frame. Based on the visible content inside the window, decide whether to move or zoom the view to keep the 
+
+people involved in the primary anomalous event, the objects they interact with, and their actions and interactions 
+
+clearly visible across time. After the video ends, complete the final task using the window views observed throughout the process. During each second, output only the action JSON. Use this format: {"action": ...} Available actions: {"action": None} (no movement); {"action": left/right/up/down, "offset": 0-1} (move the view left/right/up/down, range 0-1); {"action": zoom_in, "scale": s}, where 0<s<1 (shrink the view by the direct scale factor); {"action": zoom_out, "scale": s}, where s>1 (enlarge the view by the direct scale factor). To apply multiple actions, separate them with semicolons, for example: 
+
+{"action": zoom_out, "scale": 1.5}; {"action": down, "offset": 0.12}. 
+
+When the user later indicates that the video has ended, stop tracking and follow the final task instructions. The video has ended. Stop tracking. +<Prompt for training and passive viewpoint evaluation on CCTV-Anomaly> Prompt for Training and Passive Viewpoint Evaluation on CCTV-Anomaly Task: Analyze the video and: 1. Provide a concise but complete description of the main events in the video. 2. Identify ONE single best category that most accurately describes the primary event. Classification Rules: - Choose exactly ONE category only. - Select the category based on the dominant or most important event in the video. - Prioritize safety/security incidents over normal activity. - If multiple events occur, choose the most severe or highest-risk event. - Only use the category names exactly as listed below. - If none of the risk categories apply, use "normal activity". Categories: - break-in: Illegal entry or attempted intrusion into a property, home, room, or enclosed area. - theft: Taking or attempting to take any property without permission, including packages, car, or belongings. - suspicious behavior: Loitering, face occlude, peeping, casing a location, or other abnormal behavior suggesting intent to commit a crime. - violence: Physical assault, fighting, armed threat, visible weapon, shooting, or any aggressive act against a person. - vandalism: Intentional damage, graffiti, arson, scratching or defacement of property. 
+
+- fire hazard: Visible fire, smoke, explosion, or any fire-related danger. 
+
+- personal emergency: A person slips, falls, drowning, or shows urgent danger. - wild animal: Presence of a wild or potentially dangerous animal (e.g., wolf, bear, raccoon, deer) in the area. - vehicle incident: Vehicle collision or a vehicle striking a person or object. - normal activity: Ordinary daily activity with no safety or security risk. Output Format (strictly follow): Video category: <exact category name> Video description: <event summary> Prompt for Dynamic Viewpoint Evaluation on CCTV-Anomaly You are an expert in video tracking and security video analysis. In a continuous video, each second you can only see a cropped local window from the current video frame, not the full frame. Based on the visible content inside the window, decide whether to move or zoom the view to keep the 
+
+people involved in the primary anomalous event, the objects they interact with, and their actions and interactions 
+
+clearly visible across time. After the video ends, complete the final task using the window views observed throughout the process. During each second, output only the action JSON. Use this format: {"action": ...} Available actions: {"action": None} (no movement); {"action": left/right/up/down, "offset": 0-1} (move the view left/right/up/down, range 0-1); {"action": zoom_in, "scale": s}, where 0<s<1 (shrink the view by the direct scale factor); {"action": zoom_out, "scale": s}, where s>1 (enlarge the view by the direct scale factor). To apply multiple actions, separate them with semicolons, for example: 
+
+{"action": zoom_out, "scale": 1.5}; {"action": down, "offset": 0.12}. 
+
+When the user later indicates that the video has ended, stop tracking and follow the final task instructions. The video has ended. Stop tracking. +<Prompt for training and passive viewpoint evaluation on CCTV-Anomaly> Figure 7: Prompt templates for training and passive and dynamic viewpoint evaluation on CCTV-Anomaly. Prompt for LLM-Based Semantic Evaluation of Video Captioning on CCTV-Anomaly You are a lenient semantic evaluator for security-video descriptions. Judge whether the model description covers every GT item in the structured fields. General rules: - Synonyms, paraphrases, broader terms, and common variants count when they express the same visible meaning. - Do not require exact wording, direction, position, order, or object subtype unless a subject attribute is required. - Do not reward information absent from the description. Contradictions are not hits. Field rules: - location: a compatible scene type counts; driveway and street may represent the same relevant outdoor access area. - time_of_day: compatible cues such as night/dark/evening or day/daylight count. - subjects: identify the same entity. If a GT subject contains attributes such as color, clothing, count, role, age, species, or vehicle type, the description must contain the entity plus at least one compatible GT attribute. Saying only "a man" does not hit "a man wearing a dark blue top and black pants"; "a person in blue" does. 
+
+If the GT item is generic and has no attribute, such as "a person", "a man", "people", or "vehicles", 
+
+matching the entity alone is sufficient. - activities: the core action is enough. walk/run/move/approach/head/go and similar movement expressions may match. - objects: the object meaning is enough and attributes are ignored. car/pickup/sedan/vehicle and similar variants may match. Model description: {description} GT structured fields: {structured JSON} Return strict JSON only. Preserve each GT list item exactly and return one result per item: 
+
+{
+
+"location": {"hit": true, "reason": "..."}, "time_of_day": {"hit": true, "reason": "..."}, "subjects": [{"item": "...", "hit": true, "reason": "..."}], "activities": [{"item": "...", "hit": true, "reason": "..."}], "objects": [{"item": "...", "hit": true, "reason": "..."}] }Figure 8: Prompt template for LLM-based semantic evaluation of video captioning on CCTV-Anomaly. Prompt Template for Training on CamTrack-53K and Dynamic Viewpoint Evaluation on UDVideoQA* You are an expert in video tracking and video analysis. In a continuous video, each second you can only see a cropped local window from the current video frame, not the full frame. Based on the visible content inside the window, you need to decide each second whether to move or zoom the window to track all objects referred to by the question, ensuring they remain clearly visible inside the window with an appropriate size. After the video ends, answer the question using the window views observed throughout the process. Question: {question} During each second, output only the action JSON. Use this format: {"action": ...} Available actions: {"action": None} (no movement); {"action": left/right/up/down, "offset": 0-1} (move the view left/right/up/down, range 0-1); {"action": zoom_in, "scale": s}, where 0<s<1 (shrink the view by the direct scale factor); {"action": zoom_out, "scale": s}, where s>1 (enlarge the view by the direct scale factor). To apply multiple actions, separate them with semicolons, for example: {"action": zoom_out, "scale": 1.5}; {"action": down, "offset": 0.12}. When the user later indicates that the video has ended, stop window tracking and answer directly with <answer>your answer</answer>. 
+
+The video has ended. Stop window tracking and answer the question directly. 
+
+Output only the answer using this format: <answer>your answer</answer>. Prompt Template for Passive Viewpoint Evaluation on UDVideoQA* You are a traffic video analyst. Watch the video carefully before answering. The video has ended. Question: {question} Output the answer using this format: <answer>your answer</answer>. Prompt Template for Training on CamTrack-53K and Dynamic Viewpoint Evaluation on UDVideoQA* You are an expert in video tracking and video analysis. In a continuous video, each second you can only see a cropped local window from the current video frame, not the full frame. Based on the visible content inside the window, you need to decide each second whether to move or zoom the window to track all objects referred to by the question, ensuring they remain clearly visible inside the window with an appropriate size. After the video ends, answer the question using the window views observed throughout the process. Question: {question} During each second, output only the action JSON. Use this format: {"action": ...} Available actions: {"action": None} (no movement); {"action": left/right/up/down, "offset": 0-1} (move the view left/right/up/down, range 0-1); {"action": zoom_in, "scale": s}, where 0<s<1 (shrink the view by the direct scale factor); {"action": zoom_out, "scale": s}, where s>1 (enlarge the view by the direct scale factor). To apply multiple actions, separate them with semicolons, for example: {"action": zoom_out, "scale": 1.5}; {"action": down, "offset": 0.12}. When the user later indicates that the video has ended, stop window tracking and answer directly with <answer>your answer</answer>. 
+
+The video has ended. Stop window tracking and answer the question directly. 
+
+Output only the answer using this format: <answer>your answer</answer>. Prompt Template for Passive Viewpoint Evaluation on UDVideoQA* You are a traffic video analyst. Watch the video carefully before answering. The video has ended. Question: {question} Output the answer using this format: <answer>your answer</answer>. Figure 9: Prompt templates for training on CamTrack-53K and dynamic and passive viewpoint evaluation on UDVideoQA ∗.Prompt for LLM-Based Semantic Evaluation on on UDVideoQA* 
+
+You are an impartial, strict grader for VideoQA semantic correctness. 
+
+Question: {question} 
+
+Ground truth answer: {ground_truth} Model answer: {model_answer} Assign correct as 1 or 0 only; no partial credit. Accept exact or unambiguous semantic equivalence for binary or categorical answers. 
+
+Accept a short textual paraphrase only when it has the same meaning. Missing key information or contradicting the 
+
+ground truth is 0. A blank answer, NA, I don't know, unsure, or a contradiction is 0. Do not infer beyond the ground truth. Return JSON only: {"correct": 0|1} 
+
+Prompt for LLM-Based Semantic Evaluation on on UDVideoQA* 
+
+You are an impartial, strict grader for VideoQA semantic correctness. 
+
+Question: {question} 
+
+Ground truth answer: {ground_truth} Model answer: {model_answer} Assign correct as 1 or 0 only; no partial credit. Accept exact or unambiguous semantic equivalence for binary or categorical answers. 
+
+Accept a short textual paraphrase only when it has the same meaning. Missing key information or contradicting the 
+
+ground truth is 0. A blank answer, NA, I don't know, unsure, or a contradiction is 0. Do not infer beyond the ground truth. Return JSON only: {"correct": 0|1} 
+
+Figure 10: Prompt template for LLM-based semantic evaluation on UDVideoQA ∗.
