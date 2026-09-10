@@ -1,0 +1,295 @@
+Title: Vision-Guided Text Prompt Tuning for Multimodal Sentiment Analysis
+
+URL Source: https://arxiv.org/pdf/2609.06497v1
+
+Published Time: Wed, 09 Sep 2026 01:13:53 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Vision-Guided Text Prompt Tuning for Multimodal Sentiment Analysis 
+
+Xiaoran Kou 1, Jingyi Wu 2, Peng Sun 3* , Yang Liu 1* , Hong Chen 1
+
+> 1
+
+College of Electronic and Information Engineering, Tongji University, Shanghai 201804, China 
+
+> 2
+
+College of Intelligent Robotics and Advanced Manufacturing, Fudan University, Shanghai 200433, China 
+
+> 3
+
+Division of Natural and Applied Sciences, Duke Kunshan University, Suzhou 215316, China yangliu25@tongji.edu.cn, chenhong2019@tongji.edu.cn, jingyiwu23@m.fudan.edu.cn, peng.sun568@duke.edu 
+
+Abstract —Multimodal sentiment analysis requires effective modeling of both verbal semantics and non-verbal affective cues. A central challenge is to calibrate text-centered sentiment under-standing with visual facial evidence in a controlled, adaptive, and parameter-efficient manner. Text usually serves as the semantic anchor, whereas visual cues provide complementary evidence for ambiguous or implicit expressions; however, indiscriminate fusion may introduce visual noise and distort textual semantics. Moreover, fully fine-tuning large visual and textual encoders is costly and prone to overfitting on limited and scenario-dependent MSA benchmarks. To address these issues, we propose Vision-Guided Text Prompt Tuning (VG-TPT), which formulates visual-text sentiment modeling as controllable visual calibration of frozen text representations. VG-TPT injects visual affective cues into a frozen BERT encoder through layer-wise adaptive prompts, rather than relying on late-stage feature fusion or full backbone tuning. A co-guided router composes prompts from a trainable prompt bank according to both the evolving text state and the visual guidance feature, enabling sample-specific and layer-specific modulation. Experiments on CMU-MOSEI and CMU-MOSI show that VG-TPT consistently improves over text-only baselines and achieves competitive or superior per-formance compared with several full-modality methods, while updating only 2.4M trainable parameters. The code is available at https://github.com/ma-tubu/VG-TPT .
+
+Index Terms —Multimodal Sentiment Analysis, Prompt Tuning, Visual Guidance, Parameter-efficient Tuning 
+
+I. I NTRODUCTION 
+
+Multimodal sentiment analysis (MSA) aims to infer human affective states from heterogeneous multimedia signals, includ-ing language, vision, and acoustics [1], [2]. Beyond benchmark evaluation, MSA is increasingly required in practical multime-dia systems such as embodied perception, autonomous driving, human–robot interaction, and affect-aware human–computer interfaces [3]–[6]. Such application-oriented MSA requires efficient adaptation across users, environments, devices, and domain-specific distributions, making full fine-tuning of large modality encoders costly and potentially unstable under lim-ited paired annotations. Prompt tuning provides a parameter-efficient adaptation interface that preserves pretrained uni-modal knowledge while enabling task- and modality-specific guidance. In this context, text usually serves as the semantic 
+
+> *
+
+Corresponding authors This work was supported by DKU Professional Discretionary Funds 26AKUG0088 and 00AKUG0343. Positive Negative   
+
+> Well, that was certainly an interesting experience. Well, that was certainly an interesting experience.
+
+Fig. 1. Motivation of VG-TPT. Text alone may lead to an ambiguous or incorrect sentiment prediction, while facial expressions provide fine-grained affective cues to refine and disambiguate text-centered sentiment interpretation. 
+
+anchor, whereas visual signals provide non-verbal affective evidence such as facial expressions and gestures. Although text is often the dominant modality in sentiment analysis, its dominance also brings a structural limitation [7]. Text is usually semantically dense and easier to model, while visual cues are often sparse, noisy, and highly dependent on the speaker and context [7], [8]. As a result, existing multi-modal models may over-rely on textual polarity and under-utilize non-verbal affective evidence [8]. However, in many real-world utterances, the decisive sentiment is not explicitly encoded in words but is revealed by facial expressions. As illustrated in Fig. 1, an utterance such as “Well, that was certainly an interesting experience” may appear neutral or mildly subjective from text alone, while a disgusted facial expression clearly indicates negative sentiment. The preceding example suggests that text should serve as the semantic anchor, but visual facial cues are necessary to calibrate, refine, and sometimes overturn text-centered sentiment interpretation [9]– [11]. Conventional multimodal fusion further exposes a limitation in visual-text sentiment modeling. Most methods introduce visual information through feature concatenation, cross-modal attention, or decision-level fusion after independent modality arXiv:2609.06497v1 [cs.MM] 6 Sep 2026 encoding [1], [2], [12]–[14]. Although these paradigms model cross-modal correlations, vision is usually treated as a parallel auxiliary stream and fused with text only at a restricted stage. Late-stage fusion can adjust the final representation or pre-diction, but has limited ability to participate in the formation of textual semantics. A more principled strategy should allow visual evidence to intervene in the internal evolution of text representations across Transformer layers. Visual guidance also exhibits sample-dependent reliabil-ity [8]. Some samples require mild visual calibration, whereas others need strong correction when text and facial expressions conflict. As textual states change across layers, visual guidance should also vary with the current semantic level. However, conventional prompt-based fusion methods typically employ globally shared prompts, making them inadequate for sample-specific and layer-specific variations [15]–[17]. Motivated by these observations, VG-TPT dynamically composes prompts from a trainable prompt bank conditioned on both the evolving text state and visual guidance feature. To address these challenges, we propose VG-TPT for mul-timodal sentiment analysis. Built upon a frozen visual encoder and a BERT-based textual backbone, VG-TPT introduces three key designs: (1) a text-anchored visual guidance scheme that injects facial affective cues into the internal layers of the text encoder instead of performing late feature concatenation; (2) a layer-wise co-guided prompt routing mechanism that generates prompts according to both the evolving text state and the visual guidance feature, enabling adaptive modulation across different semantic layers; and (3) a routing-guided prompt composition strategy that selectively activates and combines prompt bases from a trainable prompt bank using learned routing weights, improving the adaptability of prompt-based visual-text fusion. Our primary contributions are summarized as follows:  
+
+> •
+
+We propose VG-TPT to formulate visual-text senti-ment modeling as controllable visual calibration of text-centered representations, enabling facial cues to correct ambiguous textual sentiment cues.  
+
+> •
+
+We introduce a layer-wise co-guided prompt routing mechanism that dynamically composes prompts from a trainable prompt bank, providing sample-specific and layer-specific visual modulation.  
+
+> •
+
+We achieve parameter-efficient visual-text adaptation by freezing the visual encoder and BERT backbone. With only 2.4M trainable parameters, VG-TPT outperforms text-only baselines and remains competitive with several full-modality methods. II. R ELATED WORK 
+
+A. Multimodal Sentiment Analysis 
+
+Multimodal sentiment analysis (MSA) integrates language, visual, and acoustic cues to infer human sentiment [1], [2]. Existing methods have evolved from simple feature-level fu-sion, such as concatenation and tensor fusion [1], [12], to attention-based fusion, multimodal Transformers [2], represen-tation disentanglement, and dynamic modality weighting [7], [13], [18]–[23]. Although these approaches effectively model cross-modal complementarity, they usually treat modalities as parallel streams and fuse them after independent encoding. As a result, visual information is often used as an auxiliary feature rather than a fine-grained guidance signal for text understanding. Unlike these methods, we focus on vision-guided text modeling, where facial cues are injected into the textual encoder through layer-wise adaptive prompts to refine and disambiguate text-centered sentiment representations. 
+
+B. Prompt Tuning for Multimodal Fusion 
+
+Prompt tuning freezes pretrained backbones and optimizes only a small number of continuous prompt tokens, providing a parameter-efficient alternative to full fine-tuning [15], [17]. Recent prompt-based multimodal fusion methods use learnable prompts to connect separately pretrained unimodal encoders and inject cross-modal information into a designated main modality encoder [16]. However, conventional prompt fusion often adopts globally shared prompts, which are applied to all samples regardless of their specific multimodal context. Such globally shared prompting limits prompt adaptivity and ex-pressiveness, especially for sentiment analysis where different text-visual pairs may require different affective interpretation patterns. Inspired by recent adaptive prompt fusion studies, we introduce a layer-wise co-guided prompt generation mech-anism. Our router jointly considers the current text state and visual guidance feature at each prompted Transformer layer, and selectively composes adaptive prompts from a trainable prompt bank, enabling sample-specific and layer-specific vi-sual modulation with few trainable parameters. III. M ETHOD 
+
+A. Overview 
+
+Given a text utterance XT and its corresponding visual input XV , our goal is to predict the sentiment intensity or sentiment category y. Unlike conventional multimodal fusion methods that combine textual and visual representations only at the feature or decision level, VG-TPT adopts a text-anchored vision-guided framework. In our formulation, the text modality serves as the primary semantic anchor, while the visual modality provides fine-grained affective cues, such as facial expressions, to refine and disambiguate text-centered sentiment understanding. As shown in Fig. 2, VG-TPT first uses a frozen visual encoder to extract a compact visual guidance feature: 
+
+gV = EV (XV ), (1) where EV (·) denotes the visual encoder. The text input XT is encoded by a BERT-based textual encoder. Instead of directly concatenating gV with the final text feature, we inject visual guidance into the textual encoder through layer-wise adaptive prompts. The resulting vision-guided text representation F T
+
+is then fed into a prediction head: 
+
+ˆy = C(F T ), (2) where C(·) denotes the sentiment prediction head. Vision-guided Text Representation  
+
+> Co-guided Prompt Generator Frozen Parameters Learnable Parameters
+> Visual Encoder
+
+Vision Text  
+
+> Can you remember anything specific they said?
+
+𝑔 𝑉 
+
+…
+
+𝐹 𝑇          
+
+> Layer 0
+> Layer 1
+> Layer 2
+> Layer n
+> Vision-guided Textual Encoder
+> Adaptive Prompt Visual Guidance Text Feature
+> Classifier
+> logits 0.02 0.09 0.16
+> 0.22 0.33 0.18
+> Trainable vs. Frozen Parameters
+> Trainable Parameters （<5% ）
+> Frozen Backbone （>95% ）Fig. 2. Overall architecture of VG-TPT. A frozen visual encoder extracts the visual guidance feature gV, which is injected into the BERT-based textual encoder through layer-wise adaptive prompts. The final vision-guided text representation is used for sentiment prediction.
+
+B. Layer-wise Vision-guided Text Encoding 
+
+Let HTl ∈ RB×N ×d denote the text hidden states before the l-th Transformer layer, where B is the batch size, N is the text sequence length, and d is the hidden dimension. For each prompted layer l ∈ S , where S denotes the set of layers equipped with vision-guided prompts, we generate a prompt sequence Pl conditioned on both the current textual state and the visual guidance feature. The generated prompt is first inserted after the [CLS] 
+
+token: 
+
+eHTl = [ hl
+
+> cls
+
+; Pl; hl
+
+> 1
+
+; · · · ; hlN ], (3) where hl 
+
+> cls
+
+denotes the [CLS] representation at layer l.The augmented sequence is then processed by the Trans-former layer, after which the inserted prompt tokens are removed: 
+
+HTl+1 = RemovePrompt 
+
+
+
+Transformer l
+
+ eHTl
+
+ 
+
+. (4) The transient prompt injection strategy allows visual affec-tive cues to interact with textual tokens through self-attention, while preserving the original text sequence structure across layers. Compared with one-shot input-level or output-level fusion, the proposed layer-wise design enables visual guidance to progressively modulate textual representations at different semantic levels. 
+
+C. Co-guided Prompt Routing 
+
+A fixed prompt treats all samples equally, which is in-sufficient for multimodal sentiment analysis where different text-visual pairs may require different affective interpretation patterns. To address this issue, we introduce a co-guided prompt routing mechanism, where the prompt activation is jointly determined by the current textual state and the visual guidance feature. For the l-th prompted layer, the current textual state and vi-sual guidance feature are projected into two routing subspaces. Specifically, WT and WV project them into dT - and dV -dimensional routing subspaces, respectively. The joint routing condition is formulated as: 
+
+zl = [ uTl ; uV ] = [ WT hl
+
+> cls
+
+; WV gV ]. (5) Here, uTl ∈ RB×dT and uV ∈ RB×dV denote the text-side and vision-side routing embeddings, respectively. Thus, zl ∈
+
+RB×dr with dT + dV = dr .We compare zl with a set of frozen routing anchors to obtain the routing distribution: 
+
+αl = Softmax 
+
+ zlAτ
+
+
+
+. (6) Here, A ∈ Rdr ×K denotes the routing anchors, K is the number of prompt bases, and τ is a temperature coefficient. The resulting routing distribution αl ∈ RB×K determines how strongly each prompt basis should be activated. As illustrated in Fig. 3, this mechanism makes prompt selection both text-aware and vision-aware. The current text state provides information about what the textual encoder has already captured, while the visual guidance feature provides complementary affective evidence. Therefore, the model can adaptively select suitable prompts according to the text-visual context of each sample and each layer. 
+
+D. Routing-guided Adaptive Prompt Composition 
+
+Based on the routing distribution, we compose an adaptive prompt from a trainable prompt basis bank. For each prompted layer, we maintain a set of learnable prompt bases: 
+
+Bl = {Bl,k }Kk=1 , Bl,k ∈ RM ×d, (7) where Bl,k denotes the k-th prompt basis at layer l, and M
+
+is the length of the adaptive prompt. Instead of selecting a single prompt basis, we perform soft prompt activation and weighted prompt composition. To explicitly preserve the visual guidance signal, we further Prompt Scores Joint State Router  𝛼 1 𝛼 2 𝛼 𝑘 … 
+
+> Adaptive Prompt Whole Prompt  𝑃 𝑙
+> 𝐻 𝑙−1 𝑇
+> 𝐿𝑎𝑦𝑒𝑟 𝑙  Output Self-Attention
+> 𝐻 𝑙 𝑇
+> …
+> 𝑃 𝑙
+> 𝐿𝑎𝑦𝑒𝑟 𝑙−1  Output
+> 𝐻 𝑙−1 𝑇
+> 𝑃 𝑙−1
+> Remove Prompt Pool / CLS Main Tokens Encoding
+> ℎ𝑙 𝑇
+> Visual Encoder Guidance Token Encoding Fig. 3. Illustration of the co-guided adaptive prompt generation mechanism. The current text state and the visual guidance feature are jointly used to produce routing scores over a trainable prompt basis bank. The routing scores softly activate different prompt bases and compose a layer-specific adaptive prompt.
+
+project the visual feature into a visual instruction token. The final inserted prompt is formulated as: 
+
+Pl = [ P ada l ; pV ] = 
+
+" KX
+
+> k=1
+
+αl,k Bl,k ; WI gV
+
+#
+
+. (8) Here, WI is a learnable projection matrix, P ada l ∈ RB×M ×d
+
+denotes the routing-guided adaptive prompt, and pV ∈
+
+RB×1×d denotes the visual instruction token. Therefore, the final prompt satisfies Pl ∈ RB×(M +1) ×d.The adaptive prompt P ada l provides sample-specific and layer-specific prompt modulation, while pV explicitly injects compact visual affective evidence into the textual encoding process. Together, they enable the model to handle diverse text-visual affective relations through controlled visual guid-ance. 
+
+E. Training Objective and Parameter-efficient Tuning a) Training objective: For sentiment intensity prediction, we optimize the model with a standard regression objective. Given the predicted sentiment score ˆy and the ground-truth score y, the task loss is defined as: 
+
+Ltask = |ˆy − y|. (9) For classification settings, Ltask can be replaced by the cross-entropy loss. Since the adaptive prompt is composed from a trainable prompt basis bank, the router may collapse to a small subset of prompt bases, leaving other bases insufficiently activated and trained. To alleviate this issue, we introduce a prompt activation balance loss. Let αl,b,k denote the routing weight of the k-th prompt basis for the b-th sample at the l-th prompted layer. We first compute the average activation of each prompt basis within a mini-batch: 
+
+ml,k = 1
+
+B
+
+> B
+
+X
+
+> b=1
+
+αl,b,k , (10) where B is the batch size. The balance loss for the l-th layer is formulated as: 
+
+Llbal = K
+
+> K
+
+X
+
+> k=1
+
+m2 
+
+> l,k
+
+− 1. (11) The balance loss reaches its minimum when different prompt bases are uniformly utilized at the batch level. The final balance loss is averaged over all prompted layers: 
+
+Lbal = 1
+
+|S| 
+
+X
+
+> l∈S
+
+Llbal , (12) where S denotes the set of prompted layers. The overall training objective is: 
+
+L = Ltask + λbal Lbal , (13) where λbal controls the strength of the prompt balance regu-larization. 
+
+b) Parameter-efficient tuning: To preserve pretrained knowledge and reduce training cost, we freeze the visual encoder and the BERT backbone during training. The visual encoder is used only for guidance feature extraction, while BERT serves as the text semantic backbone. Only the prompt-related and task-specific modules are trainable, including the prompt basis bank, co-guided routing projections, visual in-struction projection, and sentiment prediction head: 
+
+Θtrain = {Θprompt , Θrouter , Θinst , Θhead }. (14) The parameters of the visual encoder and BERT backbone remain frozen: 
+
+ΘV , ΘB /∈ Θtrain . (15) In this way, VG-TPT injects fine-grained visual affective cues into text encoding without full-model fine-tuning. IV. E XPERIMENTS 
+
+A. Datasets and Evaluation Metrics 
+
+We evaluate VG-TPT on two widely used multimodal sentiment analysis benchmarks, CMU-MOSI and CMU-MOSEI [24], [25]. Both datasets consist of opinion utterances collected from online videos, where each utterance is anno-tated with a sentiment intensity score ranging from −3 to +3 .In this work, we focus on the vision-to-text setting, where the textual modality serves as the semantic anchor and the visual modality provides fine-grained affective guidance. For CMU-MOSEI, we use 17,016 utterances for training, 1,813 for validation, and 4,098 for testing. For CMU-MOSI, we use 1,283 utterances for training, 214 for validation, and 686 for testing. Unlike many previous methods that directly use pre-aligned low-level multimodal features, our visual branch extracts guidance information from raw video frames sampled from the original videos. Specifically, we sample the middle frame of each utterance-level video segment to obtain the visual guidance representation. Following common practice, we formulate sentiment pre-diction as a regression task and report Mean Absolute Error (MAE), seven-class accuracy (Acc-7), binary accuracy (Acc-2), and F1 score. MAE evaluates the error of continuous sentiment prediction, while Acc-7 is computed by mapping continuous predictions to seven discrete sentiment levels. Acc-2 and F1 are used to evaluate binary sentiment polarity prediction. 
+
+B. Main Results 
+
+We compare VG-TPT with three groups of baselines. First, text-only baselines are included to evaluate the strength of the semantic anchor. Second, a visual-only Transformer is reported to show the limited predictive ability of visual information alone. Third, mainstream full-modality methods using acous-tic, visual, and textual modalities are included as reference results [2], [13], [26]. It should be noted that these full-modality methods use additional acoustic information and are therefore not strictly comparable to our V+T setting.                                                      
+
+> TABLE I MAIN RESULTS ON CMU-MOSEI. A, V, AND TDENOTE ACOUSTIC ,
+> VISUAL ,AND TEXTUAL MODALITIES ,RESPECTIVELY .↑/↓INDICATES THAT HIGHER /LOWER VALUES ARE BETTER . B OLDFACE DENOTES THE BEST PERFORMANCE ,AND UNDERLINING DENOTES THE SECOND -BEST PERFORMANCE .Method Mod. Acc-7 ↑Acc-2 ↑F1 ↑MAE ↓
+> BERT [27] T49.22 82.12 82.81 0.557
+> XLNet [27] T51.16 83.32 83.09 0.569 V-Transformer [2] V43.5 66.4 69.3 0.759 EF-LSTM [26] A+V+T 46.3 76.1 75.9 0.594 MulT [2] A+V+T 50.7 81.6 81.6 0.591 MMIM [13] A+V+T 52.6 81.5 81.3 0.578
+> VG-TPT V+T 52.2 84.6 84.5 0.565
+
+As shown in Table I, VG-TPT achieves strong performance on CMU-MOSEI under the V+T setting. Compared with text-only baselines, VG-TPT obtains higher Acc-7, Acc-2, and F1,                                               
+
+> TABLE II MAIN RESULTS ON CMU-MOSI. N OTATION IS CONSISTENT WITH
+> TABLE I. Method Mod. Acc-7 ↑Acc-2 ↑F1 ↑MAE ↓
+> BERT [27] T42.17 83.60 84.80 0.731 XLNet [27] T44.89 84.52 86.74 0.723
+> V-Transformer [2] V––––EF-LSTM [26] A+V+T 31.0 73.6 74.5 1.420 MulT [2] A+V+T 39.1 81.1 81.0 0.889 MMIM [13] A+V+T 45.9 83.4 83.4 0.777
+> VG-TPT V+T 46.1 83.7 83.6 0.753
+
+indicating that visual affective cues provide complementary in-formation for text-centered sentiment understanding. Although full-modality methods use an additional acoustic modality, VG-TPT still achieves competitive or superior performance on several metrics. Table II reports the results on CMU-MOSI. VG-TPT achieves the best Acc-7 among the compared methods and obtains competitive results on Acc-2, F1, and MAE. These results indicate that VG-TPT performs competitively on the smaller CMU-MOSI dataset. 
+
+C. Ablation Study 
+
+To verify the contribution of each component, we conduct ablation studies on CMU-MOSEI. We consider four variants of VG-TPT. w/o Adaptive Prompt replaces the dynamically generated adaptive prompt with fixed layer-wise prompts. 
+
+w/o Layer-wise Prompt Updating generates the co-guided prompt only at the first prompted layer and shares it across subsequent layers. w/o Text State removes the current text state from the router and uses only visual guidance to generate routing scores. w/o Prompt Selection removes selective prompt activation and uniformly averages all prompt bases.                               
+
+> TABLE III ABLATION STUDY ON CMU-MOSEI. B OLDFACE DENOTES THE BEST RESULT ,AND UNDERLINING DENOTES THE SECOND -BEST RESULT .Method Acc-7 ↑Acc-2 ↑F1 ↑MAE ↓
+> w/o Adaptive Prompt 50.6 83.4 83.2 0.586 w/o Layer-wise Updating 51.1 83.8 83.7 0.578 w/o Text State 50.9 83.6 83.4 0.582 w/o Prompt Selection 51.4 84.0 83.8 0.574
+> Full Model 52.2 84.6 84.5 0.565
+
+As shown in Table III, removing the adaptive prompt leads to a clear performance drop, indicating that fixed prompts are insufficient to model diverse text-visual affective relations. Sharing the generated prompt across layers also degrades the performance, which verifies the necessity of layer-wise prompt updating. When the current text state is removed from the router, the model cannot select prompts according to evolving textual semantics, resulting in inferior performance. Moreover, replacing selective prompt activation with uniform prompt fusion weakens the model, demonstrating the importance of routing-guided prompt composition. D. Parameter Efficiency 
+
+To further evaluate the parameter efficiency of VG-TPT, we compare the number of trainable parameters with full BERT fine-tuning and a representative full-modality baseline. Although VG-TPT introduces vision-guided prompt modules, most pretrained parameters remain frozen. Only the prompt basis bank, routing projections, visual instruction projection, and prediction head are updated during training. 
+
+TABLE IV PARAMETER EFFICIENCY COMPARISON ON CMU-MOSEI. P ARAMS DENOTES THE NUMBER OF TRAINABLE PARAMETERS IN MILLIONS (M),  
+
+> AND
+
+TRAINABLE RATIO DENOTES THE PERCENTAGE OF TRAINABLE PARAMETERS RELATIVE TO THE TOTAL PARAMETERS OF EACH MODEL .BOLD INDICATES VG-TPT RESULTS .Method Params (M) Ratio Acc-7 ↑ Acc-2 ↑
+
+BERT full fine-tuning [27] 109 100% 49.22 82.12 MulT [2] – 100% 50.7 81.6 
+
+VG-TPT 2.4 1.2% 52.2 84.6 
+
+As shown in Table IV, full BERT fine-tuning updates all BERT parameters, whereas VG-TPT updates only 2.4M parameters, accounting for 1.2% of its total model parameters. Compared with full BERT fine-tuning, the number of train-able parameters is substantially reduced. Meanwhile, VG-TPT achieves better Acc-7 and Acc-2 than BERT full fine-tuning, showing that it can effectively incorporate visual affective cues with only a small number of trainable parameters. V. C ONCLUSION 
+
+In this paper, we propose VG-TPT, a parameter-efficient vision-guided text prompt tuning framework for multimodal sentiment analysis. VG-TPT injects visual facial cues into the BERT textual encoder through layer-wise adaptive prompts, enabling visual information to refine and disambiguate text-centered sentiment representations. A co-guided router jointly uses the current text state and visual guidance feature to selectively compose adaptive prompts from a trainable prompt bank. Experiments on CMU-MOSI and CMU-MOSEI show that VG-TPT achieves competitive performance with only 2.4M trainable parameters. Future work will extend VG-TPT to audio-visual-text chain-guided sentiment modeling and more fine-grained temporal visual reasoning. REFERENCES [1] A. Zadeh, M. Chen, S. Poria, E. Cambria, and L.-P. Morency, “Tensor fusion network for multimodal sentiment analysis,” in EMNLP , 2017, pp. 1103–1114. [2] Y.-H. H. Tsai, S. Bai, P. P. Liang, J. Z. Kolter, L.-P. Morency, and R. Salakhutdinov, “Multimodal transformer for unaligned multimodal language sequences,” in ACL , 2019, pp. 6558–6569. [3] W. Zuo, Y. Liu, W. Yang, F. Wu, W. Zhou, J. Liu, P. Sun, J. Cheng, D. Yang, and X. Zeng, “Embodied multimedia: When multimedia meets embodied intelligence,” 2026, available at SSRN: https://ssrn.com/ abstract=6456578. [4] D. Yang, S. Huang, Z. Xu, Z. Li, S. Wang, M. Li, Y. Wang, Y. Liu, K. Yang, Z. Chen, Y. Wang, J. Liu, P. Zhang, P. Zhai, and L. Zhang, “Aide: A vision-driven multi-view, multi-modal, multi-tasking dataset for assistive driving perception,” in ICCV , 2023, pp. 20 459–20 470. [5] Y. Liu, D. Yang, Y. Wang, J. Liu, J. Liu, A. Boukerche, P. Sun, and L. Song, “Generalized video anomaly event detection: Systematic taxonomy and comparison of deep models,” ACM Comput. Surv. ,vol. 56, no. 7, pp. 189:1–189:38, Apr. 2024. [Online]. Available: https://doi.org/10.1145/3645101 [6] Y. Liu, J. Liu, K. Yang, B. Ju, S. Liu, Y. Wang, D. Yang, P. Sun, and L. Song, “Amp-net: Appearance-motion prototype network assisted automatic video anomaly detection system,” IEEE Trans. Ind. Inform. ,vol. 20, no. 2, pp. 2843–2855, 2024. [7] Y. Lei, D. Yang, M. Li, S. Wang, J. Chen, and L. Zhang, “Text-oriented modality reinforcement network for multimodal sentiment analysis from unaligned multimodal sequences,” in CICAI , 2024, pp. 189–200. [8] K. He, Y. Ding, X. Wang, F. Li, C. Teng, and D. Ji, “Enhance-then-balance modality collaboration for robust multimodal sentiment analysis,” in CVPR , 2026. [9] Y. Wang, S. Yan, W. Song, A. Liotta, J. Liu, D. Yang, S. Gao, and W. Zhang, “Mgr3net: Multigranularity region relation representation network for facial expression recognition in affective robots,” IEEE Trans. Ind. Inform. , vol. 20, no. 5, pp. 7216–7226, 2024. [10] Y. Wang, S. Yan, Y. Liu, W. Song, J. Liu, Y. Chang, X. Mai, X. Hu, W. Zhang, and Z. Gan, “A survey on facial expression recognition of static and dynamic emotions,” arXiv preprint arXiv:2408.15777 , 2024. [11] D. Yang, S. Huang, S. Wang, Y. Liu, P. Zhai, L. Su, M. Li, and L. Zhang, “Emotion recognition for multiple context awareness,” in ECCVW , 2022, pp. 144–162. [12] A. Zadeh, P. P. Liang, N. Mazumder, S. Poria, E. Cambria, and L.-P. Morency, “Memory fusion network for multi-view sequential learning,” in AAAI , ser. AAAI’18/IAAI’18/EAAI’18. AAAI Press, 2018. [13] W. Han, H. Chen, and S. Poria, “Improving multimodal fusion with hierarchical mutual information maximization for multimodal sentiment analysis,” in EMNLP , 2021, pp. 9180–9192. [14] D. Yang, S. Huang, Y. Liu, and L. Zhang, “Contextual and cross-modal interaction for multi-modal speech emotion recognition,” IEEE Signal Process. Lett. , vol. 29, pp. 2093–2097, 2022. [15] B. Lester, R. Al-Rfou, and N. Constant, “The power of scale for parameter-efficient prompt tuning,” in EMNLP , 2021, pp. 3045–3059. [16] S. Liang, M. Zhao, and H. Schuetze, “Modular and parameter-efficient multimodal fusion with prompting,” in ACL Findings , 2022, pp. 2976– 2985. [17] M. Jia, L. Tang, B.-C. Chen, C. Cardie, S. Belongie, B. Hariharan, and S.-N. Lim, “Visual prompt tuning,” in ECCV , 2022, pp. 709–727. [18] P. Wang, Q. Zhou, Y. Wu, T. Chen, and J. Hu, “Dlf: Disentangled-language-focused multimodal sentiment analysis,” in AAAI , vol. 39, no. 20, 2025, pp. 21 180–21 188. [19] S. Zhang, J. Liu, Y. Jiao, Y. Zhang, L. Chen, and K. Li, “A multimodal semantic fusion network with cross-modal alignment for multimodal sentiment analysis,” ACM Trans. Multimedia Comput. Commun. Appl. ,vol. 21, no. 10, pp. 1–22, 2025. [20] M. Li, D. Yang, X. Zhao, S. Wang, Y. Wang, K. Yang, M. Sun, D. Kou, Z. Qian, and L. Zhang, “Correlation-decoupled knowledge distillation for multimodal sentiment analysis with incomplete modalities,” in 
+
+CVPR , 2024, pp. 12 458–12 468. [21] S. Jiang, Z. Wang, X. Wu, H. Ji, M. Li, X. Li, and C. Gao, “Ddse: A decoupled dual-stream enhanced framework for multimodal sentiment analysis with text-centric ssm,” in ACM MM , 2025, pp. 5893–5902. [22] S. Wu, D. He, X. Wang, L. Wang, and J. Dang, “Enriching multimodal sentiment analysis through textual emotional descriptions of visual-audio content,” in AAAI , 2025, pp. 1601–1609. [23] Q. Xu, Y. Wei, C. Wu, L. Wang, S. Yuan, J. Wu, J. Lu, and H. Zhou, “Towards multimodal sentiment analysis via hierarchical correlation modeling with semantic distribution constraints,” in AAAI , 2025, pp. 21 788–21 796. [24] A. Zadeh, R. Zellers, E. Pincus, and L.-P. Morency, “Multimodal senti-ment intensity analysis in videos: Facial gestures and verbal messages,” 
+
+IEEE Intell. Syst. , vol. 31, no. 6, pp. 82–88, 2016. [25] A. Bagher Zadeh, P. P. Liang, S. Poria, E. Cambria, and L.-P. Morency, “Multimodal language analysis in the wild: CMU-MOSEI dataset and interpretable dynamic fusion graph,” in ACL , 2018, pp. 2236–2246. [26] J. Williams, S. Kleinegesse, R. Comanescu, and O. Radu, “Recognizing emotions in video using multimodal DNN feature fusion,” in Grand Challenge Workshop Hum. Multimodal Lang. , 2018, pp. 11–19. [27] X. Liu, M. Wang, M. Huang, and C. Dong, “Embedding speech temporal information in pretrained language models for sentiment analysis,” in 
+
+ICCSMT , 2025, pp. 301–306.

@@ -1,0 +1,599 @@
+Title: MURAL: Multimodal Uncertainty-aware Recommendation via Adaptive edge Learning
+
+URL Source: https://arxiv.org/pdf/2609.04574v1
+
+Published Time: Mon, 07 Sep 2026 00:19:54 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# MURAL: Multimodal Uncertainty-aware Recommendation via Adaptive edge Learning 
+
+## Ahmad Mousavi *
+
+Department of Mathematics and Statistics, American University Washington, DC, USA 
+
+mousavi@american.edu 
+
+## Majid Alikhani *
+
+Independent Researcher Toronto, Ontario, Canada 
+
+alikhanimjd@gmail.com 
+
+## Yeon-Chang Lee 
+
+Department of Computer Science and Engineering, Ulsan National Institute of Science and Technology Ulsan, South Korea 
+
+yeonchang@unist.ac.kr 
+
+## Roberto Corizzo 
+
+Department of Computer Science, American University Washington, DC, USA 
+
+rcorizzo@american.edu 
+
+## Yeganeh Abdollahinejad 
+
+Department of Biosystems and Agricultural Engineering, Michigan State University East Lansing, MI, USA 
+
+yegi@msu.edu 
+
+## Abstract 
+
+Multimodal Graph Neural Networks have become standard for recommendation by augmenting sparse interaction data with content features. Yet current architectures face two bottlenecks: struc-tural rigidity, from a reliance on static precomputed similarity graphs that cannot adapt to evolving preferences; and semantic fragility, where noisy modality signals are indiscriminately fused, distorting the collaborative signal. We propose MURAL ( Multimodal Uncertainty-aware Recommendation via 
+
+Adaptive edge Learning), a unified framework that shifts multimodal recommendation from fixed structural augmentation to dynamic topology discovery. To address structural rigidity, an Adaptive Edge Learner combines a differentiable retrieval-augmented strategy with an approximate nearest neighbor search to discover latent item-item correlations that are both semantically adaptive and computationally scalable ( O(N log N )). To address semantic fragility, an Uncertainty-Aware Fusion module models the aleatoric uncertainty of heterogeneous modalities, dynamically down-weighting unreliable features while prioritizing high-confidence signals as a defense against cross-modal noise. We further employ a contrastive teacher-student alignment that anchors modality-specific represen-tations to stable behavioral signals, ensuring optimization stability without gradient leakage. Ex-periments on large-scale benchmarks including TikTok and Amazon show that MURAL significantly surpasses both structural and generative state-of-the-art baselines, achieving superior accuracy while offering interpretability through domain-specific modality dominance and robustness under extreme data corruption. 
+
+Keywords: Graph Neural Network, Multimedia Recommendation, Representation Learning 
+
+# 1 Introduction 
+
+Multimedia recommendation systems have become indis-pensable components of modern web-based applications, ranging from large-scale e-commerce platforms to diverse content-sharing ecosystems [1, 2]. Unlike traditional col-
+
+> ∗Ahmad Mousavi and Majid Alikhani contributed equally to this work.
+
+laborative filtering, these systems leverage a rich array of item modalities - including textual descriptions, visual frames, and acoustic signals to capture fine-grained user preferences and item characteristics [3]. By integrating heterogeneous signals, multimedia recommenders have shown the capability to alleviate the fundamental chal-lenges of data sparsity, and effectively construct robust latent representations even when historical user-item in-1arXiv:2609.04574v1 [cs.IR] 4 Sep 2026 teractions are scarce [4, 5]. The evolution of multimedia recommendation has pro-gressed from early feature-concatenation methods like VBPR [6] to sophisticated attention-based architectures such as ACF [7], which identify component-level prefer-ences. Recently, GNNs have emerged as the state-of-the-art paradigm, with models such as MMGCN [8], GRCN [9], and LATTICE [10] effectively leveraging graph struc-tures to propagate multimodal information across user-item and item-item relations. By aggregating features from neighboring nodes, these models learn latent rep-resentations that capture both structural collaborative signals and raw content attributes. More recently, self-supervised learning (SSL) and generative models have been introduced to further enhance robustness. For in-stance, MMSSL utilizes adversarial training [11], while DiffMM [12] and DiffCL [13] employ diffusion models to denoise embeddings. Moreover, advances such as Align-Rec [14] and AB-Rec [15] have significantly improved performance by decomposing the recommendation ob-jective into multi-stage alignment tasks and balancing optimization gradients. However, these methods often treat the underlying item-item topology as static and assume uniform modality reliability across items. A critical challenge in Multimodal Graph Neural Networks (MGNNs) is the "Mirroring Effect": when modality-aware graphs are constructed based on shared interaction data, they tend to converge toward the topol-ogy of the original interaction graph [16]. This structural redundancy prevents the model from discovering latent item-item correlations that exist purely within the multi-modal space; signals that are essential for recommending items with sparse behavioral links. While recent structural learners have attempted to address this by introducing explicit item-item edges [10,16–19], they remain constrained by two fundamental bottlenecks: 1. Structural Rigidity: Most existing frameworks [16,19] rely on static, pre-computed similarity heuristics to define the graph topology. This assumes that the op-timal semantic structure is fixed and known a priori, ignoring the fact that semantic relationships should evolve dynamically alongside the recommendation ob-jective. 2. Semantic Fragility: Current architectures [10, 16, 19] often adopt a deterministic fusion strategy, where content and behavioral embeddings are combined without accounting for the inherent noise or reliabil-ity of heterogeneous modalities. In real-world envi-ronments like micro-videos or e-commerce, modality quality is highly inconsistent; treating a noisy visual feature with the same weight as a high-fidelity tex-tual description can distort the collaborative filtering signal. In this paper, we propose MURAL (Multimodal Uncertainty-aware Recommendation via Adaptive edge Learning), a unified framework that moves beyond static structural enrichment toward dynamic topology discov-ery and robust fusion. The main contributions of this work are summarized as follows: • Adaptive Topology Discovery: We shift the paradigm from static, heuristic-based graph construction to a differentiable approach. By introducing an Adaptive Edge Learner (AEL), MURAL treats graph struc-ture as a learnable task, discovering evolving seman-tic correlations that standard similarity metrics over-look while maintaining O(N log N ) scalability through retrieval-augmented search. • Aleatoric Uncertainty-Aware Fusion: We address the inherent "semantic fragility" of heterogeneous data by explicitly modeling modality reliability. Our UAF mechanism learns to quantify aleatoric uncertainty, dynamically down-weighting noisy or sparse signals (e.g., generic descriptions or trending background au-dio) to ensure the final representation is anchored by the most discriminative features. • Stabilized Behavioral-Semantic Anchoring: To resolve the optimization instabilities and representation col-lapse common in current alignment frameworks, we propose a simple gradient-detached anchoring strat-egy. This design decouples structural discovery from feature alignment, providing a scalable and robust al-ternative to complex cross-modality encoders. • Unified Graph Propagation Framework: We integrate these modules into MURAL, a unified framework that consistently outperforms structural, generative, and alignment-based state-of-the-art baselines across mul-tiple large-scale benchmarks. 
+
+# 2 Related Work 
+
+The integration of multimodal content has become essen-tial in modern recommender systems [20,21], particularly for mitigating data sparsity and enriching item represen-tation [22, 23]. The shift from interaction-only models to multimodal recommender systems (MMRS) was pi-oneered by early hybrid models like VBPR [6], which integrated visual features into the Bayesian Personal-ized Ranking framework. Later on, methods like CKE [24], and JRL [25] combined textual, visual, and struc-tural features to further improve recommendation qual-ity. With the rise of Graph Neural Networks (GNNs), graph-based approaches emerged that leverage high-order neighborhood information to enhance user and item representations [26, 27]. The foundation of mod-ern graph-based recommendation lies in LightGCN [28], which simplified the GCN architecture [29] by focus-ing exclusively on neighborhood aggregation to cap-ture collaborative signals. To incorporate auxiliary con-tent, MMGCN [8] pioneered the use of modality-specific 2message-passing channels, allowing visual and textual features to propagate through independent graph struc-tures. Subsequent works like GRCN [9] introduced adap-tive reweighting to prune noisy interaction edges. How-ever, these methods are primarily "interaction-centric," meaning they are fundamentally limited by the observed user-item bipartite graph. In highly sparse interaction scenarios, this reliance prevents the model from captur-ing deep semantic associations that exist independently of user behavior. To mitigate interaction sparsity, Graph Structure Learning (GSL) has emerged to uncover latent item topologies. LATTICE and MMGSL [16] pioneered this approach by mining graphs from pre-computed feature similarities. However, these approaches are often con-strained by heuristic neighborhood initialization. This topological bias prevents the model from discovering la-tent semantic connections that only emerge through be-havioral signals. Furthermore, these methods typically assume uniform reliability across modalities, failing to account for item-level content noise that can distort the structural signal during message passing. Self-Supervised Learning (SSL) has emerged as apowerful paradigm for aligning multimodal features with collaborative signals [30–32]. Foundational works such as SGL [26] and NCL [31] introduced structural and neighborhood-enriched augmentations to maximize agreement between different graph views. Building on these, SimGCL [33] demonstrated that simpler, non-structural augmentations—such as injecting uniform noise into the embedding space—can achieve superior performance by avoiding the bias of random edge drop-ping. Building on these structural advances, multimodal SSL frameworks like MMSSL [11] and AlignRec [14] em-ploy contrastive objectives (e.g., InfoNCE) to enforce consistency across different modality views. More re-cently, generative approaches like DiffMM [34] and Dif-fCL [13] have utilized diffusion-based denoising to refine node representations. While current multimodal SSL frameworks have made significant strides, they are collectively hindered by a dual dependency on structural rigidity and semantic fragility. Specifically, these methods rely on static, pre-computed item topologies and apply an indiscriminate alignment pressure, ignoring the inherent aleatoric un-certainty across diverse modalities. MURAL breaks this paradigm by transitioning from fixed heuristics to dy-namic topology discovery via its Adaptive Edge Learner, while simultaneously employing uncertainty-aware fu-sion to ensure that contrastive signals are filtered and weighted based on their objective reliability. 
+
+# 3 Adaptive Edge Learning with Uncertainty-Aware Fusion 
+
+We propose MURAL, a unified framework that transi-tions multimodal recommendation from static structural augmentation to dynamic, reliability-aware discovery. Unlike prior models constrained by pre-computed heuris-tics and deterministic weighting, MURAL introduces a differentiable architecture to learnably determine: (i) the latent topology of item-item semantic correlations, (ii) the adaptive dominance of heterogeneous modalities dur-ing fusion, and (iii) the aleatoric uncertainty of specific signals to ensure noise-robust alignment. Fig. 1 shows an overview of the proposed framework. 
+
+Problem Setup Let U = {u1, . . . , u Nu } and I =
+
+{i1, . . . , i Ni } denote users and items, respectively. We observe a binary interaction matrix R ∈ { 0, 1}Nu×Ni ,where Rui = 1 if user u has interacted with item i and 0
+
+otherwise. Each item i has multimodal content features 
+
+Fi = {f (1)  
+
+> i
+
+, f (2)  
+
+> i
+
+, . . . , f (M ) 
+
+> i
+
+}, corresponding to M modal-ities (e.g., text, image, and audio). Our goal is to learn low-dimensional embeddings hu, h i ∈ Rd for each user and item that accurately predict interaction likelihood, 
+
+ˆyui = ⟨hu, h i⟩,
+
+while efficiently incorporating multimodal information. 
+
+Modality Encoders For each modality m ∈{1, . . . , M }, we obtain a modality-specific embedding from either raw content or pretrained representations. Formally, we define 
+
+e(m) 
+
+> i
+
+= Norm  Wm Enc (m)(f (m) 
+
+> i
+
+) (1) where Enc (m)(·) denotes a modality encoder (e.g., BERT for text, ViT for images, AudioLM for audio) and Wm ∈
+
+Rd×dm is a learnable linear projection that maps the en-coder output from dimension dm into a shared latent di-mension d. This projection aligns heterogeneous modal-ity spaces and ensures all e(m) 
+
+> i
+
+reside in a common space for fusion and contrastive alignment. When pretrained modality embeddings are already available (e.g., CLIP features), Enc (m) can be treated as the identity and Wm
+
+may be initialized as the identity or omitted. All embed-dings are ℓ2-normalized through Norm( ·) for stability, and encoders may remain frozen or be lightly adapted using low-rank (LoRA) updates to preserve efficiency. 
+
+## 3.1 Adaptive Graph Construction 
+
+Behavior-Aligned Modality Representations To make each modality embedding consistent with user be-havior, we construct a behavior-aligned representation that blends each modality’s content signal with the col-laborative signal learned from user-item interactions. 3Figure 1: Overview of MURAL Let hi ∈ Rd denote the current behavioral embed-ding of item i, obtained from the interaction graph through the propagation defined in Eq. (9). Intuitively, 
+
+hi encodes how users collectively perceive and interact with item i, capturing behavioral similarity (items co-consumed or co-rated by similar users) rather than raw content similarity. By contrast, e(m) 
+
+> i
+
+captures modality-specific content features (e.g., textual, visual, or acoustic attributes) that may not always align with user prefer-ences. To reconcile these two views, we define the behavior-aligned modality representation through a lightweight fusion: 
+
+ˆe(m) 
+
+> i
+
+= κ0 stopgrad( hi) + κ1 e(m) 
+
+> i
+
+, κ0 + κ1 = 1 (2) where stopgrad( hi) denotes a gradient-detached copy of 
+
+hi. This detachment prevents gradient leakage from the modality branches back into the interaction encoder, en-suring that the alignment process does not distort the underlying collaborative topology. The learnable coef-ficients κ0 and κ1 govern the balance between behav-ioral and content-based information. To prevent short-cut learning during optimization, we isolate κ0 by pa-rameterizing it as a learnable weight updated exclusively via the structural contrastive loss ( Lcl ), thereby shielding it from direct optimization by the main recommendation objective. While prior works like AlignRec [14] employ heavy cross-attention mechanisms for alignment, MU-RAL shifts the objective toward adaptive graph struc-ture learning and modality reliability estimation. We purposefully adopt a streamlined weighted-sum formula-tion. This ensures high throughput during the frequent graph rebuilds required by our Adaptive Edge Learner. Crucially, any noise or misalignment introduced by this simple formulation is explicitly handled by the subse-quent Uncertainty-Aware Fusion (UAF) module, which calculates item-specific variances ( σ(m) 
+
+> i
+
+) to down-weight unreliable signals that a fixed weighted sum would oth-erwise amplify. 
+
+Retrieval-Augmented Candidate Neighborhoods 
+
+To maintain computational tractability on large-scale datasets, we avoid the O(N 2 
+
+> i
+
+) cost of exhaustive pairwise similarity by employing a two-stage retrieval-and-refine strategy. In the first stage, we construct a global Hierarchical Navigable Small World (HNSW) index [35]—a state-of-the-art ANN structure optimized for high-speed in-ner product search. The index is built over the fused item representations {˜hi}, which encapsulate both be-havioral signals and multimodal content. For every item 
+
+i, we retrieve a candidate neighborhood Nr (i) of size Kr
+
+(Kr ≪ Ni), effectively pruning the search space. To ensure the graph topology remains synchronized with the evolving latent space, we adopt a stochastic re-fresh schedule. Rather than rebuilding the index every epoch—which would introduce unnecessary overhead— we periodically re-index the item manifold throughout training. During the intervening epochs, the candidate sets Nr (i) remain fixed, while the Adaptive Edge Learner (see below) dynamically re-weights the edge strengths 
+
+s(m) 
+
+> ij
+
+based on the current parameters. This amortized approach maintains a complexity of O(Ni log Ni), mak-ing the framework viable for production-scale ecosystems like TikTok or Amazon. In our experiments, re-indexing every 10 epochs struck an optimal trade-off between in-dex staleness and computational overhead. 
+
+Adaptive Edge Learning After retrieving the candi-date set Nr (i) for each item i, the model learns modality-specific adjacency weights that capture how strongly each neighbor j ∈ N r (i) is related to i under modal-ity m. Rather than using fixed similarities (e.g., cosine distance), we learn an adaptive scoring function param-eterized by a small multilayer perceptron (MLP). For each modality m, the scoring network ϕ(m) 
+
+> θ
+
+:
+
+R4d → R takes as input a concatenation of behavioral 4and modality features for the item pair (i, j ):
+
+s(m) 
+
+> ij
+
+= ϕ(m)
+
+> θ
+
+ [ˆ e(m) 
+
+> i
+
+∥ˆe(m) 
+
+> j
+
+∥hi∥hj ] (3) where ∥ denotes concatenation and each component is 
+
+d-dimensional. Thus, the input dimension to ϕ(m) 
+
+> θ
+
+is 4d.Including both ˆe(m) 
+
+> i
+
+and hi allows the MLP to jointly consider modality-level and behavioral similarities when predicting the edge strength between two items. Among the Kr retrieved candidates, only the top-km
+
+neighbors with the highest s(m) 
+
+> ij
+
+values are retained to form a sparse, learnable adjacency matrix. The corre-sponding edge weights are normalized through a local softmax: 
+
+A(m) 
+
+> ij
+
+= exp( s(m) 
+
+> ij
+
+)
+
+P  
+
+> j′∈N k(i)
+
+exp( s(m) 
+
+> ij ′
+
+) , j ∈ N k(i) (4) where Nk(i) ⊆ N r (i) contains the km highest-scoring neighbors for item i. The resulting matrix A(m) ∈
+
+RNi×Ni is sparse and modality-specific, encoding the re-lational structure discovered by the network rather than imposed by a fixed similarity metric. To discourage overly sharp neighbor distributions, we apply an entropy regularizer 
+
+Lent = X
+
+> i,m
+
+X
+
+> j
+
+A(m) 
+
+> ij
+
+log A(m)
+
+> ij
+
+weighted by a small coefficient λent . This term encour-ages diversity in the learned neighbors and prevents the adjacency matrix from collapsing into one-hot edges. Overall, this two-stage process — ANN retrieval fol-lowed by adaptive edge reweighting — achieves both ef-ficiency and flexibility: the coarse retrieval ensures scal-ability, while the learned scoring allows each modality to refine and personalize its graph topology based on both multimodal and behavioral context. 
+
+## 3.2 Uncertainty-Aware Modality Fusion 
+
+Not all modalities are equally informative. To address this, we move beyond deterministic fusion by explicitly modeling for each item i the aleatoric uncertainty σ(m) 
+
+> i
+
+>
+
+0 associated with each signal along with an importance weight a(m) 
+
+> i
+
+(logit) and its normalized attention α(m) 
+
+> i
+
+:
+
+α(m) 
+
+> i
+
+= exp( a(m) 
+
+> i
+
+)
+
+P 
+
+> m′
+
+exp( a(m′) 
+
+> i
+
+) , (5) 
+
+˜hi =
+
+> M
+
+X
+
+> m=1
+
+α(m)
+
+> i
+
+1(σ(m) 
+
+> i
+
+)2 e(m) 
+
+> i
+
+(6) For numerical stability and to ensure that the vari-ance remains strictly positive, we learn the log-variance 
+
+s(m) 
+
+> i
+
+= log( σ(m) 
+
+> i
+
+)2 as a per-item, per-modality parame-ter. These parameters are initialized to zero ( s(m) 
+
+> i
+
+= 0 ), such that the initial weighting factor exp( −s(m) 
+
+> i
+
+) is 1 for all modalities. The weights α(m) 
+
+> i
+
+are produced by a lightweight fu-sion network MLP α([ e(1)  
+
+> i
+
+, . . . , e (M ) 
+
+> i
+
+, h i]) . A regularizer 
+
+P 
+
+> i,m
+
+log σ(m) 
+
+> i
+
+prevents the variances from collapsing to zero. 
+
+## 3.3 Graph Propagation 
+
+We combine the interaction graph with all modality graphs through a weighted mixture. Let M be the set of modalities and ˆA(U I ) ∈ R(|U |+|I|)×(|U |+|I|) denote the normalized user–item interaction adjacency matrix, where each edge (u, i ) corresponds to a historical inter-action (Rui = 1) . Similarly, let ˆA(m) ∈ R|I|×| I| (m ∈ M )denote the row-normalized item–item adjacency matrix constructed for each modality through adaptive edge learning. Because ˆA(m) connects only items, it is ex-panded into a full (|U| + |I| ) × (|U| + |I| ) block matrix by placing it in the item–item sub-block, with zeros else-where: 
+
+ˆA(m) 
+
+> f ull
+
+=
+
+0 00 ˆA(m)
+
+
+
+(7) We then form a convex combination of all adjacency ma-trices: 
+
+ˆA = λUI ˆA(UI) +
+
+> M
+
+X
+
+> m=1
+
+λm ˆA(m)
+
+> f ull
+
+, X
+
+> m
+
+λm + λUI = 1 (8) where each ˆA(·) is row-normalized and λm and λUI 
+
+are learnable nonnegative coefficients that balance the strength of behavioral and modality-based connections. We then propagate user and item embeddings with a LightGCN-style update: 
+
+H(ℓ+1) = ˆA H (ℓ), H(0) = [ HU ; HI ] (9) After L layers, the final embedding of each node v is the mean of all layers: 
+
+hv = 1
+
+L + 1 
+
+> L
+
+X
+
+> ℓ=0
+
+H(ℓ)
+
+> v
+
+Optionally, a skip connection combines propagation and fused embeddings: hi ← βh i + (1 − β)˜hi.
+
+Contrastive Alignment To maintain consistency be-tween behavior and content, MURAL adds dual con-trastive losses. (a) Behavior–Modality alignment: 
+
+L(m)BM = −X
+
+> i
+
+log exp(sim( hi, e (m) 
+
+> i
+
+)/τ )
+
+P 
+
+> j
+
+exp(sim( hi, e (m) 
+
+> j
+
+)/τ ) (10) (b) Cross-modality alignment: 
+
+LMM = − X
+
+> mx<m y
+
+X
+
+> i
+
+log exp(sim( e(mx) 
+
+> i
+
+, e (my ) 
+
+> i
+
+)/τ )
+
+P 
+
+> j
+
+exp(sim( e(mx) 
+
+> i
+
+, e (my ) 
+
+> j
+
+)/τ )
+
+(11) 5Here mx, m y ∈ M and sim( ·, ·) denotes cosine similarity and τ is the temperature parameter. 
+
+Preference Learning User–item affinity is predicted via the inner product ˆyui = ⟨hu, h i⟩. We adopt the Bayesian Personalized Ranking (BPR) loss: 
+
+Lrank = − X
+
+> (u,i +,i −)
+
+log σ(ˆ yui + − ˆyui − ) (12) where i+ and i− are positive and negative samples for user u.
+
+Overall Objective The full training loss combines ranking, contrastive, entropy, and regularization terms: 
+
+L = Lrank + λcl 
+
+X
+
+> m
+
+L(m)BM + LMM 
+
+!
+
++ λent Lent 
+
++ λreg 
+
+∥Θ∥22 + X
+
+> i,m
+
+log σ(m)
+
+> i
+
+ (13) where Θ denotes all learnable parameters. Optimiza-tion is performed with the Adam optimizer. 
+
+Complexity and Scalability Let Ni be the number of items, Kr the candidate size, and d the embedding dimension. Edge scoring (3) costs O(M N iKr d), propa-gation (9) costs O(( |E UI | + Ni
+
+P 
+
+> m
+
+km)d), and ANN re-trieval costs O(Ni log Ni) amortized. Therefore, total complexity is linear in Ni and Kr , scalable to large mul-timodal datasets. 
+
+# 4 Evaluation 
+
+## 4.1 Experimental Setup 
+
+Datasets To evaluate the effectiveness of MURAL, we conduct experiments on three widely used multi-modal recommendation benchmarks: TikTok, Amazon-Baby, and Amazon-Sports. The TikTok dataset pro-vides a dense multimodal representation of short-form video interactions, integrating visual, acoustic, and tex-tual signals. Textual metadata, including captions and comments, was transformed into semantic vectors us-ing Sentence-BERT. In the Amazon-Baby and Amazon-Sports categories, product titles and descriptions were encoded similarly via Sentence-BERT, while visual char-acteristics were captured through 4096-dimensional im-age embeddings. The statistical details of the datasets are provided in Table 1. 
+
+Evaluation Protocol To evaluate the performance of the top-K recommendations, we utilize two widely recog-nized metrics: Recall@ K (R@ K), and Normalized Dis-counted Cumulative Gain (NDCG@ K). Crucially, to Table 1: Statistics of the datasets                            
+
+> Dataset TikTok Amazon-Baby Amazon-Sports
+> Modality Visual Audio Text Visual Text Visual Text Embed Dim 128 128 768 4096 1024 4096 1024 # Users 9,319 19,445 35,598 # Items 6,710 7,050 18,357 # Interactions 59,541 139,110 256,308 Sparsity 99.904% 99.899% 99.961%
+
+avoid the bias associated with sampled metrics—which can lead to artificially inflated results—we adopt the full-ranking strategy. For each user in the test set, we rank the ground-truth items against all items in the data set that the user has not interacted with. 
+
+Baselines For performance evaluation, we compare MURAL against several state-of-the-art baseline models. We first consider LightGCN [28], a foundational bench-mark that simplifies the GCN architecture by remov-ing non-linear activations, focusing solely on neighbor-hood aggregation. Moving into the multimodal domain, we include MMGCN [8] and DualGNN [17], which cap-ture fine-grained preferences by constructing modality-specific user-item bipartite graphs and Dual graph ar-chitectures for message passing. Further, we evalu-ate models that incorporate latent structure discovery and graph refinement. LATTICE [10] mines item-item correlations directly from multimodal features, FREE-DOM [19] freezes the item-item graph while denoising interaction edges, and MMGSL [16] employs a graph-structured learner to model item-item correlations and adaptively fuse embeddings. Additionally, MMSSL [11] addresses label sparsity by integrating self-supervised learning with an adversarial perturbation-based struc-ture learning paradigm. More recent generative ap-proaches include DiffMM [34] and DiffCL [13]. DiffMM uses a multimodal graph diffusion process to generate modality-aware graphs and mitigate data sparsity, while DiffCL primarily uses diffusion to generate augmented embeddings for contrastive learning. Finally, we com-pare our work with AlignRec [14], which achieves cross-modal alignment via heavy cross-attention mechanisms. 
+
+Implementation Details For a rigorous evaluation, we re-implemented the baseline models using their re-spective open-source repositories, ensuring that all mod-els were tested in a unified environment. We conducted exhaustive hyperparameter sweeps for all baselines, ad-hering to the search spaces defined in their original pub-lications. All experiments utilized the Adam optimizer with a fixed batch size of 1024 and a hidden embedding di-mension of 64. Our proposed framework is developed in PyTorch, utilizing Xavier initialization for all weight matrices. We use a Hierarchical Navigable Small World vector database from FAISS to perform the ANN search. 6Table 2: Performance comparison of MURAL and baseline models. The best results are highlighted in bold .
+
+Dataset TikTok Amazon-Baby Amazon-Sports 
+
+Metric R@20 N@20 R@20 N@20 R@20 N@20 LightGCN 0.0730 0.0309 0.0649 0.0291 0.0746 0.0241 MMGCN 0.0664 0.0279 0.0714 0.0230 0.0703 0.0259 LATTICE 0.0855 0.0369 0.0843 0.0370 0.0921 0.0429 DualGNN 0.0834 0.0351 0.0829 0.0353 0.0881 0.0402 MMSSL 0.0900 0.0393 0.0944 0.0403 0.0980 0.0442 DiffMM 0.1102 0.0442 0.0954 0.0401 0.1002 0.0448 FREEDOM 0.1100 0.0458 0.0950 0.0403 0.1050 0.0485 AlignRec 0.1119 0.0473 0.1008 0.0441 0.1127 0.0501 DiffCL 0.1158 0.0490 0.0990 0.0421 0.1073 0.0498 MMGSL 0.1152 0.0488 0.0971 0.0413 0.1032 0.0464 
+
+MURAL 0.1221 ±0.0029 0.0541 ±0.0023 0.1068 ±0.0019 0.0502 ±0.0020 0.1173 ±0.0017 0.0543 ±0.0015      
+
+> Note: All results are the mean of five independent runs. Standard deviations are consistently <0.003 for all reported metrics. Improvements over the strongest baseline are statistically significant ( p < 0.01 ).
+
+To identify optimal configurations, we used the Adam optimizer with a learning rate of 10 −3. The struc-tural hyperparameters Kr and km were selected from the ranges [100 , 1000] and [5 , 150] , respectively. The coeffi-cients λent and λcl were sampled from a log-uniform dis-tribution [10 −5, 1.0] . Additional dynamics, including β ∈{0.2, 0.4, 0.6, 0.8, 1.0}, temperature τ ∈ {0.1, 0.5, 1.0},and λreg ∈ [10 −5, 1.0] , were optimized via grid search. 
+
+## 4.2 Performance Comparison 
+
+Table 2 presents the performance results for MURAL along with the state-of-the-art baselines. The result pre-sented in Table 2 is the arithmetic mean of five inde-pendent trials conducted with distinct random seeds to ensure reproducibility and robustness. We observe that multimodal models, including archi-tectures like MMGCN and DualGNN, exhibit superior performance compared to LightGCN, a graph-based col-laborative filtering model, thanks to their incorpora-tion of multimodal information. Additionally, MURAL consistently outperforms all existing models, including the most recent multimodal graph structure learning approaches. Specifically, MURAL achieves significant improvements in terms of Recall@20 and NDCG@20, validating that our retrieval-augmented strategy and uncertainty-aware fusion effectively capture underlying user preferences even in the presence of multimodal noise. Our empirical analysis reinforces the findings of [16] regarding the efficacy of contrastive learning. Specif-ically, the performance gap between contrastive mod-els (e.g., MMSSL, DiffMM) and LATTICE suggests that modeling item-item relations alone is insufficient. Contrastive signals provide the necessary supervision to bridge the gap between raw multimodal features and be-havioral embeddings. MURAL achieves superior per-formance over MMSSL, DiffMM, and DiffCL by explic-itly enriching the graph topology with latent item-item edges, unlike computationally intensive diffusion-based models that rely on stochastic denoising, our structural approach offers a more interpretable and efficient path-way for mitigating data sparsity. Finally, MURAL’s superiority over MMGSL and FREEDOM stems from a fundamental shift from static, heuristic-bound graph construction, such as the frozen item-item graphs relied upon by FREEDOM, to a learn-able topology discovery process that uncovers latent correlations during training. By explicitly modeling aleatoric uncertainty, MURAL autonomously suppresses item-level noise that deterministic frameworks cannot mitigate, ensuring robust performance across heteroge-neous datasets. 
+
+## 4.3 Ablation Studies 
+
+To further investigate the contribution of each module in MURAL, we conduct a series of ablation studies. Table 3 details these results. The comparison in the AEL section reveals that while the model without edge augmentation (no AEL) underperforms significantly, our full MLP-based approach consistently outpaces the static cosine similarity baseline. This gap confirms that the learned topology effectively integrates behavioral signals that standard content-based heuristics overlook, providing a more robust structural foundation for message passing. Fig. 2 illustrates the dynamic reconfiguration of modality contributions via the UAF module. We mea-sure the dominance ratio, defined as the proportion of items in the dataset for which a specific modality re-ceives the highest combined attention and confidence score. We observe that the model adaptively prioritizes 7Table 3: Ablation Study. We evaluate the contribution of Adaptive Edge Learning (AEL), Uncertainty-Aware Fusion (UAF), and loss components across three benchmarks.                                                                                                             
+
+> Dataset TikTok Amazon-Baby Amazon-Sports
+> Metric R@20 N@20 R@20 N@20 R@20 N@20
+> Full Model MURAL (AEL-UAF) 0.1221 0.0541 0.1068 0.0502 0.1173 0.0543
+> AEL Analysis w/o AEL 0.0778 0.0335 0.0715 0.0293 0.0825 0.0353 Static AEL (Cosine) 0.1180 0.0524 0.1004 0.0417 0.1131 0.0493
+> Fusion Analysis Simple Averaging 0.1153 0.0512 0.0975 0.0428 0.1043 0.0468
+> Contrastive Loss
+> w/o LMM 0.1181 0.0527 0.1005 0.0444 0.1116 0.0518 w/o LBM 0.1107 0.0487 0.0929 0.0410 0.1039 0.0486 w/o Lcl (All) 0.1059 0.0459 0.0862 0.0395 0.0970 0.0459
+> UAF Dynamics w/o σ(Attention only) 0.1165 0.0517 0.0980 0.0438 0.1093 0.0511 w/o α(Uncertainty only) 0.1178 0.0522 0.0991 0.0446 0.1109 0.0516
+> Noise Regularization
+> w/o Lent (Structural Only) 0.1140 0.0505 0.0947 0.0436 0.1071 0.0499 w/o σ(Feature Only) 0.1165 0.0517 0.0980 0.0438 0.1093 0.0511 w/o Lent & w/o σ(Unregularized) 0.1119 0.0489 0.0922 0.0429 0.1048 0.0516
+> Gradient Detachment Analysis w/o stopgrad 0.1091 0.0480 0.0969 0.0456 0.1055 0.0494
+
+modalities based on their discriminative power. As train-ing converges, the visual modality emerges as the pri-mary source of information, while textual and acoustic signals are significantly attenuated. This behavior pro-vides empirical justification for adaptive weighting over static aggregation: • Information Density : In the short-video domain, visual features exhibit the highest semantic density relative to user preference. MURAL autonomously identifies this hierarchy, capturing the platform’s pri-mary signal without manual heuristic tuning. • Asymmetric Noise Mitigation : Acoustic features in this context often represent non-discriminative background signals (e.g., trending audio), while tex-tual descriptions are frequently sparse. UAF treats these as lower-reliability channels, suppressing their influence to prevent the "dilution" of high-fidelity vi-sual representations. • Dynamic Regularization : Unlike mean-pooling, which treats modality-specific noise and signal equally, the UAF module ensures the final representation ˜hi is dominated by the most reliable latent features, effec-tively acting as a learned structural filter. To verify that the uncertainty parameter σ effectively captures modality-level noise, we conducted a synthetic noise-injection experiment. Fig. 3 compares the evolu-tion of the mean learned uncertainty ( E[σimg ]) for a stan-dard "clean" training run versus a "noisy" run where vi-sual features for 20% of items were corrupted with Gaus-sian noise. In the clean setup, the mean uncertainty steadily decreases as training progresses, indicating that the model is successfully aligning the visual features with behavioral signals and gaining confidence in the modal-ity’s predictive power. Conversely, in the noisy setup,      
+
+> 020 40 60 80 100 00.51
+> Epoch Weight Dominance
+> Textual Acoustic Visual
+
+Figure 2: Evolution of modality dominance during training (TikTok). The y-axis represents the propor-tion of items for which a given modality holds the maximum fusion weight. UAF autonomously priori-tizes high-density visual signals while attenuating non-discriminative acoustic and textual channels. the model progressively increases the uncertainty val-ues for the corrupted features. This divergence demon-strates that the UAF module can calibrate aleatoric un-certainty. By increasing σ, the model mathematically suppresses the contribution of noisy features in the final fused embedding ˜hi, thereby shielding the recommenda-tion performance from data corruption. This adaptive mechanism provides a significant advantage over static fusion methods, which lack the ability to modulate their reliance on features based on observed reliability. This is further corroborated by the results shown in the fusion analysis section of Table 3, where we compare two variations of the model, namely, with UAF (the full model) and with simple averaging. As the results demon-strate, UAF is superior due to customized attention and uncertainty score for each item. Specifically, the abla-tion study confirms that α and σ control different mech-anisms within the fusion process and are not coupled, 80 20 40 60 80 100 0.85 0.90.95 1
+
+> Epoch Visual Uncertainty
+> With Noise Without Noise
+
+Figure 3: Impact of synthetic noise on Visual Uncer-tainty ( σ(v)). In the presence of noise, the UAF module autonomously attenuates the visual signal by increasing uncertainty. For clean data, it converges toward high confidence (lower σ(v)). allowing the model to independently modulate relevance and reliability. Further, we conduct an ablation study to quantify the individual contributions of each component within our joint objective function, as detailed in Table 3. The con-trastive loss ( Lcl ) serves as a critical semantic anchor, facilitating the alignment between behavioral trajecto-ries and multimodal content. Moreover, the results demonstrate that the entropy loss ( Lent ) is essential for maintaining topological health. By maximizing neighborhood entropy, this term prevents the Adaptive Edge Learner (AEL) from collapsing into one-hot connections that would otherwise restrict the re-ceptive field of the GNN. This encourages a more diverse and robust aggregation of item neighborhoods. Notably, our joint ablation of these regularization mechanisms confirms that they target distinct forms of corruption: 
+
+Lent primarily suppresses structural noise within the graph topology, whereas σ explicitly suppresses content-level feature noise. Acting as complementary filters, they ensure that both clean node representations and diverse semantic pathways consistently contribute to the final recommendation. Finally, we empirically evaluate the necessity of the gradient detachment applied to hi (Eq. 2). As shown in the final row of Table 3, removing the stopgrad operation leads to a noticeable performance degradation across all datasets (e.g., Recall@20 drops from 0.1221 to 0.1091 
+
+on TikTok). This drop confirms that isolating the be-havioral gradients is crucial for preventing the modality alignment process from leaking back into and distorting the underlying collaborative topology. 
+
+## 4.4 Hyperparameter Effects 
+
+We investigate the sensitivity of recommendation per-formance to the loss weight variations of λcl and λent 
+
+(Figs. 4b and 4a). Our results indicate that while both parameters are evaluated within the same numerical range, their optimal configurations are highly dataset-dependent. Specifically, the contrastive weight λcl must balance semantic alignment with the primary ranking objective, while the entropy weight λent regulates the sparsity of the learned graph. These findings under-score that careful calibration of these hyperparameters is essential for maximizing the model’s robustness and achieving superior accuracy across diverse multimodal environments. Sensitivity analysis on neighborhood sparsity (Fig. 4c, TikTok) shows that increasing k initially improves Re-call@20 by reducing structural distance and facilitat-ing efficient message passing. However, performance degrades beyond an optimal threshold as weakly cor-related item pairs introduce semantic noise, distorting user-item relationships. Notably, performance remains stable around the peak, suggesting the UAF module acts as a learned regularizer. By assigning personalized un-certainty scores, the model dynamically weighs modality signals and mitigates sensitivity to graph density. This highlights the importance of balancing graph enrichment with structural signal preservation. 
+
+# 5 Conclusion and Future Work 
+
+In this work, we introduced MURAL, a unified frame-work that overcomes the fundamental bottlenecks of structural rigidity and semantic fragility in multimodal recommendation. By transitioning from static, pre-defined similarity heuristics to dynamic topology discov-ery, MURAL provides a robust and scalable architecture capable of navigating the inherent noise and complexity of modern heterogeneous data. Our results demonstrate that the challenges of "graph mirroring" and cross-modal noise are not insurmountable obstacles, but rather symp-toms of non-adaptive modeling. Through the Adaptive Edge Learner (AEL), we proved that treating graph con-struction as a differentiable, retrieval-augmented task allows for the discovery of latent semantic correlations that evolve in tandem with user behavior. Simultane-ously, the Uncertainty-Aware Fusion (UAF) module pro-vides a mathematically grounded defense against modal-ity noise. By explicitly modeling aleatoric uncertainty (σ(m) 
+
+> i
+
+), our framework moves beyond deterministic fu-sion to prioritize high-fidelity signals, ensuring that rec-ommendations are driven by the most reliable modality-specific insights. Extensive empirical evaluations con-firm that this unified approach to topology learning and noise-robustness consistently outperforms current state-of-the-art structural and generative models. Ultimately, MURAL establishes a new benchmark for interpretable and efficient multimodal learning, offering a resilient path forward for the next generation of content-aware recommendation systems. While MURAL significantly improves recommenda-tion accuracy and robustness, several avenues for future research remain. First, extending the uncertainty-aware 910 −5 10 −3 10 −1
+
+> 0.08 0.10.12
+
+λent     
+
+> Recall@20
+> TikTok Amazon Baby Amazon Sports
+> (a) λent sensitivity.
+> 10 −510 −310 −1
+> 0.09 0.10.11 0.12
+
+λcl        
+
+> Recall@20
+> TikTok Amazon Baby Amazon Sports
+> (b) λcl sensitivity.
+> 530 60 90 120 150 0.118 0.12 0.122
+
+k (Neighbors) Recall@20 
+
+> (c) Neighborhood sparsity ( k).
+
+Figure 4: Hyperparameter sensitivity analysis for λent , λcl , and k. The graphs illustrate the trade-offs between model alignment, sparsity, and graph enrichment. mechanism to the user side-modeling user-specific vari-ance in modality preference—could further personalize the fusion process. Second, exploring the temporal dy-namics of the adaptive graph (i.e., how semantic neigh-bors shift over longer training horizons) may yield deeper insights into evolving item trends. Ultimately, we be-lieve the principles of adaptive structure learning and reliability-aware fusion established in this work provide a robust foundation for the next generation of scalable, multimodal GNNs. 
+
+# Acknowledgment 
+
+The authors declare that they have no financial or non-financial interests that are directly or indirectly related to the work submitted for publication; that they have not received any funding, financial support, or sponsor-ship from any organization or agency for the prepara-tion of this work; and that during the preparation of this work, they used generative AI technologies with ex-treme caution to improve language and readability, after which they reviewed and edited the content as needed and take full responsibility for the publication’s content. 
+
+# References 
+
+[1] Pegah Malekpour Alamdari, Nima Jafari Nav-imipour, Mehdi Hosseinzadeh, Ali Asghar Safaei, and Aso Darwesh. A systematic study on the rec-ommender systems in the e-commerce. Ieee Access ,8:115694–115716, 2020. [2] Yashar Deldjoo, Markus Schedl, Paolo Cremonesi, and Gabriella Pasi. Recommender systems leverag-ing multimedia content. ACM Computing Surveys (CSUR) , 53(5):1–38, 2020. [3] Di Wang, Quan Wang, Yaqiang An, Xinbo Gao, and Yumin Tian. Online collective matrix factor-ization hashing for large-scale cross-media retrieval. In SIGIR ’20: Proceedings of the 43rd International ACM SIGIR Conference on Research and Develop-ment in Information Retrieval (July 2020) , SIGIR ’20, page 1409–1418, New York, NY, USA, 2020. Association for Computing Machinery. [4] Shaina Raza, Mizanur Rahman, Safiullah Kamawal, Armin Toroghi, Ananya Raval, Farshad Navah, and Amirmohammad Kazemeini. A comprehensive re-view of recommender systems: Transitioning from theory to practice, 2025. [5] Senthilselvan Natarajan, Subramaniyaswamy Vairavasundaram, Sivaramakrishnan Natarajan, and Amir H Gandomi. Resolving data sparsity and cold start problem in collaborative filtering rec-ommender system using linked open data. Expert Systems with Applications , 149:113248, 2020. [6] Ruining He and Julian McAuley. Vbpr: Visual bayesian personalized ranking from implicit feed-back, 2015. [7] Jingyuan Chen, Hanwang Zhang, Xiangnan He, Liqiang Nie, Wei Liu, and Tat-Seng Chua. Atten-tive collaborative filtering: Multimedia recommen-dation with item- and component-level attention. In 
+
+Proceedings of the 40th International ACM SIGIR Conference on Research and Development in Infor-mation Retrieval , SIGIR ’17, page 335–344, New York, NY, USA, 2017. Association for Computing Machinery. [8] Yinwei Wei, Xiang Wang, Liqiang Nie, Xiangnan He, Richang Hong, and Tat-Seng Chua. Mmgcn: Multi-modal graph convolution network for person-alized recommendation of micro-video. In Proceed-ings of the 27th ACM International Conference on Multimedia , MM ’19, page 1437–1445, New York, NY, USA, 2019. Association for Computing Ma-chinery. [9] Yinwei Wei, Xiang Wang, Liqiang Nie, Xiangnan He, and Tat-Seng Chua. Graph-refined convo-lutional network for multimedia recommendation 10 with implicit feedback. In Proceedings of the 28th ACM International Conference on Multimedia , MM ’20, page 3541–3549, New York, NY, USA, 2020. Association for Computing Machinery. [10] Jinghao Zhang, Yanqiao Zhu, Qiang Liu, Shu Wu, Shuhui Wang, and Liang Wang. Mining latent structures for multimedia recommendation. In Pro-ceedings of the 29th ACM International Conference on Multimedia , MM ’21, page 3872–3880. ACM, Oc-tober 2021. [11] Wei Wei, Chao Huang, Lianghao Xia, and Chuxu Zhang. Multi-modal self-supervised learning for rec-ommendation. In Proceedings of the ACM Web Con-ference 2023 , WWW ’23, page 790–800. ACM, April 2023. [12] Jujia Zhao, Wenjie Wang, Yiyan Xu, Teng Sun, Fuli Feng, and Tat-Seng Chua. Denoising diffusion rec-ommender model, 2024. [13] Qiya Song, Jiajun Hu, Lin Xiao, Bin Sun, Xieping Gao, and Shutao Li. Diffcl: A diffusion-based con-trastive learning framework with semantic align-ment for multimodal recommendations. IEEE Transactions on Neural Networks and Learning Sys-tems , 36(10):18587–18597, 2025. [14] Yifan Liu, Kangning Zhang, Xiangyuan Ren, Yan-hua Huang, Jiarui Jin, Yingjie Qin, Ruilong Su, Ruiwen Xu, Yong Yu, and Weinan Zhang. Align-rec: Aligning and training in multimodal recom-mendations. In Proceedings of the 33rd ACM In-ternational Conference on Information and Knowl-edge Management , CIKM ’24, page 1503–1512, New York, NY, USA, 2024. Association for Computing Machinery. [15] Binrui Wu, Shisong Tang, Fan Li, Bing Han, Chang Meng, Jingyu Xiao, and Jiechao Gao. Aligning and balancing id and multimodal representations for recommendation. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 , KDD ’25, page 5029–5038, New York, NY, USA, 2025. Association for Computing Machinery. [16] Yoshiyuki Sone, Yuma Dose, Takahiro Hara, Takuya Maekawa, Kazuki Shimazaki, Teppei Seguchi, Takayuki Kikuchi, and Kenshiro Kato. Mmgsl: Multimodal graph structure learning for recommendation. In 2025 IEEE International Con-ference on Big Data and Smart Computing (Big-Comp) . IEEE, 2025. [17] Qifan Wang, Yinwei Wei, Jianhua Yin, Jianlong Wu, Xuemeng Song, and Liqiang Nie. Dualgnn: Dual graph neural network for multimedia recom-mendation. IEEE Transactions on Multimedia ,25:1074–1084, 2021. [18] Zhulin Tao, Yinwei Wei, Xiang Wang, Xiangnan He, Xianglin Huang, and Tat-Seng Chua. Mgat: Multimodal graph attention network for recommen-dation. Information Processing & Management ,57(5):102277, 2020. [19] Xin Zhou and Zhiqi Shen. A tale of two graphs: Freezing and denoising graph structures for multi-modal recommendation. In Proceedings of the 31st ACM International Conference on Multimedia , MM ’23, page 935–943. ACM, October 2023. [20] Fan Liu, Huilin Chen, Zhiyong Cheng, Anan Liu, Liqiang Nie, and Mohan Kankanhalli. Disentangled multimodal representation learning for recommen-dation, 2022. [21] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Wei Wang, Xiping Hu, Steven Hoi, and Edith Ngai. A survey on multimodal recommender systems: Re-cent advances and future directions, 2025. [22] Yinwei Wei, Xiang Wang, Qi Li, Liqiang Nie, Yan Li, Xuanping Li, and Tat-Seng Chua. Contrastive learning for cold-start recommendation, 2021. [23] Marta Moscati. Multimodal representation learning for high-quality recommendations in cold-start and beyond-accuracy. In Proceedings of the 18th ACM Conference on Recommender Systems , RecSys ’24, page 1290–1295, New York, NY, USA, 2024. Asso-ciation for Computing Machinery. [24] Fuzheng Zhang, Nicholas Jing Yuan, Defu Lian, Xing Xie, and Wei-Ying Ma. Collaborative knowl-edge base embedding for recommender systems. In Proceedings of the 22nd ACM SIGKDD Inter-national Conference on Knowledge Discovery and Data Mining , KDD ’16, page 353–362, New York, NY, USA, 2016. Association for Computing Ma-chinery. [25] Yongfeng Zhang, Qingyao Ai, Xu Chen, and W. Bruce Croft. Joint representation learning for top-n recommendation with heterogeneous informa-tion sources. In Proceedings of the 2017 ACM on Conference on Information and Knowledge Man-agement , CIKM ’17, page 1449–1458, New York, NY, USA, 2017. Association for Computing Ma-chinery. [26] Jiancan Wu, Xiang Wang, Fuli Feng, Xiangnan He, Liang Chen, Jianxun Lian, and Xing Xie. Self-supervised graph learning for recommendation. In 
+
+Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Infor-mation Retrieval , SIGIR ’21, page 726–735. ACM, July 2021. 11 [27] Shiwen Wu, Fei Sun, Wentao Zhang, Xu Xie, and Bin Cui. Graph neural networks in recommender systems: A survey. ACM Comput. Surv. , 55(5), December 2022. [28] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. Lightgcn: Sim-plifying and powering graph convolution network for recommendation, 2020. [29] Thomas N. Kipf and Max Welling. Semi-supervised classification with graph convolutional networks, 2017. [30] Yangqin Jiang, Chao Huang, and Lianghao Xia. Adaptive graph contrastive learning for recommen-dation, 2023. [31] Zihan Lin, Changxin Tian, Yupeng Hou, and Wayne Xin Zhao. Improving graph collaborative filtering with neighborhood-enriched contrastive learning. In Proceedings of the ACM Web Confer-ence 2022 , WWW ’22, page 2320–2329. ACM, April 2022. [32] Yixin Liu, Yu Zheng, Daokun Zhang, Hongxu Chen, Hao Peng, and Shirui Pan. Towards unsupervised deep graph structure learning, 2022. [33] Yanan Zhao, Feng Ji, Jingyang Dai, Jiaze Ma, and Wee Peng Tay. Less is more: Towards simple graph contrastive learning, 2025. [34] Yangqin Jiang, Lianghao Xia, Wei Wei, Da Luo, Kangyi Lin, and Chao Huang. Diffmm: Multi-modal diffusion model for recommendation, 2024. [35] Yu. A. Malkov and D. A. Yashunin. Efficient and robust approximate nearest neighbor search using hierarchical navigable small world graphs, 2018. 12
