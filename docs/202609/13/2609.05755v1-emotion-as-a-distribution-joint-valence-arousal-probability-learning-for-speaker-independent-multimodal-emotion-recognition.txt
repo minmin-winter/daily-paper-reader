@@ -1,0 +1,806 @@
+Title: Emotion as a Distribution: Joint Valence-Arousal Probability Learning for Speaker-Independent Multimodal Emotion Recognition
+
+URL Source: https://arxiv.org/pdf/2609.05755v1
+
+Published Time: Wed, 09 Sep 2026 00:17:38 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 1
+
+# Emotion as a Distribution: Joint Valence–Arousal Probability Learning for Speaker-Independent Multimodal Emotion Recognition 
+
+Tingyi Lin, Wen-Ren Yang, and Kuanwei Chen 
+
+Abstract —Human emotion is graded and frequently mixed, yet most multimodal recognizers collapse it onto a single hard label. We argue the recognizer should instead expose a distribution over affective space. Our text +speech system, alongside its categorical decision, emits a 9 × 9 probability matrix over the Valence– Arousal plane, trained with a two-dimensional Gaussian soft tar-get under a Kullback–Leibler/cross-entropy objective, aimed at counseling support. Evaluation is strict: speaker-independent 5-fold leave-one-session-out IEMOCAP with rotating-session inner validation, headline metrics only on the held-out session. Within one fixed encoder–fusion–head pipeline we compare Transformer and state-space (Mamba-1/2/3) backbones at matched depth and width, at two operating points (T ≈ 550 , T ≈ 2750 ). The featured dual-head system reaches 73 .0% ±0.3 unweighted accuracy over three seeds (separate rerun: 72 .1% ), exceeding the Transformer fusion baseline by 3.0 UA points ( 95% session-bootstrap CI [1 .0, 4.7] ; significant under paired t-test and session-level bootstrap), with no latency or memory advantage at these lengths; swapping the ∼1M trainable front-end for frozen WavLM-Large features (learnable layer weights) lifts the same architecture to 76 .6% ± 1.3. Pre-specified controls scope the claims honestly: simpler valence–arousal auxiliaries reproduce the classification lift within noise, and a dedicated regression head tracks the continuous ratings slightly better, so the head’s specific value is the normalized affect distribution itself. That distribution recovers the circumplex: its center of mass tracks valence and arousal (CCC 0.66 /0.66 ; predominantly between-class structure, weaker within-class tracking), and its entropy is weakly but consistently linked to categorical rater ambiguity, not dimensional spread. 
+
+Index Terms —Multimodal emotion recognition, speech emo-tion recognition, valence–arousal, label distribution learning, state-space models, Mamba, speaker-independent evaluation. 
+
+I. I NTRODUCTION 
+
+# PSYCHOLOGICAL distress is increasingly common, while access to professional counseling remains limited, motivating automated systems that can provide timely, low-barrier emotional support and assist practitioners in tracking a client’s affective state [1]. Multimodal emotion recognition (MER) from text and speech is a natural building block for such systems: it is non-invasive and deployable from ordinary recordings. (In this Phase-1 study we use only text and speech; a fuller treatment of privacy and of physiological signals 
+
+T. Lin and W.-R. Yang are with the Department of Electrical Engineering, National Changhua University of Education, Changhua, Taiwan (e-mail: M1452024@mail.ncue.edu.tw; wry87c@cc.ncue.edu.tw). K. Chen is with the Department of Computer Science and Information Engineering, National Central University, Taoyuan, Taiwan. Corresponding author: Tingyi Lin. 
+
+belongs to future work, and we make no privacy claim beyond the modalities used here.) Despite rapid progress, two issues limit how useful current MER systems are in affective settings. First , most systems treat emotion as a single mutually-exclusive class. Real affective states are graded and frequently mixed — an utterance can be simultaneously sad and angry — and a hard arg max 
+
+label compresses this graded, geometry-bearing affect into a single class, discarding information an empathetic downstream component would otherwise reason over. Second , reported accuracies are often inflated by weak evaluation: speaker-dependent splits, or model selection on the test set, leak speaker identity and over-estimate generalization to unseen speakers, which is the condition that actually matters in deployment. We address both. Beyond a single class label, our recognizer emits a 9 × 9 probability matrix over the Valence–Arousal (V–A) plane — a normalized distribution over the discretized V–A grid. The matrix is supervised with a two-dimensional Gaussian soft target placed at the ground-truth (v, a ) co-ordinate, casting emotion recognition as a label-distribution problem whose output can place mass on multiple regions of the affect plane instead of being forced onto a single class. We pair this with a deliberately strict, speaker-independent evaluation protocol — 5-fold leave-one-session-out (LOSO) with rotating-session inner validation — in which model selection happens only on validation and the headline number is computed once on a held-out speaker session. Within one fixed encoder–fusion–head pipeline we additionally compare Transformer and state-space (Mamba-1/2/3 [2], [3], [4]) tem-poral backbones at matched depth and width, so that the major architectural confounds — encoder, fusion, heads, and training protocol — are held fixed (parameter counts differ at the block level; we report them alongside the results). 
+
+Contributions.  
+
+> •
+
+A probabilistic V–A representation: a 9 × 9 soft-label head trained with a 2D-Gaussian target and a KL + cross-entropy objective that emits a full distribution over the V– A plane alongside the class decision, rather than collaps-ing to a single label; its per-utterance entropy is weakly but consistently (edge-controlled, all seeds) associated with human categorical ambiguity (Sec. III-E).  
+
+> •
+
+A rigorous speaker-independent evaluation protocol (LOSO with rotating-session inner validation) that we argue should be the reporting standard for this task (Sec. IV-B). arXiv:2609.05755v1 [cs.SD] 4 Sep 2026 PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 2 
+
+> •
+
+A study of Transformer vs. Mamba-1/2/3 temporal back-bones under one fixed pipeline at matched depth and width on IEMOCAP, with a direct characterization of the accuracy/cost trade-off (Sec. V): the state-space back-bones are numerically on par with or slightly above the Transformer in accuracy yet hold no latency or memory advantage at these utterance lengths, and the probabilistic V–A head adds its distributional output at no cost to classification accuracy. II. R ELATED WORK 
+
+A. Multimodal and Speech Emotion Recognition 
+
+Early emotion recognizers were built on CNNs, LSTMs, and, more recently, Transformer architectures, with a sub-stantial line of work on how to fuse acoustic and lexi-cal streams [5], [6], [1]. Self-supervised speech representa-tions such as Wav2Vec2 [7] and the SER-specialized emo-tion2vec [8] now provide strong acoustic features, and most competitive systems combine them with a lexical encoder through attention. Our fusion is a standard two-stream cross-attention, which we keep fixed so that the study isolates the temporal backbone rather than the fusion design; recent state-space SER such as TF-Mamba [9], which applies Mamba-2 across the temporal and frequency axes on IEMOCAP, and the multimodal MaTAV [10], a Mamba text–audio–video network for conversational emotion recognition on IEMOCAP/MELD, are the closest model-side peers and motivate our use of Mamba as a backbone; we differ in targeting utterance-level text +speech under a strict speaker-independent protocol rather than conversation-level recognition with video. A recurring obstacle to comparing these systems is the 
+
+evaluation protocol . Reported IEMOCAP accuracies range widely because some works use random utterance-level k-fold splits (which leak speaker identity and reach ∼78 –80% WA), while others use the harder speaker-independent leave-one-session-out (LOSO) setting ( ∼70 –75% UA). The two are not comparable. We adopt the strict speaker-independent LOSO protocol throughout (Sec. IV-B) and, when tabulating prior numbers, record the protocol, modalities, and metric so that cross-protocol figures are never silently compared. Table I compiles representative recent IEMOCAP results together with their evaluation protocol and modalities. Among the entries we could verify under a comparable speaker-independent protocol, our mamba_dual_head is competitive: 73 .0 UA (three-seed mean) against emotion2vec’s 71 .79 WA with an emotion-specialized front-end, and our own frozen WavLM-Large [11] arm reaches 76 .6 ± 1.3 UA under the same strict LOSO protocol (Sec. V-E) against TF-Mamba’s 75 .7 under the easier 5-fold CV; the higher figures in Table I use 5-fold cross-validation or leave-one-speaker-out partitions that are not directly comparable, and we rest no comparison on rows whose partition leaves speaker independence unstated (DFSD-EMO, for instance, specifies only “5-fold cross-validation”, so speaker independence cannot be established from the source). We further use standard frozen encoders rather than emotion-specialized self-supervised front-ends such as emotion2vec, so absolute accuracy is not the contribution — the representation and the protocol are. 
+
+B. Dimensional vs. Categorical Affect, and Soft Labels 
+
+The Valence–Arousal circumplex [15] represents affect as continuous coordinates rather than discrete categories, which is more expressive for graded and mixed emotion. A com-plementary line of work softens the supervision itself. Label Distribution Learning (LDL) [16] replaces the one-hot target with a full distribution over labels, and soft-target training has been shown to help on ambiguous emotional utterances [17]. In SER specifically, a rater-distribution lineage models the 
+
+perception uncertainty carried by the annotators themselves: Han et al. [18] train against soft labels derived from inter-rater disagreement, Chou and Lee [19] learn jointly from every individual rater’s vote, and Wu et al. [20] place utterance-specific Dirichlet priors over the categorical label distribution; treating annotator disagreement as signal rather than noise is likewise the perspectivist position in subjective-annotation research [21]. Closest to us are two recent efforts: Le et al. [22] build label distributions from valence–arousal-space 
+
+neighborhoods to relabel facial expression categories , and Prabhu et al. [23], [24] — the latter published in IEEE Transactions on Affective Computing — model annotator-disagreement uncertainty in SER with a Bayesian network that predicts a per-attribute (valence or arousal) distribution. Beyond speech, Yang and Chen [25] established the prediction of a distribution over the continuous V–A plane for music emo-tion, which we regard as the closest output-space precedent in any audio domain. Our 9 × 9 head differs from these speech systems in what it predicts . Prior soft-label / LDL emotion work in speech either (i) softens categorical targets over a discrete emotion set [17], [18], [19], [20], [22], or (ii) models per-attribute 
+
+uncertainty as two independent one-dimensional regressions with predicted variance [24]. In contrast, we predict an explicit joint two-dimensional probability mass function over a dis-cretized Valence ×Arousal grid : a single softmax head whose output is, by construction, a normalized affect distribution, trained with a Gaussian soft target whose width σ encodes annotation spread directly on the grid — to our knowledge the first speech +text system whose output space is the joint V– A plane itself. This makes the representation (a) joint in form 
+
+— a single distribution over the Valence ×Arousal plane rather than two separate per-attribute predictions; (b) form-free in the affect plane — the discrete joint pmf assumes no parametric output family (the Gaussian enters only as the shape of the 
+
+training target , Sec. III-E) and can place mass on multiple, possibly non-adjacent regions, a representational capacity that neither a single class label nor two unimodal marginals possess (whether the learned distributions exercise this capacity is an empirical question we quantify in Sec. V-D); and (c) designed to be consumable as a soft prompt by a downstream language model (our Phase-2 vision — a design intention, not yet a demonstrated result), without first collapsing it to a class. Empirically (Sec. V-D), this distribution does more than soften the target: in aggregate it recovers the affective circumplex and its center of mass tracks continuous valence and arousal, evidence that the head learns class-level affect geometry ,which the categorical-soft-label and per-attribute lines above PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 3
+
+TABLE I REPRESENTATIVE RECENT IEMOCAP (4-CLASS ) RESULTS UNDER different EVALUATION PROTOCOLS . P ROTOCOL TAGS MARK THE PARTITION FAMILY 
+
+— SESSION FOLDS (LOSO; EMOTION 2VEC AND OURS ) HOLD ENTIRE SPEAKER PAIRS OUT , GENERIC “5-FOLD CV” ENTRIES DO NOT ALWAYS SPECIFY SPEAKER INDEPENDENCE , AND LEAVE -ONE -SPEAKER -OUT (LOS PK O; SDMMKD) USES 10 FINER FOLDS — AND EACH PAPER ’S PROTOCOL WORDING IS REPRODUCED verbatim IN THE †-NUMBERED TABLE FOOTNOTES , SO PARTITION DIFFERENCES ARE VISIBLE RATHER THAN FLATTENED . P ARAMS (M) 
+
+> AS REPORTED BY EACH SOURCE
+
+: a+b = FROZEN UPSTREAM + TRAINABLE PROBE ; “ FR .” = FROZEN FRONT -END ADDITIONAL TO THE STATED TRAINABLE COUNT ; N/R = NOT REPORTED . S EPARATE WA AND UA COLUMNS (— WHERE THE SOURCE DOES NOT REPORT THE METRIC ; E MO BRIDGE ADDITIONALLY REPORTS W F1 73 .8). A = AUDIO , T = TEXT . S CORES ARE TAKEN VERBATIM FROM EACH SOURCE PAPER ; THE IN -TABLE NOTE STATES THE MERGE , SEED , AND ENCODER -REGIME ANNOTATIONS . T ABLE BODY GENERATED FROM THE COMMITTED STATISTICS .Method Mod. Front-end Protocol Params (M) WA (%) UA (%) emotion2vec [8] ⋆ A emotion2vec (frozen, emo-tion SSL) LOSO (5-fold) †1 93 .8+0 .2 71.79 —TF-Mamba [9] ⋆ A WavLM-large 5-fold CV †2 20 .8 (+316 fr.) 75.3 75.7 EmoBridge [12] ⋆ A+T HuBERT (frozen) + LLM (LoRA) 5-fold CV (spk.-indep.) †3 ∼7,000 (LLM) 76.4 76.8 SDMMKD [13] ⋆ A+T HuBERT (LoRA-FT) +
+
+SKEP teacher LOSpkO (10-fold) †4 n/r 79.74 80.68 DFSD-EMO [14] ⋆ A 768-d pre-trained features 5-fold CV †5 n/r 72.36 72.35 
+
+Ours (mamba_dual_head )⋆ A+T frozen BERT + raw-conv (∼1M, FT) LOSO, rotating val. (Sec. IV-B) 16 .9 71 .4 73 .0
+
+Ours (SSL arm) ⋆ A+T frozen BERT + frozen WavLM-Large LOSO, rotating val. (Sec. V-E) 16 .0 (+316 fr.) 75 .3 76 .6
+
+Protocol wording verbatim from each source: †1“leave-one-session-out 5-fold CV” (Sec. 4.3); †2“five-fold cross-validation exclusively for the IEMOCAP dataset” (Sec. III-A2); †3“speaker-independent five-fold cross-validation” (Sec. IV-A); †4“standard 10-fold cross-validation (CV) with the leave-one-speaker-out scheme” (Sec. III-C); †5“5-fold cross-validation” (Sec. IV-B; 3-s clips). 
+
+⋆: same 4-class hap +exc merge as ours (5,531 utterances; DFSD-EMO segments them into 3 s clips). Comparison scores are the single runs reported by the source papers (no seed spread published); ours is a 3-seed mean. The comparison systems fine-tune, adapt, or distill large emotion-specialized or general SSL encoders (emotion2vec, WavLM-large, HuBERT), whereas our system trains 16 .9M parameters over frozen general-purpose encoders — the rows contextualize the operating point; absolute accuracy is not the contribution. 
+
+do not examine. A complementary precedent in speech is Zhou et al. [26], who show that a continuous arousal–valence representation can be learned from categorical emotion labels alone . We do not reproduce that setting — our soft target is constructed from the rater-mean (v∗, a ∗) coordinates, so the dimensional labels do supervise the head, through the target’s location rather than through a point-regression loss — but the head likewise emits its continuous estimate without any explicit regression objective, and yields a full joint distribution over the grid rather than a single learned embedding. Le et al. is the nearest speech-adjacent neighbor, but they use V–A neighborhoods to relabel facial-expression categories , whereas in our model the output space itself is the V–A grid for speech and text. 
+
+C. State-Space Models 
+
+Mamba [2] introduced a selective state-space model (SSM) with input-dependent dynamics and a hardware-aware parallel scan, achieving linear time complexity in sequence length. Its irregular, data-dependent recurrence is less GPU-friendly than dense attention; Mamba-2 / Structured State-Space Duality (SSD) [3] reformulates the SSM so that it can be computed with matrix multiplications, improving hardware utilization while retaining the linear-recurrence view. Mamba-3 [4] fur-ther refines the discretization (trapezoidal rule), replaces the short causal convolution with rotary position embeddings, and adds an optional multi-input/multi-output (MIMO) formula-tion, targeting long-context language modeling and decode-time efficiency. Bidirectional variants [27] and multimodal ap-plications [28] have since appeared, including emotion-specific uses such as continuous valence–arousal regression [29] (a point estimate, in contrast to our distributional grid). We use these models purely as temporal backbones ; we make no claim that they overcome an attention “complexity wall” at the utterance lengths studied here, and we report their cost explicitly in Sec. V. III. M ETHOD 
+
+A. Overview 
+
+Given an utterance, the text stream is encoded by a frozen BERT [30] and the speech stream by an interchangeable acoustic front-end (Sec. III-B). Each modality is projected from its encoder width ( 768 ) to a shared width d = 256 
+
+by a linear layer followed by layer normalization, GELU, and dropout, processed by a temporal backbone (Sec. III-C), fused by two stacked cross-attention blocks (Sec. III-D), and decoded by one or more heads (Sec. III-E). The pipeline is deliberately held fixed across all experiments in Sec. V: only the component named by a given ablation (acoustic front-end, temporal backbone, or output head) is varied. Two optimization asymmetries qualify this isolation and should be borne in mind when reading the backbone comparison: the per-category learning-rate multipliers of Sec. IV apply a ×3 rate to state-space parameters only, and the long-sequence setting uses per-model batch sizes to fit memory (Sec. IV); measured differences are therefore attributable to the varied component 
+
+under this shared training recipe , not under a per-arm tuned optimum. The temporal backbone and the fusion block play distinct, complementary roles: the backbone (Transformer self-attention or BiMamba) mixes information within each modal-ity along time, whereas the cross-attention blocks exchange PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 4                                             
+
+> Text Raw waveform (16 kHz)
+> BERT (frozen) Wav2Vec2 (frozen)
+> or raw-conv (trainable)
+> or WavLM-Large (frozen) Proj 768 →256
+> Proj 768 →256
+> Text backbone
+> 6× { BiMamba |Transformer }Audio backbone
+> 6× { BiMamba |Transformer }
+> 2×Cross-Attention fusion (text ↔audio, mask-aware) Mask-aware mean-pool +concat →z
+> Categorical head 4-way softmax (CE)
+> 9×9V–A head
+> softmax →P, KL to soft target
+> P(V, A |x):9×9PMF
+> +center of mass →continuous (V, A )
+> Fig. 1. Echo-Mind Phase-1 architecture. Afrozen text encoder and aswappable speech front-end — frozen Wav2Vec2, fine-tuned raw-convolution, or frozen WavLM-Large (Sec. V-E) — feed a shared-width projection, an interchangeable temporal backbone, bidirectional cross-attention fusion, and one or two output heads. The 9×9Valence–Arousal head (Sec. III-E) is the paper’s headline contribution; the categorical head is retained for comparability with prior work.
+
+information between the two modalities. This division matches each operation to its setting: intra-modal mixing runs along a single, possibly long time axis — the regime state-space models are designed for — whereas inter-modal fusion aligns the long audio stream with a short text stream, where content-based attention is the natural primitive and, because the text side is short, is already linear in the audio length (Sec. III-D). A state-space backbone therefore substitutes for intra-modal self-attention, not for the inter-modal cross-attention, which we keep fixed across all backbones. Fig. 1 gives the overall architecture. 
+
+B. Acoustic Front-End 
+
+Speech is resampled to 16 kHz and amplitude-normalized (peak normalization by default; zero-mean/unit-variance and identity are configurable alternatives). We deliberately keep the front-end learned rather than hand-engineered, and expose two interchangeable encoders so that the temporal backbone can be studied at two operating points along the time axis. 
+
+SSL encoder (default, T ≈ 550 ): The default encoder is a frozen Wav2Vec2 [7] whose convolutional feature ex-tractor has a total stride of 320 samples, giving a frame rate of 50 fps; an 11 s utterance therefore yields T ≈ 550 
+
+frames of dimension 768 . Inputs pass through the Hug-gingFace Wav2Vec2FeatureExtractor so that the en-coder sees the zero-mean, unit-variance signal it was pre-trained on. One subtlety matters for reproducibility: this checkpoint’s convolutional front-end uses temporal group normalization ( feat_extract_norm="group" ), so with dynamic batch-max padding an utterance’s features would depend on the longest utterance that happens to share its batch. We therefore pad every batch to the fixed 11 s cap, which makes the features per-utterance deterministic and independent of batch composition. 
+
+Trainable raw-convolution encoder (long context, T ≈
+
+2750 ): To give the temporal backbone a longer, higher-resolution sequence, we optionally replace Wav2Vec2 with a lightweight trainable stack of three strided 1-D convolutions (channels 64 → 256 → 512 , kernels 8/4/4, strides 4/4/4, each followed by a masked GroupNorm and GELU, with dropout 
+
+0.1 between layers), projected to 768 . The GroupNorm statis-tics are computed over valid frames only and padded positions are re-zeroed after every stage; together with the per-layer mask of Eq. (1) this makes the encoder’s output for an utterance independent of how much padding it receives in a batch (plain temporal GroupNorm would mix padding into the normalization statistics). The total frame stride is the product of the per-layer strides, sframe = 4 · 4 · 4 = 64 , i.e. 250 fps, so the same 11 s utterance now produces T ≈ 2750 frames — a 5× longer sequence that is the regime in which state-space backbones are expected to matter. This encoder is pre-trained on LibriSpeech [31] by self-supervised mel reconstruction and then fine-tuned (or frozen) for emotion (Sec. IV-C). 
+
+Frame-level masking: Because utterances are batched with right padding, every model must convert the sample-level validity mask into a frame-level mask that exactly matches the encoder’s down-sampling, otherwise padded samples leak into the attention and the pooling. We use the convention 
+
+True =valid throughout. For a 1-D convolution with kernel 
+
+k, stride s, padding p, and dilation d, the number of valid output frames produced from Lin valid input samples follows the exact PyTorch output-length formula 
+
+Lout =
+
+ Lin + 2 p − d (k − 1) − 1
+
+s
+
+
+
++ 1 , (1) which counts how many stride-s steps an effective window of width d(k − 1) + 1 takes across the padded length 
+
+Lin +2 p. We apply it layer by layer (for the raw-conv encoder, 
+
+{(k, s, p )} = {(8 , 4, 4) , (4 , 4, 2) , (4 , 4, 2) } with dilation d=1 
+
+throughout, so this width collapses to k and the numerator to Lin + 2 p − k) to obtain the per-utterance frame count; the frame mask sets the first Lout positions valid and the remainder padded. The Wav2Vec2 path uses the encoder’s na-tive _get_feat_extract_output_lengths . Both en-coders expose the same compute_frame_mask interface, so swapping the front-end requires no change in any down-stream model. 
+
+Why not hand-crafted spectral/prosodic inputs?: A clas-sical SER front-end would feed MFCCs, log-Mel spectro-grams, or explicit prosody (F0, energy, jitter) to the backbone. We avoid this for two reasons. First , large self-supervised speech models already encode spectral and prosodic structure in their hidden states, and consistently outperform hand-crafted inputs on SER; using them as the front-end removes a confound and keeps the comparison about the backbone ,PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 5
+
+not about feature engineering. Second , the trainable raw-convolution encoder above lets the network learn its own time-frequency filters end-to-end at the resolution the backbone needs, which a fixed spectrogram cannot. We do, however, retain prosody in one controlled place: a 12 -dimensional set of 
+
+microphone-invariant prosody descriptors (voiced ratio, pitch mean/standard-deviation/slope/jitter, energy contour statistics, speech rate, pause ratio, duration) can be late-fused as an auxiliary vector. These are gain-invariant by construction — intended for cross-corpus and counseling-room robustness where channel and microphone differ — but they are disabled by default so that the backbone and head ablations are not confounded by an extra feature stream; we describe them here as an implemented optional component only, and no prosody-enabled configuration is evaluated in this paper. 
+
+C. Temporal Backbone 
+
+A selective state-space model maps an input signal x(t) to an output y(t) through a latent state h(t) governed by the continuous-time dynamics 
+
+h′(t) = A h(t) + B x(t), y(t) = C h(t). (2) To run on discrete frames, Eq. (2) is discretized with a zero-order hold (ZOH): the input is assumed constant, x(τ ) = xk,over a step of width ∆k. Integrating the linear ODE over 
+
+[ tk, t k + ∆ k] gives the closed-form solution h(tk + ∆ k) = 
+
+e∆k Ah(tk) +   R ∆k 
+
+> 0
+
+eτ A dτ B xk, so that 
+
+¯Ak = exp(∆ kA), ¯Bk = (∆ kA)−1  exp(∆ kA) − I ∆kB,
+
+(3) The ∆kA form of ¯Bk follows [2] and is the closed form of the integral above,   R ∆k 
+
+> 0
+
+eτ A dτ B = A−1 e∆k A − IB. This yields the linear recurrence and read-out 
+
+hk = ¯Ak hk−1 + ¯Bk xk, yk = Ck hk. (4) 
+
+Selectivity is what makes this a Mamba rather than a classical linear SSM: the parameters Bk, Ck, and the step size ∆k are 
+
+input-dependent functions of xk, so the model can choose, per token, how much of the new input to write and how fast to forget — a content-based gating that a time-invariant SSM lacks [2]. The recurrence in Eq. (4) is evaluated by a hardware-aware parallel scan, giving O(T ) time and memory in the sequence length. Mamba-2 / Structured State-Space Duality [3] rewrites the same recurrence as a structured matrix multiply, trading the per-token scan for chunked matmuls that use tensor cores; we treat v1 and v2 as two realizations of the identical block and compare them empirically (Sec. V-F). 
+
+Bidirectional Mamba block: We instantiate the backbone as a bidirectional Mamba (BiMamba) block: two separate (not weight-shared) Mamba scans process the sequence forward and backward, and their outputs are merged by a linear map 
+
+WM : R2d → Rd with a residual connection [27]. Writing 
+
+Mamba → and Mamba ← for the two scans and Rb for the padding-aware valid-prefix reversal of Eq. (6) below, the block computes 
+
+BiMamba( X) = X + WM
+
+ Mamba →(LN X)
+
+Rb
+
+ Mamba ←(Rb(LN X))   ,
+
+(5) where [ · ∥ · ] concatenates along the feature axis (a dropout on the merged output is omitted for brevity). The same block structure is also realized with the Mamba-2/SSD formula-tion [3] (with its own default state size), and compared against a standard Transformer encoder under matched depth and width. 
+
+Padding-aware backward scan: With right-padded batches, a naive backward scan flip ◦ Mamba ◦ flip is subtly wrong: flipping the padded sequence places the padding before 
+
+the valid frames, so the backward recurrence accumulates state over padding before it ever reads real input, contaminating every valid position (the attention baseline, by contrast, masks padded keys exactly). We therefore reverse only the valid prefix with the index map Rb,
+
+Rb(t) = 
+
+(Tb − 1 − t, t < T b,t, t ≥ Tb, Rb ◦ Rb = id , (6) for a sample with Tb valid frames out of T ; because Rb is an involution, applying it once reverses the valid region and applying it again restores the original time order after the scan, so each backward output position aligns with the same time step of the forward branch before the two are concatenated in Eq. (5). The forward scan needs no correction (it is causal, and right padding never precedes valid frames); padded positions are excluded from all subsequent attention and pooling by the validity mask. A padding-invariance regression test (identical utterance alone vs. inside a longer-padded batch) guards this property for all three Mamba generations. 
+
+D. Cross-Attention Fusion 
+
+Let Ha ∈ RTa×d and Ht ∈ RTt×d be the audio and text backbone outputs. Each cross-attention block lets one modality query the other and vice versa. We write MHA( Q, K, V ; m)
+
+for standard multi-head attention [32] with h=8 heads of width 
+
+dh = d/h : each head applies scaled dot-product attention over the valid keys, 
+
+Attn( Q, K, V ; m) = softmax 
+
+ QK ⊤
+
+> √dh
+
++ M(m)
+
+
+
+V, (7) where the additive mask sets M(m):,j = −∞ at padded keys (mj invalid) and 0 otherwise; MHA projects Q, K, V per head, concatenates the h head outputs, and applies an output projection. The text-to-audio and audio-to-text updates are 
+
+˜Ht = FFN  LN  Ht + MHA( Ht, Ha, Ha; ma) , (8) 
+
+˜Ha = FFN  LN  Ha + MHA( Ha, ˜Ht, ˜Ht; mt) , (9) where FFN( ·) denotes a position-wise feed-forward sublayer with its own residual connection and layer norm. The two updates are applied sequentially : the text stream is updated first, and the audio stream attends to the already-updated text 
+
+˜Ht. Two such blocks are stacked. Each cross-attention block scales as O(TaTt) in the two sequence lengths (the projection and feed-forward terms add a further O(( Ta+Tt) d2), likewise linear in each length); because the text stream is capped at 
+
+Tt ≤ 64 tokens, the bounded factor collapses this to 
+
+Tt ≤ 64 = ⇒ O (TaTt) = O(Ta), (10) PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 6
+
+i.e. the fusion is linear in the audio length Ta; the only potentially quadratic term — self-attention over the long audio sequence — is precisely what the state-space backbone replaces. Each fused stream is then reduced to a single vector by a mask-aware mean pool over its valid positions, 
+
+˜H =
+
+P 
+
+> t
+
+mt ˜Ht
+
+P 
+
+> t
+
+mt
+
+, (11) where mt ∈ { 0, 1} is the ( True =valid) mask of that stream, so padded positions contribute neither to the numerator nor the denominator. The fused utterance representation is the concatenation z = [ ˜Ht ∥ ˜Ha ], which feeds the head(s). 
+
+Mask convention: Internally every validity mask uses 
+
+True =valid, including the frame mask of Eq. (1) and the BERT token mask. PyTorch attention, however, expects 
+
+key_padding_mask with True =ignore . Every model therefore inverts the mask, m = ¬(valid ), immediately before the attention call, so that a query never attends to a padded key. The mean pooling that forms z likewise sums only over valid positions. We state this explicitly because a sign error here silently lets padding leak into both the attention and the pooled representation. 
+
+E. Valence–Arousal Probability Head 
+
+In the dual-head configuration the model keeps the standard categorical 4-way head — which yields the class decision and all reported UA/WA/F1 — and adds the V–A head described here. Both read the shared fused representation z and are trained jointly (Eq. (16)), so in this paper the 9 × 9 matrix is an auxiliary distributional output (analyzed in Sec. V-D) rather than the source of the categorical prediction; using it directly as the decision head is left to future work (Sec. VI). Instead of predicting a single class, the V–A head produces a probability distribution over a discretized V–A grid: a multi-layer perceptron maps the fused representation to 81 logits, which a softmax turns into a distribution that is reshaped into a 9 × 9 matrix P, with 
+
+Pij = P (v = vi, a = aj | x), X
+
+> i,j
+
+Pij = 1 , (12) where {vi}9 
+
+> i=1
+
+and {aj }9 
+
+> j=1
+
+are nine evenly spaced grid coordinates, {1.0, 1.5, . . . , 5.0}, placed directly on the native IEMOCAP valence and arousal annotation scale [1 , 5] (so no rescaling is needed to compare predictions with annotations). 
+
+Continuous read-out and uncertainty: Although the head is trained as a classifier over the 81 cells, the matrix P admits two continuous read-outs used in the analysis of Sec. V-D. Its center of mass is a point estimate of the affect, on the same 
+
+[1 , 5] scale as the ground truth, 
+
+bv = X
+
+> i,j
+
+vi Pij , ba = X
+
+> i,j
+
+aj Pij , (13) so the head emits a continuous V–A estimate without any explicit point-regression loss — the ground-truth coordinates supervise the head only through the soft target’s location (Eq. (15)), not through a regression objective on (bv, ba) them-selves. The sharpness of the prediction is summarized by the Shannon entropy of the distribution, 
+
+H(P) = − X
+
+> i,j
+
+Pij ln Pij , 0 ≤ H(P) ≤ ln 81 ≈ 4.39 nats ,
+
+(14) which is maximized by the uniform distribution and which the soft-target width σ (Eq. (15)) directly controls. 
+
+Soft target: The ground-truth annotation (v⋆, a ⋆) is con-verted into a two-dimensional isotropic Gaussian soft target on the same grid, 
+
+Qij ∝ exp 
+
+
+
+− (vi − v⋆)2 + ( aj − a⋆)2
+
+2σ2
+
+
+
+, X
+
+> i,j
+
+Qij = 1 ,
+
+(15) with σ = 0 .5. We emphasize what this target is and is not: it is a researcher-chosen spatial smoothing prior that encodes the assumed smoothness of the affective space around the (mean) annotation, rather than a measured, per-utterance annotation distribution — IEMOCAP’s released dimensional labels are rater averages, and we do not model rater disagreement here. The chosen width is at least of a plausible scale: parsing the raw per-evaluator attribute ratings gives a mean within-utterance rater standard deviation of 0.31 (valence) and 0.44 
+
+(arousal) on the same [1 , 5] scale, so σ = 0 .5 is comparable to typical rater spread, though uniform across utterances. The target therefore prevents the head from being driven toward a degenerate one-hot spike, but the predicted matrix should be read as the model’s distributional output, not as calibrated annotator uncertainty (we assess calibration separately in Sec. V-D). 
+
+Objective: The head is trained with a convex combina-tion of cross-entropy on the discrete emotion label and KL divergence to the soft target, 
+
+L = (1 − λ) LCE + λ KL( Q ∥ P) , λ = 0 .3. (16) Here LCE is the inverse-frequency class-weighted categor-ical cross-entropy on the four-way head (Sec. IV-C), and 
+
+KL( Q ∥ P) = P 
+
+> ij
+
+Qij ln( Qij /Pij ) is taken with the soft target Q as the reference distribution, so the gradient pulls the prediction P toward Q.
+
+What the two terms do: The two terms in Eq. (16) play complementary roles. The cross-entropy term acts on the four-way categorical head and anchors the model to the discrete label, keeping the system comparable to standard SER. The KL term acts on the 9×9 grid and is minimized when P = Q;because Q is a spread Gaussian rather than a one-hot vector, the optimum is itself a distribution, so the head is never driven toward a degenerate spike. Two design parameters control the shape of that optimum. The width σ in Eq. (15) sets how much probability mass the target places off the ground-truth cell: as σ → 0 the target approaches a one-hot vector and the KL term degenerates to hard cross-entropy on the grid; as σ grows the target flattens and the predicted distribution is pushed to be smoother (higher entropy). The mixing weight λ
+
+trades the categorical anchor against the distributional target. We use λ = 0 .3 throughout and treat σ as the principal lever, sweeping it in Sec. V-C: empirically, lowering σ sharpens PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 7
+
+the predictive distribution (its entropy falls) at no measurable cost in classification accuracy, which is the behavior Eq. (16) predicts. 
+
+Geometry-aware alternative (and why we do not use it): The KL term treats the 81 cells as an unordered set; it does not “know” that adjacent cells are nearby in the V–A plane. A natural alternative is an optimal-transport cost that penalizes predicted mass by its squared distance to (v⋆, a ⋆)
+
+— equivalently the squared 2-Wasserstein distance to a Dirac at the label, 
+
+W 22
+
+ P, δ (v⋆,a ⋆)
+
+ = X
+
+> ij
+
+Pij 
+
+(vi − v⋆)2 + ( aj − a⋆)2, (17) normalized by (vmax − vmin )2 + ( amax − amin )2 to [0 , 1] . We implemented this and found it a negative result : used alone it tends to collapse mass onto a single cell and is seed-unstable, and added to KL it does not sharpen the distribution beyond what σ already achieves (Sec. V-C). We therefore retain the KL + CE objective and report the geometry-aware loss as a controlled negative. IV. E XPERIMENTAL SETUP 
+
+A. Datasets 
+
+All experiments in this paper use IEMOCAP [33], which provides per-utterance speech, transcripts, categorical labels, and V–A(–D) values; following common practice we use four classes ( angry ; happy +excited merged; sad ; neutral ), giving 
+
+∼5.5k utterances over five sessions of distinct speaker pairs. The released dimensional annotations are rater averages on a 
+
+[1 , 5] scale. The choice of corpus is constrained by the output space: the 
+
+9 × 9 V–A head requires dimensional Valence–Arousal anno-tations, which rules out sentiment-only corpora (e.g. CMU-MOSEI [34], CH-SIMS [35] — sentiment supplies valence but not arousal). The natural extensions with native V–A(–D) labels are MSP-IMPROV [36] (acted, session structure com-patible with LOSO) and MSP-Podcast [37] (large, naturalistic, with a standard speaker-independent partition). MSP-IMPROV is already exercised here as a zero-shot transfer probe (Sec. VI, no MSP data in training); trained extensions to both corpora are future work, requiring only per-corpus affine normalization of the annotation axes and dropping the Dominance dimension to share the V–A grid. 
+
+B. Evaluation Protocol 
+
+We adopt a 5-fold leave-one-session-out (LOSO) protocol with rotating-session inner validation. For fold f ∈ { 0, . . . , 4}
+
+we set test = Sf , val = S(f −1) mod 5 , and train on the remaining three sessions, where Sf is the f -th IEMOCAP session. Because IEMOCAP sessions correspond to distinct speaker pairs, this yields speaker-independent evaluation. Cru-cially, early stopping (patience 7 on validation UA) and best-checkpoint selection use the validation session only; every headline metric and the reported confusion matrix are computed once on the untouched test session, so the test set never participates in per-run model selection. We state the study-level caveat explicitly: because the same five test sessions are evaluated across the backbone, head, and σ
+
+ablations reported in this paper, the aggregate comparison reuses the test partition, as is the norm for benchmark studies; we mitigate this by fixing the protocol and hyperparameters before the comparisons and by treating small gaps as noise (Sec. V-A). Our primary metric is unweighted accuracy (UA, the mean of per-class accuracies, robust to the class imbalance of IEMOCAP); we also report weighted accuracy (WA) and Macro-F1, each as the mean ±std over the five test sessions. 
+
+Metrics: For C classes with per-class recall acc c =TP c/N c and N = P 
+
+> c
+
+Nc utterances, unweighted accuracy is the mean per-class recall UA = 1
+
+> C
+
+P 
+
+> c
+
+acc c, weighted accuracy is the overall accuracy WA = P
+
+> c
+
+(Nc/N ) acc c, and Macro-F1 is the unweighted mean of the per-class F1 scores, 
+
+> 1
+> C
+
+P   
+
+> c
+> 2Pcacc c
+> Pc+acc c
+
+, with per-class precision Pc (recall being acc c). For the continuous read-out of the V–A head (Sec. V-D), between the center-of-mass estimate ˆz (Eq. (13)) and the ground-truth attribute z (valence or arousal) we report Pearson 
+
+r, RMSE, MAE on the [1 , 5] scale, and Lin’s concordance correlation coefficient 
+
+CCC = 2 cov(ˆ z, z )
+
+σ2ˆz + σ2 
+
+> z
+
++ ( μˆz − μz )2 . (18) Calibration uses the expected calibration error over B=10 
+
+equal-width confidence bins {B b}, ECE = P 
+
+> b
+> |B b|
+> N
+
+acc( Bb)−
+
+conf( Bb) , and per-utterance distributional sharpness uses the Shannon entropy of Eq. (14). 
+
+C. Implementation Details 
+
+The text encoder (BERT-base) is always frozen. The Wav2Vec2 front-end is frozen; the raw-convolution front-end is pre-trained on LibriSpeech and then either frozen or fine-tuned (we report both). All other parameters — projections, temporal backbone, cross-attention fusion, and head(s) — are trained. Shared hyperparameters: shared width d=256 , 6
+
+backbone layers per modality and 2 cross-attention blocks (8 heads), dropout 0.3. Optimization uses AdamW (base learning rate 1×10 −4, weight decay 1×10 −4; parameters the 
+
+mamba_ssm library flags as no-decay — A, D, and ∆ biases — are exempted from weight decay), gradient clipping at 1.0,a cosine schedule with linear warmup over the first 10% of epochs, and bf16 mixed precision (autocast; no loss scaling needed). Per-category learning-rate multipliers are applied on the base rate: Mamba parameters ×3, encoders ×0.1 (only active when fine-tuned), cross-attention and all others ×1.We train for 30 epochs with early stopping (patience 7 on validation UA) and class-weighted cross-entropy, with inverse-frequency weights computed on each fold’s training split only 
+
+(normalized so the rarest class has weight 1). The V–A head uses a 9×9 grid over [1 , 5] 2, soft-target width σ=0 .5, and loss weight λ=0 .3 (Eq. (16)); three IEMOCAP utterances carry a valence annotation of 5.5, outside the nominal [1 , 5] scale, and are clipped to the grid edge. Audio is capped at 11 s (truncating 
+
+∼5% of utterances) and text at 64 tokens. In the Wav2Vec2 setting every batch is padded to the full 11 s (Sec. III-B); the mask-aware raw-conv encoder is padding-invariant, so the long-context setting uses dynamic padding, with the batch size reduced per model to fit memory (from 48 for late_fusion PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 8
+
+down to 4 for the fine-tuned Transformer); no training batch is dropped ( drop_last is disabled), so every model sees the identical training set each epoch. Each fold is seeded deterministically (base seed 42 plus the fold index, re-applied at fold start, so single-fold and full runs are bit-identical); the V–A σ ablation additionally averages over seeds {42 , 1, 2}.The headline backbone table (Table II) likewise averages over seeds {42 , 1, 2}: seed 42 from the primary campaign and seeds 1, 2 from a follow-up campaign, both under the same pinned software stack. A separate three-seed rerun of the featured configuration (the σ-ablation’s fine-tuned σ=0 .5 cell, Table IV) gives 0.721 UA against Table II(b)’s 0.730 ; run-to-run campaign variance is therefore ≈0.01 UA, which is why every comparative claim in this paper rests on paired, within-fold statistics rather than absolute third-decimal differences. All training, evaluation, and analysis code was developed with generative-AI assistance under author verification (see the declaration before the references) and is released in full (Data and Code Availability). Concretely, “significant” throughout refers to a two-sided paired t-test over the five fold-level (session-level) deltas, seeds averaged within fold, reported alongside the enumer-ated session-cluster bootstrap: all 55=3125 with-replacement resamples of the five held-out sessions of the seed-averaged fold statistic, with pboot the one-sided share of resam-ples at or below zero (“exact” means exhaustive enumer-ation, nothing stronger). Equivalence claims use TOST at 
+
+α=0 .05 , i.e. the 90% CI contained in ±0.02 UA. With 
+
+J=5 clusters, permutation-based cluster-robust alternatives floor at p=2 /25=0 .0625 two-sided: under the enumerated wild-cluster (Rademacher) bootstrap-t [38] the +0 .016 dual-head lift sits exactly at that floor (all five fold deltas posi-tive) and the dual-head-vs-Transformer contrast at p=0 .125 
+
+— at this fold count cluster-robust inference is directional support rather than an independent significance instrument, and we phrase claims accordingly. We run three primary paired contrasts per operating point, report all of them rather than selecting, and apply no further multiplicity cor-rection; no conclusion rests on a single comparison. All runs use a single NVIDIA GeForce RTX 5090 (32 GB). For reproducibility we pin the software stack: Python 3.12, PyTorch 2.9.1 (CUDA 12.8), transformers 5.8.0, 
+
+mamba_ssm 2.3.2.post1, and causal_conv1d 1.6.2.post1. V. R ESULTS 
+
+A. Main Comparison 
+
+We report the controlled backbone comparison at the two acoustic operating points of Sec. III-B: the SSL front-end (Wav2Vec2, T ≈ 550 , Table II(a)) and the long-context trainable front-end (raw-conv, T ≈ 2750 , Table II(b)). Ev-ery cell is the mean ±std over the five held-out LOSO test sessions; within each panel the encoder, fusion, depth, and width are identical and only the temporal backbone (and the presence of the V–A head) varies. All numbers come from the rotating-validation protocol of Sec. IV-B. 1 Results from earlier, weaker protocols are not comparable and are not reported. We emphasize that the two panels are not a clean “raw-conv vs. Wav2Vec2” comparison : they differ in both the encoder and the sequence length, and are presented as two self-contained backbone studies. Three findings are consistent across both front-ends. (i) 
+
+The state-space backbones (Mamba v1/v2) sit above the Transformer fusion at matched depth and width: at the short operating point mamba_fusion (0.688 UA) exceeds 
+
+cross_attention (0.679 ), and at the long operating point the single-head Mamba backbones lead the Transformer by 
+
+1.4–2.0 UA points ( 0.714 –0.719 vs. 0.700 ), with the dual-head variants extending the margin to 2.3–3.0 points. (ii) 
+
+For the single-head backbones this margin is not statistically established: at the short operating point it is within noise under both of our paired tests, and at the long operating point it is supported by the enumerated session-cluster bootstrap ( p ≤
+
+0.03 ) but not by the paired t-test ( p ≥ 0.07 ), with the per-fold standard deviation ( ∼0.03 –0.04 ) comparable to the margin. The featured dual-head systems, however, exceed the Trans-former baseline significantly under both tests at the long op-erating point ( mamba_dual_head − cross_attention :
+
++0 .030 UA, paired t p =.044 , enumerated session-cluster boot-strap p<. 001 , dz =1 .29 ; mamba_v2_dual_head : +0 .023 ,
+
+pt=.047 ) — a system-level comparison that includes the V– A head, not a pure backbone contrast. The comparison is also not parameter-matched: at equal depth and width the bidirectional Mamba blocks carry ≈2.6–3.2M more trainable parameters than the Transformer encoder (an ≈18 –24% in-crease; Table II, Params column), so the state-space edge is not capacity-free. (iii) Mamba-3 is competitive but not the best: 
+
+mamba_v3_fusion (0.715 UA) sits mid-pack — above the Transformer and on par with Mamba-1, but below Mamba-2 — while carrying the highest long-sequence latency and memory (Sec. V-F); it thus offers neither an accuracy nor an efficiency reason to prefer it here, as we discuss in Sec. VI. 
+
+B. Encoder Pre-Training Ablation 
+
+The raw-convolution front-end is pre-trained on LibriSpeech (Sec. III-B); we pre-trained it two ways and ask whether the choice transfers downstream. The basic variant pre-trains the convolutional stack alone by self-supervised mel reconstruc-tion, whereas the mamba variant attaches a Mamba-2 context module during pre-training (the context module is discarded before fine-tuning, so the downstream encoder is the identical 
+
+conv-only stack in both cases). The context module markedly lowers the pre-training objective, but Table III shows this does 
+
+not carry over to emotion recognition: across all seven back-bones the two variants are indistinguishable within the per-fold standard deviation ( ∼0.03 –0.04 UA). We therefore report the 
+
+basic arm throughout; it is within fold std of the mamba arm on every model and, at the ablation’s fixed seed, contains the       
+
+> 1The headline backbone tables pool the primary campaign (seed 42 ) with a follow-up multi-seed campaign (seeds 1,2) under the same pinned source and configuration files; the σ-ablation rows and the multi-seed entropy–ambiguity checks use designated companion runs under the same pinned setup (see Sec. IV-B for the cross-campaign replication disclosure). PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 9
+
+TABLE II BACKBONE COMPARISON ON IEMOCAP, 5-FOLD SPEAKER -INDEPENDENT LOSO, AT THE TWO ACOUSTIC OPERATING POINTS : (a) THE FROZEN 
+
+WAV 2V EC 2 FRONT -END (T ≈ 550 ); (b) THE LONG -CONTEXT RAW -CONVOLUTION FRONT -END (T ≈ 2750 , ENCODER FINE -TUNED ). UA CELLS ARE MEAN ±STD OVER THREE SEEDS {42 , 1, 2} WITH THE PER -FOLD LOSO STD IN PARENTHESES ; WA AND MACRO -F1 CARRY THE SEED STD . T HE LAST COLUMN IS THE SEED -AVERAGED PAIRED UA DIFFERENCE AGAINST THE TRANSFORMER FUSION ROW OF THE SAME PANEL WITH ITS ENUMERATED SESSION -CLUSTER BOOTSTRAP 95% CI (S EC . IV-B). B EST UA/WA/M ACRO -F1 IN BOLD WITHIN EACH PANEL . P ARAMS = trainable PARAMETERS IN MILLIONS : IN (a) THE WAV 2V EC 2 ( ∼95M) AND BERT ( ∼110M) ENCODERS ARE FROZEN AND SHARED ACROSS ALL ROWS , SO ONLY THE PROJECTION ,
+
+> TEMPORAL BACKBONE
+
+, FUSION , AND HEAD (S) ARE TRAINED ; IN (b) THE FINE -TUNED RAW -CONV ENCODER (∼1M) IS INCLUDED AND THE FROZEN 
+
+BERT ( ∼110M) IS EXCLUDED . T ABLE BODY GENERATED FROM THE RELEASED STATISTICS FILES (D ATA AND CODE AVAILABILITY ). 
+
+Model Params UA ±seed (fold) WA Macro-F1 ∆UA vs. cross_attn [95% CI] 
+
+(a) Frozen Wav2Vec2 front-end ( T ≈ 550 )
+
+late_fusion 0.46 0.672 ±0.003 (0 .017) 0.657 ±0.003 0.657 ±0.002 −0.007 [ −0.015 , +0 .001] 
+
+cross_attention 13 .2 0.679 ±0.004 (0 .020) 0.658 ±0.004 0.660 ±0.005 —
+
+mamba_fusion 15 .8 0.688 ±0.003 (0 .030) 0.673 ±0.002 0.676 ±0.003 +0 .009 [ −0.005 , +0 .023] 
+
+mamba_v2_fusion 16 .4 0.684 ±0.005 (0 .024) 0.668 ±0.008 0.671 ±0.008 +0 .005 [ −0.003 , +0 .012] 
+
+mamba_dual_head 15 .9 0.691 ±0.004 (0.018 ) 0.678 ±0.004 0.680 ±0.004 +0 .012 [+0 .003 , +0 .022] 
+
+mamba_v2_dual_head 16 .6 0.689 ±0.005 (0 .024) 0.671 ±0.010 0.674 ±0.012 +0 .010 [ −0.000 , +0 .019] 
+
+(b) Raw-convolution front-end, fine-tuned ( T ≈ 2750 )
+
+late_fusion 1.45 0.692 ±0.007 (0 .037) 0.673 ±0.008 0.677 ±0.008 −0.008 [ −0.019 , +0 .000] 
+
+cross_attention 14 .2 0.700 ±0.012 (0 .039) 0.683 ±0.013 0.688 ±0.014 —
+
+mamba_v3_fusion 17 .7 0.715 ±0.005 (0 .036) 0.700 ±0.004 0.703 ±0.005 +0 .015 [+0 .000 , +0 .030] 
+
+mamba_v2_fusion 17 .4 0.719 ±0.008 (0 .036) 0.700 ±0.006 0.705 ±0.007 +0 .020 [+0 .006 , +0 .033] 
+
+mamba_fusion 16 .8 0.714 ±0.002 (0 .030) 0.697 ±0.002 0.700 ±0.003 +0 .014 [ −0.000 , +0 .030] 
+
+mamba_v2_dual_head 17 .6 0.723 ±0.006 (0 .039) 0.707 ±0.007 0.710 ±0.007 +0 .023 [+0 .007 , +0 .035] 
+
+mamba_dual_head 16 .9 0.730 ±0.003 (0.037 ) 0.714 ±0.003 0.718 ±0.002 +0 .030 [+0 .010 , +0 .047] 
+
+TABLE III ENCODER PRE -TRAINING ABLATION : UA ( MEAN ±STD OVER THE FIVE 
+
+LOSO TEST SESSIONS , SINGLE SEED 42) FOR THE TWO LIBRI SPEECH PRE -TRAINING VARIANTS OF THE RAW -CONVOLUTION FRONT -END 
+
+(T ≈ 2750 , FINE -TUNED ). B A S I C : CONV -ONLY SSL; M A M B A : SSL  
+
+> ASSISTED BY A
+
+MAMBA -2 CONTEXT MODULE THAT IS STRIPPED BEFORE FINE -TUNING . T HE TWO ARE WITHIN FOLD STD ON EVERY MODEL .Model basic UA mamba UA 
+
+late_fusion 0.695 ±0.039 0.678 ±0.029 
+
+cross_attention 0.688 ±0.039 0.708 ±0.028 
+
+mamba_v3_fusion 0.720 ±0.030 0.718 ±0.031 
+
+mamba_v2_fusion 0.728 ±0.034 0.717 ±0.033 
+
+mamba_fusion 0.714 ±0.033 0.714 ±0.019 
+
+mamba_v2_dual_head 0.725 ±0.035 0.727 ±0.024 
+
+mamba_dual_head 0.727 ±0.040 0.724 ±0.038 
+
+top raw-conv configurations ( mamba_v2_fusion 0.728 and 
+
+mamba_dual_head 0.727 UA, indistinguishable within fold std; the three-seed means of Table II(b) confirm the dual-head arm at 0.730 ). The result also suggests that the learned con-volutional filters, rather than the pre-training context module, are what the downstream model relies on. 
+
+C. Effect of the Probabilistic V–A Head 
+
+Adding the 9 × 9 V–A head is the paper’s central design choice, and a prerequisite for it is that the extra objective must not harm the categorical task it is bolted onto. It does not — it helps. Comparing each *_dual_head model against its single-head counterpart under matched training, the dual head never hurts and usually helps: with Wav2Vec2 it lifts mamba_fusion from 0.688 to 0.691 UA (three-seed means) — the top configuration at this operating point — and with the raw-conv front-end it lifts mamba_fusion from 
+
+0.714 to 0.730 UA, above the strongest single-head backbone (mamba_v2_fusion , 0.719 ); the seed-averaged paired lift is 
+
++0 .016 UA with a fold-level 95% CI of [+0 .001 , +0 .030] (all five fold deltas positive; note the lift is smaller than the ±0.02 
+
+TOST margin used for equivalence claims, so a contrast can be simultaneously significant and equivalence-bounded — we report both), and the corresponding Mamba-2 pair is equiva-lent within ±0.02 by TOST. Across the dual-vs-single pairs spanning encoders and freeze settings the dual head improves UA or matches it within the per-fold standard deviation. It does so at a negligible parameter cost: the 9 × 9 head adds only about 0.15 M trainable parameters over the single-head model (Table II), so the distributional output comes essentially for free. The categorical anchor (the cross-entropy term) and the distributional target (the KL term) are thus complementary: the soft-label head acts as an auxiliary objective that preserves — and at both operating points improves — classification while, as a by-product, yielding the full V–A distribution that the rest of this section analyzes. We scope the attribution honestly: the pre-specified null controls of Sec. V-E show that simpler V–A auxiliaries (a scalar regression head, two factorized marginal heads) reproduce this classification lift within noise, so the lift is credited to V–A auxiliary supervision in general — the 
+
+distributional form is justified by the distribution it yields, not by extra accuracy. 
+
+D. Analysis of the V–A Probability Matrix 
+
+Beyond classification accuracy, the value of the probabilistic head lies in the quality of the distribution it produces over the V–A plane. We analyze three properties on the held-out LOSO test sessions: (i) how well the expected value PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 10 
+
+(center of mass) of the predicted matrix tracks the continuous ground-truth attributes; (ii) the sharpness of the per-utterance distribution, measured by its entropy; and (iii) the calibration of the classifier confidence. 
+
+The distribution recovers affective geometry: The per-class mean of the predicted matrices lands in the expected quadrant of the circumplex [15] (anger: low V /high A;happiness: high V /high A; sadness: low V /low A; neutral: center; Fig. 2), and the center of mass tracks the continuous labels with Pearson r = 0.69 for valence and r = 0.69 
+
+for arousal (concordance CCC 0.66 and 0.66 ; RMSE 0.69 
+
+and 0.55 , MAE 0.52 and 0.43 on the [1 , 5] scale; three-seed means over the replication runs of Table II(b), pooled over 
+
+5,531 test utterances per seed; Fig. 3). The head emits this continuous estimate without any explicit coordinate-regression objective: the KL target supervises the full distribution (its location built from the rater-mean coordinates, Eq. (15)), and the expectation read-out follows from it. Two qualifications frame these numbers. First, they are pooled correlations: the four classes occupy distinct circumplex regions, so between-class separation contributes to the pooled r (replacing every prediction and label by its class mean alone already yields r ≈
+
+0.99 ). Decomposing the read-out within classes answers the stricter test directly (Fig. 4): on class-mean-centered residuals the arousal read-out still tracks the ratings at r = 0 .52 (three-seed mean; session-level bootstrap sensitivity [0 .50 , 0.55] ; per class, anger 0.64 , sadness 0.57 , happiness 0.50 , neutral 0.40 ), whereas valence retains only r = 0 .27 [0 .23 , 0.32] . The pooled valence correlation is therefore mostly class geometry, while within-class arousal tracking is genuine — consistent with the broader finding that acoustics carry arousal more readily than valence. Second, the CCC is now anchored in-pipeline: replacing the 9 × 9 head with a direct (v, a )-regression head under otherwise identical training (Sec. V-E, Table V) reaches CCC 0.687 /0.678 — about 0.02 above the distributional read-out’s 0.661 /0.661 . The center-of-mass estimate therefore pays a small, quantified tracking price relative to a dedicated regressor (cf. multitask dimensional SER [39]); it is the price of obtaining the full distribution rather than a point. 
+
+The soft-target width σ controls distributional sharpness: 
+
+We treat the Gaussian soft-target width σ of Eq. (15) as the principal lever on the predictive distribution and ablate it under both a frozen and a fine-tuned acoustic encoder (Table IV). Sharpening the target from σ=0 .5 to σ=0 .25 reduces the mean per-utterance entropy from 3.40 to 2.97 nats (from 77% 
+
+to 68% of the maximum ln 81 ; equivalently 3.49 → 3.07 
+
+with a frozen encoder) without any significant change in classification UA (differences are within the seed/fold standard deviation of ∼ 0.03 ) and without degrading the center-of-mass regression. This effect is stable across the frozen and fine-tuned settings, indicating that σ offers a controllable, essentially cost-free knob on the sharpness of the predicted V–A distribution. Extending the sweep to σ ∈ { 0.125 , 1.0}
+
+leaves UA within the same per-fold standard deviation across the full range, so σ acts as a sharpness control rather than an accuracy lever and the σ=0 .5 default is not a tuned choice. We additionally explored a geometry-aware loss that penalizes predicted mass by its squared V–A distance to the ground-             
+
+> Fig. 2. Per-class mean of the predicted 9×9V–A matrix on the held-out LOSO test sessions ( mamba_dual_head , raw-conv encoder; representative seed of the three-seed replication; shared color scale). Each emotion’s mass concentrates in its expected circumplex quadrant [15]: the head has learned class-level affective geometry ; whether it also tracks V–A variation within aclass is answered in Fig. 4.
+> Fig. 3. Expected value (center of mass) of the predicted V–A matrix vs. ground-truth valence and arousal (points: representative seed; annotations: three-seed mean ±std of r, CCC, and the regression slope), obtained without a point-regression loss (the coordinates supervise only the soft target’s location). Vertical striping reflects the discrete support of rater-averaged annotations; the fitted slope of ≈0.5(solid line vs. the dashed identity) quantifies the expected shrinkage of a center-of-mass read-out on a bounded grid.
+
+truth point (equivalently the squared 2-Wasserstein distance 
+
+W 22 to a Dirac), used alone and added to the KL term; neither variant improved UA nor sharpened the distribution beyond the σ sweep, so we retain the KL + CE objective and report the geometry-aware loss as a negative result. 
+
+What high-entropy predictions look like: Figure 5 shows the predicted 9 × 9 matrices for the highest-entropy test utterances ( H ≈ 4.1 nats, near the maximum ln 81 = 4 .39 ). Instead of collapsing onto a single cell, the mass spreads across adjacent — and sometimes non-adjacent — regions of the V– A plane and straddles the boundary between the true and the confused category (e.g. happy/excited mass leaking toward the PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 11                                                     
+
+> Fig. 4. Within-class tracking of the continuous ratings ( mamba_dual_head ,raw-conv encoder). Top: class-mean-centered Pearson rper emotion and over all classes (bars: three-seed mean; error bars: seed std). The pooled correlation (dashed) includes between-class geometry; the within-class bars remove it. Bottom: class-mean-centered arousal residuals for the representative seed — within-class arousal tracking is genuine ( r= 0 .52 ), while valence retains only r= 0 .27 .TABLE IV EFFECT OF THE SOFT -TARGET WIDTH σON THE V–A HEAD (IEMOCAP,
+> M A M B A _D U A L _H E A D ,RAW -CONV ENCODER ). UA IS MEAN OVER 3SEEDS
+> ×5 LOSO FOLDS ;ENTROPY H(IN NATS ,MAX ln 81 = 4 .39 )AND ECE
+> ARE POOLED OVER THE TEST SESSIONS OF A REPRESENTATIVE SEED .LOWER σSHARPENS THE DISTRIBUTION (H↓)AT NO UA COST ;
+> CALIBRATION IS UNAFFECTED .Encoder σUA H(nats) ECE Frozen 0.50 0.726 3.49 0.20
+> Frozen 0.25 0.730 3.07 0.19
+> Fine-tuned 0.50 0.721 3.40 0.23
+> Fine-tuned 0.25 0.727 2.97 0.21
+
+high-arousal anger region, or toward low-valence sadness). We describe these as diffuse, multi-modal model outputs , and ask whether that diffuseness tracks human ambiguity. IEMOCAP’s per-rater files expose two distinct notions of ambiguity, and the predicted entropy behaves differently on each; evaluating a recognizer against inter-labeler consistency in this way follows a long-standing precedent [40]. Against dimensional disagree-ment — the per-rater spread of the continuous V–A ratings — entropy shows a marginally negative association across the 5,531 test utterances (Spearman −0.06 , session bootstrap 
+
+[−0.09 , −0.00] , an interval that sits at or below zero; partial correlation given distance-to-grid-edge −0.03 ); on IEMOCAP this attribute spread rests on only two to three evaluators and sits near a rater noise floor, which attenuates any observable correlation in either direction. Against categorical ambiguity — the Shannon entropy of the per-utterance emotion-category 
+
+vote distribution — predicted entropy is instead weakly but consistently positive : Pearson ≈ 0.09 , and the association sur-vives the grid-edge control (partial correlation given distance-to-edge ≈ 0.07 , within-edge-bin mean ≈ 0.07 ) and is positive in every one of three seeds ( 0.09 ±0.03 ). Entropy also rises with grid-edge distance ( r ≈ 0.25 ), the bounded-grid artifact of Sec. VI, which is precisely why the categorical link is reported as an edge-controlled partial correlation. The effect is small (r2 < 1% , in line with IEMOCAP’s limited rater pool), and we make no claim that the entropy is a calibrated ambiguity estimate; but it is a real, confound-controlled signal that the head’s diffuseness carries a modest trace of which utterances annotators found categorically hard, rather than being a pure grid artifact. The figure thus shows the output space can 
+
+represent multi-peaked affect; the correlation analysis shows that this diffuseness is weakly but genuinely linked to cate-gorical rater ambiguity, while showing a marginally negative association with dimensional V–A disagreement. A vote-conditioned placement test sharpens this picture from how much diffuseness to where it points — and surrogate nulls then show the effect is carried by predicted location , not by the joint-pmf format. For utterances whose consensus label is c1 but where at least one rater voted a second category 
+
+c2, the predicted mass inside c2’s circumplex region (cells within 0.75 rating units of the data-derived class anchor) exceeds that of unanimous-c1 controls by +0 .077 ± 0.005 
+
+absolute mass (session-bootstrap sensitivity [+0 .058 , +0 .092] ;direction-consistent at radii 0.5–1.0 and across all sufficiently populated label pairs). The same statistic on the σ=0 .5
+
+training-target Gaussians built from the consensus coordinates gives +0 .114 — the ceiling inherited from the raters’ own consensus geometry. Three surrogates, scored with the identi-cal statistic, grouping, and bootstrap, decide what the +0 .077 
+
+is worth: a σ=0 .5 Gaussian placed at the scalar regression 
+
+head’s (ˆ v, ˆa) reaches +0 .114 [+0 .093 , +0 .135] — the full ceiling; the classifier posterior mixed over anchor Gaussians P 
+
+> c
+
+p(c | x) N (anchor c, σ ) reaches +0 .101 [+0 .075 , +0 .120] ;both exceed the joint head. The pmf does beat the mixture over its own per-class mean matrices ( +0 .032 [+0 .025 , +0 .038] ), so its placement is utterance-specific rather than a class template — but any location-faithful surrogate reproduces the shift, so the placement channel provides no measured value beyond what a scalar location model already carries. This is consistent with the regression anchor’s slightly better point tracking (Sec. V-E). Alongside, a four-way softmax-entropy null shows the 9 × 9 entropy adds essentially nothing beyond 
+
+the classifier’s own uncertainty for disagreement magnitude 
+
+(partial correlation with categorical rater entropy given soft-max entropy ≈ 0.05 ). Together, both ambiguity channels — spread and placement — are explained by simpler surrogates; the head’s distributional value on this corpus lies in the output 
+
+format (one normalized joint pmf with free continuous read-outs), not in a measured placement advantage. 
+
+How joint is the learned distribution?: The 81 -cell pa-rameterization can express dependence between valence and arousal, but on IEMOCAP the learned distributions largely PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 12         
+
+> Fig. 5. Predicted 9×9V–A matrices for four of the highest-entropy ( H≈
+> 4.1nats; max ln 81 = 4 .39 ) test utterances ( mamba_dual_head , raw-conv encoder). The mass spreads across multiple V–A regions and straddles the true/predicted category boundary — diffuse, multi-peaked model outputs that the grid head can represent and a hard classifier cannot.
+
+do not exercise this capacity: the per-utterance KL divergence between P and the outer product of its own marginals averages 
+
+0.016 nats (90th percentile 0.029 ; cf. the ln 81 ≈ 4.39 -nat entropy scale), i.e., the predicted joint is nearly separable for most utterances. This measurement locates the contribution precisely: on this corpus, with unimodal Gaussian targets, the joint head’s value is its format (a single normalized affect distribution with free continuous read-outs), not measured V–A dependence — a distinction we state rather than blur. Whether task pressure that explicitly requires cross-dimension structure induces non-separable predictions is an open question for the multi-plane extension we pursue in follow-up work. 
+
+Calibration: The classifier is over-confident: the reliabil-ity diagram (Fig. 6) lies below the diagonal with an expected calibration error of ECE ≈ 0.20 (three-seed mean; 0.23 in the 
+
+σ-ablation campaign, Table IV), essentially unchanged by σ.The fix is post-hoc and validation-legal: a scalar temperature fitted per fold on the rotating validation session only (mean 
+
+T ≈ 2.7) repairs the test ECE to ≈ 0.02 without changing any argmax decision. The V–A head errs in the opposite 
+
+direction — its distributions are conservatively diffuse — and the analogous validation-fitted temperature ( T ≈ 0.74 , i.e. sharpening) brings the highest-density-region coverage of P
+
+close to nominal across levels (empirical coverage 0.55 at the 
+
+0.5 level and 0.90 at 0.9, from raw over-coverage of 0.66 
+
+and 0.95 ). The raw over-confidence also limits the usefulness 
+
+of entropy as a correctness signal: the predictive entropy of correct and incorrect predictions is nearly identical (Fig. 8; medians 3.48 vs. 3.54 nats out of a maximum 4.39 ), so entropy alone barely separates the two. The selective-risk view (Fig. 7) makes the deployment consequence explicit: ranking by softmax confidence orders errors better than the V–A            
+
+> Fig. 6. Reliability diagram on the pooled LOSO test sessions (three seeds pooled; ECE annotations are three-seed mean ±std). Left: raw confidence sits below the diagonal (ECE 0.20 ) — the categorical head is over-confident. Right: a scalar temperature fitted per fold on the rotating validation session only repairs the test ECE to 0.02 without changing any argmax decision.
+> Fig. 7. Selective risk vs. coverage when abstaining on the least-confident utterances, ranked either by softmax confidence or by V–A entropy (lines: three-seed mean; bands: seed range). Confidence ranks errors better at every coverage — the plain reading is that the 9×9entropy adds no abstention value beyond the classifier’s own confidence, even though abstention itself helps under either ranking.
+
+entropy does (area under the risk–coverage curve 0.169 ±0.003 
+
+vs. 0.210 ± 0.008 , three seeds), though abstaining on the 20% 
+
+most diffuse predictions still lifts accuracy on the retained utterances from 0.705 (the pooled no-abstention accuracy of Fig. 7) to 0.743 — a selective accuracy, not a system-level UA. The head therefore yields a faithful affect distribution 
+
+but is not, as-is, a reliable confidence or abstention signal — a limitation we attribute to the same miscalibration and flag as future work rather than a solved problem. Throughout this subsection UA and every annotated dis-tribution metric (r, CCC, ECE, AURC, the within-class correlations) are three-seed means over the replication runs of Table II(b), computed from one committed per-utterance prediction cache; panels that display individual predictions (Figs. 2, 3, 5, 8, and the lower panel of Fig. 4) show the representative seed 42 and say so. The entropy–ambiguity correlations are additionally verified to be sign-stable across the three seeds. PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 13  
+
+> Fig. 8. Predictive entropy of the V–A matrix for correct vs. incorrect test predictions ( mamba_dual_head , raw-conv encoder; dashed lines mark the group centers). The two distributions overlap almost entirely, so entropy is only a weak indicator of correctness — consistent with the over-confidence in Fig. 6. A high-entropy prediction reflects mass spread over the V–A grid (Fig. 5), but is not a reliable indicator of an incorrect prediction — nor of rater-measured ambiguity (see text).
+
+E. Pre-Specified Controls and Extensions 
+
+The revision plan pre-specified a set of control and extension arms in dated internal plan files fixed before any of these runs were launched (each 3 seeds × 5 LOSO folds under the featured recipe); Table V reports all of them against the featured system, with seed-averaged paired ∆UA and enumerated session-cluster bootstrap CIs. 
+
+Null-model controls: Swapping the 9×9 head for a scalar 
+
+(v, a )-regression auxiliary ( ∆UA −0.007 [ −0.019 , +0 .003] )or for two factorized 9-way marginal heads (−0.005 [−0.016 , +0 .006] ; equivalent within ±0.02 by TOST) leaves classification statistically unchanged — the lift of Sec. V-C comes from V–A auxiliary supervision, not from the joint grid. This is exactly what the near-separability of the learned joint (Sec. V-D, 0.016 nats) predicts. On the continuous read-out the ordering reverses in favor of the simpler heads: the direct regression anchor reaches CCC 0.687 /0.678 and the marginal heads 0.673 /0.675 , versus 0.661 /0.661 for the joint head’s center of mass. The joint distributional form is therefore 
+
+not the best point-tracker — its case rests on what only it provides: a single normalized joint pmf as an output format behind the coverage and calibration analyses of Sec. V-D (the vote-conditioned placement channel is itself location-driven — the surrogate tests there show the same scalar regression head recovers the full placement ceiling). 
+
+Anisotropic soft-target width: Setting the per-axis target widths to the measured rater standard deviations ( σV =0 .31 ,
+
+σA=0 .44 ) changes neither UA ( −0.002 , TOST-equivalent) nor the read-out CCC ( 0.668 /0.665 ): within this recipe the isotropic σ=0 .5 default is not a liability, and we report the rater-matched variant as a clean negative rather than a tuned improvement. 
+
+Rater-vote mixture supervision (pilot): Replacing the single Gaussian target with a vote-weighted mixture (anchor Gaussian at the consensus coordinates plus vote-mass compo-nents at the other voted categories’ prototypes) matches UA (0.728 ± 0.007 ) but costs arousal tracking (CCC 0.609 vs. 
+
+0.661 ; valence 0.654 ): distributing target mass across cate-gories dilutes the location signal on the dimension acoustics carry best. We report this pilot as a negative result for plain mixture supervision at this scale. 
+
+Modality ablation: Single-branch baselines (one encoder 
+
+→ projection → BiMamba → classifier, no cross-attention) reach 0.583 UA audio-only and 0.652 text-only — the bi-modal system exceeds the stronger branch by +7 .9 points ([−0.094 , −0.064] for the text-only deficit), so neither modal-ity carries the system alone. Per-class recall of the featured configuration, computed from the replication campaign’s pre-diction caches (grand mean 0.721 , not the 0.730 headline cam-paign; three-seed means: anger 0.798 , happy/excited 0.712 ,sadness 0.792 , neutral 0.584 ) locates the residual errors in the neutral class, whose confusions spread toward happy/excited and sadness — the classic low-arousal ambiguity of IEMO-CAP. 
+
+SSL front-end arm: Finally, replacing the trainable raw-convolution front-end with frozen WavLM-Large [11] features under a learnable softmax-weighted sum (the standard SU-PERB layer-probe protocol [41]) over its 25 hidden states lifts the identical downstream architecture to 0.766 ± 0.013 
+
+UA ( +0 .036 [+0 .028 , +0 .043] over the featured arm; +0 .076 
+
+over the same architecture on frozen Wav2Vec2-base, dz =3 .2)and the read-out to CCC 0.743 /0.701 — with fewer trainable parameters (16.0M; the encoder stays frozen). For context, the WavLM paper’s own SUPERB evaluation reports 70 .62% 
+
+ER accuracy on IEMOCAP for WavLM-Large [11] under SUPERB’s lightweight-probe protocol [41]; the SUPERB par-tition and probe differ from our LOSO protocol, so the two figures contextualize rather than compare. Consistent with the SSL-era observation of Wagner et al. [42], the front-end representation, not the temporal backbone or head, is the binding constraint at this scale; the distributional head transfers to the stronger front-end unchanged. We keep the raw-conv system as the featured arm — its front-end trains from scratch in ∼1M parameters, which is the deployment-oriented operating point this paper targets — and report the WavLM arm as the accuracy-oriented configuration. 
+
+F. Backbone Cost 
+
+For completeness we characterize the cost of each backbone 
+
+neutrally ; this is not an efficiency claim. Table VI reports for-ward+backward latency for the isolated 6-layer bidirectional temporal encoders ( d=256 , batch 8, bf16, median of three runs) on a single RTX 5090 across sequence length T .The measured picture is the opposite of the usual “Mamba is faster” narrative at the lengths this task actually uses. 
+
+(i) At every IEMOCAP-relevant length (T ≤ 2750 ) the Transformer is the fastest backbone, because PyTorch’s fused (flash) attention keeps its constant-factor low; the quadratic cost only catches up at T ≈ 4096 and overtakes Mamba only at T = 8192 . (ii) Peak activation memory tells the same story: with fused attention the Transformer’s peak memory stays the lowest of all four backbones even at T = 8192 
+
+(∼4.0 GB vs. 4.4/5.0/11 .6 GB for Mamba-1/2/3), so there is no “ O(T 2) memory wall” to exploit here. (iii) Among PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 14                                                                                             
+
+> TABLE V PRE -SPECIFIED CONTROLS AND EXTENSIONS (3 SEEDS ×5 LOSO FOLDS ,FEATURED RECIPE UNLESS STATED ). ∆UA IS THE SEED -AVERAGED PAIRED DIFFERENCE VS .THE FEATURED SYSTEM WITH ITS ENUMERATED SESSION -CLUSTER BOOTSTRAP 95% CI; CCC COLUMNS GIVE THE CONTINUOUS READ -OUT (HEAD -APPROPRIATE :REGRESSION OUTPUT ,MARGINAL EXPECTATIONS ,OR CENTER OF MASS ). I NDENTED ROWS MODIFY ONLY THE NAMED COMPONENT . T ABLE BODY GENERATED FROM THE RELEASED STATISTICS FILES (D ATA AND CODE AVAILABILITY ). Arm UA ∆UA [95% CI] CCC VCCC Atests featured mamba_dual_head 0.730 ±0.003 —0.661 ±0.013 0.661 ±0.005 reference head 2 →scalar (v, a )regression 0.723 ±0.010 −0.007 [ −0.019 ,+0 .003] 0.687 ±0.008 0.678 ±0.013 any-aux control / CCC anchor head 2 →two 9-way marginals 0.725 ±0.003 −0.005 [ −0.016 ,+0 .006] 0.673 ±0.009 0.675 ±0.009 jointness control anisotropic σV=0 .31 , σ A=0 .44 0.728 ±0.005 −0.002 [ −0.010 ,+0 .006] 0.668 ±0.012 0.665 ±0.012 rater-std target width front-end →frozen WavLM-Large 0.766 ±0.013 +0 .036 [+0 .028 ,+0 .043] 0.743 ±0.004 0.701 ±0.004 SSL front-end arm audio-only branch 0.583 ±0.007 −0.148 [ −0.179 ,−0.124] ——modality ablation text-only branch 0.652 ±0.004 −0.079 [ −0.094 ,−0.064] ——modality ablation rater-vote mixture target (pilot) 0.728 ±0.007 —0.654 ±0.009 0.609 ±0.012 supervision pilot TABLE VI BACKBONE FORWARD +BACKWARD LATENCY (MS )VS .SEQUENCE LENGTH T(ISOLATED 6-LAYER BIDIRECTIONAL ENCODER ,d=256 ,
+> BATCH 8,BF 16, MEDIAN OF 3, RTX 5090). L OWER IS FASTER .
+
+T Transformer Mamba-1 Mamba-2 Mamba-3 
+
+550 5.4 12 .5 28 .5 22 .42048 10 .7 16 .6 29 .1 26 .42750 16 .5 41 .0 29 .2 36 .04096 29 .0 33 .7 30 .6 53 .58192 89 .1 67 .1 63 .9 104 .9
+
+the state-space backbones, Mamba-2 is the most predictable — its latency is essentially flat (∼29 ms) up to T ≤ 4096 
+
+because its chunked-matmul form amortizes a fixed overhead (at T = 8192 it rises to 63 .9 ms, Table VI), whereas Mamba-1 hits a reproducible slow-kernel band at the non-power-of-two lengths around T ≈ 2750 . (iv) Mamba-3 is the costliest at long T on both latency and memory. We therefore do not 
+
+sell a latency advantage; the case for the state-space backbone rests on its small (not statistically established) accuracy edge (Sec. V-A) and its linear-memory recurrence, with any latency benefit deferred to the much longer inputs targeted in future work. VI. D ISCUSSION AND LIMITATIONS 
+
+We state the limitations up front, since several of them shape how the results should be read. 
+
+The soft target is a constructed prior, not measured uncertainty: This is the limitation we put first. The Gaussian target of Eq. (15) applies the same researcher-chosen width σ
+
+to every utterance, centered on the released (rater-averaged) annotation; it does not use per-rater ratings, and the model is therefore never supervised with empirical annotator disagree-ment. Consequently, claims about the predicted distribution must stay representational: the head exposes a normalized, possibly multi-peaked output over the V–A grid, but a diffuse prediction is not, by itself, strong evidence of a genuinely mixed or ambiguous state. A related artifact is structural: because the grid is bounded, targets near the edge of [1 , 5] 2 are truncated and carry less entropy than central ones, so target entropy correlates with the annotation’s distance to the grid edge — entropy comparisons across classes must control for this. We tested the link between predicted entropy and human disagreement directly (Sec. V-D): entropy shows a marginally 
+
+negative association with dimensional per-rater V–A spread (session bootstrap [−0.09 , −0.00] ; a two-to-three-rater noise floor on IEMOCAP), but a small, grid-edge-controlled positive 
+
+association with categorical rater ambiguity (partial r ≈ 0.07 –
+
+0.09 , positive across seeds). The predicted diffuseness thus carries a modest, genuine trace of categorical annotator am-biguity, though it is far too weak to read as a calibrated uncertainty estimate. Supervising the head with the per-rater 
+
+category distribution — so that the target’s spread reflects measured ambiguity by construction, the perspectivist position of learning-from-disagreement research [21] — rather than a fixed Gaussian width is the most direct way to strengthen this link, and is the focus of our continuing work. Two further design constants deserve the same scrutiny. The width is 
+
+isotropic (σV = σA = 0 .5) although our own per-axis rater-spread estimates are anisotropic ( 0.31 valence vs. 0.44 arousal, Sec. III-E); we ran the rater-matched per-axis variant and found it changes neither accuracy nor the read-out (Sec. V-E) — the isotropic default is not a liability here. And the 9-point resolution, while unswept, is not arbitrary: the annotations were collected with 5-point Self-Assessment-Manikin-style scales [43], and 2–3-rater averages on a 5-point scale have support on half-integer steps — exactly the 9 points the grid provides per axis. A third commitment is scale type : the grid’s numeric coordinates, the metric Gaussian target, and the center-of-mass and CCC read-outs all treat the SAM-derived rater means as interval-scaled. The ordinal-affect position [44] holds that emotion annotations are more faithfully treated as ranks; under a monotone re-scaling of the axes the categorical head and UA are unchanged, whereas the Gaussian width, the expectation read-out, and CCC are not rank-invariant, so the continuous results should be read within the interval convention they share with the CCC-based dimensional-SER literature, not as scale-free findings. 
+
+Scale and SOTA: All experiments run on a single GPU with frozen large encoders, and the current results are on IEMOCAP only. We do not claim to beat every reported IEMOCAP number; the higher figures use different evaluation protocols — random utterance-level splits that leak speaker identity, or other speaker-independent partitions (5-fold cross-validation, leave-one-speaker-out; note that leave-one-speaker -PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 15 
+
+out is weaker than session-out on IEMOCAP, since the held-out speaker’s dialogue partner remains in training) — that are not directly comparable to our rotating-validation LOSO, and among methods under a comparably strict speaker-independent protocol our results are competitive (Sec. II). The frozen-encoder choice is itself a scoping decision: SSL encoders are the decisive accuracy lever in modern SER and reach strong valence through implicitly learned linguistic content [42] — a claim our own SSL arm now quantifies in-pipeline: frozen WavLM-Large features lift the identical architecture by +3 .6
+
+UA points and the valence read-out by +0 .08 CCC (Sec. V-E), so the front-end, not the backbone or head, is the binding constraint at this scale. Our contribution is the representation and the protocol, not a leaderboard maximum. 
+
+Sensitivity of the V–A head: The head has two free design parameters, the grid resolution ( 9 × 9) and the soft-target width σ (with the mixing weight λ=0 .3 fixed). We ablated σ and found it a controllable, near-cost-free knob on distributional sharpness (Sec. V-C); grid resolution we did not sweep, and a finer grid would trade sharper localization against more sparsely-supervised cells. The predicted distributions are also diffuse per utterance (entropy ∼77% of maximum at σ=0 .5) and only weakly selective between correct and incorrect predictions; the aggregate geometry is clean (Fig. 2) but per-sample sharpness is modest. Finally, the classifier is over-confident (ECE ≈ 0.20 ) — an orthogonal issue that the validation-fitted temperature of Sec. V-D already repairs post hoc to ECE ≈ 0.02 without changing any decision. A natural next step, left to future work, is to promote the V–A matrix from an auxiliary output to the primary decision — for instance by self-distilling the categorical head onto the grid — so that the distribution itself, rather than a parallel 4-way head, drives the prediction. 
+
+Cross-corpus harmonization is an assumption, not aresult: The harmonization onto one V–A grid (per-axis affine normalization + dropping Dominance) is well-defined but unproven across corpora; the cross-corpus generalization ex-periment it enables awaits training on the MSP corpora (Sec. IV-A; the zero-shot IEMOCAP →MSP-IMPROV probe below is a first, deliberately untuned step), and cross-lingual transfer in particular is known to require dedicated strategies such as SSL layer-anchoring [45]. Treating Pleasure as Valence and discarding Dominance is a deliberate lossy projection that may not hold equally for acted and naturalistic corpora — and it is lossy in a clinically relevant way: affective-science evidence indicates the emotion space is not two-dimensional, with potency/dominance the axis that separates otherwise co-located states such as anger and fear/anxiety [46]. Relatedly, the counseling motivation of Sec. I must be read with the inferential limits of expression-based emotion recognition in mind [47]: this system estimates the affect that raters would perceive from voice and words, under an assistive, human-in-the-loop framing — it does not diagnose internal states, and our evidence base (acted, English, ten speakers, reference transcripts) licenses no direct deployment inference. 
+
+State-space efficiency does not materialize here: We are explicit that at IEMOCAP utterance lengths the state-space backbones are not faster than a flash-attention Transformer, and do not have lower peak memory (Sec. V-F). The accuracy edge is real but small. We therefore frame Mamba as a competitive, fast-converging, linear-memory backbone whose latency advantage is expected only at the much longer inputs of future work, not as an efficiency win at the present operating point. Relatedly, the Mamba-3 [4] variant we could train underperforms here — with an important scope qualifier: its most expressive component (MIMO) cannot be trained on our consumer Blackwell GPU, since while the bf16 forward kernel fits, the backward kernel’s dynamic shared-memory request floors at ∼123 KB across chunk sizes and ranks, above the 
+
+∼100 KB per-block opt-in — so we evaluate a reduced SISO variant, and our negative result speaks to that variant in this setting, not to Mamba-3 in general. Its headline gains target long-context language modeling, state-tracking, and decode-time efficiency; replacing the short causal convolution of Mamba-1/2 with RoPE also removes a local mixing that appears useful for frame-local prosody. None of this helps short, pooled, speaker-independent SER, so we adopt Mamba-2 as the backbone and report the SISO Mamba-3 result as a controlled negative. 
+
+Pre-specified revision experiments: Every analysis and training run pre-specified for this revision has been executed and is reported in Sec. V-E (Table V): the null-model controls, the rater-vote mixture pilot, the anisotropic soft target, the frozen-WavLM SSL arm, and the unimodal baselines with per-class recall — including the results that narrow our claims (the aux-form-agnostic classification lift, the regression head’s higher CCC, and the mixture pilot’s arousal cost). 
+
+Cross-corpus and demographic probes: Two further probes scope external validity. Zero-shot cross-corpus: scoring the featured arm unchanged on all 7,798 four-class utterances of MSP-IMPROV (a 44 .1 kHz acted corpus whose R/T sce-narios repeat fixed target sentences, making the text branch lexically uninformative there) yields 45 .6% UA (chance 25% ;seed spread < 0.1 points), with CCC 0.29 for valence and 0.35 
+
+for arousal after harmonizing IMPROV’s inverted arousal scale (1= active . . . 5= calm — established corpus-internally: on the raw scale “angry” would be rated calmer, 2.76 , than “neutral,” 
+
+3.86 ). Spontaneous scenarios transfer far better than fixed-sentence ones (UA 0.49 /0.42 vs. 0.37 /0.28 ), and the weak in-domain entropy–ambiguity link vanishes out of domain (ρ ≈ 0.02 ). We present this as distribution transfer under a known domain gap, not as a tuned cross-corpus result. 
+
+Demographics: on the held-out IEMOCAP sessions the male– female accuracy gap is not robust ( ∆UA +0 .010 , session-bootstrap interval spans zero), but the arousal read-out is markedly stronger for female speakers (CCC 0.70 vs. 0.62 )— a monitoring-relevant disparity that any deployment should track, which we flag rather than explain post hoc. 
+
+Governance and consent: The intended use — decision support for a human counselor, never autonomous intervention — must also be read against emerging AI governance. The EU AI Act [48] prohibits emotion-recognition systems outright in workplace and education settings (Art. 5(1)(f); medical and safety uses excepted) and otherwise treats emotion recognition as a high-risk application subject to transparency and oversight obligations; a counseling deployment of this system would PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 16 
+
+sit in that high-risk regime. The scientific-validity cautions raised against emotion inference in general [47], [49] argue for exactly the posture adopted here: a distributional output that preserves uncertainty and disagreement rather than asserting a single ground-truth emotion, consumed by a clinician rather than acted on autonomously. Digital mental-health ethics addi-tionally requires informed consent, data protection, and clear accountability lines before any patient-facing use [50], [51], and risk-management practice such as the NIST AI RMF [52] supplies the operational frame (map, measure, manage) for the monitoring obligations this section has flagged — the demographic disparity in the arousal read-out above being a concrete example of what deployment-time measurement must track. 
+
+Toward Phase 2 (future work): This paper is Phase 1: text +speech only. The longer-term system we are building adds a physiological (ECG) stream [53] and routes the 9 × 9
+
+V–A matrix — rather than a hard class — as a soft-prompt prefix to a language model [54] for empathetic response generation [55] in counseling support. Bidirectional Mamba has already shown strong results on ECG/EEG biosignal classification (e.g. BioMamba [56]), suggesting our BiMamba backbone should transfer to the physiological stream. Adapting that language model with parameter-efficient methods such as DoRA [57], and guaranteeing the deterministic, repro-ducible inference [58] that clinical deployment demands, are explicit design targets; distribution-free conformal coverage sets over the grid [59] are the natural consumable form of P
+
+for a human-in-the-loop practitioner. Those components are 
+
+not implemented or evaluated here; the probabilistic, LLM-consumable form of the V–A head is, however, designed with that downstream interface in mind. VII. C ONCLUSION 
+
+We presented a multimodal (text +speech) emotion recog-nizer that augments the usual hard classifier with a 9×9 prob-ability matrix over the Valence–Arousal plane, trained with a two-dimensional Gaussian soft target under a KL +cross-entropy objective, and evaluated it under a deliberately strict speaker-independent LOSO protocol with rotating-session in-ner validation. Three findings stand out. First, the probabilistic head is not a tax on accuracy: at the long operating point its fine-tuned raw-conv configuration reaches 0.730 ± 0.003 
+
+UA over three seeds on IEMOCAP (a separate three-seed rerun of the same configuration: 0.721 ± 0.002 , Table IV; pooled over both campaigns 0.726 ± 0.006 , n=6 runs), ex-ceeding the Transformer fusion baseline significantly under both a paired t-test and an enumerated session-cluster boot-strap (with only five session clusters the strictest cluster-robust tests cannot reach p < 0.05 ; see Sec. IV-B), and at both operating points the dual-head variants are the top configurations — while additionally producing an affect dis-tribution whose center of mass tracks continuous valence and arousal ( r = 0 .69 /0.69 , CCC 0.66 /0.66 ; predominantly between-class structure, within-class r ≈ 0.27 valence / 0.52 
+
+arousal) and whose per-class means recover the circumplex geometry (the raw categorical confidence is over-confident, ECE ≈ 0.20 , but a validation-fitted temperature repairs it to ECE ≈ 0.02 without changing any decision). Second, within one fixed pipeline at matched depth and width the state-space (Mamba-1/2) backbones are numerically on par with or slightly above a Transformer; on our hardware Mamba-2’s latency is the most stable across sequence length and overtakes the Transformer only at T ≈ 8192 , while the trainable (SISO) Mamba-3 variant gives neither an accuracy nor an efficiency advantage on this short-utterance task. Third, the soft-target width σ is a near-free knob on distributional sharpness, and a geometry-aware transport loss did not improve on KL +CE. The representation is designed to feed a downstream language model as a soft prompt; integrating that, together with a physiological stream, for empathetic response generation in counseling support is left to future work. Three nearer-term directions follow directly from this study: trained cross-corpus extension over the harmonized V–A grid (Sec. VI); streaming emission of the distribution over long conversational audio with explicit detection of emotion shifts — a setting where soft targets provide a natural change signal and long-sequence backbones should matter most; and input-adaptive soft targets that learn the Gaussian’s width per utterance rather than fixing it globally. ACKNOWLEDGMENTS 
+
+The authors gratefully acknowledge the sustained support of the AI Application Laboratory of the Department of Electri-cal Engineering, National Changhua University of Education, directed by Prof. Wen-Ren Yang, which funded the GPU computing hardware used for all experiments in this work. This research did not receive any specific grant from funding agencies in the public, commercial, or not-for-profit sectors. CR EDI T AUTHORSHIP CONTRIBUTION STATEMENT 
+
+Tingyi Lin: Conceptualization, Methodology, Software, Validation, Formal analysis, Investigation, Data curation, Writ-ing – original draft, Writing – review & editing, Visualization. 
+
+Wen-Ren Yang: Supervision, Project administration, Funding acquisition, Writing – review & editing. Kuanwei Chen: 
+
+Conceptualization, Writing – original draft, Writing – review & editing. DECLARATION OF COMPETING INTEREST 
+
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper. DATA AND CODE AVAILABILITY 
+
+The complete training, evaluation, and analysis code — in-cluding every table and figure generator and the dataset-index regeneration scripts — is publicly available at https://github. com/brian10420/EchoMind-Mamba-VA-SER and is archived on Zenodo (DOI: 10.5281/zenodo.21904810). The IEMOCAP corpus itself is available from the University of Southern California under its release license and cannot be redistributed by us; the repository regenerates our exact utterance index and splits from a licensed copy, so all reported results are reproducible end-to-end. PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 17 
+
+DECLARATION OF GENERATIVE AI AND AI-ASSISTED TECHNOLOGIES IN THE MANUSCRIPT PREPARATION PROCESS 
+
+During the preparation of this work the authors used Claude (Anthropic), accessed through the Claude Code environment across its successive 2025–2026 model versions, in order to assist with LaTeX drafting and editing of the manuscript. Beyond the writing process, the same assistant was used as a programming aid in the development of the training, statistical-analysis, and figure/table generation code (Sec. IV-B); all of this code is released for inspection (see Data and code availability), and its correctness was verified by the authors through the released regression-test suite, the automated gates that regenerate every table cell from the committed per-run statistics, and independent re-runs of the reported experiments. After using this tool, the authors reviewed, tested, and edited the content as needed — all experiments, analyses, and sci-entific claims were verified by the authors — and the authors take full responsibility for the content of the published article. REFERENCES [1] S. Kalateh, L. A. Estrada-Jimenez, S. Nikghadam-Hojjati, and J. Barata, “A systematic review on multimodal emotion recognition: Building blocks, current state, applications, and challenges,” IEEE Access , vol. 12, pp. 103 976–104 019, 2024. [2] A. Gu and T. Dao, “Mamba: Linear-time sequence modeling with selective state spaces,” in First Conference on Language Modeling (COLM) , 2024, arXiv:2312.00752. [3] T. Dao and A. Gu, “Transformers are SSMs: Generalized models and efficient algorithms through structured state space duality,” in 
+
+Proc. International Conference on Machine Learning (ICML) , 2024, arXiv:2405.21060. [4] A. Lahoti, K. Y. Li, B. Chen, C. Wang, A. Bick, J. Z. Kolter, T. Dao, and A. Gu, “Mamba-3: Improved sequence modeling using state space principles,” in Int. Conf. on Learning Representations (ICLR) , 2026, arXiv:2603.15569. [5] Y. Shang and T. Fu, “Multimodal fusion: A study on speech-text emotion recognition with the integration of deep learning,” Intelligent Systems with Applications , vol. 24, p. 200436, 2024. [6] N. R. Yerragondu, C. Krishnan, J. Giddirappa, and O. B. Indla, “Multi-fold fusion attention variant for emotion recognition,” in 2025 Int. Conf. on Computer Science and Software Engineering (CSASE) , 2025, pp. 60–66. [7] A. Baevski, Y. Zhou, A. Mohamed, and M. Auli, “wav2vec 2.0: A framework for self-supervised learning of speech representations,” in 
+
+Advances in Neural Information Processing Systems (NeurIPS) , 2020. [8] Z. Ma, Z. Zheng, J. Ye, J. Li, Z. Gao, S. Zhang, and X. Chen, “emotion2vec: Self-supervised pre-training for speech emotion repre-sentation,” in Findings of the Association for Computational Linguistics (ACL) , 2024. [9] J. Zhao, F. Wang, K. Li, Y. Wei, S. Tang, S. Zhao, and X. Sun, “Temporal-frequency state space duality: An efficient paradigm for speech emotion recognition,” in ICASSP 2025 - 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2025, pp. 1–5. [10] X. Li, X. Fan, Q. Wu, X. Peng, and Y. Li, “Mamba-enhanced text-audio-video alignment network for emotion recognition in conversa-tions,” in Advanced Data Mining and Applications (ADMA) , 2025, arXiv:2409.05243. [11] S. Chen, C. Wang, Z. Chen, Y. Wu, S. Liu, Z. Chen, J. Li, N. Kanda, T. Yoshioka, X. Xiao, J. Wu, L. Zhou, S. Ren, Y. Qian, Y. Qian, J. Wu, M. Zeng, X. Yu, and F. Wei, “WavLM: Large-scale self-supervised pre-training for full stack speech processing,” IEEE Journal of Selected Topics in Signal Processing , vol. 16, no. 6, pp. 1505–1518, 2022. [12] Y. Sun, X. Zhang, and Y. Sun, “Emobridge: Aligning speech and language for emotion recognition via q-former,” IEEE Access , vol. PP, pp. 1–1, 01 2025. [13] C. Zhu, C. Sun, Y. Liu, J. Chen, and K. Luo, “Enhancing speech emotion recognition with speech dynamic modeling and multi-modal knowledge distillation,” in ICASSP 2025 - 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2025, pp. 1–5. [Online]. Available: https://api.semanticscholar.org/CorpusID: 276983194 [14] H. Yu and Y. Ning, “Decoupled feature and self-knowledge distillation for speech emotion recognition,” IEEE Access , vol. 13, pp. 33 275– 33 285, 2025. [15] J. A. Russell, “A circumplex model of affect,” Journal of Personality and Social Psychology , vol. 39, no. 6, pp. 1161–1178, 1980. [16] X. Geng, “Label distribution learning,” IEEE Transactions on Knowl-edge and Data Engineering , vol. 28, no. 7, pp. 1734–1748, 2016. [17] A. Ando, S. Kobashikawa, H. Kamiyama, R. Masumura, Y. Ijima, and Y. Aono, “Soft-target training with ambiguous emotional utterances for DNN-based speech emotion classification,” in Proc. IEEE Int. Conf. on Acoustics, Speech and Signal Processing (ICASSP) , 2018, pp. 4964– 4968. [18] J. Han, Z. Zhang, M. Schmitt, M. Pantic, and B. Schuller, “From hard to soft: Towards more human-like emotion recognition by modelling the perception uncertainty,” in Proc. ACM International Conference on Multimedia (ACM MM) , 2017, pp. 890–897. [19] H.-C. Chou and C.-C. Lee, “Every rating matters: Joint learning of subjective labels and individual annotators for speech emotion classi-fication,” in Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2019, pp. 5886–5890. [20] W. Wu, C. Zhang, and P. C. Woodland, “Estimating the uncertainty in emotion class labels with utterance-specific Dirichlet priors,” arXiv preprint arXiv:2203.04443 , 2022. [21] A. M. Davani, M. D´ ıaz, and V. Prabhakaran, “Dealing with disagree-ments: Looking beyond the majority vote in subjective annotations,” 
+
+Transactions of the Association for Computational Linguistics , vol. 10, pp. 92–110, 2022. [22] N. Le, K. Nguyen, Q. Tran, E. Tjiputra, B. Le, and A. Nguyen, “Uncertainty-aware label distribution learning for facial expression recognition,” in Proc. IEEE/CVF Winter Conf. on Applications of Computer Vision (WACV) , 2023, pp. 6088–6097. [23] N. R. Prabhu, N. Lehmann-Willenbrock, and T. Gerkmann, “Label uncertainty modeling and prediction for speech emotion recognition using t-distributions,” in Proc. Int. Conf. on Affective Computing and Intelligent Interaction (ACII) , 2022, arXiv:2207.12135. [24] ——, “End-to-end label uncertainty modeling in speech emotion recog-nition using Bayesian neural networks and label distribution learning,” 
+
+IEEE Transactions on Affective Computing , 2023, arXiv:2209.15449. [25] Y.-H. Yang and H. H. Chen, “Prediction of the distribution of perceived music emotions using discrete samples,” IEEE Transactions on Audio, Speech, and Language Processing , vol. 19, no. 7, pp. 2184–2196, 2011. [26] E. Zhou, Y. Zhang, and Z. Duan, “Learning arousal-valence repre-sentation from categorical emotion labels of speech,” in Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2024, pp. 12 126–12 130, arXiv:2311.14816. [27] L. Zhu, B. Liao, Q. Zhang, X. Wang, W. Liu, and X. Wang, “Vision mamba: Efficient visual representation learning with bidirectional state space model,” in Proc. International Conference on Machine Learning (ICML) , 2024, arXiv:2401.09417. [28] Y. Qiao, Z. Yu, L. Guo, S. Chen, Z. Zhao, M. Sun, Q. Wu, and J. Liu, “VL-Mamba: Exploring state space models for multimodal learning,” 
+
+arXiv preprint arXiv:2403.13600 , 2024. [29] Y. Liang, Z. Wang, F. Liu, M. Liu, and Y. Yao, “Mamba-VA: A mamba-based approach for continuous emotion recognition in valence-arousal space,” in Proc. IEEE/CVF Conf. on Computer Vision and Pattern Recognition Workshops (CVPRW), ABAW , 2025, arXiv:2503.10104. [30] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “BERT: Pre-training of deep bidirectional transformers for language understanding,” in Proc. NAACL-HLT , 2019, pp. 4171–4186. [31] V. Panayotov, G. Chen, D. Povey, and S. Khudanpur, “Librispeech: An ASR corpus based on public domain audio books,” in Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2015, pp. 5206–5210. [32] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances in Neural Information Processing Systems (NeurIPS) , 2017. [33] C. Busso, M. Bulut, C.-C. Lee, A. Kazemzadeh, E. Mower, S. Kim, J. N. Chang, S. Lee, and S. S. Narayanan, “IEMOCAP: Interactive emotional dyadic motion capture database,” Language Resources and Evaluation ,vol. 42, no. 4, pp. 335–359, 2008. PREPRINT — SUBMITTED TO SPEECH COMMUNICATION , 2026 18 
+
+[34] A. B. Zadeh, P. P. Liang, S. Poria, E. Cambria, and L.-P. Morency, “Multimodal language analysis in the wild: CMU-MOSEI dataset and interpretable dynamic fusion graph,” in Proc. 56th Annual Meeting of the Association for Computational Linguistics (ACL) , 2018, pp. 2236–2246. [35] W. Yu, H. Xu, F. Meng, Y. Zhu, Y. Ma, J. Wu, J. Zou, and K. Yang, “CH-SIMS: A chinese multimodal sentiment analysis dataset with fine-grained annotation of modality,” in Proc. 58th Annual Meeting of the Association for Computational Linguistics (ACL) , 2020, pp. 3718–3727. [36] C. Busso, S. Parthasarathy, A. Burmania, M. AbdelWahab, N. Sadoughi, and E. Mower Provost, “MSP-IMPROV: An acted corpus of dyadic in-teractions to study emotion perception,” IEEE Transactions on Affective Computing , vol. 8, no. 1, pp. 67–80, 2017. [37] R. Lotfian and C. Busso, “Building naturalistic emotionally balanced speech corpus by retrieving emotional speech from existing podcast recordings,” IEEE Transactions on Affective Computing , vol. 10, no. 4, pp. 471–483, 2019. [38] A. C. Cameron, J. B. Gelbach, and D. L. Miller, “Bootstrap-based improvements for inference with clustered errors,” The Review of Eco-nomics and Statistics , vol. 90, no. 3, pp. 414–427, 2008. [39] B. T. Atmaja and M. Akagi, “Multitask learning and multistage fu-sion for dimensional audiovisual emotion recognition,” in Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2020, pp. 4482–4486. [40] S. Steidl, M. Levit, A. Batliner, E. N¨ oth, and H. Niemann, ““Of all things the measure is man”: Automatic classification of emotions and inter-labeler consistency,” in Proc. IEEE International Conference on Acoustics, Speech, and Signal Processing (ICASSP) , 2005, pp. 317–320. [41] S.-w. Yang, P.-H. Chi, Y.-S. Chuang, C.-I. J. Lai, K. Lakhotia, Y. Y. Lin, A. T. Liu, J. Shi, X. Chang, G.-T. Lin, T.-H. Huang, W.-C. Tseng, K.-t. Lee, D.-R. Liu, Z. Huang, S. Dong, S.-W. Li, S. Watanabe, A. Mohamed, and H.-y. Lee, “SUPERB: Speech processing universal PERformance benchmark,” in Proc. Interspeech , 2021. [42] J. Wagner, A. Triantafyllopoulos, H. Wierstorf, M. Schmitt, F. Burkhardt, F. Eyben, and B. W. Schuller, “Dawn of the transformer era in speech emotion recognition: Closing the valence gap,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 45, no. 9, pp. 10 745– 10 759, 2023. [43] M. M. Bradley and P. J. Lang, “Measuring emotion: The self-assessment manikin and the semantic differential,” Journal of Behavior Therapy and Experimental Psychiatry , vol. 25, no. 1, pp. 49–59, 1994. [44] G. N. Yannakakis, R. Cowie, and C. Busso, “The ordinal nature of emotions: An emerging approach,” IEEE Transactions on Affective Computing , vol. 12, no. 1, pp. 16–35, 2021. [45] S. G. Upadhyay, C. Busso, and C.-C. Lee, “A layer-anchoring strategy for enhancing cross-lingual speech emotion recognition,” arXiv preprint arXiv:2407.04966 , 2024. [46] J. R. J. Fontaine, K. R. Scherer, E. B. Roesch, and P. C. Ellsworth, “The world of emotions is not two-dimensional,” Psychological Science ,vol. 18, no. 12, pp. 1050–1057, 2007. [47] L. F. Barrett, R. Adolphs, S. Marsella, A. M. Martinez, and S. D. Pollak, “Emotional expressions reconsidered: Challenges to inferring emotion from human facial movements,” Psychological Science in the Public Interest , vol. 20, no. 1, pp. 1–68, 2019. [48] European Parliament and Council of the European Union, “Regulation (EU) 2024/1689 laying down harmonised rules on artificial intelligence (Artificial Intelligence Act),” Official Journal of the European Union, L series, 2024/1689, 2024, art. 5(1)(f) and Annex III on emotion-recognition systems. [49] L. Stark and J. Hoey, “The ethics of emotion in artificial intelligence systems,” in Proc. ACM Conference on Fairness, Accountability, and Transparency (FAccT) , 2021, pp. 782–793. [50] A. Fiske, P. Henningsen, and A. Buyx, “Your robot therapist will see you now: Ethical implications of embodied artificial intelligence in psychiatry, psychology, and psychotherapy,” Journal of Medical Internet Research , vol. 21, no. 5, p. e13216, 2019. [51] N. Martinez-Martin and K. Kreitmair, “Ethical issues for direct-to-consumer digital psychotherapy apps: Addressing accountability, data protection, and consent,” JMIR Mental Health , vol. 5, no. 2, p. e32, 2018. [52] National Institute of Standards and Technology, “Artificial intelligence risk management framework (AI RMF 1.0),” U.S. Department of Com-merce, Tech. Rep. NIST AI 100-1, 2023. [53] S. Katsigiannis and N. Ramzan, “DREAMER: A database for emotion recognition through EEG and ECG signals from wireless low-cost off-the-shelf devices,” IEEE Journal of Biomedical and Health Informatics ,vol. 22, no. 1, pp. 98–107, 2018. [54] M. A. K. Raiaan et al. , “A review on large language models: Archi-tectures, applications, taxonomies, open issues and challenges,” IEEE Access , vol. 12, pp. 26 839–26 874, 2024. [55] Z. Yang, Z. Ren, W. Yufeng, S. Peng, H. Sun, X. Zhu, and X. Liao, “Enhancing empathetic response generation by augmenting llms with small-scale empathetic models,” arXiv preprint arXiv:2402.11801 , 2024. [56] J. Qian, T. L. Goh, B. Xie, C. Zhu, B. Wan, Y. Guan, R. D. Chen, and P. Y. Chiang, “BioMamba: Leveraging spectro-temporal embedding in bidirectional mamba for enhanced biosignal classification,” arXiv preprint arXiv:2503.11741 , 2025. [57] S.-Y. Liu, C.-Y. Wang, H. Yin, P. Molchanov, Y.-C. F. Wang, K.-T. Cheng, and M.-H. Chen, “DoRA: Weight-decomposed low-rank adaptation,” in Proc. International Conference on Machine Learning (ICML) , 2024, pp. 32 100–32 121, arXiv:2402.09353. [58] H. He and Thinking Machines Lab, “Defeating nondeterminism in llm inference,” Thinking Machines Lab: Connectionism, 2025. [59] A. N. Angelopoulos and S. Bates, “Conformal prediction: A gentle introduction,” Foundations and Trends in Machine Learning , vol. 16, no. 4, pp. 494–591, 2023.

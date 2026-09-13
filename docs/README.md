@@ -6,68 +6,68 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-12
-- 运行时间：2026-09-12 21:02:04 UTC
+- 最新运行日期：2026-09-13
+- 运行时间：2026-09-13 21:59:35 UTC
 - 运行状态：成功
-- 本次总论文数：15
-- 精读区：1
+- 本次总论文数：16
+- 精读区：2
 - 速读区：14
 
 ### 今日简报（AI）
-- 今日共生成 15 篇推荐（精读 1 篇，速读 14 篇）
-- 精读：《The Illusion of Balanced Multimodal Sentiment Analysis: Beyond the Limits of Optimization-Based Methods》（9.0/10）
-- 速读：《MVFA: A Multi-View Text-Guided Multimodal Fusion LLM Adapter for Sentiment Analysis and Emotion Recognition》（7.0/10）, 《Reason Through the Latent! Making Latent Visual Reasoning Necessary》（7.0/10）, 《MV-STRIDE: Enabling MLLMs to Master Multi-View Spatial Reasoning via Hierarchical Capability Modeling》（7.0/10）
-- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
-- 详情：[/202609/12/README](/202609/12/README)
+今日筛读16篇、精读2篇、速读14篇，视觉推理与长视频理解以8.0分领跑。最值得看的是《Reason Through the Latent! Making Latent Visual Reasoning Necessary》和《Caption-once, Frames-on-Demand: Visual-Need Routing for Budget-Aware Agentic Long Video Understanding》，均8.0分。普通读者可先精读这两篇，再按兴趣浏览14篇速读，重点关注多模态推理与预算受限
+- 详情：[/202609/13/README](/202609/13/README)
 
 ### 精读区论文标签
-1. [The Illusion of Balanced Multimodal Sentiment Analysis: Beyond the Limits of Optimization-Based Methods](/202609/12/2609.11247v1-the-illusion-of-balanced-multimodal-sentiment-analysis-beyond-the-limits-of-optimization-based-methods)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：多模态学习中的模态不平衡与基于优化的平衡方法
+1. [Reason Through the Latent! Making Latent Visual Reasoning Necessary](/202609/13/2609.06746v1-reason-through-the-latent-making-latent-visual-reasoning-necessary)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：使图像条件路径成为必要的潜在视觉多模态推理
+2. [Caption-once, Frames-on-Demand: Visual-Need Routing for Budget-Aware Agentic Long Video Understanding](/202609/13/2609.11899v1-caption-once-frames-on-demand-visual-need-routing-for-budget-aware-agentic-long-video-understanding)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：面向长视频理解的预算感知代理框架，融合语言与视觉模态
 
 ### 速读区论文标签
-1. [MVFA: A Multi-View Text-Guided Multimodal Fusion LLM Adapter for Sentiment Analysis and Emotion Recognition](/202609/12/2609.06188v1-mvfa-a-multi-view-text-guided-multimodal-fusion-llm-adapter-for-sentiment-analysis-and-emotion-recognition)  
+1. [When Semantically Consistent Encoding Meets View-Label Heterogeneity Modeling: A Unified Framework for Incomplete Multi-View Multi-Label Learning](/202609/13/2609.07525v1-when-semantically-consistent-encoding-meets-view-label-heterogeneity-modeling-a-unified-framework-for-incomplete-multi-view-multi-label-learning)  
    标签：评分：7.0/10、query:balanced-mml
-   evidence：文本引导的多模态融合适配器，在跨模态融合中保留文本线索
-2. [Reason Through the Latent! Making Latent Visual Reasoning Necessary](/202609/12/2609.06746v2-reason-through-the-latent-making-latent-visual-reasoning-necessary)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：视觉与语言跨模态的潜在视觉推理
-3. [MV-STRIDE: Enabling MLLMs to Master Multi-View Spatial Reasoning via Hierarchical Capability Modeling](/202609/12/2609.07258v1-mv-stride-enabling-mllms-to-master-multi-view-spatial-reasoning-via-hierarchical-capability-modeling)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：多模态大模型的多视图空间推理
-4. [Exploring Diffusion Transformers for Cross-Modal Augmentation in Multimodal Brain State Decoding](/202609/12/2609.11341v1-exploring-diffusion-transformers-for-cross-modal-augmentation-in-multimodal-brain-state-decoding)  
+   evidence：面向多视图聚合的自适应标签感知融合权重
+2. [TeMo: Temperature Modulation for Multimodal Contrastive Learning](/202609/13/2609.07540v1-temo-temperature-modulation-for-multimodal-contrastive-learning)  
    标签：评分：7.0/10、query:balanced-mml
-   evidence：跨模态注意力与可靠性门控自适应注入的多模态融合
-5. [Companion-style QA Assistance in Ego-Vision](/202609/12/2609.06721v1-companion-style-qa-assistance-in-ego-vision)  
+   evidence：面向多模态对比学习的自适应温度调制
+3. [InfluenceField: A Differentiable Field with Interventionally Identifiable Causal Structure for Multimodal World Modeling](/202609/13/2609.07874v1-influencefield-a-differentiable-field-with-interventionally-identifiable-causal-structure-for-multimodal-world-modeling)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：用于多模态世界建模和因果结构的干预感知潜在场
+4. [EMMI: Edge Multi-Modal Intelligence for Communication-Efficient MLLM Inference via Fused Representation Compression](/202609/13/2609.11058v1-emmi-edge-multi-modal-intelligence-for-communication-efficient-mllm-inference-via-fused-representation-compression)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：融合表示压缩用于通信高效的边缘MLLM推理
+5. [RAMamba-Net: A Reliability-Aware and Mamba-Based Multimodal Fusion Network for Auditory Attention Detection](/202609/13/2609.11372v1-ramamba-net-a-reliability-aware-and-mamba-based-multimodal-fusion-network-for-auditory-attention-detection)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：可靠性感知的多模态融合，平衡EEG与EOG证据
+6. [Emotion as a Distribution: Joint Valence-Arousal Probability Learning for Speaker-Independent Multimodal Emotion Recognition](/202609/13/2609.05755v1-emotion-as-a-distribution-joint-valence-arousal-probability-learning-for-speaker-independent-multimodal-emotion-recognition)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：用于多模态情感识别的联合效价-唤醒概率学习
+7. [Visual Search Augmented Chain-of-Thought Reasoning for Attribute Value Extraction from Product Videos](/202609/13/2609.06410v1-visual-search-augmented-chain-of-thought-reasoning-for-attribute-value-extraction-from-product-videos)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：自我中心流式视频问答推理
-6. [Emo-DVS: A Multimodal Benchmark for Privacy-Aware Emotion Recognition with Event Cameras](/202609/12/2609.06928v1-emo-dvs-a-multimodal-benchmark-for-privacy-aware-emotion-recognition-with-event-cameras)  
+   evidence：基于视频VLM的免训练思维链推理
+8. [M3-Tele: A Unified Multimodal Teleoperational Framework for Compliant Whole-Body Mobile Manipulation](/202609/13/2609.07859v1-m3-tele-a-unified-multimodal-teleoperational-framework-for-compliant-whole-body-mobile-manipulation)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：融合事件、音频与文本三模态的基准
-7. [RAFM-SER++: A Lightweight Multimodal Emotion Recognition Framework for Real-Time Behavioral Monitoring in Surveillance Systems](/202609/12/2609.07409v1-rafm-ser-a-lightweight-multimodal-emotion-recognition-framework-for-real-time-behavioral-monitoring-in-surveillance-systems)  
+   evidence：统一多模态框架，融合视觉、触觉、力与本体感知信号
+9. [Eliciting Self-Verification in Multimodal Reasoning Agents with Reinforcement Learning](/202609/13/2609.08025v1-eliciting-self-verification-in-multimodal-reasoning-agents-with-reinforcement-learning)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：结合文本与图像的多模态推理智能体，用强化学习自我验证
+10. [CLFTv2: Efficient Camera-LiDAR Fusion for Semantic Segmentation via Hierarchical Feature Pyramids](/202609/13/2609.09881v1-clftv2-efficient-camera-lidar-fusion-for-semantic-segmentation-via-hierarchical-feature-pyramids)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：基于非对称残差注意力的轻量多模态融合情绪识别
-8. [Bridging the Semantic-Utility Gap in Multimodal RAG via Generator-in-the-Loop Alignment](/202609/12/2609.08188v1-bridging-the-semantic-utility-gap-in-multimodal-rag-via-generator-in-the-loop-alignment)  
+   evidence：相机与激光雷达多模态融合及层级特征金字塔
+11. [Isotropic Embedding Perturbations for Robust Vision Language Encoders](/202609/13/2609.10292v1-isotropic-embedding-perturbations-for-robust-vision-language-encoders)  
    标签：评分：6.0/10、query:native-multi
-   evidence：通过生成器在环对齐弥合图像到文本模态鸿沟
-9. [MoEMB: Scaling Universal Multimodal Embeddings with Efficient Mixture-of-Experts Models](/202609/12/2609.08663v1-moemb-scaling-universal-multimodal-embeddings-with-efficient-mixture-of-experts-models)  
+   evidence：嵌入空间扰动以维持视觉语言编码器的跨模态对齐
+12. [Toward Interpretable Multimodal Fusion: Heat Conduction Modeling for Hyperspectral and LiDAR Joint Classification](/202609/13/2609.11040v1-toward-interpretable-multimodal-fusion-heat-conduction-modeling-for-hyperspectral-and-lidar-joint-classification)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：面向多模态多任务扩展通用多模态嵌入模型
-10. [AuK Technical Report: An Open-Source Foundational Model for Speech Generation and Editing](/202609/12/2609.08936v1-auk-technical-report-an-open-source-foundational-model-for-speech-generation-and-editing)  
+   evidence：基于热传导的高光谱与LiDAR可解释多模态融合
+13. [OmniHallu: Unified Hallucination Detection for Cross-Modal Comprehension and Generation in Multimodal Large Language Models](/202609/13/2609.11244v1-omnihallu-unified-hallucination-detection-for-cross-modal-comprehension-and-generation-in-multimodal-large-language-models)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：整合语音、音频与文本指令模态的统一基础模型
-11. [EgoSIS: From Factorized Visual Ego-Transitions to Motion-Canonical Spatial Evidence for UAV Reasoning](/202609/12/2609.08938v1-egosis-from-factorized-visual-ego-transitions-to-motion-canonical-spatial-evidence-for-uav-reasoning)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：多模态视频问答与无人机视频内容推理
-12. [EgoSIS: From Factorized Visual Ego-Transitions to Motion-Canonical Spatial Evidence for UAV Reasoning](/202609/12/2609.08938v2-egosis-from-factorized-visual-ego-transitions-to-motion-canonical-spatial-evidence-for-uav-reasoning)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：基于运动规范化视觉证据的无人机视频问答
-13. [Beyond Surface Imitation: Contrastive Modeling for Reasoning Path Alignment in Multimodal In-Context Learning](/202609/12/2609.10177v1-beyond-surface-imitation-contrastive-modeling-for-reasoning-path-alignment-in-multimodal-in-context-learning)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：对齐多模态输入的MLLM推理路径而非表面模仿
-14. [Robust Multimodal Sentiment Analysis with Incomplete Modalities via Semantic-aware Completeness based Reconstruction](/202609/12/2609.10950v1-robust-multimodal-sentiment-analysis-with-incomplete-modalities-via-semantic-aware-completeness-based-reconstruction)  
-   标签：评分：6.0/10、query:balanced-mml
-   evidence：在多模态情感融合中处理模态缺失与不均衡
+   evidence：跨图像、视频与音频模态的统一幻觉检测
+14. [Prototype Matters: Modality-unified Prototype Self-distillation for Unsupervised Visible-infrared Person Re-identification](/202609/13/2609.11514v1-prototype-matters-modality-unified-prototype-self-distillation-for-unsupervised-visible-infrared-person-re-identification)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：模态统一原型对比与自蒸馏实现跨模态对齐
 
 
 <div class="dpr-home-promo-card">
