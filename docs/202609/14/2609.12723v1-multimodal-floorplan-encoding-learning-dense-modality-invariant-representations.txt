@@ -1,0 +1,262 @@
+Title: Multimodal Floorplan Encoding: Learning Dense Modality-Invariant Representations
+
+URL Source: https://arxiv.org/pdf/2609.12723v1
+
+Published Time: Mon, 14 Sep 2026 01:13:24 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Multimodal Floorplan Encoding: Learning Dense Modality-Invariant Representations 
+
+Xavier Anadón 1⋆, Rémi Pautrat 2, and Rui Wang 2 
+
+> 1
+
+University of Zaragoza, Spain  
+
+> 2
+
+Microsoft, Switzerland 
+
+Abstract. Floorplans arise in many forms, from vector CAD drawings to raster renderings and sensor-derived density maps. This heterogeneity makes it difficult to build learning systems that transfer across modalities and support geometry-centric tasks such as alignment and retrieval. We introduce the Multimodal Floorplan Encoder (MMFE), which maps di-verse 2D indoor representations into a shared dense latent grid. MMFE combines a frozen DINOv3 backbone with a trainable Dense Predic-tion Transformer (DPT) head, and is trained with a per-cell Information Noise-Contrastive Estimation (InfoNCE) objective that aligns spatially corresponding regions across modalities while using all other cells as negatives. To improve robustness to geometric distortions, we incorpo-rate controlled similarity transformations and enforce geometric consis-tency through feature-grid warping. On Structured3D, a held-out out-of-domain dataset, MMFE improves cross-modal dense matching, enables robust similarity alignment with RANSAC, and yields strong retrieval when paired with learned aggregation. 
+
+Keywords: multimodal representation learning · floorplans · dense con-trastive learning · alignment · retrieval 
+
+## 1 Introduction 
+
+Two-dimensional floorplans are among the most widespread and long-lived repre-sentations of indoor space: compact, human-readable, cheap to store, and largely unaffected by the alterations that break appearance-based maps (e.g., changes in furniture, light, or paint). In robotics, architectural plans and BIM models serve as global references for localization and mapping, by matching geometric primitives [47] or higher-level topological structures [35]; by directly localizing a camera inside a floorplan [18, 19, 25]; or by reasoning about the depth of the surrounding structure [4, 14, 42]. Beyond localization, floorplans are the working representation for architectural analysis, layout generation and retrieval [20,26], and the target output of indoor reconstruction pipelines [5, 24, 44]. What makes this heterogeneous landscape hard to unify is that "a floorplan" is not a single kind of data. The same apartment may be available as a vector  
+
+> ⋆
+
+Corresponding author: xanadon@unizar.es arXiv:2609.12723v1 [cs.CV] 11 Sep 2026 2 X. Anadón et al. 
+
+CAD drawing, as a raster plan with furniture, hatching and text annotations, as a stylized rendering of wall and opening polygons, or as a sensor-derived observation. Consequently, most learned floorplan systems are trained for one modality and one dataset, and degrade once the rendering style or the sensing process changes. Generic visual encoders offer only partial relief: as we show in Sec. 5, DINOv2 [29] / DINOv3 [36] features of two modalities of the same 
+
+floorplan are dominated by appearance rather than by layout. What is missing is a representation of floorplans that is agnostic to how the floorplan was produced. We address this gap with the Multimodal Floorplan Encoder (MMFE), which maps any of these indoor representations into a single, shared latent grid. MMFE is deliberately dense : rather than collapsing a floorplan into one global vector as in contrastive multimodal pretraining (e.g. CLIP [30]), it predicts a grid of local descriptors, so that spatial correspondence is preserved and geometry-centric tasks become directly accessible. It pairs a frozen DINOv3 backbone [36] with a trainable Dense Prediction Transformer (DPT) head [31], trained with a per-cell InfoNCE objective [28]. The resulting descriptors are modality-invariant enough to be used in downstream tasks such as multimodal alignment and retrieval. We validate these tasks on a held-out generalization test set, where MMFE substantially outperforms generic dense features. The individual components we build on are deliberately standard; our contribution lies in the multimodal floorplan formulation and the training recipe rather than in a new architecture. 
+
+Contributions. 
+
+– A multimodal formulation of floorplan representation learning , in which heterogeneous 2D representations of the same scene are treated as views to be bound together in a single dense latent grid, preserving geometric structure instead of collapsing each floorplan into a global embedding. 
+
+– MMFE , an instantiation of this formulation from standard components — a frozen DINOv3 backbone, a DPT head, and a per-cell InfoNCE objective in which positives are spatially corresponding cells of two different modalities and the remaining cells of the batch act as a large set of hard negatives. 
+
+– A per-cell contrastive objective that aligns corresponding regions across modalities while leveraging a large set of hard negatives from the remaining cells in the batch. 
+
+– A geometric robustness training recipe based on controlled similarity perturbations and feature-grid warping, validated out-of-domain on cross-modal alignment and retrieval , where MMFE substantially outperforms strong generic dense-feature baselines. 
+
+## 2 Related Work 
+
+Floorplan representations. Architectural and CAD pipelines represent floorplans with polylines and polygons for walls, doors and windows, optionally enriched Multimodal Floorplan Encoding 3
+
+with semantics as in BIM models [7, 35, 38]. However, floorplans are also en-countered as raster images [22]. A complementary line of work generates floor-plans from observations: raster-to-vector approaches parse existing drawings into structured geometry [22, 23], while reconstruction methods recover layouts from 3D scans or images [5, 24, 44]. When only sensor data is available, the floorplan is a projection of it: an orthographic point-density map of a 3D reconstruc-tion [3, 46] or a sparse set of 2D range returns [47]. These formats describe the 
+
+same geometry under very different appearance statistics, which is precisely the heterogeneity MMFE is designed to absorb. 
+
+Floorplan-based localization and matching. Classical approaches match geomet-ric primitives extracted from range data to the plan [47], and iS-Graphs [35] lifts this to hierarchical graph matching. Learned methods increasingly localize from RGB alone: LaLaLoc [19] and LaLaLoc++ [18] embed layouts and panoramic observations in a shared latent space; LASER [25] renders the plan as a point set and matches pose-conditioned features; and F 3Loc [4] with its semantic ex-tension [14] exploit predicted structural depth inside a filtering framework, while UnLoc [42] leverages off-the-shelf monocular depth models. Closer to matching, FloorplanNet [11] aligns 3D submaps to 2D plans via topometric graphs. All of these systems are engineered around one particular sensing-to-map pairing; our goal is orthogonal, namely a single dense representation in which any pair of floorplan modalities becomes directly comparable. 
+
+Multimodal representation learning. Aligning heterogeneous inputs in a shared embedding space is the central idea behind aligning image–text pairs [30, 45], while ImageBind [13] extends the principle to align six modalities. In the 3D in-door domain, CrossOver [32] aligns images, point clouds, CAD models and text at the scene level. These methods produce a global embedding per input, dis-carding the spatial layout. MMFE keeps the multimodal contrastive formulation but moves the alignment down to the level of individual spatial cells, treating floorplan modalities as the views to be bound together. 
+
+Contrastive learning and dense representations. Contrastive and metric-learning objectives shape embedding spaces through pairwise supervision. From the orig-inal contrastive [15] and triplet [34] losses to formulations that exploit more of the batch [27, 37, 41]. Among these, InfoNCE [28] has become the dominant choice for representation learning, underpinning approaches like SimCLR [6] and MoCo [16]. While global objectives discard spatial information, dense variants contrast local descriptors instead [40, 43]. We adopt a dense InfoNCE formula-tion, but in a multimodal setting: positives are not two augmentations of one image but spatially corresponding cells of two different floorplan modalities of the same scene. 4 X. Anadón et al. 
+
+## 3 Multimodal Floorplan Dataset 
+
+Floorplan Modalities: Before describing the encoder, we make explicit the input space it is expected to absorb. We group the indoor representations considered in this work into four families, illustrated in Fig. 1: 
+
+– Vector Geometry. Walls, doors and windows are available as vector ge-ometry and are rasterized into clean line drawings. Appearance is minimal and fully determined by the rendering convention (line thickness, which ele-ment classes are drawn), so two renderings of the same layout can still differ substantially in style. 
+
+– Raster Image. The floorplan is given as an image produced for human consumption. Besides the layout, it can contain furniture symbols, hatching patterns, dimension lines, and text. 
+
+– Density Maps. A 3D representation of the scene is projected orthographi-cally onto the ground plane and rasterized into a density map. 
+
+– Sparse Range Scans. A small number of 2D range returns is available instead of a dense map, yielding a partial, noisy outline of the structure. Throughout the paper, a modality pair denotes two such representations of the same floorplan, and all supervision is derived from pairs of this kind. Figure 1 illustrates representative samples. We held out the Structured3D [46] dataset from the training sets to test out-of-domain generalization. All results in this paper are reported on the validation split of this dataset. In total, our training split contains 14 ,939 floorplans across four sources (Tab. 1), which amounts to a total of 44 ,817 modality pairs. These floorplans are at apartment or single-floor scale rather than building scale: for reference, Structured3D contains 21 ,835 rooms across 3,500 house models [46] and Swiss Dwellings 242 ,257 rooms across 42 ,207 apartments [38], i.e. approximately six rooms per plan in both cases. Layouts with hundreds of interconnected rooms are outside the scope of our current setup (Sec. 6). 
+
+Synthetic 2D-LiDAR modality. As we are not aware of any dataset that pairs 
+
+Sparse Range Scans with the sources above at a comparable number of examples, we additionally simulate a sparse 2D LiDAR-like observation from the binary layout mask M ∈ { 0, 1}H×W of each floorplan. The goal is not to create a physically accurate sensor model, but rather a modality that captures the partial and noisy structural cues characteristic of planar range measurements. We first build a smooth, spatially varying density field by low-pass filtering random noise and applying a non-linear contrast transform, then normalize it over the layout interior to obtain a sampling distribution P (p). Given a target density ρ ∈ (0 , 1] ,we then draw N = ⌊ρ |{ p : M (p) = 1 }|⌋ points without replacement according to P , which controls the sparsity of the observation. Each sampled point is perturbed by Gaussian noise ε ∼ N (0 , σ 2I) in pixel units, with a small fraction assigned a larger variance to emulate outliers, and the points inside the image boundaries are rasterized into a sparse density map. Consequently, this modality does not perfectly model viewpoint-dependent visibility, occlusions, or sensor-specific artifacts; we discuss the implications in Sec. 6. Multimodal Floorplan Encoding 5                 
+
+> Table 1: Datasets and splits used in this work. In bold we highlight the most im-portant numbers: the total training set, the in-domain validation set used only for design choices, and the out-of-domain validation set. Out-of-domain training set (gray) is never seen during training.
+> Dataset Type Dataset Name Training Validation
+> Training Datasets CubiCasa5K [22] 4,200 200 Swiss Dwellings [38] 4,572 800 Zillow Indoor (ZInD) [7] 2,167 278 Aria SE [3] 4,000 1,000
+> Total 14,939 2,278
+> Evaluation Dataset Structured3D [46] 3,000 247
+
+## 4 Method 
+
+4.1 Dense Multimodal Encoder 
+
+Given an input floorplan image x (generated from any modality), MMFE pro-duces a latent tensor 
+
+F = fθ (x) ∈ RH×W ×D ,
+
+with H = W = 32 and descriptor dimension D = 32 . The spatial domain is aligned with the original image, but downsampled to a lower resolution to reduce computations in downstream tasks. The encoder combines (i) a frozen DINOv3 backbone [36] and (ii) a trainable Dense Prediction Transformer (DPT) [31] head inspired by MoGe [39] that fuses multi-scale transformer features into a structured grid (Fig. 2). We justify the selection of this architecture in Sec. 5. 
+
+4.2 Per-Cell Multimodal InfoNCE 
+
+Training uses paired modalities (x, x ′) of the same scene, producing F = fθ (x)
+
+and F ′ = fθ (x′). Both modalities are rendered into a common canonical floorplan frame at the same resolution, so cell (u, v ) in F and in F ′ refers to the same scene location; this defines the ground-truth cell correspondence used for supervision. This shared frame follows directly from how the modalities are produced, so no explicit registration step is required. For scenes reconstructed from 3D data, the annotations that yield the rendered floorplan and the projected point clouds are already aligned in 3D, and we preserve this alignment when projecting to 2D. The synthetic point-density maps inherit the frame of the modality from which they are generated. Therefore, corresponding cells initially share the same coordinates by construction. For each cell (u, v ), we treat the corresponding cell in the other modality as the positive, 
+
+z = F [u, v ], z+ = F ′[u, v ],6 X. Anadón et al. Raster Image Vector Geometry Sim. Sparse Range             
+
+> (a) CubiCasa5K [22] Raster Image Vector Geometry Sim. Noisy Density (b) Swiss Dwellings [38] Raster Image Vector Geometry Sim. Sparse Range
+> (c) ZInD [7] Vector Geometry Density Map Sim. Sparse Range (d) Aria SE [3] Vector Geometry Density Map Sim. Sparse Range
+> (e) Structured3D (Test) [46]
+
+Fig. 1: Example floorplan sources used for training (a - d) and evaluation (e). 
+
+and all other cells in the batch (including same-image cells) as negatives. We optimize a per-cell InfoNCE loss [28]: 
+
+Lu,v = − log exp(sim( z, z +)/τ )exp(sim( z, z +)/τ ) + P 
+
+> n∈N u,v
+
+exp(sim( z, n )/τ ) . (1) where sim( ·, ·) denotes the cosine similarity between ℓ2-normalized feature vec-tors, and τ is the temperature parameter that controls the sharpness of the softmax distribution. Note that spatially adjacent cells of the same scene are also included among the negatives Nu,v ; since neighboring cells are often near-duplicates, this acts as a strong hard-negative signal that pushes the encoder toward spatially discriminative descriptors without the need of more explicit negative mining. 
+
+4.3 Geometric Robustness via Similarity Perturbations 
+
+Downstream alignment requires robustness to planar transformations, so we per-turb the training pairs with elements of the planar similarity group Sim(2) . We sample transforms from a family parameterized by three boundary parameters Multimodal Floorplan Encoding 7Dino V3 DPT Head 
+
+> Intermediate Features Last Layer Features
+> b) Multimodal Features a) Visual Features
+> MMFE
+> Input Image
+
+Fig. 2: MMFE architecture: a frozen DINOv3 backbone [36] with a trainable DPT-style head [31] producing a 32 × 32 × 32 latent grid. 
+
+representing rotation angle, translation and scale change (θmax , t max , ∆s ), draw-ing 
+
+θ ∼ U (−θmax , θ max ), tx, t y ∼ U (−tmax , t max ), s ∼ U (1 − ∆s, 1 + ∆s ). (2) Two transforms are applied per training pair. First, a common , rotation-only transform T c, shared by both modalities, prevents the model from overfitting to the axis-aligned walls that dominate floorplans. Second, a noise transform T n,applied to a single modality, simulates the residual misalignment; its boundary parameters (θn
+
+> max
+
+, t n
+
+> max
+
+, ∆s n) are given in Sec. 5 for training and in Tab. 2 for the evaluation regimes. Since T n breaks the cell-wise correspondence between the two feature grids, we do not compare F and F ′ directly. Instead, we warp the perturbed grid back into the canonical frame using the known inverse flow field induced by T n. An example of these transformations can be seen in Fig. 3. Note that this models residual misalignment as a global Sim(2) transfor-mation. Real modality pairs may additionally differ through missing or added structures, renovations, or non-rigid discrepancies between as-planned and as-built geometry, which this family does not capture. 
+
+## 5 Experiments 
+
+We evaluate local feature quality and downstream tasks in the held out validation set of Structured3D [46]. Inputs are resized to 256 × 256 , using padding to keep the proportions of the floorplan; and MMFE outputs a 32 × 32 × 32 grid. 
+
+Implementation details. The encoder uses a frozen DINOv3 ViT-B/16 back-bone with a trainable MoGe-style DPT head that produces a 32 × 32 grid of 
+
+D = 32 -dimensional descriptors; only the head is trained. We optimize the per-cell InfoNCE objective of Eq. (1) with temperature τ = 0 .07 , using AdamW 8 X. Anadón et al. θ=0º | t= 0 | s=1 θ=0º | t= 0 | s=1 θ=-45º | t= 0 | s=1 θ=-45º | t= 0 | s=1 θ=-45º | t= 0 | s=1 θ=-115º | t= -0.1 | s=0.9 
+
+Fig. 3: Training transformations. A common transform preserves alignment; a noise transform perturbs only one modality breaking cell-wise correspondences, which forces the model to learn meaningful representations instead of trivially representing cell indices. The inverse warp restores correspondence in latent space for supervision. 
+
+(β = (0 .9, 0.999) , weight decay 10 −4) at a constant learning rate of 10 −4 (no scheduler), for 100 epochs in mixed precision on a single NVIDIA RTX 4090 GPU. Each mini-batch contains 32 floorplan pairs, i.e. 64 images, and the neg-atives for a cell are drawn only from the same mini-batch: they comprise all 
+
+64 × 32 × 32 cells in the batch except the query cell and its cross-modal positive, i.e. 64 × 32 × 32 − 2 = 65 ,534 negatives per cell. Every training example pairs two randomly sampled modalities of the same floorplan, drawn from its avail-able renderings, density maps, and the synthetic 2D-LiDAR point observation of Sec. 3. For the geometric-robustness recipe (Fig. 3) we apply a common rotation, 
+
+T c, of up to ±180 ◦ to both modalities; and a noise similarity transform, T n, to a single modality, with rotation in ±25 ◦, translation in ±0.2 of the image size, and scale in [0 .5, 1.5] .For evaluation, we define three difficulty levels: easy , medium and hard , based on the magnitude of the noise similarity transform, T n. This is summarized in Tab. 2. 
+
+Table 2: Parameters defining the similarity noise transformation T n difficulty levels. 
+
+Setting Rotation ( θ) Translation ( t) Scale ( ∆s )
+
+Easy 0° 0 0Medium 15° 0.1 0.2 Hard 180° 0.2 0.5 
+
+5.1 Feature Quality and Modality Consistency 
+
+We first evaluate the modality consistency of dense features at the cell level. Given a pair of modalities for the same floorplan, we match each cell in one modality to its nearest neighbor in the other modality by cosine similarity and report (i) Accuracy (percentage of cells that retrieve the correct corre-spondence), (ii) Average End Point Error ( AEPE ) (average Euclidean error in Multimodal Floorplan Encoding 9
+
+grid coordinates), and (iii) Percentage of Correct Keypoints ( PCK@3 ) (fraction of correspondences within three grid cells). To justify our design, we compare MMFE (DINOv3 + DPT head) to two alternatives that use a CNN projection head on top of either a ResNet50 backbone [17] or only the last-layer DINOv3 features [36]. As shown in Tab. 3, the DINOv3 + DPT design, which also ex-ploits intermediate backbone features, yields the most consistent cross-modal correspondences across difficulty levels.                                 
+
+> Table 3: Backbone/head comparison for cross-modal cell correspondence on Struc-tured3D [46], across difficulty levels. Model Difficulty Acc ( ↑)AEPE ( ↓)PCK@3.0 ( ↑)ResNet50 + CNN easy 0.18 15.01 17.63 medium 0.00 13.58 10.79 hard 0.00 12.66 8.67 DINOv3 + CNN easy 29.22 1.30 91.93 medium 15.40 1.59 89.04 hard 7.58 2.19 83.53 DINOv3 + DPT (Ours) easy 46.00 0.78 94.53
+> medium 28.67 1.20 91.05
+> hard 21.82 1.26 89.82
+
+Figure 4 visualizes PCA projections of dense feature grids produced by DI-NOv3 and by MMFE. For the same floorplan across modalities, DINOv3 features vary substantially, reflecting appearance differences between modalities. In con-trast, MMFE produces highly consistent feature maps across modalities while still preserving meaningful spatial structure, even though the training objective only enforces local cross-modal correspondence. 
+
+5.2 Cross-Modal Alignment 
+
+Problem statement. Let x and x′ denote two observations of the same floorplan in different modalities, not necessarily spatially aligned: a pixel (u, v ) in x does not need to correspond to the same physical location as the pixel (u, v ) in x′.We seek a planar similarity transformation a ∈ Sim(2) (rotation, translation, and scaling) that aligns x′ to x, formally x(u, v ) ≈ x′ a(u, v ). Figure 5 shows qualitative results of aligning two modalities with our method. In the coarse setting, we estimate the a ∈ Sim(2) directly from the floorplan feature maps. Dense correspondences are obtained by nearest-neighbor matching in latent space and estimate a similarity transform with RANSAC [12], using a partial-affine model with a minimal sample of two correspondences and a 3-cell inlier (reprojection) threshold. To handle rotations beyond the training range (±25 ◦), we rotate one modality in 45 ◦ increments at test time and keep the hy-pothesis with the largest inlier count.This search is part of the alignment pipeline and not of the representation: it is applied identically to all methods in Tab. 4, so 10 X. Anadón et al.    
+
+> (a) DINOv3 (PCA) (b) MMFE (PCA)
+
+Fig. 4: PCA visualization of dense features. DINOv3 is appearance-driven; MMFE aligns spatial structure across modalities. 
+
+Table 4: Alignment on Structured3D [46] via nearest-neighbor matching + RANSAC. Model Diff RMSE( ↓) Median RSE( ↓) Acc@1( ↑) Acc@3( ↑) Acc@5( ↑) Acc@10( ↑) Acc@20( ↑)DINOv2 med 217.06 247.48 0.03 0.10 0.17 0.71 2.90 hard 239.34 261.57 0.00 0.07 0.07 0.24 0.84 DINOv3 med 128.96 37.14 0.10 1.62 4.62 14.30 31.58 hard 168.32 124.91 0.03 0.84 2.02 5.13 13.25 MMFE (ours) med 11.70 4.41 7.09 36.91 58.87 84.38 92.98        
+
+> hard 15.26 5.48 4.32 27.19 49.36 75.91 90.08
+
+the comparison against DINOv2/DINOv3 remains like-for-like. Following stan-dard practice [8], we map the four image corners with the estimated and the ground-truth transform and report, at the 256 × 256 input resolution, the RMS and median corner errors (RMSE and Med RSE, in pixels) together with Acc@ k
+
+(the fraction of corners whose reprojection error is below k pixels). In Tab. 4, MMFE substantially outperforms generic dense features (DI-NOv2 [29]/DINOv3 [36]) across both medium and hard settings, demonstrating the benefit of explicitly training for cross-modal geometric consistency. We omit the easy setting, where the inter-modality transform is the identity and align-ment is trivially near-perfect. The accuracy nonetheless drops markedly between Acc@10 and Acc@5: for a 256 × 256 input we reduce the spatial resolution to 
+
+32 × 32 , so each cell corresponds to an 8 × 8-pixel patch, which lower-bounds the attainable corner precision of the coarse matcher. 
+
+Fine-tuning a pretrained matcher. For sub-cell accuracy we pair MMFE with a state-of-the-art dense matcher, RoMa [9,10], on top of frozen backbone features. We initialize from the released weights and fine-tune only the matcher and the Multimodal Floorplan Encoding 11 Modality 0 (M0) Modality 1 (M1) Corrected M1 (CM1) M0 VS CM1 MMFE DinoV3     
+
+> Acc@3: 100% | Acc@10: 100% Error: 1.8px
+> Acc@3: 0% | Acc@10: 0% Error: 306.4px
+> Acc@3: 25% | Acc@10: 100% Error: 4.3px
+> Acc@3: 0% | Acc@10: 0% Error: 257.8px
+
+Fig. 5: Qualitative alignment examples; red segments in the third column visualize residual corner error. Last column overlays the original M0 modality and the M1 modal-ity after alignment is applied. 
+
+fine-level features, keeping the backbone (DINO or MMFE) frozen. Note that we finetune only RoMaV1, as the RoMaV2 training code was unavailable at the time of this work. Results are given in Tab. 5. First of all, comparing the first two rows and last two rows, it appears that a simple fine-tuning of the matching layers on top of our MMFE features is able to outperform the vanilla RoMa matching across modalities. However, the best results are obtained with DINO rather than MMFE features, despite the clear advantage of MMFE in coarse alignment. Nevertheless, this is not a like-for-like comparison of feature quality: RoMa’s released matcher was itself trained on top of frozen DINOv2 coarse features, so the DINOv2 rows benefit from a matcher already co-adapted to those features, while the MMFE rows require it to be re-adapted to a new feature space. Since RoMa’s pretraining uses orders of magnitude more data than both MMFE’s pretraining and our fine-tuning setup, fine-tuning the matching layers on our comparatively small dataset is insufficient for changing RoMa’s matcher to work properly with our features. We disentangle the two factors below. 
+
+Isolating the contribution of the features. To disentangle feature quality from RoMa’s pretraining advantage, we compare features under an equal data regime. 12 X. Anadón et al. 
+
+Table 5: Fine-tuning a pretrained dense matcher (RoMa) with different backbone features, both out-of-the-box (OOB) and fine-tuned on our floorplan dataset (FT). Under this heavily pretrained regime, DINO features remain competitive with MMFE (see Sec. 6). Matcher Features Diff RMSE( ↓) Med RSE( ↓) Acc@1( ↑) Acc@5( ↑) Acc@10( ↑)RoMa v1 (OOB) DINOv2 med 13.10 2.43 27.09 74.26 85.09 hard 22.48 2.74 24.70 70.14 80.74 RoMa v2 (OOB) DINOv3 med 31.26 2.59 30.57 71.19 80.70 hard 54.72 2.58 28.27 67.95 76.86 RoMa v1 (FT) DINOv2 med 8.66 2.05 35.80 82.73 89.51                  
+
+> hard 7.54 1.93 35.83 81.41 89.74
+> RoMa v1 (FT) MMFE med 11.12 2.04 37.82 79.93 87.15 hard 13.35 1.98 34.51 77.87 86.47
+
+We train RoMa from scratch on our floorplan dataset using either DINO or MMFE features, keeping the backbone frozen and learning only the matcher and the fine-level features. As shown in Tab. 6, MMFE features yield an average improvement of 20 percentage points in accuracy over DINO, showing that the modality-invariance learned by MMFE directly benefits fine matching when the matcher is trained under matched conditions. 
+
+Table 6: Training the RoMa matcher from scratch in the same data regime: with identical data and training, MMFE features improve accuracy by 20 percentage points on average over DINO features. Matcher Features Diff RMSE( ↓) Med RSE( ↓) Acc@1( ↑) Acc@5( ↑) Acc@10( ↑)RoMa w/o pretraining DINOv2 med 35.52 7.79 12.28 42.85 57.35 hard 47.10 11.42 8.74 38.12 48.92 RoMa w/o pretraining MMFE med 19.08 2.91 28.24 69.64 79.99      
+
+> hard 23.71 3.18 24.83 61.61 73.89
+
+5.3 Cross-Modal Retrieval 
+
+Problem statement. Consider a database X = {xi}Ni=1 of floorplans from multiple scenes and modalities, with x′ ∈ X . Given a query x, the objective is to retrieve the element of X corresponding to the same underlying scene but expressed in a different modality. Unlike in image retrieval, appearance is not a reliable cue: two observations of the same scene may be visually dissimilar because of modality, rendering style, noise or sampling density, so retrieval must instead rely on higher-level structural and semantic cues. We aggregate local descriptors into global embeddings with two learnable modules, NetVLAD [1] and SALAD [21], both trained (or fine-tuned) on our mul-timodal floorplan training set with a global contrastive loss on paired modalities, Multimodal Floorplan Encoding 13                    
+
+> Table 7: Cross-modal floorplan retrieval on the Structured3D validation set. Aggregator Encoder Acc( ↑)Top5 Acc( ↑)Top10 Acc( ↑)NetVLAD DINOv3 0.40 3.64 4.45 MMFE 24.29 40.08 50.61
+> SALAD DINOv3 43.72 64.77 72.06 MMFE 55.06 74.49 79.35
+
+and report Top-k accuracy. In Tab. 7, MMFE consistently improves over generic DINO features for each aggregator under the same training protocol, confirming that local multimodal alignment translates into stronger global descriptors. To assess the influence of the contrastive pretraining, we compare the exact same architecture (DINOv3 + DPT + aggregator) trained end-to-end against a two-stage variant that first performs the contrastive pretraining and then trains only the aggregator on frozen features. We keep the Dino features frozen, and we train the DPT + NetVLAD aggregator jointly with the goal of seeing the influence of the pretrained weights of the DPT head. As shown in Tab. 8, the task-agnostic multimodal pre-training yields an approximately 38% gain in Top-1 accuracy, showing that our multimodal pre-training can benefit specialized downstream setups. Qualitatively (Fig. 6), even incorrect top-1 retrievals are structurally similar layouts, indicating that the embedding captures global geometric cues beyond modality-specific appearance.             
+
+> Table 8: Comparing the same architecture with and without contrastive pretraining. The task-agnostic pretraining improves Top-1 accuracy by approximately 38 percentage points. Encoder Acc( ↑)Top5 Acc( ↑)Top10 Acc( ↑)MMFE w/o Pretraining 15.38 28.34 39.27 MMFE w/ Pretraining 53.04 70.85 76.52
+
+## 6 Limitations and Future Work 
+
+Data scale and realism. Our training set is small by the standards of deep learn-ing: MMFE is trained on roughly 45 K modality pairs, whereas dense matchers such as RoMa [10] are pretrained on over 2.5M. It is also limited in realism on the sensing side: the Sparse Range Scans are simulated from the layout mask (Sec. 3) and the held-out Structured3D domain is itself synthetic, so the gen-eralization we report is across datasets and modalities rather than across the real sensing process. Robustness to real range data, including noise, occlusions, incomplete coverage, clutter, and the drift and non-metric distortion of scanned 14 X. Anadón et al.  
+
+> Fig. 6: Qualitative top-5 retrieval examples on Structured3D [46] validation.
+
+maps, remains to be demonstrated and is the most important next step for this work. 
+
+Resolution and scalability. MMFE outputs an 8 × 8-pixel patch per cell, which lower-bounds the corner precision attainable by the coarse matcher (Tab. 4); Sec. 6 discusses how this bound could be raised. This is a training-memory constraint rather than an architectural one: the DPT head can, in principle, produce finer grids, but the memory footprint of the per-cell InfoNCE loss grows with the number of cells; sampling a subset of cells during training would trade the number of negatives for memory. Scaling from a single consumer-grade GPU to higher-end or multi-GPU setups would allow increasing both spatial resolution and descriptor dimensionality without reducing the number of negatives. 
+
+Adapting large pretrained models to new features. Fine-tuning a large pretrained matcher (RoMa) on MMFE features did not surpass its DINO-based counterpart, despite the clear advantage of MMFE in coarse matching (Tab. 5). Fine-tuning strategies that exploit new backbone features while retaining pretrained knowl-edge could transfer the coarse-matching gains of MMFE to the fine matcher. 
+
+Beyond contrastive training. Our per-cell InfoNCE objective relies on large batches to provide informative negatives, which limits its scalability. Self-supervised objectives that require no explicit negatives, in particular a joint-embedding predictive architecture (JEPA) [2] using different modalities as alternative aug-mentations of the same scene, are a promising alternative for learning modality-invariant floorplan representations. Relaxing the one-to-one positive assignment, Multimodal Floorplan Encoding 15 
+
+for instance through soft or optimal-transport assignments, would additionally accommodate pairs that are not in exact correspondence. 
+
+Incorporating perspective images. Working purely from 2D floorplans discards the 3D scene information carried by perspective images. Aligning our multimodal latent space with perspective images, as done in SNAP [33], would embed both floorplans and perspective views in a shared representation, unlocking perspec-tive image localization in multimodal floorplan settings. 
+
+## 7 Conclusion 
+
+We introduced MMFE, a dense multimodal floorplan encoder that maps hetero-geneous 2D indoor representations into a shared latent grid by coupling a frozen DINOv3 backbone with a trainable DPT-style head, trained with a per-cell In-foNCE objective and a similarity-perturbation recipe that enforces geometric consistency through feature-grid warping. On the held-out Structured3D domain, the learned descriptors prove strongly modality-invariant. For coarse alignment, nearest-neighbor matching followed by RANSAC substantially outperforms generic DINOv2/DINOv3 features under both moderate and large geometric perturbations. When higher precision is re-quired, MMFE is a drop-in front-end for a dense matcher: under a matched, in-domain data regime it improves a from-scratch RoMa matcher by roughly 20 
+
+percentage points over DINO features, indicating that its benefit is most visible when downstream training data is limited rather than at the scale of large pre-trained matchers. For retrieval, MMFE consistently improves over DINO features with both NetVLAD and SALAD, with the task-agnostic contrastive pretraining as the main driver. Together, these results show that a single dense, modality-invariant represen-tation can support geometry-centric floorplan tasks across heterogeneous modal-ities. 
+
+## Acknowledgements 
+
+We thank Shaohui Liu for insightful discussions and feedback throughout this project. We are also grateful to Professor Marc Pollefeys, along with the entire Computer Vision and Geometry (CVG) group at ETH, for fostering a supportive environment where ambitious ideas and creativity can thrive. 
+
+## Disclosure of Interests 
+
+The authors have no competing interests to declare that are relevant to the content of this article. 16 X. Anadón et al. 
+
+## References 
+
+1. Arandjelović, R., Gronat, P., Torii, A., Pajdla, T., Sivic, J.: NetVLAD: CNN archi-tecture for weakly supervised place recognition. In: CVPR. pp. 5297–5307 (2016) 2. Assran, M., Duval, Q., Misra, I., Bojanowski, P., Vincent, P., Rabbat, M., Le-Cun, Y., Ballas, N.: Self-supervised learning from images with a joint-embedding predictive architecture. In: CVPR. pp. 15619–15629 (2023) 3. Avetisyan, A., Xie, C., Howard-Jenkins, H., Yang, T.Y., Aroudj, S., Patra, S., Zhang, F., Frost, D., Holland, L., Orme, C., Engel, J., Miller, E., Newcombe, R., Balntas, V.: SceneScript: Reconstructing scenes with an autoregressive structured language model. In: ECCV (2024) 4. Chen, C., Wang, R., Vogel, C., Pollefeys, M.: F3Loc: Fusion and filtering for floor-plan localization. In: CVPR. pp. 18029–18038 (2024) 5. Chen, J., Qian, Y., Furukawa, Y.: HEAT: Holistic edge attention transformer for structured reconstruction. In: CVPR (2022) 6. Chen, T., Kornblith, S., Norouzi, M., Hinton, G.: A simple framework for con-trastive learning of visual representations. In: ICML. pp. 1597–1607 (2020) 7. Cruz, S., Hutchcroft, W., Li, Y., Khosravan, N., Boyadzhiev, I., Kang, S.B.: Zillow indoor dataset: Annotated floor plans with 360° panoramas and 3D room layouts. In: CVPR. pp. 2133–2143 (2021) 8. DeTone, D., Malisiewicz, T., Rabinovich, A.: SuperPoint: Self-supervised interest point detection and description. In: CVPRW (2018) 9. Edstedt, J., Nordström, D., Zhang, Y., Bökman, G., Astermark, J., Larsson, V., Heyden, A., Kahl, F., Wadenbäck, M., Felsberg, M.: RoMa v2: Harder better faster denser feature matching. arXiv preprint arXiv:2511.15706 (2025) 10. Edstedt, J., Sun, Q., Bökman, G., Wadenbäck, M., Felsberg, M.: RoMa: Robust dense feature matching. In: CVPR (2024) 11. Feng, D., He, Z., Hou, J., Schwertfeger, S., Zhang, L.: FloorplanNet: Learning topometric floorplan matching for robot localization. In: ICRA. pp. 6168–6174 (2023) 12. Fischler, M.A., Bolles, R.C.: Random sample consensus: A paradigm for model fitting with applications to image analysis and automated cartography. Commun. ACM 24 (6), 381–395 (1981) 13. Girdhar, R., El-Nouby, A., Liu, Z., Singh, M., Alwala, K.V., Joulin, A., Misra, I.: ImageBind: One embedding space to bind them all. In: CVPR (2023) 14. Grader, Y., Averbuch-Elor, H.: Supercharging floorplan localization with semantic rays. arXiv preprint arXiv:2507.09291 (2025) 15. Hadsell, R., Chopra, S., LeCun, Y.: Dimensionality reduction by learning an in-variant mapping. In: CVPR (2006) 16. He, K., Fan, H., Wu, Y., Xie, S., Girshick, R.: Momentum contrast for unsupervised visual representation learning. In: CVPR (2020) 17. He, K., Zhang, X., Ren, S., Sun, J.: Deep residual learning for image recognition. In: CVPR. pp. 770–778 (2016) 18. Howard-Jenkins, H., Prisacariu, V.A.: LaLaLoc++: Global floor plan comprehen-sion for layout localisation in unvisited environments. In: ECCV. pp. 693–709 (2022) 19. Howard-Jenkins, H., Ruiz-Sarmiento, J.R., Prisacariu, V.A.: LaLaLoc: Latent lay-out localisation in dynamic, unvisited environments. In: ICCV. pp. 10107–10116 (2021) Multimodal Floorplan Encoding 17 20. Hu, R., Huang, Z., Tang, Y., van Kaick, O., Zhang, H., Huang, H.: Graph2Plan: Learning floorplan generation from layout graphs. ACM TOG 39 (4) (2020) 21. Izquierdo, S., Civera, J.: Optimal transport aggregation for visual place recognition. In: CVPR. pp. 17658–17668 (2024) 22. Kalervo, A., Ylioinas, J., Häikiö, M., Karhu, A., Kannala, J.: CubiCasa5K: A dataset and an improved multi-task model for floorplan image analysis. arXiv preprint arXiv:1904.01920 (2019) 23. Liu, C., Wu, J., Kohli, P., Furukawa, Y.: Raster-to-Vector: Revisiting floorplan transformation. In: ICCV (2017) 24. Liu, C., Wu, J., Furukawa, Y.: FloorNet: A unified framework for floorplan recon-struction from 3D scans. In: ECCV (2018) 25. Min, Z., Khosravan, N., Bessinger, Z., Narayana, M., Kang, S.B., Dunn, E., Boy-adzhiev, I.: LASER: Latent space rendering for 2D visual localization. In: CVPR. pp. 11122–11131 (2022) 26. Nauata, N., Chang, K.H., Cheng, C.Y., Mori, G., Furukawa, Y.: House-GAN: Re-lational generative adversarial networks for graph-constrained house layout gener-ation. In: ECCV (2020) 27. Oh Song, H., Xiang, Y., Jegelka, S., Savarese, S.: Deep metric learning via lifted structured feature embedding. In: CVPR (2016) 28. van den Oord, A., Li, Y., Vinyals, O.: Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 (2018) 29. Oquab, M., Darcet, T., Moutakanni, T., Vo, H.V., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., Assran, M., Ballas, N., Galuba, W., Howes, R., Huang, P.Y., Li, S.W., Misra, I., Rabbat, M., Sharma, V., Syn-naeve, G., Xu, H., Jégou, H., Mairal, J., Labatut, P., Joulin, A., Bojanowski, P.: DINOv2: Learning robust visual features without supervision. arXiv preprint arXiv:2304.07193 (2023) 30. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., Sutskever, I.: Learning transferable visual models from natural language supervision. In: ICML. pp. 8748–8763 (2021) 31. Ranftl, R., Bochkovskiy, A., Koltun, V.: Vision transformers for dense prediction. In: ICCV (2021) 32. Sarkar, S.D., Miksik, O., Pollefeys, M., Barath, D., Armeni, I.: CrossOver: 3D scene cross-modal alignment. In: CVPR. pp. 8985–8994 (2025) 33. Sarlin, P.E., Trulls, E., Pollefeys, M., Hosang, J., Lynen, S.: SNAP: Self-supervised neural maps for visual positioning and semantic understanding. In: NeurIPS (2023) 34. Schroff, F., Kalenichenko, D., Philbin, J.: FaceNet: A unified embedding for face recognition and clustering. In: CVPR (2015) 35. Shaheer, M., Millan-Romera, J.A., Bavle, H., Sanchez-Lopez, J.L., Civera, J., Voos, H.: Graph-based global robot simultaneous localization and mapping using archi-tectural plans. arXiv preprint arXiv:2305.09295 (2023) 36. Siméoni, O., Vo, H.V., Seitzer, M., Baldassarre, F., Oquab, M., Jose, C., Khalidov, V., Szafraniec, M., Yi, S., Ramamonjisoa, M., Massa, F., Haziza, D., Wehrstedt, L., Wang, J., Darcet, T., Moutakanni, T., Sentana, L., Roberts, C., Vedaldi, A., Tolan, J., Brandt, J., Couprie, C., Mairal, J., Jégou, H., Labatut, P., Bojanowski, P.: DINOv3. arXiv preprint arXiv:2508.10104 (2025) 37. Sohn, K.: Improved deep metric learning with multi-class N-pair loss objective. In: NeurIPS (2016) 38. Standfest, M., Franzen, M., Schröder, Y., Gonzalez Medina, L., Villanueva Hernan-dez, Y., Buck, J.H., Tan, Y.L., Niedzwiecka, M., Colmegna, R.: Swiss dwellings: 18 X. Anadón et al. A large dataset of apartment models including aggregated geolocation-based sim-ulation results covering viewshed, natural light, traffic noise, centrality and geo-metric analysis. Zenodo, version 1.0.0 (2022). https://doi.org/10.5281/zenodo. 7070952 
+
+39. Wang, R., Xu, S., Dai, C., Xiang, J., Deng, Y., Tong, X., Yang, J.: MoGe: Unlocking accurate monocular geometry estimation for open-domain images with optimal training supervision. arXiv preprint arXiv:2410.19115 (2024) 40. Wang, X., Zhang, R., Shen, C., Kong, T., Li, L.: Dense contrastive learning for self-supervised visual pre-training. In: CVPR. pp. 3024–3033 (2021) 41. Wang, X., Han, X., Huang, W., Dong, D., Scott, M.R.: Multi-similarity loss with general pair weighting for deep metric learning. In: CVPR (2019) 42. Wüest, M., Engelmann, F., Miksik, O., Pollefeys, M., Barath, D.: UnLoc: Leverag-ing depth uncertainties for floorplan localization. arXiv preprint arXiv:2509.11301 (2025) 43. Xie, Z., Lin, Y., Zhang, Z., Cao, Y., Lin, S., Hu, H.: Propagate yourself: Exploring pixel-level consistency for unsupervised visual representation learning. In: CVPR (2021) 44. Yue, Y., Kontogianni, T., Schindler, K., Engelmann, F.: Connecting the dots: Floorplan reconstruction using two-level queries. In: CVPR (2023) 45. Zhai, X., Mustafa, B., Kolesnikov, A., Beyer, L.: Sigmoid loss for language image pre-training. In: ICCV (2023) 46. Zheng, J., Zhang, J., Li, J., Tang, R., Gao, S., Zhou, Z.: Structured3D: A large photo-realistic dataset for structured 3D modeling. In: ECCV (2020) 47. Zimmerman, N., Guadagnino, T., Chen, X., Behley, J., Stachniss, C.: Long-term localization using semantic cues in floor plan maps. IEEE RA-L (2022)

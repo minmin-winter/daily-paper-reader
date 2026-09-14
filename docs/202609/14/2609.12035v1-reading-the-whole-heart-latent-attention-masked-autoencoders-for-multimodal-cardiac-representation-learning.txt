@@ -1,0 +1,540 @@
+Title: Reading the Whole Heart: Latent-Attention Masked Autoencoders for Multimodal Cardiac Representation Learning
+
+URL Source: https://arxiv.org/pdf/2609.12035v1
+
+Published Time: Mon, 14 Sep 2026 00:04:30 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+Preprint. 
+
+# READING THE WHOLE HEART : LATENT -A TTENTION 
+
+# MASKED AUTOENCODERS FOR MULTIMODAL 
+
+# CARDIAC REPRESENTATION LEARNING 
+
+Andrea Agostini 1,* , Simon B¨ ohi 2,* , Moritz Vandenhirtz 1, Samuel Ruiperez-Campillo 1,Max Kr¨ ahenmann 2, Silke M¨ uhlstedt 1, Irene Cannistraci 1,Ece ¨ Ozkan Elsen 2, †, Julia E. Vogt 1, †, Thomas M. Sutter 1, †
+
+> 1
+
+Department of Computer Science, ETH Zurich, Switzerland 
+
+> 2
+
+Department of Biomedical Engineering, University of Basel, Switzerland 
+
+> *
+
+Equal contribution. †Shared senior authorship. 
+
+## ABSTRACT 
+
+Cardiovascular diagnosis rests on integrating complementary modalities, like ECG, echocardiography, chest radiographs, and clinical variables, each capturing distinct but correlated aspects of cardiac physiology. Yet most medical founda-tion models remain modality-specific, combining modalities only for finetuning or post-training. This discards the cross-modal evidence clinicians naturally integrate and ignores the structure within each modality. We introduce Latent-Attention Masked Autoencoders (LAMAE), a multimodal, structure-aware masked autoen-coder that jointly learns patient-level representations during self-supervised pre-training. Rather than fusing modalities post hoc, LAMAE exchanges information directly in the latent space through a shared latent-attention module operating over a study–view–entity hierarchy, enabling aggregation of variable observations and graceful handling of missing modalities. Pretrained on over 1.2 million MIMIC-IV hospital stays, LAMAE outperforms modality-specific pretraining and strong contrastive and vision–language baselines across multimodal hospital-stay tasks, such as in-hospital mortality, ICD-10 and DRG coding, and length of stay, while remaining competitive on unimodal tasks. These gains persist even when only a single modality is available at test time, showing that modeling both intra- and inter-modal structure yields more robust, transferable representations. 
+
+## 1 INTRODUCTION 
+
+Cardiovascular diseases (CVDs) remain the leading cause of mortality worldwide, accounting for more than 20 million deaths annually and imposing a substantial burden on healthcare systems (Roth et al., 2025). Early diagnosis and appropriate risk stratification are critical for improving patient out-comes, yet clinical decision making rarely relies on a single diagnostic modality. Instead, clinicians routinely integrate complementary information from electrocardiograms (ECGs), echocardiography (Echo), chest radiographs (CXR), laboratory values, and clinical history to form a comprehensive assessment of cardiac function and disease progression (Kashou et al., 2023; Dohi, 2019). Recent advances in self-supervised learning (SSL) and foundation models have demonstrated that large-scale pretraining can learn transferable representations from unlabeled medical data, substan-tially reducing the dependence on expensive expert annotations (Azizi et al., 2021b; Khan et al., 2025). Among SSL methods, Masked autoencoders (MAEs, He et al., 2022) have emerged as a scalable paradigm for representation learning by reconstructing masked portions of the input from sparse observations. MAEs have since been successfully adapted to numerous medical domains, including CXRs (Chen et al., 2024), US and Echo imaging (Jiao et al., 2024; Kim et al., 2025), and electrocardiography (Na et al., 2024; Jin et al., 2024). Despite these advances, nearly all existing foundation models, and especially their pretraining strategies, remain modality-specific, learning separate representations for ECG, Echo, or CXR independently before combining them, if at all, only during downstream prediction. 1arXiv:2609.12035v1 [cs.AI] 10 Sep 2026 Preprint. 
+
+Beyond being modality-specific, many existing approaches also overlook the intrinsic structure present within medical data. Medical observations are rarely independent. A standard 12-lead ECG consists of multiple correlated electrical projections of the same cardiac activity, while a CXR and Echo examinations comprise multiple anatomical views acquired from different imaging planes. Explicitly modeling these relationships has recently been shown to substantially improve represen-tation learning (Laguna et al., 2025; Vandenhirtz et al., 2026; B¨ ohi et al., 2026). These findings suggest that exploiting structural relationships constitutes an effective form of inductive bias for medical foundation models. However, current approaches remain confined to individual modalities and therefore fail to exploit the relationships between complementary diagnostic modalities acquired from the same patient. ECG, Echo, and CXR each capture distinct but highly correlated aspects of cardiovascular physi-ology. ECG measures electrical conduction and rhythm, Echo visualizes cardiac anatomy and me-chanical function, while CXRs reveal cardiopulmonary morphology and secondary manifestations such as pulmonary congestion or cardiomegaly. Many clinically important diseases, including acute myocardial infarction, heart failure, valvular disease, and cardiomyopathies, manifest simultane-ously across these modalities, providing complementary evidence that clinicians naturally integrate during diagnosis (McDonagh et al., 2021; Byrne et al., 2023). Consequently, learning from each modality independently ignores substantial cross-modal information that could improve robustness, generalization, and clinical utility. Learning jointly from heterogeneous medical modalities presents several challenges. First, differ-ent modalities exhibit fundamentally different data characteristics, ranging from one-dimensional physiological time series to two-dimensional images and spatio-temporal videos. Second, clinical examinations are inherently incomplete: patients often undergo only a subset of available diagnostic procedures, requiring models to gracefully handle arbitrary patterns of missing modalities. Finally, multimodal observations exhibit hierarchical structure, with dependencies both within modalities (e.g., ECG leads or echocardiographic views) and across modalities at the patient level. Existing multimodal learning approaches typically rely on contrastive alignment or late feature fusion, limit-ing their ability to directly model these hierarchical interactions during representation learning. In this work, we propose Latent-Attention Masked Autoencoders (LAMAEs), a multimodal and structure-aware MAE (He et al., 2022) that jointly learns representations from ECG, Echo, CXRs and clinical variables through a shared latent attention (LA) mechanism. Rather than treating modal-ities as independent feature extractors whose representations are fused only during downstream pre-diction, our LAMAE enables information exchange directly within the latent space during self-supervised pretraining. This design naturally accommodates heterogeneous modalities, variable numbers of observations, and missing data while preserving the flexibility to exploit modality-specific information when appropriate. Our framework learns unified patient-level representations that better reflect the multimodal nature of clinical reasoning. Our contributions are four-fold: (1) We introduce a structure-aware multimodal masked autoen-coder that jointly learns from ECG, Echo, and CXRs during self-supervised pretraining. (2) We present the latent attention (LA) module for modeling relationships within individual modalities and learning interactions across heterogeneous diagnostic modalities. (3) We demonstrate that exploit-ing both intra-modal and inter-modal structure leads to more robust patient representations, and that the benefit of multimodal pretraining can transfer to single-modality inference, though the extent of this transfer is modality-dependent. (4) We validate the proposed framework across multiple down-stream cardiovascular prediction tasks, showing that access to multiple modalities provides a clear advantage over relying on a single modality, particularly on hospital-stay-level tasks. 
+
+## 2 RELATED WORK 
+
+Self-supervised pretraining in medicine. Self-supervised learning (SSL) has become a key strat-egy for medical representation learning, where expert annotation is costly and label distributions are heavily imbalanced (Azizi et al., 2021a; Moody et al., 2025). Early approaches adapted general-purpose pretext tasks such as context restoration or rotation prediction (Zhuang et al., 2019), fol-lowed by contrastive frameworks (Chen et al., 2020; He et al., 2020) that enforce invariance to augmentations. Applied to large unlabeled corpora such as MIMIC-CXR (Johnson et al., 2019), these methods yield encoders that transfer well to downstream classification and localization (Azizi 2Preprint. 
+
+et al., 2021a; Tiu et al., 2022), but they treat every image as an independent instance and are trained, almost without exception, within a single modality. 
+
+Masked and reconstruction-based pretraining. Masked image modeling has since become the dominant self-supervised paradigm. Masked autoencoders (MAEs) (He et al., 2022) learn dense representations by reconstructing masked (Bizeul et al., 2025), and video extensions (Tong et al., 2022; Wang et al., 2023) transfer the objective to spatiotemporal tubes. The paradigm has been adapted independently in each of the modalities we consider: CXR (Xiao et al., 2023; Mo & Liang, 2024), ultrasound and Echo (Jiao et al., 2024; Megahed et al., 2026; Kang et al., 2023; 2026; Kim et al., 2025; Stebler et al., 2025; Zhang et al., 2024; Yang et al., 2026), and ECG (Na et al., 2024; Jin et al., 2024), typically with modality-specific inductive biases such as temporal alignment losses or noise- and blur-based reconstruction targets. Each line of work confirms that masked reconstruction scales in its own domain, yet the resulting encoders are siloed, and the reconstruction signal remains strictly intra-sample: a single image, a single clip, or a single lead treated as a quasi-independent channel. 
+
+General-purpose and multimodal medical models. A parallel effort builds broader medical models by aligning modalities with language. Vision–language models pair images with reports (Boecking et al., 2022; Pellegrini et al., 2025; Chen et al., 2024; Deperrois et al., 2025), and gener-alist medical models extend this to several imaging domains (Sellergren et al., 2026; Zhang et al., 2026; Gao et al., 2025). Outside medicine, ImageBind (Girdhar et al., 2023) binds many modalities into a shared space by aligning each one to a single anchor. This text- or anchor-centred design has two consequences for our setting. First, supervision is semantic rather than geometric or physiologi-cal: a report states what is seen, not how a lateral projection, a precordial lead, and an apical view of the same patient relate. Second, coverage is bounded by the availability and quality of paired text, which is uneven across echocardiography, ECG and radiography alike. 
+
+Structured studies and set-based aggregation. Unlike natural images, medical data are rarely collected as single-entity samples: a CXR study couples frontal and lateral projections, an ECG com-prises twelve simultaneous leads, and an echocardiographic exam consists of several videos from complementary views. Prior work exploits this redundancy through multi-view or correspondence-based contrast (Nguyen et al., 2022; Zhou et al., 2023; Zeng et al., 2023; Agostini et al., 2025; Laguna et al., 2025), hierarchical fusion trained from scratch (Mokhtari et al., 2023), latent-space MAEs over frozen per-view encoders (Tohyama et al., 2025), or lead-alignment objectives combined with masked reconstruction (Erlacher et al., 2025). These methods establish intra-study coherence as a useful signal, but realize it almost exclusively through pairwise alignment, which under-utilizes higher-order relations and scales awkwardly with the number of views (Tschannen et al., 2023); frozen-encoder variants additionally inherit their representational ceiling. We instead treat a study as an unordered, variable-size set of latents and aggregate it with a learned attention module. Set-based attention is a natural fit here: it is permutation-invariant, accommodates missing or additional views, and learns which elements are informative (Lee et al., 2019), while instance-weighted at-tention yields interpretable summaries in related weakly supervised settings (Ilse et al., 2018). The formulation is agnostic to what constitutes a view, so the same aggregation applies to projections, leads and echocardiographic recordings alike: learning not from more data, but from the structure 
+
+of the data itself. 
+
+## 3 METHOD 
+
+We propose Latent-Attention Masked Autoencoders (LAMAEs), a multimodal and structure-aware MAE (He et al., 2022) that jointly learns representations from multimodal datasets S.We define a multimodal dataset as S = {S (s)}Ss=1 where every multimodal sample S(s) = {X(s,k )}k∈M , m(s), where X(s,k ) describes modality k ∈ M and m(s) ∈ { 0, 1}|M| the avail-ability mask and 
+
+m(s,k ) =
+
+1, if modality k is observed for s, 
+
+0, otherwise. . (1) The observed modalities per multimodal sample s are then M(s) 
+
+> obs
+
+= {k ∈ M | m(s,k ) = 1 }.3Preprint. Input 
+
+> Modalities
+> Masking
+> (Patch & Full Entity)
+> 𝐸𝜙1
+> 𝐸𝜙2
+> 𝐸𝜙3
+> 𝐷𝜙1
+> 𝐷𝜙2
+> 𝐷𝜙3
+> Reconstructed
+> Modalities
+> LAMAE
+> Network
+
+𝐿𝐴𝜙 
+
+Figure 1: Overview of the LAMAE framework. Given multimodal input (ECG, CXR, and Echo, left), tokens are masked at both the patch level and the full-entity level, e.g., dropping an entire lead or view (second panel). Modality-specific encoders Eϕk embed the visible tokens of each modality independently into latent embeddings, which the shared latent attention module LA ϕ then processes jointly across modalities. Modality-specific decoders Dϕk reconstruct the full, unmasked input from the resulting representations (right). The data acquisition process of healthcare data leads to more structure in the data compared to gen-eral or natural domain data (Laguna et al., 2025). Therefore, we introduce a three-layered hierarchy to describe modalities: studies, views, and base entities. Every modality X(s,k ) is a medical study that may consist of multiple examinations, e.g., an Echo study usually consists of multiple videos of different frames each. Hence, a modality is given as X(s,k ) = {X(s,k, 1) , . . . , X (s,k,V k )}, where 
+
+X(s,k,v ) is the data sample for view v and modality k, e.g., video of an echo study. For every modality k and sample s, we define the set of observed views as V(s) 
+
+> k, obs
+
+⊆ V k = {1, . . . , V k}, where 
+
+Vk = |V k| is the total number of views and Vk the complete set of views for modality k. Every view v of modality k is defined as X(s,k,v ) = ( x(s,k,v, 1) , . . . , x(s,k,v,E k )), where each base entity 
+
+x(s,k,v,e ) is, e.g., a frame in an Echo video, a lead in an ECG measurement, or an image in a CXR study, and Ek = {1, . . . , E k} is the tuple of base entities with Ek = |E k|.3.1 ENCODERS AND DECODERS 
+
+We have modality-specific encoders Eϕk (·) and decoders Dθk (·). Like MAEs (He et al., 2022), we mask a large portion of the input X(s,k ) during pretraining with the objective to reconstruct the unmasked input. Following He et al. (2022), we use transformer-based encoder and decoder architectures (Vaswani et al., 2017). More specifically we follow the suggested model variants presented in Dosovitskiy et al. (2020) and He et al. (2022). For details regarding the modality-specific adaptations, we refer to section A.1. Given a binary mask M (s) 
+
+> k,α k
+
+(·) with mask ratio αk for modality k, we define the model input X(s,k )
+
+> vis
+
+as 
+
+X(s,k ) 
+
+> vis
+
+= M (s) 
+
+> k,α k
+
+(X(s,k )). (2) Given our transformer-based architectures, we have Tk patches for modality k and Tk,vis = (1 −
+
+αk) · Tk visible patches for modality k. Hence, T (s) 
+
+> k,vis
+
+⊆ { 1, . . . , T k} is the set of input patches. We transform the patches of all modalities k ∈ M (s) 
+
+> obs
+
+to tokens using a single linear layer. During pretraining, the encoder Eϕk only processes the visible part X(s,k ) 
+
+> vis
+
+and embeds them into latent embeddings Z(s,k ) to reconstruct the full input ˆX(s,k ). However, for every modality k, the encoder Eϕk sequentially processes modalities on a base entity level, i.e., 
+
+z(s,k,v,e ) = Eϕk (x(s,k,v,e )) such that Z(s,k ) = {z(s,k,v,e ) | e ∈ E k, v ∈ V (s)
+
+> k, obs
+
+} (3) 4Preprint. 
+
+For simplicity, we describe the set of latent embeddings Z(s,k ) for modality k as Z(s,k ) =
+
+Eϕk (X(s,k ) 
+
+> vis
+
+). Similarly, we have modality-specific decoders Dθk , which decode the base entities of each modality separately, i.e., 
+
+ˆx(s,k,v,e ) = Dθk (z(s,k,v,e ) 
+
+> out
+
+) where Z(s,k ) 
+
+> out
+
+= {z(s,k,v,e ) 
+
+> out
+
+| e ∈ E k, v ∈ V (s)
+
+> k, obs
+
+}. (4) For vanilla MAEs, we have z(s,k,v,e ) = z(s,k,v,e ) 
+
+> out
+
+.3.2 LATENT ATTENTION FOR MULTIMODAL INTEGRATION 
+
+Compared to large-scale web data, multimodal datasets S provide additional structure in the data acquisition process that we can leverage. We introduce a novel Latent Attention (LA) module for leveraging the additional structure in the data. Inspired by Ilse et al. (2018) and Lee et al. (2019), the LA module allows to learn the correlation and shared information between different modalities with-out having the capacity and computational overhead of training an encoder-decoder model using a single, long sequence of concatenated input tokens of all modalities. In addition, the LA module is a flexible way of leveraging the additional structure provided by the data acquisition process, which is different to contrastive learning approaches that focus mostly on what is shared between modalities. This assumption might not be suitable for more complicated relationships between modalities such as in the healthcare domain. Hence, the LA module is where the information coming from all modalities is being processed jointly. Let Z(s) = {Z(s,k )}k∈M (s)
+
+> obs
+
+be the concatenation of latent embeddings Z(s,k ) of all modal-ities k ∈ M (s) 
+
+> obs
+
+.We design the latent attention module as a multi-head, multi-layer self-attention block using an ad-ditional multimodal CLS token z(s) 
+
+> cls,mm
+
+(Kolesnikov et al., 2021). Given a set of latent embeddings 
+
+Z(s), the LA module transforms the embeddings that only contain information of their respective base entities into embeddings containing all available multimodal information as follows 
+
+Z(s) 
+
+> out
+
+= ( z(s)
+
+> cls,mm
+
+, Z(s)
+
+> LA
+
+) = LA ϕ(Z(s)) (5) 3.3 LAMAE During pretraining, we optimize the following objective function 
+
+L(s) = X
+
+> k∈M (s)
+> obs
+
+X
+
+> v∈V (s)
+> k, obs
+
+X
+
+> e∈E k
+
+1
+
+αk
+
+X 
+
+> t / ∈T (s)
+> k,vis
+
+x(s,k,v,e ) 
+
+> t
+
+− ˆx(s,k,v,e )
+
+> t
+> 22
+
+where (6) 
+
+ˆx(s,k,v,e ) = Dθk
+
+  LA ϕ(Z(s))(k,v,e ) (7) 
+
+LA ϕ(Z(s))(k,v,e ) describes the output tokens for modality k, view v, base entity e in combination with the multimodal CLS token z(s)
+
+> cls,mm
+
+.Please note that our reconstruction-based objective naturally handles missingness of modalities as the reconstruction objective only applies to available modalities. This architecture supports the extraction of relevant information of each modality, combined with subsequent merging of the in-formation in the LA module for a global representation captured within the MM CLS token. This token is then used for downstream tasks, similar to the CLS token in (Dosovitskiy et al., 2020). 3.4 ENTITY MASKING 
+
+Given our late fusion approach, the latent attention module allows for more elaborate masking strate-gies compared to single-entity-based approaches. Single-entity masked-reconstruction approaches, such as the vanilla MAE (He et al., 2022), define their pretraining objective via patch-based mask-ing: a signal or image is divided into patches, of which a random subset is masked, defining the reconstruction target (see section 3.3 for details). The latent attention module additionally allows us to mask or drop complete entities such as leads, frames, or views. Dropping complete entities 5Preprint. 
+
+forces the latent attention module to connect information across base entities and, because entities are dropped independently per modality and view, an entity absent in one modality may remain visible in another, forcing cross-modal reconstruction. We make Equation (2) more specific as follows. Let Ek denote the entity set of modality k, with 
+
+Ek = |E k| assumed constant across the views v of modality k, and assume all entities of a given 
+
+(k, v ) carry the same number of tokens. For each sample s, modality k, and view v, we indepen-dently sample the number of visible (encoded) entities 
+
+E(s,k,v ) 
+
+> vis
+
+⊆ E k with E(s,k,v ) 
+
+> vis
+
+= n(s,k,v ) 
+
+> e,vis
+
+∼ U{ nmin , n max }, (8) and treat the remaining Ek − n(s,k,v ) 
+
+> e,vis
+
+dropped entities as fully masked (mask ratio 100% ). The reconstruction target comprises all masked tokens, i.e. every token of a dropped entity together with the masked tokens of the visible entities. We target a mask ratio αk per modality, held constant across all views v and all samples s. Since 
+
+n(s,k,v ) 
+
+> e,vis
+
+varies across views, we set the per-entity mask ratio β(s,k,v ) applied to the visible enti-ties so that each view attains the common target αk in expectation. Requiring  Ek − n(s,k,v ) 
+
+> e,vis
+
++
+
+n(s,k,v ) 
+
+> e,vis
+
+β(s,k,v )/E k = αk gives 
+
+β(s,k,v ) = αk − 1 + n(s,k,v ) 
+
+> e,vis
+
+/E k
+
+n(s,k,v ) 
+
+> e,vis
+
+/E k
+
+. (9) For β(s,k,v ) ≥ 0 the number of dropped entities must not by itself exceed the target, which bounds the sampler via nmin ≥ ⌈ (1 − αk) Ek⌉.The resulting masking procedure is 
+
+X(s,k ) 
+
+> vis
+
+=  Mk,β (s,k,v ) (x(s,k,v,e )) v, e ∈E (s,k,v )
+
+> vis
+
+= M (s)
+
+> k,α k
+
+ X(s,k ), (10) i.e. the per-view entity-dropping combined with the per-view ratio β(s,k,v ) is, in expectation and under the equal-token assumption within each (k, v ), equivalent to applying a single mask ratio αk
+
+to modality k.
+
+## 4 DATA 
+
+We use the MIMIC-IV database (Johnson et al., 2023b; Goldberger et al., 2000), together with its modality-specific subsets MIMIC-IV-CXR (Johnson et al., 2019), MIMIC-IV-ECG (Gow et al., 2023), MIMIC-IV-Echo (Gow et al., 2026), and MIMIC-IV-ED (Johnson et al., 2023a) to generate a dataset of multimodal hospital stays. A hospital stay is a collection of modalities describing the health status of a patient. Note that not every hospital stay S(s) is comprised of the same modalities as every patient trajectory potentially requires a different set of modalities to be acquired. In total, our dataset consists of 1′267 ′017 unique hospital stays with a total of 227 ′835 CXR studies and 
+
+377 ′110 images, 7′243 Echo studies and 525 ′328 videos, and 800 ′035 12-lead ECG measurements. 
+
+## 5 EXPERIMENTS 
+
+Our aim is to evaluate how the LA block influences the pretraining of models. We do so by assessing the downstream task performance of various tasks, both on a hospital-stay level (see section 5.1), where we expect multimodal models to benefit, and on unimodal tasks (see section 5.2), where unimodal models should have all the required information to solve the respective tasks. These two settings reflect the different layers of tasks within the healthcare setting, which range from low-level modality-specific tasks such as left ventricular ejection fraction estimation (LVEF) to tasks that reflect the longitudinal nature of a patient journey within a hospital stay such as in-hospital mortality or diagnosis codes. We study these complementary questions: (i) Does multimodal pretraining help in solving hospital-stay tasks? 
+
+LAMAE outperforms the Independent MAE on every hospital-stay task and both state-of-the-art baselines on five of six (table 1). 6Preprint. 
+
+(ii) Does modeling structure within a single modality via the LA module improve representations even without cross-modal information? 
+
+LAMAE outperforms Independent MAE on Echo and on five of six ECG targets, though the CXR comparison is within seed variance (tables 3a, 3b and 4). (iii) Does having access to multiple modalities provide an advantage over relying on a single modal-ity when solving hospital-stay tasks? 
+
+On every hospital-stay task, having access to all three modalities outperforms access to only a single one, with the gap widening as the available modality’s test-time coverage shrinks (table 2). 5.1 MULTIMODAL EVALUATION LAMAE 
+
+> Backbone
+> Task
+> Heads
+> 𝑇1
+> 𝑇𝑛
+> Downstream Tasks
+> ICD10 codes
+> Length of stay
+> Mortality
+> DRG codes
+
+Figure 2: Finetuning Pipeline Hospital stays are inherently multimodal, since a holistic understanding of a patient’s health requires integrating imaging, waveform, and longitudinal information rather than any single modality in isolation. Many classical medical AI tasks do not reflect this: chest X-ray anal-ysis, for instance, can be solved from the im-age alone and offers only a weak test of mul-timodal reasoning. We therefore evaluate on hospital-stay-level tasks that genuinely require this kind of cross-modal reasoning and closely mirror real clinical decision-making. 
+
+Setup. We evaluate on six hospital-stay-level tasks: in-hospital mortality, ICD-10 chapter IX diagnosis coding (World Health Organization, 2004), DRG code, severity, and mortality-risk prediction (Fetter et al., 1980), and length of stay. We compare against two state-of-the-art baselines, ProbMED (Gao et al., 2025) and MedSigLip (Sell-ergren et al., 2026). ProbMED is trained on combinations of CXR, ECG, Echo, and corresponding text samples using a contrastive training objective; it is also trained solely on data coming from the MIMIC database (Johnson et al., 2023b). MedSigLip is the encoder of the MedGemma model fam-ily; it natively handles CXR views, as it was trained on de-identified medical data, including CXRs, dermatology images, ophthalmology images, and histopathology slides (Sellergren et al., 2026). We finetune the MedSigLip encoder with frequency images of ECG signals such that it also has access to all three modalities during finetuning and testing. In addition, we include an Independent MAE baseline, trained simultaneously on all three modalities using the same data and training time as the LAMAE, but without multimodal interaction; this baseline directly isolates the impact of our proposed LA module, as it is the only difference relative to the proposed LAMAE. To isolate the effect of test-time modality access from the effect of the LA module itself, we additionally evaluate LAMAE with its input restricted to a subset of modalities, replacing any missing modality with the training-set mode so that every configuration is scored on the same test set (table 2). 
+
+Results. table 1 and table 2 give two views on the same underlying claim: solving hospital-stay tasks requires genuine multimodal reasoning, and LAMAE captures it better than the alternatives. In ta-ble 1, LAMAE achieves the best AUROC on five of the six tasks; mortality, ICD-10, DRG severity, DRG mortality-risk, and length of stay, outperforming both the ProbMED and MedSigLip baselines as well as the Independent MAE. The only exception is DRG code prediction, where MedSigLip and ProbMED are slightly ahead, though LAMAE still clearly outperforms the Independent MAE on this task. Comparing LAMAE against the Independent MAE, which is trained on the same data and for the same amount of time but without cross-modal interaction, isolates the benefit of the LA module: LAMAE outperforms it on every single task, while the Independent MAE alone is already competitive with the state-of-the-art baselines, suggesting that most of the remaining gains come specifically from modeling cross-modal interactions rather than from multimodal pretraining data alone. table 2 makes the same point from the complementary direction: instead of removing cross-modal interaction from the architecture, we now restrict which modalities the finetuned LAMAE is allowed to see at test time. Restricting it to Echo alone causes a large drop across all tasks, including a DRG code AUROC of only 17.60, far below chance, since Echo is available for only a small frac-tion of hospital stays and most test samples therefore fall back to the training-set default rather than 7Preprint. 
+
+Table 1: Hospital Stay Tasks. We finetune all methods using 50’000 labeled samples. Every sample has at least one ECG, Echo, or CXR measurement. At test, the model receives the set of modalities that is available for each hospital stay. We report the AUROC(%) or macro average of AUROC where applicable. The LAMAE and Independent MAE are both pretrained for 1000 epochs. LAMAE 1500 
+
+is pretrained for 1500 epochs. 
+
+Mortality ICD10 DRG Length of Stay Model In-hospital Ch. IX Code Severity Mortality Risk 
+
+MedSigLip 89 .62 ±0.38 82 .06 ±0.18 59 .39 ±0.38 68 .75 ±0.22 70 .65 ±0.06 79 .20 ±0.44 
+
+ProbMED 90 .20 ±0.66 82 .56 ±0.08 59 .38 ±0.35 69 .31 ±0.28 71 .36 ±0.34 79 .81 ±0.38 
+
+Independent MAE 90 .51 ±0.47 81 .66 ±0.11 57 .46 ±0.23 69 .08 ±0.36 71 .14 ±0.23 80 .87 ±0.25 
+
+LAMAE 91 .59 ±0.37 83 .02 ±0.18 58 .92 ±0.31 70 .29 ±0.24 72 .21 ±0.43 81 .70 ±0.26 
+
+LAMAE 1500 91 .71 ±0.36 83 .10 ±0.08 59 .17 ±0.58 70 .28 ±0.27 72 .32 ±0.27 81 .25 ±0.14 
+
+Table 2: Restricting the modalities a model accepts. All rows are LAMAE checkpoints finetuned on 50’000 labeled samples; the subscript gives the set of modalities the model takes as input. Test samples that lack an accepted modality are assigned the training-set mode, so every row is scored on the same test set. Because Echo and CXR are available for only a small fraction of hospital stays, the restricted rows fall back on this default for much of the test set, and their scores reflect modality coverage alongside representation quality. The bottom row is the same model as LAMAE 1500 in table 1. We report AUROC (%), or the macro average of AUROC where applicable. 
+
+Mortality ICD10 DRG Length of Stay Model In-hospital Ch. IX Code Severity Mortality Risk 
+
+LAMAE Echo 49 .82 ±0.25 50 .51 ±0.07 42 .36 ±0.06 50 .17 ±0.15 50 .26 ±0.23 50 .60 ±0.02 
+
+LAMAE CXR 61 .03 ±0.20 56 .53 ±0.05 51 .25 ±0.11 52 .91 ±0.16 53 .35 ±0.06 57 .48 ±0.04 
+
+LAMAE ECG 87 .14 ±0.15 74 .45 ±1.04 55 .09 ±0.26 67 .22 ±0.25 69 .39 ±0.09 74 .59 ±0.32 
+
+LAMAE ECG+Echo+CXR 91 .71 ±0.36 83 .10 ±0.08 59 .17 ±0.58 70 .28 ±0.27 72 .32 ±0.27 81 .25 ±0.14 
+
+an observed measurement. Restricting to ECG, the most commonly available modality, performs considerably better and approaches the full model, but still trails it on every task. Taken together, a model without cross-modal interaction and a model without access to multiple modalities each fall short of the full LAMAE, showing that both multimodality and the LA module are necessary for its performance on hospital-stay tasks. 5.2 UNIMODAL EVALUATION 
+
+While we propose LAMAE mainly for its multimodal capabilities, its hierarchical approach can be leveraged equally well for unimodal problems and dataset where some structure is present to be leveraged. Therefore, we evaluate LAMAE on unimodal tasks too. For CXR, we have a 14-label classification problem (Irvin et al., 2019), which are the 14 most prevalent findings in radiology reports of the CheXpert dataset. For Echo, we predict left ventricular ejection fraction, which serves as critical marker for the health status of a heart (Stebler et al., 2025). For ECG, we predict machine measurements such as the PR interval, the QRS complex duration or the QT interval, all describing clinically relevant temporal characteristics of the ECG waveform (Kligfield et al., 2007). All these tasks serve as steps to validate the unimodal performance of the proposed LAMAE approach. 5.2.1 CHEST X-R AY 
+
+Setup. We evaluate on the 14-label CheXpert finding classification task described above, with each CXR study capped at a maximum of three views. Alongside the view-based Indepen-dent MAE CXR baseline, trained solely on CXR, we evaluate LAMAE CXR , and additionally report LAMAE ECG+Echo+CXR , the same fully multimodal-pretrained checkpoint used in the Echo evalua-tion, finetuned and tested with its input restricted to CXR only. Pretraining uses all available CXR studies for 3000 epochs; finetuning runs for 50 epochs, and the checkpoint with the lowest valida-8Preprint. 
+
+Table 3: Unimodal CXR and echo finetuning results (mean ± SD over 3 seeds). 
+
+(a) CXR: Macro AUROC (%) of the test set. Best result under full finetuning (FT) in bold; best result under linear probing (LP) under-lined. 
+
+Method AUROC ↑
+
+Independent MAE CXR (FT) 81 .87 ±0.11 
+
+LAMAE ECG+Echo+CXR (FT) 81 .85 ±0.05 
+
+LAMAE CXR (FT) 82 .01 ±0.23 
+
+Independent MAE CXR (LP) 79 .73 ±0.12 
+
+LAMAE CXR (LP) 79 .91 ±0.11 
+
+(b) Echo: LVEF regression, MAE in percentage points.             
+
+> MAE ↓R2↑
+> Independent MAE Echo (FT) 8.97 ±0.20 0.306 ±0.005
+> LAMAE ECG+Echo+CXR (FT) 8.47 ±0.31 0.364 ±0.027
+> LAMAE Echo (FT) 8.29 ±0.22 0.412 ±0.043
+
+tion loss is used for evaluation on the test set, following the same protocol as the Echo and ECG experiments. Alongside full finetuning (FT), we report linear-probing (LP) results for LAMAE CXR 
+
+and Independent MAE CXR , freezing the pretrained encoder and training only a linear head for 20 epochs. 
+
+Result. Table 3a and fig. 5 report the results. LAMAE CXR achieves the best macro AUROC (82 .01 ), narrowly ahead of both Independent MAE CXR (81 .87 ) and the multimodal-pretrained LAMAE ECG+Echo+CXR (81 .85 ); the three are within each other’s seed variance, so we read this as LAMAE remaining competitive on CXR rather than offering a decisive improvement, consistent with CXR being a comparatively weak test of multimodal reasoning on its own (section 5.1). The linear-probed LAMAE CXR trails the fully finetuned variants by roughly 2.1 points, suggesting that most of the useful CXR-specific information still requires adapting the encoder rather than being linearly decodable from the frozen pretrained features. Nevertheless, LAMAE CXR also surpasses Independent MAE CXR under linear probing, consistent with the trend observed after full finetuning. fig. 5 shows how this aggregate score breaks down across the 14 individual CheXpert findings. 5.2.2 ECHOCARDIOGRAM 
+
+Setup. We predict left ventricular ejection fraction (LVEF), taken from the structured mea-surements accompanying the MIMIC-IV-Echo studies. Alongside the frame-based Independent MAE Echo baseline, trained solely on Echo videos, we evaluate LAMAE Echo , and additionally report LAMAE ECG+Echo+CXR , the same fully multimodal-pretrained checkpoint used in the CXR evaluation, finetuned and tested with its input restricted to Echo only. Pretraining uses all available echo videos for 1200 epochs; finetuning runs for 500 epochs, and the checkpoint with the lowest validation loss is used for evaluation on the test set. For the LVEF task, we sample one random apical four-chamber (A4C) view per study, as these are the views from which LVEF is clinically assessed. A4C views were identified with the view classifier of EchoPrime Vukadinovic et al. (2024). The same data selection is applied to every model, so it does not affect the comparison. For each video, a random set of 8 frames was selected with a 4 frame stride. 
+
+Result. Table 3b and fig. 6 report the results. Both LAMAE variants improve over the frame-based Independent MAE baseline, with LAMAE reducing the mean absolute error by 0.68 percentage points and raising R2 from 0.306 to 0.412 . The multimodal-pretrained LAMAE ECG+Echo+CXR out-performs the Independent MAE baseline but falls slightly short of the modality-specific LAMAE variant. 5.2.3 ELECTROCARDIOGRAM 
+
+Setup. We derive six global interval measurements from the MIMIC-IV-ECG machine annotations: the RR interval, taken directly from the annotations, and the PR interval, P-wave duration, QRS duration and QT interval, obtained as differences of the annotated wave onsets and offsets. The rate-corrected QTc interval is computed from QT and RR using Bazett’s formula, following Plagwitz et al. (2025). Following the same work, we discard records whose annotated intervals fall outside normal physiological bounds (PR < 20 or > 500 ,ms; P wave < 20 or > 300 ,ms; QRS < 50 or 
+
+> 300 ,ms; QT < 250 or > 600 ,ms), as well as records carrying the ”not measured” sentinel code, 9Preprint. 
+
+Table 4: Unimodal ECG interval regression. Targets are derived from the MIMIC-IV-ECG machine annotations as differences of fiducial points: PR is the interval from P onset to QRS onset, P wave from P onset to P end, QRS from QRS onset to QRS end, and QT from QRS onset to T end; RR is taken directly from the annotations, and QTc is obtained from QT and RR by Bazett’s correction. Mean ± SD over 3 seeds; MAE in ms, best value per column and metric in bold.                                       
+
+> Model Metric RR PR P wave QRS QT QTc Independent MAE ECG (FT) MAE ↓14 .18 ±1.38 12 .33 ±0.67 11 .96 ±0.10 5.43 ±0.53 10 .74 ±1.38 11 .39 ±0.40
+> R2↑0.98 ±0.00 0.70 ±0.03 0.20 ±0.02 0.85 ±0.02 0.89 ±0.02 0.73 ±0.02
+> LAMAE ECG (FT) MAE ↓11 .66 ±1.24 11 .17 ±0.87 10 .55 ±0.33 5.80 ±1.24 8.60 ±0.56 9.43 ±0.31
+> R2↑0.99 ±0.00 0.73 ±0.03 0.31 ±0.04 0.85 ±0.04 0.92 ±0.01 0.79 ±0.01
+
+since these indicate lower annotation reliability. A record is retained only if all six targets are valid. Both models are pretrained on the same ECG records for 600 epochs under identical settings, and fully finetuned for 20 epochs as a single multi-task regression over all six intervals. We select the epoch with the lowest validation loss and report test performance over three seeds. Predicting these intervals is not itself a clinically useful task, since dedicated delineation algorithms already solve it reliably. We use it instead as a probe: the intervals depend on precise wave onsets and offsets, so recovering them indicates that the learned representation preserves fine-grained temporal structure rather than only coarse signal-level information. 
+
+Result. Table 4 and fig. 7 report mean absolute error and R2 per interval. LAMAE improves over the Independent MAE baseline on five of the six targets, with the largest gains on QT ( −2.1 ms) and QTc ( −2.0 ms); QRS duration is the one exception, where the two models are within seed variance of each other. The ordering of the targets is consistent across both models: RR, QRS, and QT are recovered most accurately ( R2 ≥ 0.85 ), PR and QTc are recovered moderately well, and P-wave duration remains hard for both ( R2 = 0 .20 and 0.31 ). 
+
+## 6 CONCLUSION 
+
+We introduced Latent-Attention Masked Autoencoders (LAMAE), a multimodal, structure-aware masked autoencoder that jointly learns patient-level representations from ECG, echocardiography, chest radiographs, and clinical variables during self-supervised pretraining. Instead of fusing modal-ities only at the prediction stage, LAMAE exchanges information directly in the latent space through a shared LA module operating over a study–view–entity hierarchy, naturally handling heteroge-neous data, variable numbers of observations, and missing modalities within a single reconstruc-tion objective. Pretrained on over 1.2 million MIMIC-IV hospital stays, LAMAE outperforms modality-specific pretraining and strong contrastive and vision–language baselines across multi-modal hospital-stay tasks, while remaining competitive on unimodal ones. When only a single modality is available at test time, the benefit of multimodal pretraining is mixed: it carries over for ECG, but is less consistent for echocardiography and chest radiographs, suggesting that the model’s use of cross-modal structure is modality-dependent rather than uniformly transferable. Promising next steps include going beyond a single data source to validate cross-institutional transfer, and ex-tending the latent-attention framework to further modalities such as laboratory time series or clinical notes. By learning representations that reflect the multimodal, structured nature of clinical reason-ing, LAMAE offers a step toward foundation models that support the holistic patient assessment clinicians perform in practice. 
+
+## REFERENCES 
+
+Andrea Agostini, Sonia Laguna, Alain Ryser, Samuel Ruiperez-Campillo, Moritz Vandenhirtz, Nicolas Deperrois, Farhad Nooralahzadeh, Michael Krauthammer, Thomas M Sutter, and Julia E Vogt. Leveraging the structure of medical data for improved representation learning. International Conference on Machine Learning Workshop on FM4LS , 2025. Shekoofeh Azizi, Basil Mustafa, Fiona Ryan, Zachary Beaver, Jan Freyberg, Jonathan Deaton, Aaron Loh, Alan Karthikesalingam, Simon Kornblith, Ting Chen, and others. Big self-supervised 10 Preprint. 
+
+models advance medical image classification. In Proceedings of the IEEE/CVF international conference on computer vision , pp. 3478–3488, 2021a. Shekoofeh Azizi, Basil Mustafa, Fiona Ryan, Zachary Beaver, Jan Freyberg, Jonathan Deaton, Aaron Loh, Alan Karthikesalingam, Simon Kornblith, Ting Chen, et al. Big self-supervised models advance medical image classification. In Proceedings of the IEEE/CVF international conference on computer vision , pp. 3478–3488, 2021b. Alice Bizeul, Thomas Sutter, Alain Ryser, Bernhard Sch¨ olkopf, Julius von K¨ ugelgen, and Julia E. Vogt. From Pixels to Components: Eigenvector Masking for Visual Representation Learning, February 2025. URL http://arxiv.org/abs/2502.06314 . arXiv:2502.06314 [cs]. Benedikt Boecking, Naoto Usuyama, Shruthi Bannur, Daniel C Castro, Anton Schwaighofer, Stephanie Hyland, Maria Wetscherek, Tristan Naumann, Aditya Nori, Javier Alvarez-Valle, et al. Making the most of text semantics to improve biomedical vision–language processing. In Euro-pean conference on computer vision , pp. 1–21. Springer, 2022. Robert A Byrne, Xavier Rossello, J J Coughlan, Emanuele Barbato, Colin Berry, Alaide Chi-effo, Marc J Claeys, Gheorghe-Andrei Dan, Marc R Dweck, Mary Galbraith, Martine Gilard, Lynne Hinterbuchner, Ewa A Jankowska, Peter J¨ uni, Takeshi Kimura, Vijay Kunadian, Mar-gret Leosdottir, Roberto Lorusso, Roberto F E Pedretti, Angelos G Rigopoulos, Maria Ru-bini Gimenez, Holger Thiele, Pascal Vranckx, Sven Wassmann, Nanette Kass Wenger, Borja Ibanez, and ESC Scientific Document Group. 2023 ESC Guidelines for the management of acute coronary syndromes: Developed by the task force on the management of acute coro-nary syndromes of the European Society of Cardiology (ESC). European Heart Journal , 44 (38):3720–3826, October 2023. ISSN 0195-668X. doi: 10.1093/eurheartj/ehad191. URL 
+
+https://doi.org/10.1093/eurheartj/ehad191 .Simon B¨ ohi, Irene Cannistraci, Sergio Mu˜ noz Gonzalez, Moritz Vandenhirtz, Sonia Laguna, Samuel Ruiperez-Campillo, Max Kr¨ ahenmann, Andrea Agostini, Ece Ozkan, Thomas M. Sut-ter, and Julia E. Vogt. Beyond Independent Frames: Latent Attention Masked Autoencoders for Multi-View Echocardiography, April 2026. URL http://arxiv.org/abs/2604.15096 .arXiv:2604.15096 [cs.CV] version: 1. Ting Chen, Simon Kornblith, Mohammad Norouzi, and Geoffrey Hinton. A simple framework for contrastive learning of visual representations. In International conference on machine learning ,pp. 1597–1607. PmLR, 2020. Zhihong Chen, Maya Varma, Jean-Benoit Delbrouck, Magdalini Paschali, Louis Blankemeier, Dave Van Veen, Jeya Maria Jose Valanarasu, Alaa Youssef, Joseph Paul Cohen, Eduardo Pontes Reis, et al. Chexagent: Towards a foundation model for chest x-ray interpretation. In AAAI 2024 Spring Symposium on Clinical Foundation Models , 2024. Nicolas Deperrois, Hidetoshi Matsuo, Samuel Ruip´ erez-Campillo, Moritz Vandenhirtz, Sonia La-guna, Alain Ryser, Koji Fujimoto, Mizuho Nishio, Thomas M Sutter, Julia E Vogt, et al. Radvlm: A multitask conversational vision-language model for radiology. arXiv preprint arXiv:2502.03333 , 2025. Kaoru Dohi. Echocardiographic assessment of cardiac structure and function in chronic renal dis-ease. Journal of Echocardiography , 17(3):115–122, September 2019. ISSN 1880-344X. doi: 10.1007/s12574-019-00436-x. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszko-reit, and Neil Houlsby. An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. CoRR , abs/2010.11929, 2020. URL https://arxiv.org/abs/2010.11929 .arXiv: 2010.11929. Lucas Erlacher, Andrea Agostini, Samuel Ruiperez-Campillo, Ece Ozkan, Thomas M Sutter, and Julia E Vogt. Swissbeatsnet: A multilead masked autoencoder for chagas disease detection. Com-puting In cardiology , 15:16, 2025. 11 Preprint. 
+
+Robert B Fetter, Youngsoo Shin, Jean L Freeman, Richard F Averill, and John D Thompson. Case mix definition by diagnosis-related groups. Medical care , 18(2):i–53, 1980. Yuan Gao, Sangwook Kim, Jianzhong You, and Chris McIntosh. ProbMED: A Prob-abilistic Framework for Medical Multimodal Binding. pp. 20157–20167, 2025. URL 
+
+https://openaccess.thecvf.com/content/ICCV2025/html/Gao_ProbMED_ A_Probabilistic_Framework_for_Medical_Multimodal_Binding_ICCV_ 2025_paper.html .Rohit Girdhar, Alaaeldin El-Nouby, Zhuang Liu, Mannat Singh, Kalyan Vasudev Alwala, Armand Joulin, and Ishan Misra. ImageBind: One Embedding Space To Bind Them All, May 2023. URL 
+
+http://arxiv.org/abs/2305.05665 . arXiv:2305.05665 [cs.CV]. Ary L Goldberger, Luis AN Amaral, Leon Glass, Jeffrey M Hausdorff, Plamen Ch Ivanov, Roger G Mark, Joseph E Mietus, George B Moody, Chung-Kang Peng, and H Eugene Stanley. Physiobank, physiotoolkit, and physionet: components of a new research resource for complex physiologic signals. circulation , 101(23):e215–e220, 2000. Brian Gow, Tom Pollard, Larry A Nathanson, Alistair Johnson, Benjamin Moody, Chrystinne Fer-nandes, Nathaniel Greenbaum, Jonathan W Waks, Parastou Eslami, Tanner Carbonati, et al. Mimic-iv-ecg: Diagnostic electrocardiogram matched subset. Type: dataset , 6:13–14, 2023. Brian Gow, Tom Pollard, Nathaniel Greenbaum, Benjamin Moody, Ahram Han, Jonathan W Waks, Alistair Johnson, Elizabeth Herbst, Parastou Eslami, Ashish Chaudhari, Tanner Carbonati, Seth Berkowitz, Roger Mark, and Steven Horng. MIMIC-IV-ECHO: Echocardiogram Matched Sub-set. PhysioNet , March 2026. doi: 10.13026/nrjh-5r77. URL https://doi.org/10. 13026/nrjh-5r77 .Kaiming He, Haoqi Fan, Yuxin Wu, et al. Momentum contrast for unsupervised visual representation learning. In CVPR , 2020. Kaiming He, Xinlei Chen, Saining Xie, Yanghao Li, Piotr Doll´ ar, and Ross Girshick. Masked au-toencoders are scalable vision learners. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 16000–16009, 2022. Maximilian Ilse, Jakub Tomczak, and Max Welling. Attention-based deep multiple instance learn-ing. In International conference on machine learning , pp. 2127–2136. PMLR, 2018. Jeremy Irvin, Pranav Rajpurkar, Michael Ko, Yifan Yu, Silviana Ciurea-Ilcus, Chris Chute, Henrik Marklund, Behzad Haghgoo, Robyn Ball, Katie Shpanskaya, Jayne Seekins, David A. Mong, Safwan S. Halabi, Jesse K. Sandberg, Ricky Jones, David B. Larson, Curtis P. Langlotz, Bhavik N. Patel, Matthew P. Lungren, and Andrew Y. Ng. CheXpert: A Large Chest Radiograph Dataset with Uncertainty Labels and Expert Comparison, January 2019. URL http://arxiv.org/ abs/1901.07031 . arXiv:1901.07031 [cs]. Jing Jiao, Jin Zhou, Xiaokang Li, Menghua Xia, Yi Huang, Lihong Huang, Na Wang, Xiaofan Zhang, Shichong Zhou, Yuanyuan Wang, and Yi Guo. USFM: A universal ultrasound foun-dation model generalized to tasks and organs towards label efficient image analysis. Med-ical Image Analysis , 96:103202, August 2024. ISSN 1361-8415. doi: 10.1016/j.media. 2024.103202. URL https://www.sciencedirect.com/science/article/pii/ S1361841524001270 .Jiarui Jin, Haoyu Wang, Hongyan Li, Jun Li, Jiahui Pan, and Shenda Hong. Reading your heart: Learning ecg words and sentences via pre-training ecg language model. In International confer-ence on learning representations , 2024. Alistair Johnson, Lucas Bulgarelli, Tom Pollard, Leo Anthony Celi, Roger Mark, and Steven Horng. MIMIC-IV-ED. PhysioNet , January 2023a. doi: 10.13026/5ntk-km72. URL https://doi. org/10.13026/5ntk-km72 .Alistair E W Johnson, Tom J Pollard, Seth J Berkowitz, Nathaniel R Greenbaum, Matthew P Lun-gren, Chih-ying Deng, Roger G Mark, and Steven Horng. MIMIC-CXR, a de-identified publicly available database of chest radiographs with free-text reports. Scientific Data , 6, 2019. 12 Preprint. 
+
+Alistair EW Johnson, Lucas Bulgarelli, Lu Shen, Alvin Gayles, Ayad Shammout, Steven Horng, Tom J Pollard, Sicheng Hao, Benjamin Moody, Brian Gow, et al. Mimic-iv, a freely accessible electronic health record dataset. Scientific data , 10(1):1, 2023b. Qingbo Kang, Jun Gao, Kang Li, and Qicheng Lao. Deblurring Masked Autoencoder is Bet-ter Recipe for Ultrasound Image Recognition, July 2023. URL http://arxiv.org/abs/ 2306.08249 . arXiv:2306.08249 [cs]. Qingbo Kang, Jun Gao, Hongkai Zhao, Zhu He, Kang Li, and Qicheng Lao. D$$ˆ2$$MAE: Diffu-sional Deblurring MAE for Ultrasound Image Pre-training. In James C. Gee, Daniel C. Alexander, Jaesung Hong, Juan Eugenio Iglesias, Carole H. Sudre, Archana Venkataraman, Polina Golland, Jong Hyo Kim, and Jinah Park (eds.), Medical Image Computing and Computer Assisted Inter-vention – MICCAI 2025 , pp. 107–117, Cham, 2026. Springer Nature Switzerland. ISBN 978-3-032-05169-1. doi: 10.1007/978-3-032-05169-1 11. Anthony H Kashou, Peter A Noseworthy, Thomas J Beckman, Nandan S Anavekar, Michael W Cullen, Kurt B Angstman, Benjamin J Sandefur, Brian P Shapiro, Brandon W Wiley, Andrew M Kates, et al. Ecg interpretation proficiency of healthcare professionals. Current problems in cardiology , 48(10):101924, 2023. Wasif Khan, Seowung Leem, Kyle B See, Joshua K Wong, Shaoting Zhang, and Ruogu Fang. A comprehensive survey of foundation models in medicine. IEEE Reviews in Biomedical Engineer-ing , 2025. Sekeun Kim, Pengfei Jin, Sifan Song, Cheng Chen, Yiwei Li, Hui Ren, Xiang Li, Tianming Liu, and Quanzheng Li. Echofm: Foundation model for generalizable echocardiogram analysis, 2025. URL https://arxiv.org/abs/2410.23413 .Paul Kligfield, Leonard S. Gettes, James J. Bailey, Rory Childers, Barbara J. Deal, E. William Hancock, Gerard van Herpen, Jan A. Kors, Peter Macfarlane, David M. Mirvis, Olle Pahlm, Pentti Rautaharju, and Galen S. Wagner. Recommendations for the standardization and in-terpretation of the electrocardiogram. Circulation , 115(10):1306–1324, 2007. doi: 10.1161/ CIRCULATIONAHA.106.180200. URL https://www.ahajournals.org/doi/abs/ 10.1161/CIRCULATIONAHA.106.180200 .Alexander Kolesnikov, Alexey Dosovitskiy, Dirk Weissenborn, Georg Heigold, Jakob Uszkoreit, Lucas Beyer, Matthias Minderer, Mostafa Dehghani, Neil Houlsby, Sylvain Gelly, Thomas Un-terthiner, and Xiaohua Zhai. An image is worth 16x16 words: Transformers for image recognition at scale. 2021. Sonia Laguna, Andrea Agostini, Alain Ryser, Samuel Ruiperez-Campillo, Irene Cannistraci, Moritz Vandenhirtz, Stephan Mandt, Nicolas Deperrois, Farhad Nooralahzadeh, Michael Krauthammer, et al. Structure is supervision: Multiview masked autoencoders for radiology. arXiv preprint arXiv:2511.22294 , 2025. Juho Lee, Yoonho Lee, Jungtaek Kim, Adam Kosiorek, Seungjin Choi, and Yee Whye Teh. Set transformer: A framework for attention-based permutation-invariant neural networks. In Interna-tional conference on machine learning , pp. 3744–3753. PMLR, 2019. Theresa A McDonagh, Marco Metra, Marianna Adamo, Roy S Gardner, Andreas Baumbach, Michael B¨ ohm, Haran Burri, Javed Butler, Jelena ˇ Celutkien˙ e, Ovidiu Chioncel, John G F Cleland, Andrew J S Coats, Maria G Crespo-Leiro, Dimitrios Farmakis, Martine Gilard, Stephane Hey-mans, Arno W Hoes, Tiny Jaarsma, Ewa A Jankowska, Mitja Lainscak, Carolyn S P Lam, Alexan-der R Lyon, John J V McMurray, Alexandre Mebazaa, Richard Mindham, Claudio Muneretto, Massimo Francesco Piepoli, Susanna Price, Giuseppe M C Rosano, Frank Ruschitzka, Anne Kathrine Skibelund, and ESC Scientific Document Group. 2021 ESC Guidelines for the diagno-sis and treatment of acute and chronic heart failure: Developed by the Task Force for the diagno-sis and treatment of acute and chronic heart failure of the European Society of Cardiology (ESC) With the special contribution of the Heart Failure Association (HFA) of the ESC. European Heart Journal , 42(36):3599–3726, September 2021. ISSN 0195-668X. doi: 10.1093/eurheartj/ehab368. URL https://doi.org/10.1093/eurheartj/ehab368 .13 Preprint. 
+
+Youssef Megahed, Robin Ducharme, Aylin Erman, Mark C. Walker, Steven Hawken, and Adrian D. C. Chan. USF-MAE: Ultrasound Self-Supervised Foundation Model with Masked Autoen-coding, January 2026. URL https://papers.ssrn.com/abstract=5900025 .Shentong Mo and Paul Pu Liang. Multimed: Massively multimodal and multitask medical under-standing. arXiv preprint arXiv:2408.12682 , 2024. Masoud Mokhtari, Neda Ahmadi, Teresa S. M. Tsang, Purang Abolmaesumi, and Renjie Liao. GEMTrans: A General, Echocardiography-based, Multi-Level Transformer Framework for Cardiovascular Diagnosis, August 2023. URL http://arxiv.org/abs/2308.13217 .arXiv:2308.13217 [cs]. Jonathan B Moody, Alexis Poitrasson-Rivi` ere, Jennifer M Renaud, Tomoe Hagio, Fares Alahdab, Mouaz H Al-Mallah, Michael D Vanderver, Sascha N Goonewardena, Edward P Ficaro, and Venkatesh L Murthy. A foundation transformer model with self-supervised learning for ecg-based assessment of cardiac and coronary function. NEJM AI , 2(12):AIoa2500164, 2025. Yeongyeon Na, Minje Park, Yunwon Tae, and Sunghoon Joo. Guiding masked representation learn-ing to capture spatio-temporal relationship of electrocardiogram. In International conference on learning representations , 2024. Thanh Nguyen et al. Self-supervised contrastive learning for multi-view chest x-ray representation. In MICCAI , 2022. Chantal Pellegrini, Ege ¨ Ozsoy, Benjamin Busam, Benedikt Wiestler, Nassir Navab, and Matthias Keicher. Radialog: Large vision-language models for x-ray reporting and dialog-driven assis-tance. In Medical Imaging with Deep Learning , 2025. Lucas Plagwitz, Florian Doldi, Jannes Magerfleisch, Maxim Zotov, Lucas Bickmann, Dominik Hei-der, Julian Varghese, Lars Eckardt, and Antonius B¨ uscher. QTcNet: a deep learning model for direct heart rate corrected QT interval estimation. EP Europace , 27(12):euaf274, Decem-ber 2025. ISSN 1532-2092. doi: 10.1093/europace/euaf274. URL https://doi.org/10. 1093/europace/euaf274 .Gregory A. Roth, Global Burden of Cardiovascular Diseases, and Risks 2023 Collaborators. Global, regional, and national burden of cardiovascular diseases and risk factors in 204 countries and territories, 1990-2023. Journal of the American College of Cardiology , 86(22):2167–2243, 2025. Andrew Sellergren, Sahar Kazemzadeh, Tiam Jaroensri, Atilla Kiraly, Madeleine Traverse, Timo Kohlberger, Shawn Xu, Fayaz Jamil, C´ ıan Hughes, Charles Lau, Justin Chen, Fereshteh Mahvar, Liron Yatziv, Tiffany Chen, Bram Sterling, Stefanie Anna Baby, Susanna Maria Baby, Jeremy Lai, Samuel Schmidgall, Lu Yang, Kejia Chen, Per Bjornsson, Shashir Reddy, Ryan Brush, Ken-neth Philbrick, Mercy Asiedu, Ines Mezerreg, Howard Hu, Howard Yang, Richa Tiwari, Sunny Jansen, Preeti Singh, Yun Liu, Shekoofeh Azizi, Aishwarya Kamath, Johan Ferret, Shreya Pathak, Nino Vieillard, Ramona Merhej, Sarah Perrin, Tatiana Matejovicova, Alexandre Ram´ e, Morgane Riviere, Louis Rouillard, Thomas Mesnard, Geoffrey Cideron, Jean-bastien Grill, Sabela Ramos, Edouard Yvinec, Michelle Casbon, Elena Buchatskaya, Jean-Baptiste Alayrac, Dmitry Lepikhin, Vlad Feinberg, Sebastian Borgeaud, Alek Andreev, Cassidy Hardin, Robert Dadashi, L´ eonard Hussenot, Armand Joulin, Olivier Bachem, Yossi Matias, Katherine Chou, Avinatan Hassidim, Kavi Goel, Clement Farabet, Joelle Barral, Tris Warkentin, Jonathon Shlens, David Fleet, Vic-tor Cotruta, Omar Sanseviero, Gus Martins, Phoebe Kirk, Anand Rao, Shravya Shetty, David F. Steiner, Can Kirmizibayrak, Rory Pilgrim, Daniel Golden, and Lin Yang. MedGemma Techni-cal Report, April 2026. URL http://arxiv.org/abs/2507.05201 . arXiv:2507.05201 [cs.AI]. Yves Stebler, Thomas M Sutter, Ece ¨ Ozkan Elsen, and Julia E Vogt. Temporal representation learn-ing for ultrasound analysis using masked modeling. arXiv , 2025. Ekin Tiu, Ellie Talius, Pujan Patel, Curtis P Langlotz, Andrew Y Ng, and Pranav Rajpurkar. Expert-level detection of pathologies from unannotated chest X-ray images via self-supervised learning. 
+
+Nature biomedical engineering , 6(12):1399–1406, 2022. Publisher: Nature Publishing Group UK London. 14 Preprint. 
+
+Takeshi Tohyama, Ahram Han, Dukyong Yoon, Kenneth Paik, Brian Gow, Nura Izath, Jacques Kpodonu, and Leo Anthony Celi. Multi-View Echocardiographic Embedding for Accessible AI Development. medRxiv , pp. 2025.08.15.25333725, October 2025. doi: 10.1101/2025.08.15. 25333725. URL https://pmc.ncbi.nlm.nih.gov/articles/PMC12393585/ .Zhan Tong, Yibing Song, Jue Wang, and Limin Wang. VideoMAE: Masked Autoencoders are Data-Efficient Learners for Self-Supervised Video Pre-Training, October 2022. URL http: //arxiv.org/abs/2203.12602 . arXiv:2203.12602 [cs]. Michael Tschannen, Manoj Kumar, Andreas Steiner, Xiaohua Zhai, Neil Houlsby, and Lucas Beyer. Image captioners are scalable vision learners too. Advances in Neural Information Processing Systems , 36:46830–46855, 2023. Moritz Vandenhirtz, Samuel Ruip´ erez-Campillo, Simon B¨ ohi, Sonia Laguna, Irene Cannistraci, An-drea Agostini, Ece Ozkan, Thomas M. Sutter, and Julia E. Vogt. Foundation Model for Car-diac Time Series via Masked Latent Attention, April 2026. URL http://arxiv.org/abs/ 2603.26475 . arXiv:2603.26475 [cs.LG]. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Ł ukasz Kaiser, and Illia Polosukhin. Attention is All you Need. In I. Guyon, U. Von Luxburg, S. Bengio, H. Wallach, R. Fergus, S. Vishwanathan, and R. Garnett (eds.), Ad-vances in Neural Information Processing Systems , volume 30. Curran Associates, Inc., 2017. URL https://proceedings.neurips.cc/paper_files/paper/2017/ file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf .Milos Vukadinovic, Xiu Tang, Neal Yuan, Paul Cheng, Debiao Li, Susan Cheng, Bryan He, and David Ouyang. Echoprime: A multi-video view-informed vision-language model for compre-hensive echocardiography interpretation, 2024. URL https://arxiv.org/abs/2410. 09704 .Limin Wang, Bingkun Huang, Zhiyu Zhao, Zhan Tong, Yinan He, Yi Wang, Yali Wang, and Yu Qiao. VideoMAE V2: Scaling Video Masked Autoencoders with Dual Masking. In 2023 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 14549–14560, Vancouver, BC, Canada, June 2023. IEEE. ISBN 979-8-3503-0129-8. doi: 10.1109/CVPR52729. 2023.01398. URL https://ieeexplore.ieee.org/document/10203656/ .World Health Organization. ICD-10: international statistical classification of diseases and related health problems: tenth revision . World Health Organization, Geneva, 2nd edition, 2004. URL 
+
+https://who.int .Junfei Xiao, Yutong Bai, Alan Yuille, and Zongwei Zhou. Delving into masked autoencoders for multi-label thorax disease classification. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , pp. 3588–3600, 2023. Xuan Yang, Rui Xu, Xinchen Ye, Zhihui Wang, Miao Zhang, Yi Wang, Xin Fan, Hongkai Wang, Qingxiong Yue, Xiangjian He, and Yen-Wei Chen. EchoCardMAE: Video Masked Auto-Encoders Customized for Echocardiography. In James C. Gee, Daniel C. Alexander, Jaesung Hong, Juan Eugenio Iglesias, Carole H. Sudre, Archana Venkataraman, Polina Golland, Jong Hyo Kim, and Jinah Park (eds.), Medical Image Computing and Computer Assisted Intervention – MICCAI 2025 , pp. 171–180, Cham, 2026. Springer Nature Switzerland. ISBN 978-3-032-05169-1. doi: 10.1007/978-3-032-05169-1 17. Haoran Zeng et al. Learning cross-view anatomical consistency for radiographic representation. 
+
+IEEE Transactions on Medical Imaging , 2023. Andrew Zhang, Tong Ding, Sophia J. Wagner, Caiwei Tian, Ming Y. Lu, Rowland Pettit, Joshua E. Lewis, Alexandre Misrahi, Dandan Mo, Long Phi Le, and Faisal Mahmood. A multimodal and temporal foundation model for virtual patient representations at healthcare system scale, April 2026. URL http://arxiv.org/abs/2604.18570 . arXiv:2604.18570 [cs.LG]. Ziyang Zhang, Qinxin Wu, Sirui Ding, Xiaolong Wang, and Jiancheng Ye. Echo-Vision-FM: A Pre-training and Fine-tuning Framework for Echocardiogram Videos Vision Foundation Model, October 2024. URL https://www.medrxiv.org/content/10.1101/2024.10.09. 24315195v2 . Pages: 2024.10.09.24315195. 15 Preprint. 
+
+Bowen Zhou et al. Multi-view self-supervised learning for chest x-ray representation. Medical Image Analysis , 2023. Xiahai Zhuang et al. Self-supervised feature learning for 3d medical images by playing a rubik’s cube. In MICCAI , 2019. 
+
+## A APPENDIX 
+
+A.1 MODALITY -S PECIFIC ARCHITECTURES 
+
+TBD. A.2 ECHO ABLATION 
+
+The base configuration is chosen as LAMAE with 8 frames, one view, frame level encoding, tem-poral patch size of one and no frame dropping. Each model is pretrained on all MIMIC echo videos for 1200 epochs. This setup was chosen for its relative computational affordability (given the nr of models that need to be trained), while still giving a solid performance as a basis for comparisons of architecture and hyperparameter choices. All models were finetuned with the same setting and the best epoch with respect to the validation loss was selected for evaluation on the test set. 
+
+Frame masking: We compare the effect of full frame masking where in each batch a random number of frames are dropped between 0 and N where N ∈ { 0, 1, 3, 5, 7}. With a total of 8 frames per video, 7 frames is the maximum number of frames that can be dropped while still retaining some information. The effective masking ratio is kept constant across the different setups. That means the effective number of unmasked patches in an entire video stays the same, regardless of the number of frames that were dropped. We chose this setup to maximize the comparability of the methods, both in terms of computational requirements, as well as in terms of provided information. Table 5 shows the performance comparison on the LVEF task. Table 5: LVEF regression performance on the held-out test set after finetuning encoders pretrained with different numbers of dropped frames. The scratch baseline is finetuned without pretrained weights. MAE is reported as a fraction of ejection fraction (not in percentage points as in table 3b). 
+
+No pre-training Frames dropped 
+
+0 1 3 5 7
+
+R2 ↑ −0.044 0.305 0.356 0.380 0.361 0.391 
+
+MAE ↓ 0.1058 0.0879 0.0868 0.0831 0.0840 0.0847 
+
+Patch size: We compare the effect of patch size on model performance. We compare models trained with a patch size of 1 and 2. Doubling temporal patch size effectively halves the number of tokens that are produced. Therefore we also report the situation where we double the number of frames from 8 to 16 and thus keep the patch count constant. Table 6 reports the results. Table 6: LVEF regression performance on the held-out test set for encoders pretrained with different temporal patch sizes and clip lengths. Doubling the temporal patch size halves the token count; doubling the number of frames restores it. Tokens are given relative to the 8-frame, patch-size-1 setup. MAE is reported as a fraction of ejection fraction (not in percentage points as in table 3b). 
+
+8 frames 16 frames 
+
+Temporal patch size 1 2 1 2
+
+Relative tokens 1× 0.5× 2× 1×
+
+R2 ↑ 0.305 0.279 0.202 0.317 
+
+MAE ↓ 0.0879 0.0911 0.0946 0.0878 
+
+16 Preprint. 
+
+(a) CXR 
+
+(b) ECG 
+
+(c) Echo 
+
+(d) ECG-CXR 
+
+(e) ECG-Echo 
+
+## B DATA DISTRIBUTIONS 
+
+## C EXPERIMENTS 
+
+17 Preprint. 
+
+Figure 4: ICD10 Ch. IX Classification Performance. Finetuning on the complete MIMIC-IV dataset. Every cell represents an ICD10 code or a group thereof. The center cell is the root, whereas we reach the leaves towards the outer parts of the circle. The leaves are the most fine-grained codes. 0.6 0.7 0.8 0.9 
+
+> Pleural Effusion Edema Support Devices Pleural Other No Finding Cardiomegaly Pneumothorax Consolidation Atelectasis Lung Opacity Pneumonia Lung Lesion Enlarged C. Fracture
+
+CXR Fine-tuning: LAMAE 
+
+Figure 5: Radar plot of CXR finetuning performance for the LAMAE CXR model. Test-set results are reported for each of the 14 labels. 18 Preprint. 
+
+Figure 6: Unimodal echo finetuning results (mean ± SD over 3 seeds). MAE is reported in LVEF percentage points. Independent MAE LAMAE ECG + Echo + CXR 
+
+> LAMAE Echo
+> 2468
+
+MAE LVEF ( )
+
+> Independent MAE LAMAE ECG + Echo + CXR
+> LAMAE Echo
+> 0.0 0.1 0.2 0.3 0.4
+
+R² LVEF ( )
+
+Unimodal echo fine-tuning LVEF (mean ± SD over 3 seeds) 
+
+Figure 7: Unimodal ECG finetuning results (MAE ± SD over 3 seeds). MAE is reported in mil-liseconds. RR interval PR interval P duration QRS duration QT interval QTc interval 
+
+246810 12 14 16 
+
+Independent-MAE LAMAE LAMAE-MM 
+
+19

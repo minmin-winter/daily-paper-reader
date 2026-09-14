@@ -1,0 +1,337 @@
+Title: Tracing and Coordinating Cross-Layer Influence for Multimodal Model Merging
+
+URL Source: https://arxiv.org/pdf/2609.12897v1
+
+Published Time: Mon, 14 Sep 2026 01:08:14 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# TRACING AND COORDINATING CROSS -L AYER INFLU -
+
+# ENCE FOR MULTIMODAL MODEL MERGING 
+
+Pengyang Zhou ∗, Xiaobin Tu ∗, Zhengxi Liu, Rongkun Xue, Haochen Li, Miancan Liu, Ziyuan Chen, Yinggui Wang †, Jinkui Ren, Xiantao Zhang 
+
+Alibaba Cloud 
+
+## ABSTRACT 
+
+Multimodal model merging aims to consolidate task experts into a single model that retains their complementary capabilities. Most unimodal model merging methods combine expert updates within individual layers, and multimodal ap-proaches largely follow this design. However, an expert update changes the repre-sentations passed to subsequent layers, allowing its influence to propagate across depth and affect how visual and textual information interact. When visual and language updates are combined, later updates act on inputs already modified by earlier ones, coupling their effects. This poses two challenges: (1) how to char-acterize the multimodal influence of individual expert updates across depth, and (2) how to jointly combine expert updates based on their multimodal influence. To address these challenges, we propose TAC-Merge for tracing and coordinat-ing cross-layer influence in multimodal model merging. It contains two modules, i.e., multimodal influence mapping (MIM) and coupled merge control (CMC). MIM constructs graphs of update effects and uses Ricci curvature together with expert predictions to define a shared fusion objective. CMC models interactions among coefficient adjustments and jointly optimizes regional weights to synthe-size one shared model. Experiments across diverse multimodal tasks demonstrate the effectiveness of TAC-Merge in consolidating complementary expert capabil-ities and supporting generalization to unseen tasks. 
+
+## 1 INTRODUCTION 
+
+Large pretrained models are often adapted into experts for different tasks and domains (Hu et al., 2022; Zeng et al., 2025). Storing and deploying each expert separately incurs substantial over-head (Yadav et al., 2023). Model merging offers an efficient alternative by combining expert updates into one deployable model (Wortsman et al., 2022; Ilharco et al., 2023). This is particularly valuable for multimodal large language models (MLLMs), whose experts span question answering, visual reasoning, chart understanding, and object localization (Wei et al., 2026). The objective is to con-solidate these complementary capabilities in one model while preserving the interactions through which visual evidence and textual instructions jointly support task predictions. Most model merging methods adopt a layer-wise design. Their strategies include direct parameter-space aggregation (Wortsman et al., 2022; Ilharco et al., 2023), interference-aware update trans-formation (Yadav et al., 2023; Yu et al., 2024; Gargiulo et al., 2025; Stoica et al., 2025), and data-dependent merge estimation (Matena & Raffel, 2022; Jin et al., 2023; Tam et al., 2024; Yang et al., 2024). Multimodal merging methods largely retain this layer-wise formulation, adapting how updates are combined to the architectural components and task requirements of multimodal mod-els (Chen et al., 2024; Du et al., 2025; Zeng et al., 2025; Qu et al., 2025; Wei et al., 2026). Some recent methods move beyond this layer-wise view by modeling dependencies across model depth. Chain of Merges refreshes activation statistics as layers are merged sequentially (Buzzega et al., 2026), whereas RegMean++ introduces explicit correlations between layers (Nguyen et al., 2026). These designs reflect a basic property of deep models: changing an intermediate representa-tion can alter downstream computation (Ghandeharioun et al., 2024). Their formulations, however, do not distinguish how these effects are distributed across modalities. 
+
+> ∗
+
+Equal contribution. 
+
+> †
+
+Corresponding author: wyinggui@gmail.com 
+
+1arXiv:2609.12897v1 [cs.AI] 11 Sep 2026 This perspective presents two challenges. Firstly, how to characterize the multimodal influence of individual expert updates across depth (CH1 ). An expert update can alter representations far beyond the region where it is applied, making local parameter changes insufficient to characterize its influence. At later depths, effects from different regions can overlap, obscuring the contribution of each update. Multimodal fusion adds ambiguity because visual evidence and textual instructions jointly shape hidden representations. For example, a change at an image-token position may reflect altered visual processing, a different response to the instruction, or both. Neither token labels nor final predictions alone reveal these distinctions. The challenge is therefore to trace effects across depth back to individual expert updates while distinguishing how they alter image- and instruction-dependent computation within shared multimodal representations. Secondly, how to jointly combine expert updates based on their multimodal influence (CH2 ). Given the influence information, fusion requires determining how much of each expert update to apply in each region. The weights assigned to visual and language updates must be chosen together to form one model. A shared objective evaluates both multimodal influence structure and agreement with expert predictions. The preferred weight for one update depends on the weights assigned to the others. The measured influence must therefore support modeling complete combinations within a coefficient neighborhood to determine the regional weights of one shared model. To address these challenges, we propose TAC-Merge , a framework that traces multimodal influence across depth and uses it to coordinate expert updates. It consists of two modules, i.e., multimodal influence mapping (MIM) and coupled merge control (CMC). MIM constructs influence graphs link-ing regional expert updates to hidden representations and conditional image–instruction responses at different depths and token positions. It evaluates candidate merges by measuring agreement with both the Ricci curvature of task-expert graphs and expert predictions. CMC uses the measured responses to identify a compact coefficient subspace and fit a local model of interactions among coefficient adjustments. It then jointly selects regional weights within a bounded neighborhood and combines the original expert updates into one static model shared across tasks. We summarize our contributions as follows: (1) We identify a limitation of layer-wise multimodal merging, where local parameter changes alone cannot fully capture how expert updates influence downstream representations and image–instruction interactions. (2) We propose TAC-Merge , com-bining multimodal influence mapping with coupled merge control to trace expert influence and coor-dinate regional update weights. (3) We evaluate TAC-Merge on two multimodal backbones across eight seen and four unseen tasks. TAC-Merge achieves the best average performance among the compared merging methods on both task groups. Its gains on unseen tasks further demonstrate that the consolidated capabilities extend beyond the datasets used for expert training. 
+
+## 2 RELATED WORK 
+
+Multimodal Model Merging. Model merging consolidates task-specialized models into one shared set of parameters. On single-modality vision and language tasks, existing approaches can be grouped by how they construct the merged parameters. Direct parameter-space aggregation aver-ages model weights or adds scaled task-specific updates to a common initialization (Wortsman et al., 2022; Ilharco et al., 2023). Interference-aware update transformation prunes or rescales update en-tries, resolves conflicting signs, or aligns singular subspaces before combining updates (Yadav et al., 2023; Yu et al., 2024; Gargiulo et al., 2025; Stoica et al., 2025). Data-dependent merge estimation uses parameter-importance statistics, feature-matching objectives, or calibration losses to determine parameter values and mixing coefficients (Matena & Raffel, 2022; Jin et al., 2023; Tam et al., 2024; Yang et al., 2024). Multimodal merging extends these strategies to models with modality-specific encoders and shared language components, including compositions that reuse encoders while merg-ing language parameters (Chen et al., 2024). Architectural mappings support interpolation between heterogeneous multimodal models (Du et al., 2025), while uncertainty estimated from visual and textual inputs guides expert selection and composition order (Qu et al., 2025). Other methods nor-malize low-rank updates to preserve direction robustness (Zeng et al., 2025), or denoise task vectors and optimize their interactions to combine task and modality capabilities (Wei et al., 2026). 
+
+Layer and Modality Dependencies. Dependencies across depth arise because parameter updates change the intermediate representations used by subsequent layers. Sequential merging accounts for 2this propagation by refreshing activation statistics after preceding layers are merged (Buzzega et al., 2026). Regression-based formulations incorporate correlations within and between layers when estimating merged parameters (Nguyen et al., 2026). Related output-space formulations optimize coefficients against calibration responses and extend the procedure sequentially across layers (Evans et al., 2026). In multimodal models, depth-dependent computation also determines where visual and textual information interact. Attention interventions localize information transfer among visual tokens, textual tokens, and answer-prediction positions (Zhang et al., 2025). Extensions to free-form generation trace these interactions during image captioning and chain-of-thought reasoning, revealing variation in visual–textual integration across architectures and tasks (Saporita et al., 2026). 
+
+## 3 METHOD 
+
+3.1 PROBLEM STATEMENT 
+
+Let f (·, θ0) be a pretrained multimodal model, and let {θk}Kk=1 be K expert models adapted from the same base model for different multimodal tasks. Each expert contributes a task-specific update, such as the effective weight update of a LoRA adapter: 
+
+∆θk = θk − θ0, k = 1 , . . . , K, (1) where ∆θk is expert k’s full update. Following data-dependent merging methods (Du et al., 2025; Zhang et al., 2026a; Buzzega et al., 2026), we assume access to a small calibration set C = SKt=1 Ct
+
+of multimodal inputs. Each task-specific subset is Ct = {xti}Nt
+
+> i=1
+
+, where xti = ( vti , qti ) contains a visual input vti and its textual instruction qti . Our objective is to select a single model from the regional weighted family: 
+
+θ(α) = θ0 + Concat L−1
+
+> ℓ=0
+> K
+
+X
+
+> k=1
+
+αℓk ∆θkℓ
+
+!
+
+, (2) where L is the number of parameter regions, ∆θkℓ is expert k’s update block in region ℓ, and αℓk is its weight. Concatenation follows the original parameter order. The vector α collects these coefficients. Given C, we seek coefficients that preserve the complementary multimodal capabilities represented by the experts in one model shared across tasks. 3.2 FRAMEWORK OVERVIEW 
+
+Figure 1 illustrates TAC-Merge , which combines multimodal influence mapping (MIM) with cou-pled merge control (CMC). MIM constructs influence graphs from original readouts and responses to image and instruction changes, tracing regional update effects across depth and token positions. Matching task-expert curvature and predictions defines the reference objective. CMC uses measured responses to identify a compact coefficient subspace and fits a quadratic model from individual and paired coefficient variations. It jointly optimizes these coefficients around a uniform merge and ac-cepts the proposal only if it improves the measured objective. The selected weights combine regional expert updates into one shared model with fixed inference coefficients. 3.3 MULTIMODAL INFLUENCE MAPPING 
+
+Multimodal Influence Graph. Visual influence varies across depth and token positions (Zhang et al., 2025), motivating a source-specific account of how expert updates alter image- and instruction-dependent computation. The L disjoint parameter regions are ordered along the visual and language pathways, with boundaries and readout positions fixed throughout coefficient selection. The regional coefficients in Eq. (2) are shared across inputs and collected in α ∈ RLK . The uniform reference 
+
+¯α has every entry equal to 1/K . Let hr (v, q, α) denote a pooled hidden readout, where r spec-ifies a region boundary and the group of token positions pooled there. The readouts cover visual representations and language image-token and instruction-token positions carrying fused informa-tion (Saporita et al., 2026). For each task t, a fixed seeded permutation forms disjoint calibration pairs (i, j ) with i̸ = j. Both pair orders are reused throughout coefficient selection, and any unpaired 3Coupled Merge Control 
+
+Static Coefficient Synthesis    
+
+> Joint Selection Regional Weights Update Blocks Final Expert
+> Selected
+> Combination
+> Experts 𝜶𝜶 ∗
+> Vision
+> Language
+> Depth regions
+> Expert updates
+
+Joint Response Modeling                              
+
+> LLM
+> Decoder
+> Vision
+> Encoder
+> Readout Sensitivities Control Directions V
+> Individual
+> Paired
+> 𝜶𝜶 =�𝜶𝜶 +𝑽𝑽𝑽𝑽
+> Vision
+> Language
+> Readouts
+> Updates by expert and region
+> SVD +−
+> +−
+> +−
+> +−
+> + Increase −Decrease
+> 𝒗𝒗𝟏𝟏 Experts 𝒗𝒗𝟐𝟐 Experts
+> …
+> +−
+> +−
+> +−
+> +−
+> Uniform �𝜶𝜶
+> +−
+> +−
+> 𝑽𝑽 𝟏𝟏 𝒗𝒗𝟏𝟏 𝑽𝑽 𝟐𝟐 𝒗𝒗𝟐𝟐
+> Candidates 𝜶𝜶
+> Coupled response fitting Fitted joint response
+> 𝑢𝑢1 , 0
+> 𝑢𝑢1 ,𝑢𝑢2
+> Control 𝑢𝑢 Change Δ𝜀𝜀 Control-response
+> pairs
+
+Multimodal Influence Graph 
+
+Joint Influence Measurement 
+
+Multimodal Influence Mapping          
+
+> Curvature Matching Output Agreement
+> Base
+> Parameters
+> Prediction difference Ricci curvature difference
+> Joint Reference Loss
+> Candidate model Task expert Candidate model Task expert
+> Edge curvature Token predictions
+> Objective values 𝓔𝓔 (𝜶𝜶 )
+> LLM Decoder
+> Text
+> Embedding
+> Vision Encoder
+> LoRA
+> Image Instruction
+> Late LoRA
+> Early LoRA
+> …
+> Influence Graph
+> Updates by expert and region
+> Readout
+> locations
+> Visual output
+> Early-Img
+> Early-Inst
+> Late-Img
+> Late-Inst
+> Expert 1
+> Vision
+> Expert 2
+> Vision
+> Expert 1
+> Language
+
+Figure 1: Overview of TAC-Merge . MIM maps multimodal expert influence, and CMC coordi-nates regional coefficients using the resulting reference objective to synthesize one shared model. input still contributes to original readouts and output agreement. For a fixed pair (i, j ), suppressing task superscripts, define the image-change and instruction-change responses separately: 
+
+hvij,r (α) =  hr (vi, qi, α) − hr (vj , qi, α), hqij,r (α) =  hr (vi, qi, α) − hr (vi, qj , α), (3) Here hvij,r varies the image at a fixed instruction, whereas hqij,r varies the instruction at a fixed image. Both comparisons hold the readout location r and coefficients α fixed. We retain the original representation as h0
+
+i,r (α) = hr (vi, qi, α) and index these three readout channels by c ∈ { 0, v, q }.Channel 0 is always retained. Channel v or q is retained when at least one fixed pair changes that modality, with this choice fixed throughout coefficient selection. Identical instructions give 
+
+hqij,r = 0 for every coefficient configuration, while the image-change response remains available. For each available channel, a bipartite graph links expert–region sources to observations labeled by depth and token-position group. An edge (ℓ, k, r ) connects expert k in region ℓ to observation r
+
+reachable for channel c in the forward computation. The architecture and attention mask fix these connections, excluding observations structurally independent of the changed modality. Its task-specific influence measures the sensitivity of the corresponding readout channel: 
+
+wt,c ℓk,r (α) = E
+
+"
+
+∂hcr (α)
+
+∂α ℓk 
+
+22
+
+#
+
+, (4) where sample indices are suppressed in hcr , and ∥ · ∥ 2 is the Euclidean norm. The expectation averages uniformly over all original inputs of task t for c = 0 and over its fixed ordered pairs for 
+
+c = v, q . The separate graphs preserve the distinction between the three sensitivities. To characterize the allocation of influence around each node, incident weights are normalized into a probability distribution. For a source, neighbor masses describe relative influence across observations, while for an observation they describe relative sensitivity to expert–region updates. For nodes with positive total incident weight, suppressing task, channel, and coefficient arguments, we retain mℓk (ℓ, k ) = 
+
+mr (r) = 1 /2 at the source and observation nodes themselves and distribute the remaining mass among their architectural neighbors: 
+
+mℓk (r) = wℓk,r 
+
+2 P
+
+r′ wℓk,r ′
+
+, mr (ℓ, k ) = wℓk,r 
+
+2 P
+
+ℓ′,k ′ wℓ′k′,r 
+
+. (5) The sums range over architecturally connected observations and sources, respectively. Other nodes receive zero probability mass. A node with zero incident influence places all its probability mass at itself. The equal self and neighbor masses retain endpoint identity and relative influence allocation for comparison across coefficient configurations. 4Joint Influence Measurement. Joint updates change downstream computation (Buzzega et al., 2026), so selecting their coefficients requires characterizing their combined effect on multimodal influence. For edge (ℓ, k, r ) in channel c, let mℓk and mr denote the endpoint neighborhood distri-butions defined above, with task, channel, and coefficient arguments suppressed. Distances use the fixed shortest-path metric on the channel’s undirected architectural support with unit edge lengths. Since an edge’s endpoints are at unit distance, its Ollivier–Ricci curvature (Ollivier, 2009) is: 
+
+κt,c ℓk,r (α) = 1 − W1(mℓk , m r ), (6) where W1 is the minimum cost of transporting one endpoint distribution to the other using this graph distance. For a fixed graph support, changes in curvature summarize changes in the relative influence patterns around each source–observation pair. The task-t expert corresponds to coefficients equal to one for expert t and zero for the other experts. We evaluate its channel graphs on Ct using the same fixed pairs and record κt,c,⋆ ℓk,r as the task-specific curvature target. For each original input, let pti and 
+
+pi(α) denote expert and merged next-token distributions on fixed continuation prefixes generated by expert t. Combining curvature matching with expert-output agreement gives: 
+
+E(α) = Et,i DKL 
+
+ pti ∥ pi(α) + λ Et,c,ℓ,k,r 
+
+h κt,c ℓk,r (α) − κt,c,⋆ ℓk,r 
+
+2i
+
+, (7) where DKL is Kullback–Leibler divergence averaged over continuation positions and λ ≥ 0 weights the geometric reference. Both expectations assign equal weight to tasks. Within each task, the first weights original inputs equally, and the second weights available channels equally and architec-turally valid edges equally within each channel. Crossed inputs supply response measurements without answer targets. At each queried coefficient configuration α, this module computes the read-out derivatives and Eq. (7) on C. Curvature matching constrains the relative organization of influence across regions and modalities, while output agreement penalizes deviations from the expert’s next-token distributions on the original calibration inputs. Optimizing both terms links representation-level influence preservation to the predictive behavior needed for each task. 3.4 COUPLED MERGE CONTROL 
+
+Joint Response Modeling. Selecting regional weights requires modeling how expert updates jointly affect the reference objective, since the effect of one update can depend on the others. Di-rectly modeling these interactions over all LK coefficients is costly, so we construct a compact control subspace from measured multimodal responses and fit a local quadratic model within it. To select this subspace, we stack the readout derivatives returned by MIM at ¯α into a response matrix, with one column per expert–region source and one row per scalar readout component across tasks, samples, channels, and readout locations. The squared stacking weights assign equal mass to tasks, then to available channels, and uniform mass to samples and readout locations within each channel. If the response matrix is zero, we retain the uniform merge. For a nonzero matrix, let σ1 ≥ σ2 ≥ · · · 
+
+denote its singular values. We select the control dimension d based on the stable rank P 
+
+> a
+
+σ2
+
+> a
+
+/σ 21 ,which reflects how response energy is distributed across singular directions. The leading d right sin-gular vectors form an orthonormal basis V ∈ RLK ×d, with each column specifying a coordinated adjustment of expert weights across regions. The control vector u ∈ Rd adjusts these directions within radius R > 0 of the uniform reference: 
+
+α = ¯ α + V u , ∥u∥2 ≤ R. (8) Orthonormality makes R a bound on the aggregate coefficient displacement from ¯α. Within this neighborhood, a quadratic model approximates the objective change relative to ¯α:
+
+bE(u) = g⊤u + 12 u⊤Hu , (9) where g ∈ Rd represents linear trends and the symmetric matrix H ∈ Rd×d represents quadratic effects within and between control directions. To fit these terms, we use MIM to evaluate Eq. (7) under a fixed set of symmetric coefficient variations. With ea denoting a coordinate unit vector, we use signed individual variations u = ±Rea for 1 ≤ a ≤ d. We also use paired variations 
+
+u = R(±ea ± eb)/√2 for 1 ≤ a < b ≤ d, with all independent sign choices. Least-squares fitting then identifies the model coefficients: 
+
+(g, H) ∈ arg min  
+
+> g,H=H⊤
+
+Eu
+
+h E( ¯ α + V u ) − E ( ¯ α) − g⊤u − 12 u⊤Hu 2i
+
+, (10) 5where Eu averages over the evaluated coefficient configurations. Individual variations identify lin-ear trends and quadratic terms within each direction, while paired variations identify interactions between directions through the off-diagonal entries of H. The interaction terms let the controller evaluate each adjustment in the context of the others, helping identify expert combinations that work together across regions to preserve multimodal influence. 
+
+Static Coefficient Synthesis. Because the fitted model is only a local approximation, a predicted improvement may not reduce the measured fusion objective. We therefore limit coefficient changes to the prescribed neighborhood and check the resulting proposal against the uniform reference. We first obtain a joint coefficient proposal by minimizing the fitted objective: 
+
+u⋆ ∈ arg min 
+
+> ∥u∥2≤R
+
+bE(u), (11) The reference u = 0 is feasible and predicts zero objective change. We solve Eq. (11) using an eigendecomposition of H and the spectral trust-region conditions (Mor´ e & Sorensen, 1983): 
+
+(H + μId)u⋆ = −g, H + μId ⪰ 0, (12) where μ ≥ 0 is a spectral shift satisfying μ(∥u⋆∥2 − R) = 0 and ⪰ 0 denotes positive semidef-initeness. An interior solution has μ = 0 , while a boundary solution uses a shift consistent with 
+
+∥u⋆∥2 = R. In the eigenbasis, the boundary search reduces to a scalar norm condition, with a nullspace component included when required by a singular boundary solution. Together with feasi-bility, Eq. (12) characterizes a global minimizer of the fixed quadratic model over the prescribed ball. To verify the predicted improvement, we evaluate the proposal using Eq. (7) on the same calibration data and expert targets. The final coefficients are α⋆ = ¯ α + V u ⋆ if E( ¯ α + V u ⋆) < E( ¯ α) − τ , and 
+
+α⋆ = ¯ α otherwise, where τ ≥ 0 is a fixed numerical comparison tolerance. This check requires no iterative refitting of the response model. The selected coefficients α⋆ synthesize the shared model: 
+
+θ⋆ = θ0 + Concat L−1
+
+> ℓ=0
+> K
+
+X
+
+> k=1
+
+α⋆ℓk ∆θkℓ
+
+!
+
+, (13) The regional blocks are concatenated in the original parameter order to obtain f (·, θ⋆). By selecting regional coefficients jointly, CMC accounts for how updates in one part of the model affect the inputs seen by later updates. This coordination helps reduce interference across layers and modalities and retain the complementary capabilities of different experts. 
+
+## 4 EXPERIMENTS 
+
+4.1 EXPERIMENTAL SETUPS 
+
+Datasets. Following RobustMerge (Zeng et al., 2025), we adopt MM-MergeBench with eight seen datasets: ScienceQA (Lu et al., 2022), ImageNet (Deng et al., 2009), VQAv2 (Goyal et al., 2017), REC-COCO (Kazemzadeh et al., 2014; Mao et al., 2016), OCR-VQA (Mishra et al., 2019), VizWiz-Caption (Gurari et al., 2020), Flickr30k (Plummer et al., 2017), and IconQA (Lu et al., 2021). These datasets cover visual question answering, referring expression comprehension, im-age classification, and image captioning. Generalization is evaluated on four unseen datasets: A-OKVQA (Schwenk et al., 2022), ImageNet-R (Hendrycks et al., 2021), Screen2Words (Wang et al., 2021), and TabMWP (Lu et al., 2023). The seen-task evaluation measures how well one merged model retains the capabilities of the eight adapted experts. Unseen tasks evaluate whether the same coefficients transfer to datasets outside expert adaptation, testing whether the consolidated capabili-ties remain useful under a change in task distribution. 
+
+Baselines. To evaluate the effectiveness of TAC-Merge , we compare it with the following repre-sentative baselines. We first consider two reference settings: (1) Zero-shot, which directly evaluates the pretrained model, and (2) Individual, which evaluates each task expert on its corresponding task. For single-modality merging, we include (3) TA (Ilharco et al., 2023), which adds the summed expert updates to the base model with a shared scaling coefficient, (4) TIES (Yadav et al., 2023), which trims small updates, resolves sign conflicts, and averages the remaining updates with con-sistent signs, and (5) DC-Merge (Zhang et al., 2026b), which smooths singular values and aligns 6Table 1: Performance comparison on Qwen3.5-4B. Seen Tasks Unseen Tasks Method SciQA Image VQA REC OCR VizWiz Flickr IconQA Avg. AVQA Image-R S2W TabMWP Avg. Zero-shot 67.13 38.81 72.00 76.15 70.58 23.74 25.65 25.86 49.99 78.69 87.27 5.35 64.39 58.92 Individual 97.92 97.47 74.85 91.53 71.51 72.80 60.44 99.15 83.21 – – – – –TA 94.99 59.03 72.52 73.48 68.78 52.21 58.11 79.79 69.86 86.20 90.95 15.95 69.95 65.76 TIES 94.15 56.36 72.71 74.22 69.19 52.42 57.80 70.39 68.41 83.67 90.97 15.58 69.57 64.95 DC-Merge 95.29 59.03 72.52 74.55 68.46 52.42 57.95 79.79 70.00 86.20 90.10 15.59 69.95 65.46 CoM 95.29 63.21 72.54 74.62 68.46 52.59 58.04 79.25 70.50 84.72 90.10 15.59 71.82 65.56 RegMean++ 95.84 85.86 69.92 75.55 67.41 53.16 57.95 94.85 75.07 87.25 85.83 15.19 70.78 64.76 RobustMerge 96.03 48.18 72.15 74.55 66.75 50.76 57.59 92.15 69.77 87.07 88.83 15.75 67.85 64.88 OptMerge 93.80 88.46 63.25 38.70 57.04 48.76 56.50 47.83 61.79 58.08 77.86 14.92 53.86 51.18               
+
+> TAC-Merge 97.12 88.08 73.86 83.42 69.93 58.68 59.84 97.07 78.50 88.47 90.57 18.72 74.64 68.10
+
+Table 2: Performance comparison on Qwen3-VL-8B. Seen Tasks Unseen Tasks Method SciQA Image VQA REC OCR VizWiz Flickr IconQA Avg. AVQA Image-R S2W TabMWP Avg. Zero-shot 94.40 35.03 72.34 77.32 69.61 27.26 28.66 44.20 56.10 79.65 90.48 5.87 60.40 59.10 Individual 95.79 94.69 74.45 89.33 74.32 69.68 59.54 90.94 81.09 – – – – –TA 95.19 35.07 72.87 77.08 72.43 48.78 56.86 72.29 66.32 87.16 90.67 9.41 61.67 62.23 TIES 96.13 54.77 70.65 84.07 70.24 51.12 58.18 82.49 70.96 86.72 89.60 14.04 63.14 63.38 DC-Merge 96.58 72.08 70.52 86.55 73.25 52.76 57.67 86.94 74.54 87.34 89.95 14.41 66.56 64.56 CoM 95.98 46.85 72.67 74.13 72.59 51.38 57.89 83.40 69.36 87.51 90.07 13.03 64.10 63.68 RegMean++ 96.43 77.49 73.03 83.92 73.27 52.33 57.77 86.45 75.08 87.95 90.33 12.35 67.55 64.55 RobustMerge 95.14 34.85 72.68 69.90 71.61 49.83 58.17 80.78 66.62 87.95 90.22 14.35 64.05 64.14 OptMerge 96.23 58.77 70.76 84.15 70.77 50.25 57.78 82.16 71.36 87.60 89.75 13.33 61.75 63.11               
+
+> TAC-Merge 96.38 82.63 73.58 87.42 73.46 56.83 59.37 90.33 77.50 88.65 90.53 16.84 69.98 66.50
+
+task vectors in a shared orthogonal subspace before aggregation. For cross-layer merging, we com-pare (6) Chain of Merges (Buzzega et al., 2026), which merges layers sequentially while refreshing activation statistics, and (7) RegMean++ (Nguyen et al., 2026), which incorporates intra-layer and cross-layer dependencies into regression-based merging. For multimodal merging, we include (8) RobustMerge (Zeng et al., 2025), which prunes and rescales low-rank parameters and normalizes task contributions to preserve direction robustness, and (9) OptMerge (Wei et al., 2026), which de-noises task vectors and optimizes the merged update through an objective over their interactions. 
+
+Implementation Details. We use Qwen3.5-4B (Qwen Team, 2026) and Qwen3-VL-8B-Instruct (Bai et al., 2025) as the base models and train one LoRA expert for each of the eight seen tasks using Unsloth (Han et al., 2023). LoRA adapters are inserted into the attention and MLP mod-ules of both the vision encoder and the language backbone, and the two parts are optimized jointly on each task’s image–instruction examples while the pretrained weights remain frozen. The LoRA rank and scaling factor are both 16. Experts train for one epoch with AdamW, learning rate 2×10 −4,linear decay, warmup ratio 0.03, weight decay 0.001, and a 2,048-token sequence limit. 4.2 PERFORMANCE EVALUATION 
+
+Main Results. Tables 1 and 2 compare performance on seen and unseen tasks using Qwen3.5-4B and Qwen3-VL-8B, respectively. The results yield four main observations. (1) Traditional single-modality merging methods struggle to balance heterogeneous multimodal capabilities. Task Arith-metic, TIES, and DC-Merge determine update compatibility through parameter aggregation, sign consistency, or subspace alignment, leaving the role of each update in visual–language computa-tion implicit. Parameter-compatible updates can still alter the representations through which visual and textual information interact. The resulting trade-offs are evident on the 8B model, where TIES gains 19.70 points on ImageNet over Task Arithmetic while losing 2.22 points on VQAv2. (2) 7Table 3: Ablation study.                                                                   
+
+> Qwen3.5-4B Qwen3-VL-8B Variant Seen Unseen Seen Unseen w/o MIM 76 .12 ±0.39 67 .04 ±0.27 76 .03 ±0.43 65 .88 ±0.30
+> MIM: w/o modality contrasts 77 .46 ±0.26 67 .87 ±0.21 77 .09 ±0.29 66 .29 ±0.24
+> w/o CMC 77 .03 ±0.46 67 .58 ±0.32 76 .64 ±0.48 66 .26 ±0.34
+> CMC: w/o directional coupling 77 .79 ±0.30 67 .71 ±0.20 77 .02 ±0.36 66 .38 ±0.19
+> TAC-Merge (Full) 78 .50 ±0.24 68 .10 ±0.18 77 .50 ±0.31 66 .50 ±0.22
+
+Existing multimodal merging methods remain limited in preserving the propagation of expert capa-bilities across depth. RobustMerge stabilizes low-rank update directions, and OptMerge optimizes interactions among task vectors within individual layers. These parameter-space objectives provide indirect control over how a visual update changes the input encountered by later language updates. Their lower aggregate performance is consistent with this gap between local update compatibility and preservation of multimodal influence throughout the model. (3) Cross-layer methods improve knowledge consolidation, with remaining limitations in multimodal transfer. Chain of Merges re-freshes activation statistics sequentially, and RegMean++ models correlations across layers, account-ing for representation changes induced by preceding updates. Their objectives emphasize activation agreement and cross-layer correlations, leaving source-specific image–instruction effects implicit. On the 4B model, RegMean++ improves the seen average over TIES by 6.66 points, while its un-seen average remains 1.00 point below Task Arithmetic. This uneven transfer supports extending cross-layer dependency modeling with explicit multimodal influence measurements when jointly se-lecting expert coefficients. (4) TAC-Merge achieves the best average performance on both seen and unseen tasks across the two backbones. On Qwen3.5-4B, it exceeds the strongest merging baselines by 3.43 points on seen tasks and 2.34 points on unseen tasks. The corresponding gains on Qwen3-VL-8B are 2.42 and 1.94 points, respectively. It also leads the merging methods on seven of eight seen tasks and three of four unseen tasks for each backbone. These results support jointly selecting regional coefficients based on multimodal influence to preserve complementary expert capabilities in a shared model. 
+
+Ablation Study. Table 3 presents ablation results organized by module, examining each mod-ule and its central design. Results are reported as mean ± standard deviation. All variants share the expert checkpoints, calibration inputs, coefficient radius, and budget of objective evaluations, with the control dimension matched whenever a basis is used. (1) Effect of MIM. The variant w/o MIM uses output KL as its sole objective and a fixed random orthonormal basis for CMC, replacing the influence graphs and readout-response measurements. The variant w/o modality con-trasts retains the original readouts h0 and their influence graphs, removing the image-change and instruction-change channels from both curvature matching and response-based subspace selection. Original readouts capture overall representation changes, while the two contrast channels distin-guish update effects associated with changing the image or instruction at fixed observation loca-tions. Removing MIM reduces seen averages by 2.38 and 1.47 points on 4B and 8B, respectively, compared with 1.04 and 0.41 points when removing only the contrasts. These results support us-ing explicit modality-dependent responses alongside the original representations to guide influence matching and coefficient-direction selection. (2) Effect of CMC. The variant w/o CMC retains the full reference objective and replaces subspace selection and quadratic control with direct search over fixed-seed regional coefficient candidates sampled uniformly within the same radius, selecting the best candidate together with the uniform reference. The variant w/o directional coupling retains the fitted linear terms and the diagonal entries of the quadratic matrix H, setting its off-diagonal entries to zero before solving for the coefficients. Its response basis, calibration evaluations, and proposal check remain fixed, isolating the contribution of interactions between control directions. Each direction adjusts multiple regional weights, so these mixed terms describe how one coordinated adjustment changes the effect of another. The unseen averages decrease by 0.52 and 0.24 points af-ter removing CMC, compared with 0.39 and 0.12 points after removing only directional coupling. These results support coordinated coefficient selection that accounts for interactions among regional 80.1 0.5 0.8 1 2 3 10 -1.5 -1.0 -0.5 0                
+
+> Δ Avg. Score
+> Qwen3.5-4B
+> 0.1 0.5 0.8 12310
+> Qwen3-VL-8B
+> 1/16 1/8 1/4 1/2 1
+> Qwen3.5-4B
+> 1/16 1/8 1/4 1/2 1
+> Qwen3-VL-8B
+> (a) Geometric weight λ(b) Control radius R
+> Seen Unseen
+
+Figure 2: Sensitivity to (a) λ and (b) R. ∆ is the average-score change from (λ, R ) = (1 , 0.25) in score points. Settings are equally spaced, and dotted lines mark the default values. updates, helping preserve complementary capabilities on unseen tasks. (3) Overall comparison. Across both backbones, the full configuration achieves the highest mean in all four evaluation set-tings, while removing either module lowers both seen and unseen performance. Retaining MIM but replacing CMC with direct search reduces the seen averages by 1.47 and 0.86 points on 4B and 8B, respectively, suggesting that an informative fusion objective alone may be insufficient under a fixed evaluation budget. Conversely, the larger drops after removing MIM suggest that coefficient control depends on the objective and response measurements used to guide it. These comparisons distin-guish two complementary roles. MIM specifies the multimodal influence to preserve through its reference objective, while CMC uses that objective to compare coordinated coefficient adjustments and select regional weights for the merged model. 
+
+Hyperparameter Sensitivity. To examine the sensitivity of TAC-Merge , Figure 2 compares changes in seen and unseen average scores relative to the shared default (λ, R ) = (1 , 0.25) . The scans vary λ ∈ { 0.1, 0.5, 0.8, 1, 2, 3, 10 } and R ∈ { 1/16 , 1/8, 1/4, 1/2, 1} separately, holding the other parameter fixed. Each curve uses its corresponding default mean from the main tables as zero, allowing seen and unseen sensitivity to be compared on the same scale. The sensitivity curves show a broad intermediate plateau for λ, with small local fluctuations. Smaller weights retain expert-output agreement and the response subspace, while larger weights emphasize the experts’ relative influence patterns. Since these geometric targets are constructed from seen tasks, preserving their influence patterns and transferring to unseen inputs can favor different weights. For R, smaller neighborhoods restrict coordinated coefficient adjustments, whereas larger neighborhoods expand both the feasi-ble displacement and the configurations used to fit the response model. The large-radius reference points represent accepted proposals with a greater decline on unseen tasks, illustrating a possible difference between calibration-objective improvement and transfer to new task distributions. The acceptance check can also produce plateaus when multiple proposals return the uniform merge. 
+
+## 5 CONCLUSION 
+
+This paper presents TAC-Merge , a framework for multimodal model merging that traces expert influence across depth and jointly coordinates regional updates. Multimodal influence mapping characterizes how each update affects representations at different depths and token positions, using Ricci curvature and expert predictions to define a shared merging objective. Coupled merge con-trol models interactions among coefficient adjustments in a compact subspace and selects regional weights to synthesize one model shared across tasks. The selected coefficients yield one static model that serves all tasks with the base inference architecture. Across the two evaluated backbones, the merged model improves both seen and unseen averages over the compared merging methods, and the ablations support the contribution of modality-specific responses and interactions between control directions. Future work will explore more efficient influence estimation and scalable coordination when merging larger collections of task experts. 9REFERENCES 
+
+Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, Wenbin Ge, Zhifang Guo, Qidong Huang, Jie Huang, Fei Huang, Binyuan Hui, Shutong Jiang, Zhaohai Li, Mingsheng Li, Mei Li, Kaixin Li, Zicheng Lin, Junyang Lin, Xuejing Liu, Jiawei Liu, Chenglong Liu, Yang Liu, Dayiheng Liu, Shixuan Liu, Dunjie Lu, Ruilin Luo, Chenxu Lv, Rui Men, Lingchen Meng, Xuancheng Ren, Xingzhang Ren, Sibo Song, Yuchong Sun, Jun Tang, Jianhong Tu, Jianqiang Wan, Peng Wang, Pengfei Wang, Qiuyue Wang, Yuxuan Wang, Tianbao Xie, Yiheng Xu, Haiyang Xu, Jin Xu, Zhibo Yang, Mingkun Yang, Jianxin Yang, An Yang, Bowen Yu, Fei Zhang, Hang Zhang, Xi Zhang, Bo Zheng, Humen Zhong, Jingren Zhou, Fan Zhou, Jing Zhou, Yuanzhi Zhu, and Ke Zhu. Qwen3-VL technical report. arXiv preprint arXiv:2511.21631 , 2025. URL https://arxiv.org/abs/ 2511.21631 .Pietro Buzzega, Riccardo Salami, Angelo Porrello, and Simone Calderara. Rethinking layer-wise model merging through chain of merges, 2026. URL https://arxiv.org/abs/2508. 21421 .Chi Chen, Yiyang Du, Zheng Fang, Ziyue Wang, Fuwen Luo, Peng Li, Ming Yan, Ji Zhang, Fei Huang, Maosong Sun, and Yang Liu. Model composition for multimodal large language models. In Lun-Wei Ku, Andre Martins, and Vivek Srikumar (eds.), Proceedings of the 62nd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 11246–11262, Bangkok, Thailand, August 2024. Association for Computational Linguistics. doi: 10.18653/v1/ 2024.acl-long.606. URL https://aclanthology.org/2024.acl-long.606/ .Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. ImageNet: A large-scale hierarchical image database. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 248–255, 2009. doi: 10.1109/CVPR.2009.5206848. Yiyang Du, Xiaochen Wang, Chi Chen, Jiabo Ye, Yiru Wang, Peng Li, Ming Yan, Ji Zhang, Fei Huang, Zhifang Sui, Maosong Sun, and Yang Liu. Adamms: Model merging for heterogeneous multimodal large language models with unsupervised coefficient optimization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 9413–9422, June 2025. Bethan Evans, Benjamin Etheridge, Stephen Roberts, and Jared Tanner. Model merging by output-space projection. arXiv preprint arXiv:2605.29101, 2026. URL https://arxiv.org/abs/ 2605.29101 .Antonio Andrea Gargiulo, Donato Crisostomi, Maria Sofia Bucarelli, Simone Scardapane, Fabrizio Silvestri, and Emanuele Rodol` a. Task singular vectors: Reducing task interference in model merg-ing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 18695–18705, June 2025. Asma Ghandeharioun, Avi Caciularu, Adam Pearce, Lucas Dixon, and Mor Geva. Patchscopes: A unifying framework for inspecting hidden representations of language models. In Ruslan Salakhutdinov, Zico Kolter, Katherine Heller, Adrian Weller, Nuria Oliver, Jonathan Scarlett, and Felix Berkenkamp (eds.), Proceedings of the 41st International Conference on Machine Learning ,volume 235 of Proceedings of Machine Learning Research , pp. 15466–15490. PMLR, 21–27 Jul 2024. URL https://proceedings.mlr.press/v235/ghandeharioun24a.html .Yash Goyal, Tejas Khot, Douglas Summers-Stay, Dhruv Batra, and Devi Parikh. Making the V in VQA matter: Elevating the role of image understanding in visual question answering. In 
+
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 6904–6913, 2017. URL https://arxiv.org/abs/1612.00837 .Danna Gurari, Yinan Zhao, Meng Zhang, and Nilavra Bhattacharya. Captioning images taken by people who are blind. In European Conference on Computer Vision (ECCV) , 2020. URL https: //arxiv.org/abs/2002.08565 .Daniel Han, Michael Han, and Unsloth team. Unsloth, 2023. URL https://github.com/ unslothai/unsloth .10 Dan Hendrycks, Steven Basart, Norman Mu, Saurav Kadavath, Frank Wang, Evan Dorundo, Rahul Desai, Tyler Zhu, Samyak Parajuli, Mike Guo, Dawn Song, Jacob Steinhardt, and Justin Gilmer. The many faces of robustness: A critical analysis of out-of-distribution generalization. In Pro-ceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pp. 8340–8349, 2021. URL https://arxiv.org/abs/2006.16241 .Edward J Hu, yelong shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. LoRA: Low-rank adaptation of large language models. In International Con-ference on Learning Representations , 2022. URL https://openreview.net/forum? id=nZeVKeeFYf9 .Gabriel Ilharco, Marco Tulio Ribeiro, Mitchell Wortsman, Ludwig Schmidt, Hannaneh Hajishirzi, and Ali Farhadi. Editing models with task arithmetic. In The Eleventh International Confer-ence on Learning Representations , 2023. URL https://openreview.net/forum?id= 6t0Kwf8-jrj .Xisen Jin, Xiang Ren, Daniel Preotiuc-Pietro, and Pengxiang Cheng. Dataless knowledge fusion by merging weights of language models. In The Eleventh International Conference on Learning Representations , 2023. URL https://openreview.net/forum?id=FCnohuR6AnM .Sahar Kazemzadeh, Vicente Ordonez, Mark Matten, and Tamara Berg. ReferItGame: Referring to objects in photographs of natural scenes. In Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pp. 787–798. Association for Computa-tional Linguistics, 2014. doi: 10.3115/v1/D14-1086. URL https://aclanthology.org/ D14-1086/ .Pan Lu, Liang Qiu, Jiaqi Chen, Tony Xia, Yizhou Zhao, Wei Zhang, Zhou Yu, Xiaodan Liang, and Song-Chun Zhu. IconQA: A new benchmark for abstract diagram understanding and visual lan-guage reasoning. In Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks , 2021. URL https://iconqa.github.io/ .Pan Lu, Swaroop Mishra, Tanglin Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. Learn to explain: Multimodal reasoning via thought chains for science question answering. In Advances in Neural Information Processing Systems , volume 35, pp. 2507–2521, 2022. URL https://arxiv.org/abs/2209.09513 .Pan Lu, Liang Qiu, Kai-Wei Chang, Ying Nian Wu, Song-Chun Zhu, Tanmay Rajpurohit, Peter Clark, and Ashwin Kalyan. Dynamic prompt learning via policy gradient for semi-structured mathematical reasoning. In The Eleventh International Conference on Learning Representations ,2023. URL https://arxiv.org/abs/2209.14610 .Junhua Mao, Jonathan Huang, Alexander Toshev, Oana Camburu, Alan L. Yuille, and Kevin Mur-phy. Generation and comprehension of unambiguous object descriptions. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 11–20, 2016. URL 
+
+https://arxiv.org/abs/1511.02283 .Michael S Matena and Colin Raffel. Merging models with fisher-weighted averaging. In S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh (eds.), Advances in Neural Information Processing Systems , volume 35, pp. 17703–17716. Curran Associates, Inc., 2022. doi: 10.52202/ 068431-1287. URL https://proceedings.neurips.cc/paper_files/paper/ 2022/file/70c26937fbf3d4600b69a129031b66ec-Paper-Conference.pdf .Anand Mishra, Shashank Shekhar, Ajeet Kumar Singh, and Anirban Chakraborty. OCR-VQA: Visual question answering by reading text in images. In International Conference on Document Analysis and Recognition (ICDAR) , 2019. URL https://ocr-vqa.github.io/ .Jorge J. Mor´ e and D. C. Sorensen. Computing a trust region step. SIAM Journal on Scientific and Statistical Computing , 4(3):553–572, 1983. doi: 10.1137/0904038. URL https://doi.org/ 10.1137/0904038 .The-Hai Nguyen, Dang Huu-Tien, Takeshi Suzuki, and Le-Minh Nguyen. Regmean++: Enhancing effectiveness and generalization of regression mean for model merging. Transactions on Machine Learning Research , 2026. ISSN 2835-8856. URL https://openreview.net/forum? id=H5lDsSCS9i .11 Yann Ollivier. Ricci curvature of Markov chains on metric spaces. Journal of Functional Analysis ,256(3):810–864, 2009. doi: 10.1016/j.jfa.2008.11.001. URL https://doi.org/10.1016/ j.jfa.2008.11.001 .Bryan A. Plummer, Liwei Wang, Chris M. Cervantes, Juan C. Caicedo, Julia Hockenmaier, and Svetlana Lazebnik. Flickr30k entities: Collecting region-to-phrase correspondences for richer image-to-sentence models. International Journal of Computer Vision , 123(1):74–93, 2017. doi: 10.1007/s11263-016-0965-7. Huaizhi Qu, Xinyu Zhao, Jie Peng, Kwonjoon Lee, Behzad Dariush, and Tianlong Chen. 
+
+UQ-Merge : Uncertainty guided multimodal large language model merging. In Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar (eds.), Findings of the Asso-ciation for Computational Linguistics: ACL 2025 , pp. 1401–1417, Vienna, Austria, July 2025. Association for Computational Linguistics. ISBN 979-8-89176-256-5. doi: 10.18653/v1/2025. findings-acl.73. URL https://aclanthology.org/2025.findings-acl.73/ .Qwen Team. Qwen3.5: Towards native multimodal agents, February 2026. URL https://qwen. ai/blog?id=qwen3.5 .Alessia Saporita, Vittorio Pipoli, Federico Bolelli, Lorenzo Baraldi, Andrea Acquaviva, and Elisa Ficarra. Fg-tracer: Tracing information flow in multimodal large language models in free-form generation. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , pp. 7903–7912, March 2026. Dustin Schwenk, Apoorv Khandelwal, Christopher Clark, Kenneth Marino, and Roozbeh Mottaghi. A-OKVQA: A benchmark for visual question answering using world knowledge. In European Conference on Computer Vision (ECCV) , 2022. URL https://arxiv.org/abs/2206. 01718 .George Stoica, Pratik Ramesh, Boglarka Ecsedi, Leshem Choshen, and Judy Hoffman. Model merging with svd to tie the knots. In Y. Yue, A. Garg, N. Peng, F. Sha, and R. Yu (eds.), International Conference on Learning Representations , volume 2025, pp. 4501–4519, 2025. URL https://proceedings.iclr.cc/paper_files/paper/2025/file/ 0d4f8a5109c5083b5307fcd0bddae7a7-Paper-Conference.pdf .Derek Tam, Mohit Bansal, and Colin Raffel. Merging by matching models in task parameter sub-spaces. Transactions on Machine Learning Research , 2024. URL https://arxiv.org/ abs/2312.04339 .Bryan Wang, Gang Li, Xin Zhou, Zhourong Chen, Tovi Grossman, and Yang Li. Screen2Words: Automatic mobile UI summarization with multimodal learning. In Proceedings of the 34th Annual ACM Symposium on User Interface Software and Technology , pp. 498–510, 2021. doi: 10.1145/ 3472749.3474765. URL https://arxiv.org/abs/2108.03353 .Yongxian Wei, Runxi Cheng, Weike Jin, Enneng Yang, Li Shen, LU HOU, SiNan Du, Chun Yuan, Xiaochun Cao, and Dacheng Tao. Optmerge: Unifying multimodal llm capabilities and modalities via model merging. In C. Vondrick, B. Hariharan, C. Raffel, L. Pinto, D. Yang, and A. Faust (eds.), International Conference on Learning Representations , volume 2026, pp. 61571–61595, 2026. URL https://proceedings.iclr.cc/paper_files/paper/2026/file/ 64741c1e80cc3bbed205b1c2b040dfa8-Paper-Conference.pdf .Mitchell Wortsman, Gabriel Ilharco, Samir Ya Gadre, Rebecca Roelofs, Raphael Gontijo-Lopes, Ari S Morcos, Hongseok Namkoong, Ali Farhadi, Yair Carmon, Simon Kornblith, and Lud-wig Schmidt. Model soups: averaging weights of multiple fine-tuned models improves accu-racy without increasing inference time. In Kamalika Chaudhuri, Stefanie Jegelka, Le Song, Csaba Szepesvari, Gang Niu, and Sivan Sabato (eds.), Proceedings of the 39th International Conference on Machine Learning , volume 162 of Proceedings of Machine Learning Research ,pp. 23965–23998. PMLR, 17–23 Jul 2022. URL https://proceedings.mlr.press/ v162/wortsman22a.html .Prateek Yadav, Derek Tam, Leshem Choshen, Colin Raffel, and Mohit Bansal. Ties-merging: Resolving interference when merging models. In A. Oh, T. Naumann, A. Globerson, 12 K. Saenko, M. Hardt, and S. Levine (eds.), Advances in Neural Information Process-ing Systems , volume 36, pp. 7093–7115. Curran Associates, Inc., 2023. doi: 10.52202/ 075280-0310. URL https://proceedings.neurips.cc/paper_files/paper/ 2023/file/1644c9af28ab7916874f6fd6228a9bcf-Paper-Conference.pdf .Enneng Yang, Zhenyi Wang, Li Shen, Shiwei Liu, Guibing Guo, Xingwei Wang, and Dacheng Tao. Adamerging: Adaptive model merging for multi-task learning. In B. Kim, Y. Yue, S. Chaudhuri, K. Fragkiadaki, M. Khan, and Y. Sun (eds.), In-ternational Conference on Learning Representations , volume 2024, pp. 22743–22763, 2024. URL https://proceedings.iclr.cc/paper_files/paper/2024/file/ 62868cc2fc1eb5cdf321d05b4b88510c-Paper-Conference.pdf .Le Yu, Bowen Yu, Haiyang Yu, Fei Huang, and Yongbin Li. Language models are super mario: Absorbing abilities from homologous models as a free lunch. In Ruslan Salakhutdinov, Zico Kolter, Katherine Heller, Adrian Weller, Nuria Oliver, Jonathan Scarlett, and Felix Berkenkamp (eds.), Proceedings of the 41st International Conference on Machine Learning , volume 235 of 
+
+Proceedings of Machine Learning Research , pp. 57755–57775. PMLR, 21–27 Jul 2024. URL 
+
+https://proceedings.mlr.press/v235/yu24p.html .Fanhu Zeng, Haiyang Guo, Fei Zhu, Li Shen, and Hao Tang. Robustmerge: Parameter-efficient model merging for mllms with direction robustness. In D. Belgrave, C. Zhang, H. Lin, R. Pascanu, P. Koniusz, M. Ghassemi, and N. Chen (eds.), Ad-vances in Neural Information Processing Systems , volume 38, Main Conference, pp. 71071–71095. Curran Associates, Inc., 2025. doi: 10.52202/085713-2390. URL 
+
+https://proceedings.neurips.cc/paper_files/paper/2025/file/ 67101f97dc23fcc10346091181fff6cb-Paper-Conference.pdf .Dengming Zhang, Xiaowen Ma, Zhenliang Ni, Zhenkai Wu, Han Shu, Xin Jiang, and Xinghao Chen. Expert merging: Model merging with unsupervised expert alignment and importance-guided layer chunking. In C. Vondrick, B. Hariharan, C. Raffel, L. Pinto, D. Yang, and A. Faust (eds.), International Conference on Learning Representations , volume 2026, pp. 21780–21803, 2026a. URL https://proceedings.iclr.cc/paper_files/paper/2026/file/ 24dbe8babeca9f372712bbf19dd3584e-Paper-Conference.pdf .Han-Chen Zhang, Zi-Hao Zhou, Mao-Lin Luo, Shimin Di, Min-Ling Zhang, and Tong Wei. DC-Merge: Improving model merging with directional consistency. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 22248–22258, June 2026b. URL https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_ DC-Merge_Improving_Model_Merging_with_Directional_Consistency_ CVPR_2026_paper.html .Zhi Zhang, Srishti Yadav, Fengze Han, and Ekaterina Shutova. Cross-modal information flow in multimodal large language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 19781–19791, June 2025. 13
