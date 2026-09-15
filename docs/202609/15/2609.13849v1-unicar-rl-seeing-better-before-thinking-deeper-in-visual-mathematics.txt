@@ -1,0 +1,873 @@
+Title: UniCAR-RL: Seeing Better before Thinking Deeper in Visual Mathematics
+
+URL Source: https://arxiv.org/pdf/2609.13849v1
+
+Published Time: Tue, 15 Sep 2026 00:45:12 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# UniCAR-RL: Seeing Better before Thinking Deeper in Visual Mathematics 
+
+Yuzhe Li 1 * Hao Yan 1 * Hao Wang 2 Xingchen Liu 1 Ya-Qi Yu 2
+
+Jihao Wu 2 Minghui Liao 2† Wei Chen 1 Yuliang Liu 1‡
+
+> 1
+
+Huazhong University of Science and Technology, 2Huawei Inc. 
+
+{yzli, ylliu}@hust.edu.cn https://github.com/yzli9/UniCAR-RL 
+
+Abstract 
+
+Multimodal Large Language Models (MLLMs) often struggle with complex mathematical visual reasoning primarily due to a lack of fine-grained perception, causing initial visual hallu-cinations to directly trigger cascading reasoning failures. In traditional end-to-end reinforcement learning (RL), sparse rewards fail to decouple perceptual hallucinations from logi-cal missteps, hindering targeted perception optimization. Al-ternatively, fine-tuning with perception-enhanced CoT data incurs high costs and hallucinations. In this paper, we ad-dress these challenges by proposing UniCAR-RL , an RL framework for annotation-free perception optimization. By explicitly decoupling the optimization of perception and rea-soning during the training process, it achieves isolation and optimization of both capabilities. Specifically, UniCAR-RL consists of three synergistic branches: 1) a Caption-RL branch that optimizes perception capabilities through verifier-guided reasoning validation; 2) a Reasoning-RL branch that performs logical reasoning based on a gold image description to halt cascading errors; 3) a QA-RL branch that retains native end-to-end alignment to ensure robust question-answering performance. Experiments show that UniCAR-RL substantially improves MLLMs’ mathemat-ical and visual reasoning using only raw short-answer data. Furthermore, it demonstrates strong generalization across diverse architectures and scales. 
+
+1. Introduction 
+
+Driven by the rapid advancements in Chain-of-Thought (CoT) [1, 2] and Reinforcement Learning (RL) [3, 4] tech-niques, Multimodal Large Language Models (MLLMs) have achieved substantial progress in their reasoning capabili-ties for complex tasks [5–7]. However, the performance of    
+
+> *Equal contribution.
+> †Project Leader.
+> ‡Corresponding author.
+
+existing MLLMs remains unsatisfactory when confronted with abstract visual reasoning tasks, such as math [8, 9] and logic [10, 11]. Extensive research [12–14] shows that the primary bottleneck is not the models’ insufficient reasoning skills, but rather the absence of a fine-grained perception ca-pability. As illustrated in Fig. 1(a), when processing complex mathematical figures, models may easily misinterpret crit-ical yet microscopic visual conditions, causing subsequent rigorous mathematical reasoning to be founded upon halluci-nated visual premises. These initial visual misinterpretations fundamentally cause the breakdown of the mathematical reasoning. As illustrated in Fig. 1(b), extensive recent research has emphasized the importance of enhancing fine-grained vi-sual perception capabilities in MLLMs. Some recent w orks [15, 16] attempt to optimize models’ perceptual abili-ties by distilling high-quality, perception-enhanced CoT data. However, these methods heavily rely on costly expert-level annotations and are inherently constrained by the halluci-nations of teacher models. Alternatively, as an effective paradigm for boosting model performance on complex tasks, RL has been employed for optimization. However, sparse global rewards in RL fail to distinguish whether an incorrect prediction stems from visual misperception or logical errors, thereby rendering perception optimization highly inefficient. To address the above challenges of existing methods, we propose Unified Caption-Answer-Reasoning Reinforcement Learning ( UniCAR-RL ), an RL framework for annotation-free perception optimization. As illustrated in Fig. 1(b), UniCAR-RL fundamentally disentangles perceptual evalua-tion from end-to-end black-box training by introducing an explicit image description process and an advanced verifier. Specifically, to obtain a pure perceptual feedback sig-nal, the Caption-RL Branch of UniCAR-RL isolates the MLLM’s internal reasoning module to generate an exclu-sive image description, and directly utilizes an advanced verifier’s evaluation of this description as the reward. If the verifier successfully deduces the ground-truth answer relying solely on image description, it confirms the flawless extrac-1arXiv:2609.13849v1 [cs.AI] 12 Sep 2026 Direct Reinforcement Learning 
+
+Distilling Perception-Enhanced CoT data 
+
+UniCAR-RL (Ours)                                                        
+
+> Image Question VLM
+> Image Question API
+> Server
+> VLM
+> Wrong Answer
+> Image
+> Description
+> Perception
+> Enhanced CoT
+> Short
+> Answer GT
+> Direct Perception Reward
+> Reward
+> Perceptual error or
+> Reasoning error?
+> Image Question
+> Advanced
+> Verifier
+> training
+> VLM
+> CoT data
+> Target VLM High Cost
+> Teacher
+> Hallucination
+> Short-Answer
+> Supervision
+> Low Cost
+> Perception optimization
+> Sparse global reward
+> As shown in the figure, straight lines a and b intersect at point O.
+> If angle 1 is equal to 50.0, then
+> angle 2 is equal to
+> A:50 °B:40 °C:140 °D:130 °
+> …Angles ∠1 and ∠2are adjacent angles …
+> ∠1 + ∠2 = 180 °50.0 °+
+> ∠2 = 180 °…correct
+> answer is D: 130 °…
+> \boxed{D}
+> GRPO response
+> … Angle ∠1 and angle
+> ∠2 are vertically opposite angles …∠2 =
+> ∠1 = 50.0 °… Thus, the
+> correct answer is A: 50 °…\boxed{A}
+> Ours response
+> baseline GRPO Ours baseline GRPO Ours
+> baseline GRPO Ours baseline GRPO Ours
+> MathVerse MathVision
+> MathVista WeMath
+> Correct Reasoning error Perception error
+> 66 59 45 79 73 64
+> 63 57 39
+> 78 69 61
+> (a) Perception Bottleneck of MLLMs in Math
+> (b) Fine-Grained Perception Enhancement Method
+> 34 25 24
+> 21 17 16
+> 37 25 22
+> 22 15 14
+> (c) Error Distribution in mathematical reasoning
+
+Figure 1. Motivation of proposed approach. (a) highlights the perception bottleneck of MLLMs in visual mathematical reasoning, but existing RL methods struggle to address it; (b) presents existing perception enhancement methods and their limitations; (c) provides a comparison of error distributions on visual mathematical reasoning tasks. 
+
+tion of visual information. Consequently, this verification mechanism returns an unambiguous direct perception reward to MLLMs, enabling precise optimization of perception ca-pabilities while eliminating the interference of reasoning errors. Building upon the high-quality image descriptions, 
+
+Reasoning-RL Branch further enhances the model’s logi-cal reasoning capabilities. At this stage, this branch forces the model to perform independent mathematical reasoning based strictly on the gold caption verified in the preceding stage. This design of visual isolation fundamentally severs the error cascade of fine-grained perceptual hallucinations into the reasoning process, ensuring optimization signals are purely and intensely focused on enhancing logical deduction capabilities. Finally, QA-RL Branch jointly optimizes perception and reasoning end-to-end, alongside maintaining the model’s inherent question-answering proficiency. By synergizing these three branches, UniCAR-RL successfully achieves the joint optimization of perception and reasoning based on original short answers. The main advantages of UniCAR-RL are summarized as follows: 1) Perception Enhancement via Raw Short-Answer Data. As shown in Fig. 1(c), unlike traditional RL that primarily optimizes reasoning, this framework relies solely on raw short answers to simultaneously improve perceptual capabilities while preserving reasoning optimization. 2) Performance Gains on Mathematical Tasks. This framework achieves comprehensive gains across diverse mathematical benchmarks, delivering performance compa-rable to close-source proprietary models at a fraction of the training cost. 3) Generalization Across Different Architectures and Sizes. This framework achieves consistent and significant performance improvements across varying architectures and sizes. Furthermore, optimization efficacy exhibits limited sensitivity to the capabilities of the advanced verifier. 
+
+2. Related Work 
+
+RL for Mathematical Reasoning. As reinforcement learn-ing continually advances mathematical reasoning, GRPO [3] and its variants [17–19] have become widely used post-training paradigms in this domain. In multimodal mathe-matical reasoning, existing methods fall into cold-start RL and zero-RL. Cold-start RL bootstraps policies via curated reasoning traces or process supervision. We-Math 2.0 [20] structures training around mathematical knowledge, Vision-R1 [21] builds multimodal CoT data for GRPO initializa-tion, and URSA [22] combines a multimodal CoT founda-tion with process-supervised GRPO. Zero-RL directly opti-2mizes MLLMs with rule-based rewards. MM-Eureka [23] scales rule-based RL on filtered image-text math data, while Shuffle-R1 [4] improves RL efficiency through data-centric trajectory sampling and batch shuffling. R1-VL [24] intro-duces StepGRPO with dense step-wise rewards, and VL-Cogito [25] adopts curriculum RL with dynamic length re-wards. 
+
+Visual Perception Enhancement in MLLMs. Fine-grained visual perception is essential for complex visual tasks, yet remains a major bottleneck for MLLMs [13, 16, 26]. Existing methods mainly improve visual per-ception through perception-augmented trajectory training and perception-rewarded RL. The former typically dis-tills high-quality perception-enhanced CoT data from ad-vanced teacher models and then uses these data to enhance the perceptual capabilities of MLLMs. CodePercept [15] and GeoCode [27] use executable programs to recover di-agram structures, while MathFlow [26] decouples visual extraction from downstream inference. ViRC [28] and Geoint-R1 [29] further structure the reasoning process with grounded reasoning chunks and auxiliary geometric con-structions. Perception-reward-guided RL methods [30–32] incorporate perceptual signals into reward design. They introduce rewards based on visual annotation consistency, visual knowledge internalization, and caption utility, respec-tively. Other studies reduce reliance on distilled perception data: VPPO [33] focuses policy updates on visually depen-dent tokens, Vision-SR1 [14] self-verifies generated visual descriptions, PAPO [34] derives grounding signals from vi-sual perturbations, and NoisyRollout [35] leverages noisy visual rollouts. Details of those works are provided in Ap-pendix C. 
+
+3. Method 
+
+3.1. Overall Framework 
+
+Visual mathematical reasoning demands two tightly coupled competencies: perception faithfully extracting fine-grained visual details such as axis values, geometric marks, and sym-bolic annotations, and reasoning chains logical deductions toward a correct answer. A model can fail for either rea-son, yet conventional outcome-driven RL treats both failure modes identically: a wrong final answer yields a negative signal regardless of its root cause. Without a targeted signal, the perception bottleneck silently persists across training. The key insight that motivates our approach is intuitive: 
+
+the quality of a visual description can be objectively mea-sured by whether a capable text-only solver can derive the correct answer from it alone. This reformulation converts the inherently subjective problem of evaluating perception into a clean, annotation-free binary signal tied directly to task utility rather than surface-level textual fidelity. Building on this insight, we propose UniCAR-RL , disen-tangling the optimization into three jointly updated branches. As illustrated in Fig. 2, the Caption-RL Branch encour-ages broader, question-agnostic visual perception and eval-uates generated descriptions by their task sufficiency. The 
+
+Reasoning-RL Branch isolates logical reasoning in a purely textual setting, using the best available description as input. The QA-RL Branch then anchors both capabilities back to the native end-to-end task format. All three branches share the same policy parameters θ and are updated jointly in every iteration, so perception and reasoning co-evolve rather than being trained in isolated stages. 
+
+3.2. Caption-RL Branch 
+
+Motivation. The Caption-RL Branch is built on a deliber-ate act of information withholding: the question q is explic-itly excluded from the model’s input. A model that knows the question can selectively attend only to visually relevant elements; a model that does not must describe everything. By stripping q from the context, we exert a natural pressure toward holistic, unbiased visual grounding. 
+
+Stage 1: Caption Generation. The policy πθ generates 
+
+G caption rollouts from the image I and a task prompt pcap ,tasked with exhaustively extracting visual details without producing an answer: 
+
+ci ∼ πθ (· | I, p cap ), i = 1 , . . . , G. (1) This design is inspired by the intuition behind EM-style optimization: the caption acts as a latent intermediate expla-nation, which is first inferred under the current policy and then used to optimize downstream reasoning. We do not perform EM in a strict probabilistic sense, since c⋆ is chosen by reward-guided selection rather than posterior expectation, and the overall objective remains RL-based. 
+
+Stage 2: Verification. Each caption ci is evaluated by a 
+
+proxy solver V, implemented as a text-only language model that accepts no visual input by design. Given only the caption 
+
+ci, the question q, and a task prompt pver , V attempts to solve the problem entirely from the textual evidence at hand: 
+
+ˆai = V(ci, q, p ver ), i = 1 , . . . , G. (2) Because V is a capable text-based reasoner with no access to 
+
+I, the resulting reward serves as a practical proxy for caption sufficiency, though it may still contain noise from the verifier itself. The perception reward thus becomes: 
+
+rcap  
+
+> i
+
+= I [D(Extract(ˆ ai), a ⋆)] , (3) where a⋆ denotes the ground-truth answer. Missing a single critical visual element, such as a tick label, a right-angle mark, or a legend entry, will cause the text-only proxy solver to fail, sending a precise corrective signal back to the policy. 3Synergistic End -to -End QA Integration 
+
+Caption -RL Branch 
+
+> Pure Visual Perception Enhancement
+
+Gold  Caption 
+
+Reasoning -RL Branch 
+
+> Gold Caption
+> Question
+
++
+
+> Target VLM
+> Shared parameter
+> Visually -Isolated Logic Optimization
+
+Policy 
+
+Optimization 
+
+Target VLM 
+
+> Shared parameter
+> End2End
+> QA
+> optimization
+> Perception
+> optimization
+> Reasoning
+> optimization
+> Rollout output
+
+GT Answer 
+
+O1
+
+O2
+
+t1
+
+t2 …
+
+a1
+
+a2
+
+OG tG aG
+
+> Rollout output
+
+O1
+
+OG cG
+
+c1 O1
+
+O2
+
+OG
+
+…
+
+> Rollout output
+
+O2 c2
+
+…
+
+t1 a1
+
+t2 a2
+
+tG aG
+
+c Image Caption 
+
+t CoT  solution 
+
+a Short Answer 
+
+> Question
+> API
+> Advanced
+> Verifier
+
+QA -RL Branch  Rollout output 
+
+O1
+
+O2
+
+t1
+
+t2 …
+
+a1
+
+a2
+
+OG tG aG
+
+> Target VLM
+> Shared parameter
+> Image
+> Question
+
++
+
+c1
+
+c2
+
+cG 
+
+> Find ∠D of
+> quadrilateral ABCD.
+
+75 °
+
+> Image
+> Question
+> GT Answer
+
+Input Figure 2. Overview of UniCAR-RL. It disentangles optimization into three branches: a) the Caption-RL Branch for pure visual perception enhancement, b) the Reasoning-RL Branch for visually-isolated logic optimization, and c) the QA-RL Branch for synergistic end-to-end QA integration. 
+
+3.3. Reasoning-RL Branch 
+
+Gold Caption Selection. From the G caption rollouts, we select the highest-reward caption as the selected gold caption 
+
+c⋆:
+
+c⋆ = arg max 
+
+> ci
+
+rcap  
+
+> i
+
+, (4) breaking ties uniformly at random. Conditioning on c⋆ is deliberate: it provides a description that is simultaneously realistic (drawn from the policy’s own distribution) and max-imally informative. 
+
+Text-Only Reasoning. The image is withheld, and the model solves the problem from c⋆, q and a task prompt prsn :
+
+a′ 
+
+> j
+
+∼ πθ (· | c⋆, q, p rsn ), j = 1 , . . . , G. (5) This setup is structurally symmetric to the verification step in Caption-RL: there, the proxy solver V takes a caption and derives an answer; here, πθ does the same but as the learner, so gradients flow directly through this rollout. In effect, the model is learning to be its own proxy solver. The reward follows the same rule-based extraction: 
+
+rrsn  
+
+> j
+
+= ID(Extract( a′ 
+
+> j
+
+), a ⋆) . (6) This branch also induces a natural curriculum : as Caption-RL Branch improves, c⋆ becomes progressively richer, pre-senting Reasoning-RL Branch with increasingly demand-ing textual inputs. Stronger perception raises the ceiling for reasoning; stronger reasoning amplifies the value of accurate perception. 
+
+3.4. QA-RL Branch 
+
+The two specialized branches target perception and reasoning separately. The QA-RL Branch serves as an integration stage: it trains the model to deploy both competencies under conditions matching downstream inference. The input image 
+
+I, question q, and prompt pqa mirror the test-time setting: 
+
+ai ∼ πθ (· | I, q, p qa ), i = 1 , . . . , G, (7) 
+
+rqa  
+
+> i
+
+= I [D(Extract( ai), a ⋆)] . (8) By running this branch alongside the two specialized branches in every training iteration, the policy is contin-uously pulled back toward the task distribution it faces at 4deployment. The decoupled branches sharpen individual competencies; the QA branch ensures those competencies are always being woven back together. 
+
+3.5. Unified GRPO Optimization 
+
+The three branches yield reward streams with heterogeneous semantics. To prevent any single branch from dominating the gradient, advantages are normalized independently within each rollout group. For branch k ∈ { cap , rsn , qa }:
+
+A(k) 
+
+> i
+
+= r(k) 
+
+> i
+
+− mean  r(k)
+
+std  r(k) . (9) Each branch’s objective takes the standard clipped GRPO: 
+
+Jk(θ) = E
+
+"
+
+1
+
+G
+
+> G
+
+X
+
+> i=1
+
+1
+
+|o(k) 
+
+> i
+
+| 
+
+> |o(k)
+> i|
+
+X
+
+> t=1
+
+min 
+
+
+
+r(k) 
+
+> i,t
+
+A(k) 
+
+> i
+
+,
+
+clip  r(k) 
+
+> i,t
+
+, 1−ϵ, 1+ ϵA(k)
+
+> i
+
+#
+
+,
+
+(10) where the token-level importance ratio is 
+
+r(k) 
+
+> i,t
+
+=
+
+πθ
+
+
+
+o(k) 
+
+> i,t
+
+| x(k), o (k)
+
+> i,<t
+
+
+
+πold 
+
+
+
+o(k) 
+
+> i,t
+
+| x(k), o (k)
+
+> i,<t
+
+ . (11) All three objectives are optimized jointly via a single backward pass: 
+
+θ ← θ + η ∇θ
+
+
+
+Jcap (θ) + Jrsn (θ) + Jqa (θ)
+
+
+
+. (12) This locally decoupled, globally co-evolving paradigm is the defining characteristic of UniCAR-RL: each branch con-tributes a specialized gradient signal targeting a distinct com-petency, yet all signals are applied simultaneously to the same shared parameters within every single update step. 
+
+4. Experiments 
+
+4.1. Experimental Setup 
+
+Dataset. We utilize 30k samples from MMRL30k [4] during the training. In the evaluation phase, we conduct extensive testing on four highly challenging multimodal mathemati-cal reasoning benchmarks, including WeMath [42], Math-Verse [8], MathVista [43], and MathVision [9]. Furthermore, we verify the model’s general capabilities on ChartQA [44] and HallusionBench [45]. 
+
+Implementation Details. Our experiments use Qwen2.5-VL [39] and Qwen3-VL [38] as backbones for full-parameter fine-tuning. Models are optimized using AdamW [46] with a learning rate of 1 × 10 −6, a weight decay of 1 × 10 −2, a micro-batch size of 8 per device, and a rollout number of 16 per input. The text-only training verifiers are Qwen3.5-35B-A3B [47] and Gemini 3 Pro. For all locally evaluated models and benchmarks, decoding uses temperature 0.0, top-p 0.8, top-k 20, and presence penalty 0.0. For fair comparison, all evaluated models receive only the image and question as input during inference. Gemini-2.5-Flash [48] is used only as a benchmark answer judge when required by the evaluation protocol. 
+
+4.2. Main Results 
+
+Table 1 compares the proposed model with prior methods across four mathematical visual reasoning benchmarks. We draw the following observations: 1) Significant performance gains. By alleviating inher-ent perception bottlenecks of MLLMs, UniCAR-RL consis-tently delivers significant improvements across all evaluated backbone and scale configurations on visual mathematical reasoning benchmarks. It further achieves state-of-the-art av-erage performance among the compared open-source models at comparable scales and remains competitive with propri-etary models. 2) Generalization across diverse backbones. By in-herently enhancing visual perception through decoupling, UniCAR-RL demonstrates robust generalization, achieving substantial performance gains across architectures and scales. Notably, baselines with smaller sizes and lower initial per-formance tend to yield more significant improvements. 3) Effect of advanced verifier. Experiments clearly re-veal the relationship between advanced verifier capability and model performance. A stronger verifier provides more precise perception reward signals, thereby more accurately guiding the model’s optimization and significantly elevating the upper bound of its reasoning performance. 
+
+4.3. Visual Perception Evaluation 
+
+To quantitatively verify the perceptual enhancements of UniCAR-RL, we conduct a visual perception evaluation experiment. Specifically, we utilize the model to generate image descriptions for mathematical images, which are sub-sequently fed into a unified advanced verifier for problem-solving. Under this setup, the verifier’s accuracy objectively reflects the perception capability of the model. Table 3 demonstrates that while standard GRPO brings negligible im-provements, UniCAR-RL secures significant breakthroughs in description quality. 
+
+4.4. General Tasks Evaluation 
+
+Although primarily optimized on visual mathematical data, UniCAR-RL mitigates the perception bottlenecks of MLLMs, yielding fine-grained perceptual enhancements that broadly benefit general multimodal tasks. We there-fore further evaluate its generalization on a broader set of 5Model Venue WeMath MathVerse MathVista MathVision Avg. 
+
+Close-source Proprietary model 
+
+GPT-4o [36] 68.8 50.2 63.8 30.4 53.4 Claude-3.7-Sonnet [37] 72.6 52.0 66.8 41.3 58.1 
+
+Models based on Qwen3-VL-Instruct 
+
+Qwen3-VL-4B [38] arXiv 2025 75.0 47.2 73.5 50.1 61.5 Qwen3-VL-8B [38] arXiv 2025 79.4 60.8 77.9 52.9 67.8 UniCAR-RL-4B (Gemini 3 Pro) Ours 78.5 51.2 80.4 53.3 65.9 UniCAR-RL-8B (Gemini 3 Pro) Ours 82.5 63.4 79.5 54.6 70.0 
+
+Models based on Qwen2.5-VL-Instruct-3B 
+
+Qwen2.5-VL-3B [39] arXiv 2025 55.9 33.6 59.4 22.5 42.9 MMR1-3B-RL ⋆ [40] CVPR-F 2026 64.5 35.3 65.3 23.5 47.2 PAPO-D-3B ⋆ [34] ICLR 2026 65.3 42.0 64.8 26.4 49.6 Shuffle-R1-3B ⋆ [4] ICLR 2026 64.8 40.5 67.7 26.3 49.9 UniCAR-RL-3B (Qwen3.5-35B-A3B) Ours 66.5 41.8 68.9 27.3 51.1 UniCAR-RL-3B (Gemini 3 Pro) Ours 67.3 42.9 70.1 28.5 52.2 
+
+Models based on Qwen2.5-VL-Instruct-7B 
+
+Qwen2.5-VL-7B [39] arXiv 2025 61.7 42.5 67.3 25.7 48.3 MMR1-7B-RL ⋆ [40] CVPR-F 2026 71.5 46.0 70.8 29.3 54.4 MM-Eureka-7B † [23] TMLR 2026 66.1 50.3 73.0 26.9 54.0 NoisyRollout-7B † [35] NeurIPS 2025 70.8 50.1 70.9 28.0 54.9 R1-ShareVL-7B ⋆ [41] NeurIPS 2025 69.8 52.8 75.1 29.5 56.8 PAPO-D-7B ⋆ [34] ICLR 2026 69.3 49.3 74.5 29.6 55.7 Vision-R1-7B ⋆ [21] ICLR 2026 - 50.4 71.2 - -Vision-SR1-7B ⋆ [14] ICLR 2026 63.9 43.5 68.4 27.4 50.8 Shuffle-R1-7B ⋆ [4] ICLR 2026 68.7 49.3 75.2 30.0 55.8 Perception-R1-7B † [30] ICLR 2026 72.0 54.3 74.2 28.6 57.2 UniCAR-RL-7B (Qwen3.5-35B-A3B) Ours 71.9 53.0 75.5 30.2 57.7 UniCAR-RL-7B (Gemini 3 Pro) Ours 72.4 53.7 76.0 30.6 58.2 
+
+Table 1. Main results on visual mathematical reasoning benchmarks. The Avg. score is the arithmetic mean over WeMath, MathVerse, MathVista, and MathVision; CVPR-F denotes CVPR Findings. Models marked with ⋆ are evaluated under our setting. Results marked with  
+
+> †
+
+are sourced from previous work [30]. The best value in each column is shown in bold , and the second-best is underlined. For UniCAR-RL (Verifier ), the Verifier denotes the advanced verifier used during training. This convention applies to all subsequent tables. 
+
+general tasks, using the system prompts provided in Ap-pendix E. Table 4 reports the results on ChartQA [44] and HallusionBench [45], while additional results are provided in Appendix D. The results show consistent performance gains across different model scales, demonstrating that the fine-grained perception enhancements of UniCAR-RL trans-fer beyond visual mathematical reasoning to diverse visual tasks. 
+
+4.5. Ablation Study 
+
+To investigate the contributions of each branch and com-ponent, we perform comprehensive ablation studies with Qwen3-VL-4B as the default setup. Ablation on Different Branches. To verify the contribution of each branch, we pro-gressively remove the Reasoning-RL Branch , Caption-RL Branch , and QA-RL Branch , gradually degrading UniCAR-RL back to the baseline. As demonstrated in Table 5, the absence of any single branch leads to performance degra-dation, proving that all three branches play a crucial syner-gistic role in enhancing reasoning capabilities. More impor-tantly, compared to the mere 1.3% gain yielded by vanilla GRPO, the decoupled optimization of perception and reason-ing significantly enhances the model’s reasoning capabilities, achieving a 3.1% improvement. 
+
+Ablation on Key Components. We further investigate the impact of different baselines, model sizes and verifiers on UniCAR-RL. As shown in Table 2, the results reveal three key observations. 1) First, UniCAR-RL consistently yields significant performance enhancements across various base models. 2) Second, this positive trend remains highly stable 6Configuration WeMath MathVerse MathVista MathVision Avg. 
+
+Base model ablations (Verifier: Qwen3.5-35B-A3B) 
+
+Qwen2.5-VL-3B (base) 55.9 33.6 59.4 22.5 42.9 + UniCAR-RL 66.5 (+10.6) 41.8 (+8.2) 68.9 (+9.5) 27.3 (+4.8) 51.1 (+8.2) 
+
+Qwen3-VL-4B (base) 75.0 47.2 73.5 50.1 61.5 + UniCAR-RL 77.8 (+2.8) 50.4 (+3.2) 79.6 (+6.1) 52.9 (+2.8) 65.2 (+3.7) 
+
+Verifier ablations 
+
+Qwen3-VL-4B (base) 75.0 47.2 73.5 50.1 61.5 w/ Qwen3.5-35B-A3B 77.8 (+2.8) 50.4 (+3.2) 79.6 (+6.1) 52.9 (+2.8) 65.2 (+3.7) 
+
+w/ Gemini 3 Pro 78.5 (+3.5) 51.2 (+4.0) 80.4 (+6.9) 53.3 (+3.2) 65.9 (+4.4) 
+
+Parameter scale ablations (Verifier: Qwen3.5-35B-A3B) 
+
+Qwen3-VL-4B (base) 75.0 47.2 73.5 50.1 61.5 + UniCAR-RL 77.8 (+2.8) 50.4 (+3.2) 79.6 (+6.1) 52.9 (+2.8) 65.2 (+3.7) 
+
+Qwen3-VL-8B (base) 79.4 60.8 77.9 52.9 67.8 + UniCAR-RL 82.5 (+3.1) 63.4 (+2.6) 79.5 (+1.6) 54.6 (+1.7) 70.0 (+2.3) 
+
+Table 2. Component ablations of UniCAR-RL. We adopt Qwen3-VL-4B (Qwen3.5-35B-A3B) as the default configuration. We then conduct ablations on the base model, parameter scale, and verifier selection. Rows marked (base) denote the pretrained model without UniCAR-RL training and green values report absolute improvement over the corresponding base. Captioner Verifier-Solve Accuracy (%) ↑
+
+WeMath MathVerse MathVista MathVision Avg. Qwen3-VL-4B (zero-shot) 80.8 62.4 76.6 65.9 71.4 Qwen3-VL-4B + GRPO 82.1 (+1.3) 63.8 (+1.4) 77.8 (+1.2) 67.5 (+1.6) 72.8 (+1.4) 
+
+Qwen3-VL-4B + UniCAR-RL 84.9 (+4.1) 65.5 (+3.1) 82.5 (+5.9) 70.8 (+4.9) 75.9 (+4.5) 
+
+Table 3. Evaluation results of visual perception. We adopt Gemini 3 Pro as the unified verifier. Model ChartQA HallBench 
+
+Models around 4B parameters 
+
+Qwen3-VL-4B 83.0 73.7 +UniCAR-RL(Qwen3.5-35B-A3B) 87.9 (+4.9) 75.0 (+1.3) 
+
++UniCAR-RL(Gemini 3 Pro) 89.5 (+6.5) 75.5 (+1.8) 
+
+Models around 8B parameters 
+
+Qwen3-VL-8B 88.4 75.0 +UniCAR-RL(Qwen3.5-35B-A3B) 90.2 (+1.8) 75.2 (+0.2) 
+
++UniCAR-RL(Gemini 3 Pro) 90.6 (+2.2) 75.4 (+0.4) 
+
+Table 4. Performance comparison on general multimodal bench-marks. HallBench stands for HallusionBench. 
+
+across different parameter scales, verifying the strong scal-ability of our approach. 3) Third, the verifier serves purely as an auxiliary for problem-solving. Although a stronger verifier inherently leads to better performance, the marginal gains are relatively limited, suggesting that powerful open-source models can effectively substitute for proprietary ones in most scenarios. 
+
+4.6. Qualitative Analysis 
+
+To illustrate the advantages of UniCAR-RL, we present rep-resentative comparative examples in Fig. 3. In mathematical reasoning tasks, the failures of the baseline model primarily stem from visual perception errors and logical reasoning er-rors. Although standard RL methods, represented by GRPO, can help correct reasoning errors, they still fall short in opti-mizing the perception capabilities of MLLMs. In contrast, benefiting from the explicit decoupling of the perception and reasoning processes, UniCAR-RL can simultaneously and specifically optimize both visual perception and logical reasoning capabilities. Its synergistic multi-branch archi-tecture not only retains the error-correction advantages of RL, but also precisely rectifies visual misjudgments through an independent branch, ultimately achieving substantial im-provements in overall performance. 
+
+4.7. Training Efficiency Analysis 
+
+To evaluate the training overhead associated with the perfor-mance gains of UniCAR-RL, we further analyze its training efficiency. We use Qwen2.5-VL-7B as the default backbone and measure both the rollout time and the total step time for 7Math problem  Baseline  GRPO  UniCAR -RL                     
+
+> If angle B=70 .0,angle C=
+> 30 .0,angle DAC =35 .0,then
+> the degree of angle EAC is
+> A:40 °B:45 °C:35 °D:25 °
+
+Flawed 
+
+Perception 
+
+Incorrect 
+
+Reasoning                                                                                                                                                                                                                                                        
+
+> AB parallel DE, angle B=
+> 30 .0,angle C=110 .0,the
+> degree of angle Dis
+> A:115 °B:120 °
+> C:100 °D:80 °
+> Answer: B
+> Answer: C
+> …From the diagram, point
+> Dlies on line AE, so A, D,
+> and Eare collinear .
+> Therefore, ray AE coincides
+> with ray AD, meaning the
+> angle with AC at Ais the
+> same .∠EAC =∠DAC
+> So, ∠EAC =35 °.Therefore,
+> Final Answer :\\boxed{C}
+> …the ray AD is the same
+> direction as AE, meaning the
+> angle formed with AC is
+> identical whether we use AD
+> or AE .So, ∠EAC =∠DAC .
+> …
+> Substituting the given value :
+> ∠EAC =35 °.Therefore, the
+> value of ∠EAC is 35 °.
+> Final Answer :\\boxed{C}
+> …since CF is parallel to DE,
+> and CD is atransversal, then
+> the angle between CD and
+> CF (which is 80 °)is equal
+> to the alternate interior angle
+> with angle D.Therefore,
+> angle D=80 °.
+> …
+> Answer :D
+> Final Answer :\\boxed{D}
+> …The angles provided are :∠B
+> =70 .0°∠C=30 .0°
+> ∠DAC =35 .0°…
+> ∠BAC =180 °-100 °=80 °…
+> ∠EAC =∠BAC -∠DAC =
+> 80 °-35 °=45 °…
+> because ∠EAC is the angle
+> from EA to AC, while ∠DAC is
+> the angle from DA to AC ... Thus,
+> the answer is B:45 °.
+> Final Answer :\\boxed{B}
+> We are given that AB is
+> parallel to DE, ∠B = 30 °, and
+> ∠C = 110 °… Introduce an
+> auxiliary line. Through point
+> C, draw a line parallel to AB
+> and DE. Call this line CF,
+> extending to the right …
+> ∠BCF = ∠B = 30 °…
+> ∠FCD = 80 °…
+> ∠FCD + ∠D = 180 °,
+> ∠D = 100 °.
+> Final Answer: \\boxed{C}
+> We are given that AB is parallel
+> to DE, and we know ∠B=30 °,
+> ∠C=110 °... draw aline
+> through point Cthat is parallel
+> to both AB and DE .Let ’scall
+> this line FG, passing through
+> C…∠B=∠BCF =30 °…∠C
+> =∠BCF +∠FCD →110 °=30 °
+> +∠FCD →∠FCD =110 °-
+> 30 °=80 °…∠D+∠FCD =
+> 180 °→∠D=100 °
+> Final Answer :\\boxed{C}
+> False collinearity perception
+> Angle misclassification
+> False collinearity perception
+
+Figure 3. Qualitative comparison of mathematical reasoning tasks. Configuration WeMath MathVerse MathVista MathVision Avg. 
+
+UniCAR-RL(full) 78.5 51.2 80.4 53.3 65.9 
+
+w/o Reasoning-RL Branch 77.2 49.8 78.1 51.4 64.2 w/o Caption-RL Branch (Vanilla GRPO) 76.3 48.5 76.0 50.8 62.8 w/o QA-RL Branch (Base Qwen3-VL-4B) 75.0 47.2 73.5 50.1 61.5 Table 5. Branch ablations of UniCAR-RL. By systematically removing each branch, UniCAR-RL progressively degrades to the standard baseline. The default setup uses Qwen3-VL-4B with the Gemini 3 Pro verifier. Method Rollout Total Vanilla GRPO (QA-RL) 72.3 297.8 Reasoning-RL 68.4 292.7 Caption-RL 305.1 525.5 UniCAR-RL iteration (sum) 445.8 1116.0 ( ∼3.75 ×)Table 6. Training Cost Analysis of UniCAR-RL. 
+
+each training branch. As shown in Table 6, QA-RL branch and Reasoning-RL branch have training costs comparable to vanilla GRPO, while the additional overhead mainly comes from Caption-RL due to its extra verifier-based evaluation. A UniCAR-RL iteration takes approximately 3.75 × the time of a vanilla GRPO step. However, UniCAR-RL requires fewer optimization iterations in the observed training runs, with about 70 iterations compared with about 150 steps for vanilla GRPO, resulting in an overall training-time ratio of approx-imately 1.75 ×. Overall, UniCAR-RL achieves substantial performance gains with a moderate increase in training cost. 
+
+5. Conclusion 
+
+In this paper, we propose UniCAR-RL, a novel RL frame-work for annotation-free perception optimization that ad-dresses the visual perception bottlenecks of MLLMs in com-plex visual mathematical reasoning. The core innovation lies in decoupling the optimization of perception and reasoning without relying on data distillation. By introducing a veri-fier to provide pure visual perception optimization signals and leveraging gold-description-based reasoning to deliver pure logical reasoning signals, UniCAR-RL can precisely co-optimize the model’s fine-grained perception and logical 8reasoning capabilities. Extensive experiments show that our method exhibits robust generalization across diverse model architectures and sizes. Notably, because UniCAR-RL’s per-formance gains stem from breaking the inherent perceptual bottlenecks of MLLMs, particularly in small sizes and ear-lier architectures, these enhancements naturally generalize to broad multimodal tasks. 
+
+Limitations 
+
+Within the UniCAR-RL framework, the joint optimization of the synergistic Caption-RL branch, Reasoning-RL branch, and QA-RL branch inevitably increases the training cost, as discussed in Section 4.7. Moreover, the framework is primarily validated on complex mathematical and a limited set of general visual tasks. Future work will explore its application to a broader range of multimodal scenarios. 
+
+Acknowledgments 
+
+This research was supported by the NSFC 62576147. 
+
+References 
+
+[1] Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke Iwasawa. Large language models are zero-shot reasoners. In Advances in Neural Information Pro-cessing Systems , volume 35, pages 22199–22213, 2022. 1 [2] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc Le, and Denny Zhou. Chain-of-thought prompting elicits reasoning in large lan-guage models. In Advances in Neural Information Processing Systems , volume 35, pages 24824–24837, 2022. 1 [3] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junx-iao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y K Li, Y Wu, and Daya Guo. DeepSeekMath: Pushing the lim-its of mathematical reasoning in open language models. In 
+
+arXiv:2402.03300 , 2024. 1, 2 [4] Linghao Zhu, Yiran Guan, Dingkang Liang, Jianzhong Ju, Zhenbo Luo, Bin Qin, Jian Luan, Yuliang Liu, and Xiang Bai. Shuffle-R1: Efficient RL framework for multimodal large language models via data-centric dynamic shuffle. In 
+
+International Conference on Learning Representations , 2026. 1, 3, 5, 6, 13 [5] Anwen Hu, Haiyang Xu, Liang Zhang, Jiabo Ye, Ming Yan, Ji Zhang, Qin Jin, Fei Huang, and Jingren Zhou. mPLUG-DocOwl2: High-resolution compressing for OCR-free multi-page document understanding. In Annual Meeting of the Association for Computational Linguistics , pages 5817–5834, 2025. 1 [6] Hao Yan, Yuliang Liu, Xingchen Liu, Yuyi Zhang, Minghui Liao, Jihao Wu, Wei Chen, and Xiang Bai. Docseeker: Struc-tured visual reasoning with evidence grounding for long doc-ument understanding. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 41140–41149, 2026. [7] Zhang Li, Biao Yang, Qiang Liu, Zhiyin Ma, Shuo Zhang, Jingxu Yang, Yabo Sun, Yuliang Liu, and Xiang Bai. Monkey: Image resolution and text label are important things for large multi-modal models. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 26763–26773, 2024. 1 [8] Renrui Zhang, Dongzhi Jiang, Yichi Zhang, Haokun Lin, Ziyu Guo, Pengshuo Qiu, Aojun Zhou, Pan Lu, Kai-Wei Chang, Yu Qiao, Peng Gao, et al. MathVerse: Does your multi-modal LLM truly see the diagrams in visual math problems? In 
+
+European Conference on Computer Vision , pages 169–186, 2024. 1, 5 [9] Ke Wang, Junting Pan, Weikang Shi, Zimu Lu, Mingjie Zhan, and Hongsheng Li. Measuring multimodal mathematical reasoning with MATH-Vision dataset. In Advances in Neural Information Processing Systems , volume 37, pages 95095– 95169, 2024. 1, 5 [10] Weiye Xu, Jiahao Wang, Weiyun Wang, Zhe Chen, Wen-gang Zhou, Aijun Yang, Lewei Lu, Houqiang Li, Xiaohua Wang, Xizhou Zhu, Wenhai Wang, Jifeng Dai, and Jinguo Zhu. VisuLogic: A benchmark for evaluating visual reason-ing in multi-modal large language models. In International Conference on Learning Representations , 2026. 1 [11] Yueqi Song, Tianyue Ou, Yibo Kong, Zecheng Li, Graham Neubig, and Xiang Yue. VisualPuzzles: Decoupling mul-timodal reasoning evaluation from domain knowledge. In 
+
+International Conference on Machine Learning , 2026. 1 [12] Ziqi Miao, Haonan Jia, Lijun Li, Chen Qian, Yuan Xiong, Wenting Yan, and Jing Shao. Seeing with you: Perception-reasoning coevolution for multimodal reasoning. In arXiv:2603.28618 , 2026. 1 [13] Hao Yan, Xingchen Liu, Hao Wang, Zhenbiao Cao, Han-dong Zheng, Liang Yin, Xinxing Su, Zihao Chen, Jihao Wu, Minghui Liao, et al. VisuRiddles: Fine-grained perception is a primary bottleneck for multimodal large language models in abstract visual reasoning. In International Conference on Learning Representations , 2026. 3 [14] Zongxia Li, Wenhao Yu, Zhenwen Liang, Chengsong Huang, Rui Liu, Fuxiao Liu, Jingxi Chen, Dian Yu, Jordan Boyd-Graber, Haitao Mi, and Dong Yu. Vision-SR1: Self-rewarding vision-language model via reasoning decomposition and multi-reward policy optimization. In International Confer-ence on Learning Representations , 2026. 1, 3, 6, 13 [15] Tongkun Guan, Zhibo Yang, Jianqiang Wan, Mingkun Yang, Zhengtao Guo, Zijian Hu, Ruilin Luo, Ruizhe Chen, Songtao Jiang, Peng Wang, Wei Shen, Junyang Lin, and Xiaokang Yang. CodePercept: Code-grounded visual STEM perception for MLLMs. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2026. 1, 3, 13 [16] Linger Deng, Linghao Zhu, Yuliang Liu, Yu Wang, Qunyi Xie, Jingjing Wu, Gang Zhang, Yingying Zhu, and Xiang Bai. Theorem-validated reverse chain-of-thought problem gener-ation for geometric reasoning. In Conference on Empirical Methods in Natural Language Processing , pages 718–735, 2025. 1, 3 [17] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xi-aochen Zuo, Yu Yue, Tiantian Fan, Gaohong Liu, Lingjun Liu, Xin Liu, et al. DAPO: An open-source LLM reinforcement learning system at scale. In Advances in Neural Information Processing Systems , volume 38, 2025. 2 
+
+9[18] Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. Understanding R1-zero-like training: A critical perspective. In Conference on Language Modeling , 2025. [19] Zhongwei Wan, Zhihao Dou, Che Liu, Yu Zhang, Dongfei Cui, Qinjian Zhao, Hui Shen, Jing Xiong, Yi Xin, Yifan Jiang, et al. SRPO: Enhancing multimodal LLM reasoning via reflection-aware reinforcement learning. In Advances in Neural Information Processing Systems , volume 38, pages 153676–153713, 2025. 2, 13 [20] Runqi Qiao, Peiqing Yang, Yanzi Wang, Xiaowan Wang, En-hui Wan, Guanting Dong, Shiqiang Lang, Sitong Zhou, Yida Xu, Yuchen Zeng, et al. We-Math 2.0: A versatile mathbook system for incentivizing visual mathematical reasoning. In 
+
+International Conference on Learning Representations , pages 150171–150218, 2026. 2, 13 [21] Wenxuan Huang, Bohan Jia, Shaosheng Cao, Zheyu Ye, Fei Zhao, Zhe Xu, Yao Hu, and Shaohui Lin. Vision-R1: Incen-tivizing reasoning capability in multimodal large language models. In International Conference on Learning Represen-tations , 2026. 2, 6, 13 [22] Ruilin Luo, Zhuofan Zheng, Lei Wang, Yifan Wang, Xinzhe Ni, Zicheng Lin, Songtao Jiang, Yiyao Yu, Chufan Shi, Rui-hang Chu, et al. Unlocking multimodal mathematical rea-soning via process reward model. In Advances in Neural Information Processing Systems , volume 38, pages 49851– 49899, 2025. 2, 13 [23] Fanqing Meng, Lingxiao Du, Zongkai Liu, Zhixiang Zhou, Quanfeng Lu, Daocheng Fu, Botian Shi, Wenhai Wang, Jun-jun He, Kaipeng Zhang, Ping Luo, Yu Qiao, Qiaosheng Zhang, and Wenqi Shao. MM-Eureka: Exploring visual aha moment with rule-based large-scale reinforcement learning. In arXiv:2503.07365 , 2025. 3, 6, 13 [24] Jingyi Zhang, Jiaxing Huang, Huanjin Yao, Shunyu Liu, Xikun Zhang, Shijian Lu, and Dacheng Tao. R1-VL: Learn-ing to reason with multimodal large language models via step-wise group relative policy optimization. In IEEE/CVF International Conference on Computer Vision , pages 1859– 1869, 2025. 3, 13 [25] Ruifeng Yuan, Chenghao Xiao, Sicong Leng, Jianyu Wang, Long Li, Weiwen Xu, Hou Pong Chan, Deli Zhao, Tingyang Xu, Zhongyu Wei, et al. VL-Cogito: Progressive curriculum reinforcement learning for advanced multimodal reasoning. In arXiv:2507.22607 , 2025. 3, 13 [26] Shuhang Chen, Hangjie Yuan, Yunqiu Xu, Pengwei Liu, Tao Feng, Jun Cen, Zeying Huang, and Yi Yang. MathFlow: Enhancing the perceptual flow of MLLMs for visual mathe-matical problems. In Annual Meeting of the Association for Computational Linguistics , pages 967–992, 2026. 3, 13 [27] Haobo Lin, Tianyi Bai, Chen Chen, Jiajun Zhang, Bohan Zeng, Wentao Zhang, and Binhang Yuan. Synthesizing mul-timodal geometry datasets from scratch and enabling visual alignment via plotting code. In arXiv:2602.18745 , 2026. 3, 13 [28] Lihong Wang, Liangqi Li, Weiwei Feng, Jiamin Wu, Chang-tao Miao, Tieru Wu, Rui Ma, Bo Zhang, and Zhe Li. ViRC: Enhancing visual interleaved mathematical CoT with reason chunking. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 26144–26153, 2026. 3, 13 [29] Jingxuan Wei, Caijun Jia, Qi Chen, Honghao He, Linzhuang Sun, Conghui He, Lijun Wu, Bihui Yu, and Cheng Tan. Geoint-R1: Formalizing multimodal geometric reasoning with dynamic auxiliary constructions. In IEEE/CVF Con-ference on Computer Vision and Pattern Recognition , pages 2547–2556, 2026. 3, 13 [30] Tong Xiao, Xin Xu, Zhenya Huang, Hongyu Gao, Quan Liu, Qi Liu, and Enhong Chen. Perception-R1: Advancing multi-modal reasoning capabilities of MLLMs via visual perception reward. In International Conference on Learning Representa-tions , 2026. 3, 6, 13 [31] Shuhang Chen, Yunqiu Xu, Junjie Xie, Aojun Lu, Tao Feng, Zeying Huang, Ning Zhang, Yi Sun, Yi Yang, and Hangjie Yuan. CogFlow: Bridging perception and reasoning through knowledge internalization for visual mathematical problem solving. In International Conference on Learning Represen-tations , 2026. 13 [32] Long Xing, Xiaoyi Dong, Yuhang Zang, Yuhang Cao, Jianze Liang, Qidong Huang, Jiaqi Wang, Feng Wu, and Dahua Lin. CapRL: Stimulating dense image caption capabilities via reinforcement learning. In International Conference on Learning Representations , 2026. 3, 13 [33] Siyuan Huang, Xiaoye Qu, Yafu Li, Yun Luo, Zefeng He, Daizong Liu, and Yu Cheng. Spotlight on token perception for multimodal reinforcement learning. In International Con-ference on Learning Representations , 2026. 3, 13 [34] Zhenhailong Wang, Xuehang Guo, Sofia Stoica, Haiyang Xu, Hongru Wang, Hyeonjeong Ha, Xiusi Chen, Yangyi Chen, Ming Yan, Fei Huang, and Heng Ji. PAPO: Perception-aware policy optimization for multimodal reasoning. In Interna-tional Conference on Learning Representations , 2026. 3, 6, 13 [35] Xiangyan Liu, Jinjie Ni, Zijian Wu, Chao Du, Longxu Dou, Haonan Wang, Tianyu Pang, and Michael Shieh. NoisyRoll-out: Reinforcing visual reasoning with data augmentation. In Advances in Neural Information Processing Systems , vol-ume 38, pages 3248–3282, 2025. 3, 6, 13 [36] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. GPT-4 technical report. In arXiv:2303.08774 , 2023. 6 [37] Anthropic. Claude 3.7 Sonnet system card, 2025. System card. 6 [38] Qwen Team. Qwen3-VL technical report. In 
+
+arXiv:2511.21631 , 2025. 5, 6 [39] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, et al. Qwen2.5-VL technical report. In arXiv:2502.13923 ,2025. 5, 6 [40] Sicong Leng, Jing Wang, Jiaxi Li, Hao Zhang, Zhiqiang Hu, Boqiang Zhang, Yuming Jiang, Hang Zhang, Xin Li, Deli Zhao, Wei Lu, Yu Rong, Aixin Sun, and Shijian Lu. MMR1: Enhancing multimodal reasoning with variance-aware sam-pling. In IEEE/CVF Conference on Computer Vision and Pattern Recognition Findings , pages 9075–9087, 2026. 6 
+
+10 [41] Huanjin Yao, Qixiang Yin, Jingyi Zhang, Min Yang, Yibo Wang, Wenhao Wu, Fei Su, Li Shen, Minghui Qiu, Dacheng Tao, et al. R1-ShareVL: Incentivizing reasoning capabilities of multimodal large language models via Share-GRPO. In Ad-vances in Neural Information Processing Systems , volume 38, pages 80424–80451, 2025. 6 [42] Runqi Qiao, Qiuna Tan, Guanting Dong, Minhui Wu, Chong Sun, Xiaoshuai Song, Jiapeng Wang, Zhuoma Gongque, Shanglin Lei, Yifan Zhang, et al. We-math: Does your large multimodal model achieve human-like mathematical reason-ing? In Annual Meeting of the Association for Computational Linguistics , pages 20023–20070, 2025. 5 [43] Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. MathVista: Evaluating mathemat-ical reasoning of foundation models in visual contexts. In 
+
+International Conference on Learning Representations , 2024. 5[44] Ahmed Masry, Do Long, Jia Qing Tan, Shafiq Joty, and Ena-mul Hoque. ChartQA: A benchmark for question answering about charts with visual and logical reasoning. In Findings of the Association for Computational Linguistics , pages 2263– 2279, 2022. 5, 6 [45] Tianrui Guan, Fuxiao Liu, Xiyang Wu, Ruiqi Xian, Zongxia Li, Xiaoyu Liu, Xijun Wang, Lichang Chen, Furong Huang, Yaser Yacoob, et al. HallusionBench: An advanced diagnostic suite for entangled language hallucination and visual illusion in large vision-language models. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 14375– 14385, 2024. 5, 6 [46] Ilya Loshchilov and Frank Hutter. Decoupled weight de-cay regularization. In International Conference on Learning Representations , 2019. 5 [47] Qwen Team. Qwen3.5: Towards native multimodal agents, 2026. 5 [48] Gheorghe Comanici et al. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. In arXiv:2507.06261 ,2025. 5 [49] Penghao Wu and Saining Xie. V*: Guided visual search as a core mechanism in multimodal LLMs. In IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pages 13084–13094, 2024. 14 [50] Wenbin Wang, Liang Ding, Minyan Zeng, Xiabin Zhou, Li Shen, Yong Luo, Wei Yu, and Dacheng Tao. Divide, conquer and combine: A training-free framework for high-resolution image perception in multimodal large language models. In AAAI Conference on Artificial Intelligence , vol-ume 39, pages 7907–7915, 2025. 14 
+
+11 A. Visualization of the UniCAR-RL Training Workflow 
+
+To provide an intuitive view of UniCAR-RL, Fig. 4 visualizes a training step across the three branches on a geometry problem. The Caption-RL Branch gener-ates G image descriptions and assigns per-rollout per-ception rewards via the advanced verifier, promoting the highest-scoring one as the gold caption. Since the verifier solves purely from text, its accuracy directly reflects faithfulness of visual evidence in the descrip-tion. The Reasoning-RL Branch then reasons over this gold caption with the image withheld, while the 
+
+QA-RL Branch performs standard end-to-end infer-ence from the image and question. The three branches are executed sequentially within each iteration. 
+
+B Instruction Templates for UniCAR-RL This sec-tion details the prompt templates used in UniCAR-RL training. We design three task-specific templates for the three synergistic branches of our framework, as il-lustrated in Fig. 5, Fig. 6, and Fig. 7. They correspond respectively to the QA-RL Branch for end-to-end answer alignment, the Caption-RL Branch for pure visual description extraction, and the Reasoning-RL Branch for text-only logical deduction. 
+
+QA-RL Branch System Prompt 
+
+You FIRST think about the reasoning process as an internal monologue and then provide the final answer. The reasoning process MUST BE enclosed within <think> </think> tags. The final answer MUST BE put in \boxed{}. 
+
+Figure 5: System prompt used by the QA-RL Branch .
+
+Caption-RL Branch System Prompt 
+
+As a helpful assistant, your role is to support visually impaired users by providing detailed and precise descriptions of input images. Your descriptions should be thorough, enabling users to understand and address any issues related to the images without needing to see them. Focus on offering visual aid without solving the questions for them. 
+
+Figure 6: System prompt used by the Caption-RL Branch .3) QA-RL Branch 
+
+1) Caption-RL Branch 
+
+Caption Prompt: As a helpful assistant, your role is to support visually impaired users ... Focus on offering visual aid without solving the questions for them. 
+
+2) Reasoning-RL Branch 
+
+Input Model output (CoT inference + final answer) Reward Input Model output (Multi caption rollouts) Reward Input Model output (Multi reason rollouts) Reward  
+
+> QA Prompt : You FIRST think about the reasoning process as an internal monologue and then provide the final answer. The reasoning process MUST BE enclosed within <think> </think> tags. The final answer MUST BE put in boxed\{\}.
+
+question 
+
+MLLM 
+
+MLLM Verifier 
+
+Verifier output 
+
+C1 : This image shows a coordinate plane with two slanted line segments ... and two highlighted points labeled P and P’. 
+
+Reason Prompt: You are provided with the following information: An image (actually you are provided with its caption): 
+
+MLLM 
+
+CG : This image shows a rotated line segment on the coordinate axes ... with midpoint points marked in red. 
+
+> Caption 2 : This image features a geometric diagram on the Cartesian plane ... with labeled points A, B, A', B', O, P, and P’.
+
+C2 : This image features a geometric diagram on the Cartesian plane ... with labeled points …, and P’. (Best Caption) 
+
+… …
+
+T2 : Based on caption of ... rotated point matches option \boxed{B}. 
+
+T1 : Based on description showing ...... so the result is \boxed{D}. 
+
+TG : Based on description of...Therefore the answer is \boxed {A}. 
+
+…
+
+R2 : 1 R1 : 0 RG : 0 
+
+T1 : Based on description of the labeled points and the highlighted midpoint ... the transformed midpoint corresponds to \boxed{A}. 
+
+T2 : Based on description of the Cartesian diagram and rotated segment ... the final coordinates are (-√3, 3). Hence \boxed{B}. 
+
+…
+
+TG : Based on description of the geometry figure after rotation ... the midpoint image is (-√3, 3), giving \boxed{B}. 
+
+R1 : 0 RG : 1 R2 : 1 
+
+…
+
+O1 : <think>The midpoint of AB is (3,√3). After rotating, the point becomes (-√3,3).</think>This corresponds to option B. \boxed{B} 
+
+O2 : <think>P is the midpoint of AB, so P=(3,√3). A 90 ° counter-clockwise rotation maps (x,y)→(-y,x), giving P'=(-√3,3).</think>The rotated midpoint matches option B. \boxed{B} 
+
+OG : <think>First compute midpoint P=(3,√3). Rotating 90 °
+
+counter-clockwise gives (-√3,3).</think>So the answer is option B. \boxed{B} 
+
+…
+
+R1 : 1 
+
+R2 : 1 RG : 1 
+
+…
+
+B. (-√3, 3) 
+
+Image 
+
+Question: In the coordinate plane, A=(0,2√3) and B=(6,0). P is the midpoint of AB. After a 90 ° counterclockwise rotation about O, what are the coordinates of P'? A. (-3, √3) B. (-√3, 3) C. (√3, -3) D. (-1, √3) 
+
+Question GT Answer 
+
+Caption 2: This image shows a rotated line segment on the coordinate axes ... with midpoint points marked in red. (Best Caption) 
+
+your task is to solve the question based on the image . The final answer MUST BE put in boxed{}. 
+
+Input 
+
+Figure 4: Visualization of a single UniCAR-RL training step. The three branches share the same policy network and are jointly optimized via a unified GRPO objective. 12 C. Related Work 
+
+To complement Section 2, Table 7 compares mul-timodal mathematical reasoning methods by train-ing paradigm (Zero-RL vs. SFT+RL), distillation 
+
+(whether teacher-generated CoT supervision is used, which may introduce additional cost and teacher hallu-cinations), and perception (whether visual perception is explicitly optimized). Existing methods in RL for Mathematical Reasoning and Visual Perception En-hancement typically focus on only part of these as-pects. In contrast, UniCAR-RL combines Zero-RL, avoids distilled supervision, and explicitly optimizes visual perception within a unified framework. 
+
+Reasoning-RL Branch System Prompt 
+
+You are provided with the following information: an image (actually you are provided with its caption). Your task is to solve the question based on the image. The final answer MUST BE put in \boxed{}. 
+
+Figure 7: System prompt used by the Reasoning-RL Branch , where the image is withheld and model reasons purely from caption. 
+
+> Table 7. Comparison of representative methods for multimodal mathematical reasoning. “Train” indicates the training paradigm, where “Zero-RL” denotes direct RL optimization from a pretrained or instruction-tuned model without task-specific cold-start SFT, “SFT+RL” denotes a cold-start supervised stage followed by reinforcement learning, and “–” indicates non-RL methods. “Distill.” indicates whether the method explicitly relies on distilled reasoning traces, teacher-generated supervision, or synthetic high-quality CoT/QA data. “Percep.” denotes whether the method explicitly enhances visual perception, grounding, diagram understanding, or visual reasoning capabilities.
+
+Method Venue Backbone Size Train Distill. Percep. 
+
+Reinforcement Learning for Mathematical Reasoning 
+
+SRPO [19] NeurIPS’25 Qwen2.5-VL 7B/32B SFT+RL ✓ ✓
+
+Vision-R1 [21] ICLR’26 Qwen2.5-VL 7B/32B/72B SFT+RL ✓ ✓
+
+MM-Eureka [23] TMLR’26 Qwen2.5-VL 7B/32B Zero-RL × ✓
+
+R1-VL [24] ICCV’25 Qwen2-VL 7B SFT+RL × ✓
+
+URSA [22] NeurIPS’25 Qwen2.5-Math 8B SFT+RL ✓ ✓
+
+We-Math 2.0 [20] ICLR’26 Qwen2.5-VL 7B SFT+RL ✓ ✓
+
+VL-Cogito [25] arXiv’25 Qwen2.5-VL 7B Zero-RL × ✓
+
+Shuffle-R1 [4] ICLR’26 Qwen2.5-VL 3B/7B Zero-RL × ✓
+
+Visual Perception Enhancement in MLLMs 
+
+CodePercept [15] CVPR’26 Qwen3-VL 4B/8B/32B SFT+RL × ✓
+
+GeoCode [27] ICML’26 Qwen2.5/3-VL 7B SFT × ✓
+
+MathFlow [26] ACL’26 Qwen2-VL 7B SFT ✓ ✓
+
+ViRC [28] CVPR’26 Qwen2.5-VL 7B SFT+RL × ✓
+
+Geoint-R1 [29] CVPR’26 Qwen2.5-VL 7B SFT+RL × ✓
+
+Perception-R1 [30] ICLR’26 Qwen2/2.5-VL 7B Zero-RL × ✓
+
+CogFlow [31] ICLR’26 Qwen2.5-VL 7B SFT+RL × ✓
+
+CapRL [32] ICLR’26 Qwen2.5/3-VL 2B–8B Zero-RL × ✓
+
+VPPO [33] ICLR’26 Qwen2.5-VL 7B/32B Zero-RL × ✓
+
+Vision-SR1 [14] ICLR’26 Qwen2.5-VL 7B Zero-RL × ✓
+
+PAPO [34] ICLR’26 Qwen2.5/3-VL 2B/3B/7B Zero-RL × ✓
+
+NoisyRollout [35] NeurIPS’25 Qwen2.5-VL 7B Zero-RL × ✓
+
+UniCAR-RL (Ours) – Qwen2.5-VL, Qwen3-VL 3B/4B/7B/8B Zero-RL × ✓
+
+13 Table 8. Additional perception results on ChartQA, HallBench, V*Bench and HR-Bench. Gemini 3 Pro is used as the verifier during training by default. 
+
+Model ChartQA HallBench V*Bench HR-Bench 4K HR-Bench 8K Qwen3-VL-4B 83.0 73.7 86.4 80.0 73.6 +UniCAR-RL 89.5 75.5 88.5 81.6 76.4 Qwen3-VL-8B 88.4 75.0 88.7 81.2 76.5 +UniCAR-RL 90.6 75.4 90.1 82.8 78.3 
+
+D. Additional Results on General Benchmarks 
+
+To further evaluate the generalization of UniCAR-RL beyond visual mathematical reasoning, we extend the evaluation to a broader range of general visual tasks and model configurations. Beyond ChartQA and HallusionBench reported in Section 4.4, we further evaluate on V*Bench [49] and HR-Bench [50], covering complementary aspects of general visual understanding, including fine-grained visual search and high-resolution perception. As shown in Table 8, UniCAR-RL consistently improves performance across these additional tasks and architectures, further demonstrating its ability to generalize from visual mathematical reasoning to a broader range of general visual tasks. 
+
+E. Prompts for General Benchmarks 
+
+For reproducibility, we provide the prompts used for evaluating the general multimodal benchmarks. All benchmarks are evaluated under the same chat template, with the following shared instruction prepended to the benchmark-specific question: 
+
+You FIRST think about the reasoning process as an internal monologue and then provide the final answer. The reasoning process MUST BE enclosed within <think> </think> tags. The final answer MUST BE put in \boxed{}. 
+
+The image is then provided together with the benchmark-specific question. The corresponding question templates are described in Fig. 8. 
+
+ChartQA 
+
+> We directly use the original question without any task-specific modifi-cation.
+> {question}
+
+HallusionBench         
+
+> We retain the original question and explicitly constrain the final re-sponse to a binary answer.
+> {question} Your final answer can only be yes or no.
+
+V*Bench                 
+
+> Each question is formatted as a four-way multiple-choice problem.
+> Question: {question} Options: A. {option A} B. {option B} C. {option C} D. {option D} Please select the correct answer from the options above.
+
+HR-Bench                 
+
+> HR-Bench-4K and HR-Bench-8K use the same four-way multiple-choice prompt format.
+> Question: {question} Options: A. {option A} B. {option B} C. {option C} D. {option D} Please select the correct answer from the options above.
+
+Figure 8. Task-specific prompt templates and output evaluation protocols. Placeholders enclosed in braces are replaced with the corresponding benchmark questions and answer options at inference time. 
+
+14 For output evaluation, ChartQA answers are extracted and evaluated using the benchmark-specific answer matching procedure. For HallusionBench, we extract the answer from the final boxed response and match it to yes /no . For V*Bench and HR-Bench, the predicted option letter is extracted and compared with the ground-truth choice. 15

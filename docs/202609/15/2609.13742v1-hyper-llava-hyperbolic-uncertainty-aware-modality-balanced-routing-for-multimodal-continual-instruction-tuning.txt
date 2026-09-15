@@ -1,0 +1,1921 @@
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing
+for Multimodal Continual Instruction Tuning
+Kunlun Xu * 1 Yanqin Zhang * 1 Wenwen Qiang 2 3 Jiahuan Zhou † 1
+Abstract
+Multimodal Continual Instruction Tuning (MCIT)
+aims to exploit the incrementally accumulated
+knowledge to process multimodal inputs of
+diverse tasks, where parameter routing plays an
+important role. State-of-the-art methods rely on
+sample-to-task center similarity and cross-modal
+fusion with equal weight during routing. How-
+ever, such solutions face two fundamental flaws:
+(1) Within each modality, the sample-to-task
+center distance is sub-optimal for routing since
+the abundant intra-task diversity information is
+underleveraged. (2) Different modalities exhibit
+varying reliability across tasks, where the modal-
+ity with inter-task ambiguity can easily misguide
+the routing result. To address these problems,
+we
+propose
+Hyperbolic
+Uncertainty-aware
+Modality-Balanced Routing (Hyper-LLaVA) to
+improve parameter routing capacity based on
+cross-modality task feature uncertainty modeling.
+Specifically, to improve intra-modality task
+matching, Hyper-LLaVA accesses the sample-
+to-task distribution similarity in the Hyperbolic
+space.
+Besides, to alleviate the degradation
+brought by unreliable modalities, Hyper-LLaVA
+quantifies the task matching ambiguity within
+each modality to achieve adaptive balancing
+between task matching across modalities. Based
+on the complementary intra- and inter-modality
+task matching enhancement, our Hyper-LLaVA
+outperforms
+state-of-the-art
+approaches
+by
+large margins. Our source code is available at
+https://github.com/zhoujiahuan1991/ICML2026-
+Hyper-LLaVA
+*Equal contribution
+1Wangxuan Institute of Computer Tech-
+nology, Peking University, Beijing, China 2Institute of Software
+Chinese Academy of Sciences, Beijing, China 3University of Chi-
+nese Academy of Sciences, Beijing, China.
+Accepted by ICML 2026. Correspondence to: Jiahuan Zhou
+<jiahuanzhou@pku.edu.cn>.
+Preprint. September 15, 2026.
+Visual feature space
+Instruction feature space
+Ambiguous Region
+Grounding
+Classification
+Distinct
+(c) Ours
+(b) Existing methods
+Average: 𝒑𝒕
+𝒅=(𝒑𝒕
+𝒗+ 𝒑𝒕
+𝒔)/2
+Modality Balancing: 𝒑𝒕
+𝒅=𝒘𝒕
+𝒗𝒑𝒕
+𝒗+ 𝒘𝒕
+𝒔𝒑𝒕
+𝒔
+Task feature distribution
+Test sample feature
+Test Image
+“Find the animal 
+in the picture.”
+Test Instruction
+(a) Task feature distribution and matching scores across modalities 
+Dual-modality matching scores
+Dual-modality matching scores
+𝒑𝒗
+𝒑𝒔
+Sample Task Matching
+Sample Task Matching
+𝒑𝒅
+𝒑𝒅
+Figure 1. (a) Within different modalities, the task feature regions
+may be ambiguous or distinct. The ambiguous task feature regions
+can often result in high erroneous task matching scores. and dis-
+tinct task feature distribution may also generate low correct task
+matching scores. (b) Existing methods are vulnerable to erroneous
+task matching scores due to simply averaging the dual-modality
+predictions. (c) Our method aims to seek an adaptive balance
+between modalities to generate reliable task selection.
+1. Introduction
+Multi-modal Large Language Models (MLLMs) (Yin et al.,
+2024) extend the reasoning capabilities of Large Language
+Models (LLMs) (Touvron et al., 2023) to the visual domain
+by integrating visual encoders (Radford et al., 2021). To
+bridge the gap between large-scale pre-training and down-
+stream task, instruction tuning (Zhao et al., 2025; Ouyang
+et al., 2022) has been introduced, where MLLMs are fine-
+tuned on paired (instruction, image, response) data to en-
+hance their ability to follow user commands. However, in
+practical scenarios, it is often infeasible to collect data for
+1
+arXiv:2609.13742v1  [cs.CV]  12 Sep 2026
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+all downstream tasks in advance. Instead, task data typically
+arrive sequentially, requiring the model to continuously ac-
+quire new capabilities over time. This setting gives rise to
+Multimodal Continual Instruction Tuning (MCIT) (He et al.,
+2023; Zheng et al., 2024), which aims to enable MLLMs to
+progressively learn new tasks while preserving performance
+on previously learned ones.
+Since MLLMs have already acquired abundant fundamen-
+tal knowledge during large-scale pre-training, recent MCIT
+methods are typically built upon Mixture-of-Experts archi-
+tectures (Wang et al., 2025; Guo et al., 2025). Usually, the
+pretrained parameters are kept frozen, while task-specific
+experts, e.g., prompts (Zeng et al., 2025; Li et al., 2024b;
+Xu et al., 2025; Zhang et al., 2025a; Xu et al., 2026b) or
+Low-Rank Adaptation (LoRA) modules (Chen et al., 2024),
+are introduced to encode incrementally arriving task knowl-
+edge. Such methods perform intra-modality task matching
+by measuring the distance between a test sample and task
+centers, and then generate the final task matching results
+by averaging the predictions from the visual and instruction
+(textual) modalities.
+However, such paradigms suffer from two fundamental lim-
+itations. First, within each modality, routing based solely
+on the distance between a sample and a task center is sub-
+optimal, as the abundant intra-task diversity information is
+largely underexploited (Xu et al., 2024; Zhou et al., 2025).
+Second, as illustrated in Figure 1 (a), the same task may
+exhibit varying levels of reliability across different modal-
+ities due to task distribution overlap. In task-ambiguous
+regions, test samples may produce erroneously high task-
+matching scores, whereas samples located near distinct task
+distribution boundaries may yield low scores despite being
+correctly matched. When these inter-modality scores are
+naively averaged, unreliable predictions from one modality
+can dominate the final decision, thereby misleading task
+prediction and degrading overall performance.
+To address these problems, we propose a novel MCIT
+framework named Hyperbolic Uncertainty-aware Modality-
+Balanced Routing (Hyper-LLaVA), which improves both
+intra-modality matching and inter-modality aggregation
+from an uncertainty-aware perspective. Given the training
+data of each incoming task, Hyper-LLaVA not only learns
+the corresponding task-specific expert but also estimates the
+statistical properties of the task data distribution. During
+inference, to enhance intra-modality task prediction, both
+sample features and task distributions are projected into a hy-
+perbolic space, where similarity is measured using the uncer-
+tainty quantified by the Poincar´e distance, which provides
+improved robustness to complex distributional variations.
+Furthermore, to mitigate erroneous task predictions caused
+by unreliable modalities, Hyper-LLaVA estimates inter-task
+separation to quantify task ambiguity within each modal-
+ity. Based on this estimation, modality-wise weights are
+adaptively assigned to each task through a dual-modality am-
+biguity balancing mechanism, as shown in Figure 1(b). By
+jointly enhancing intra-modality similarity estimation and
+inter-modality score aggregation, Hyper-LLaVA achieves
+significantly more accurate parameter routing, outperform-
+ing state-of-the-art MCIT approaches by a large margin.
+To sum up, our contributions include:
+(1) We propose Hyper-LLaVA, a novel MCIT framework
+that addresses two key limitations of existing methods: poor
+modeling of intra-task distributional diversity, and unreli-
+able inter-modality aggregation under task ambiguity.
+(2) Our approach jointly enhances routing by embedding
+samples and task distributions into hyperbolic space for ro-
+bust intra-modality similarity measurement, and adaptively
+balancing modalities based on ambiguity estimated from
+inter-task separation.
+(3) Extensive experiments on two challenging MCIT bench-
+marks show Hyper-LLaVA outperforms state-of-the-art
+MCIT methods by a large margin.
+Conflict of Interest Disclosure
+The authors declare that they have no known competing
+financial interests or personal relationships that could have
+appeared to influence the work reported in this paper.
+2. Related Work
+2.1. Multimodal Large Language Models
+The rapid advancement of Large Language Models (LLMs)
+(Touvron et al., 2023) has paved the way for Multimodal
+Large Language Models (MLLMs), which extend the rea-
+soning capabilities of LLMs to the visual domain. Propri-
+etary models such as GPT-4V (Achiam et al., 2023) and
+Gemini (Team et al., 2023)have demonstrated exceptional
+performance in understanding and reasoning about com-
+plex visual inputs. In the open-source community, MLLMs
+typically adopt a modular architecture comprising a vision
+encoder (e.g., CLIP (Radford et al., 2021; Liu et al., 2025b;
+Xu et al., 2026a) or SigLIP (Zhai et al., 2023)), a pre-
+trained LLM backbone, and a vision-language connector.
+Early prominent works like BLIP-2 (Li et al., 2023), and In-
+structBLIP (Dai et al., 2023) utilized a Q-Former to bridge
+the modality gap, effectively compressing visual informa-
+tion into query tokens for the LLM. MiniGPT-4 (Zhu et al.,
+2023) demonstrated that aligning a frozen visual encoder
+with a frozen LLM using a single projection layer could
+yield strong emergent abilities. Building on this streamlined
+design, LLaVA (Liu et al., 2023) and its enhanced ver-
+sion LLaVA-1.5 (Liu et al., 2024) employed a Multi-Layer
+Perceptron (MLP) connector and leveraged GPT-4 gener-
+ated data for visual instruction tuning, establishing a robust
+2
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+Image Encoder
+Projector
+Tokenizer
+Large 
+Language 
+Model
+Frozen
+Learnable
+𝑥𝑡
+𝑣
+𝑥𝑡
+𝑠
+LoRA 𝐸𝑡
+𝑦𝑡
+(a) Task-specific Expert Learning
+Text Encoder
+Task 1
+Visual Distribution
+Task t
+Task 1
+Instruction Distribution
+Task t
+𝜔𝑠
+𝜔𝑣
+𝜔𝑣
+𝜔𝑠
+The Inference Stage
+𝑄𝑡
+𝑣
+Weight Generation
+min
+𝑗≠𝑘𝐷𝐵𝐶
+ℳ𝑇𝑘
+𝑣, 𝑇𝑗
+𝑣
+min
+𝑗≠𝑘𝐷𝐵𝐶
+ℳ𝑇𝑘
+𝑠, 𝑇𝑗
+𝑠
+Hyperbolic Embedding
+“What is the
+object in the
+image?”
+Text Encoder
+“What is the
+object in the
+image?”
+“There is a
+bird in this
+picture.”
+𝑥𝑡𝑒𝑠𝑡
+𝑣
+Task 1
+Visual Distribution
+Task t
+Instruction Distribution
+Task t
+Large 
+Language 
+Model
+LoRA 𝐸1
+LoRA 𝐸2
+LoRA 𝐸𝑇
+𝑝𝑣
+Task1
+Task2
+Task2
+Task1
+𝑥𝑡𝑒𝑠𝑡
+s
+Tokenizer
+Image Encoder
+Projector
+(b) Task-aware Modality Weight Generation
+The Training Stage
+(c) Hyperbolic Task Similarity Estimation
+(d) Dual-Modality Balanced Routing
+𝑝𝑠
+Task
+Task
+𝑝d
+Task
+Final Task 
+Similarity 
+Prediction 
+Hyperbolic Task Distribution
+Hyperbolic visual/instruction embedding
+𝓗
+𝓗
+𝓗
+𝓗
+𝓗
+Task
+𝑄𝑡
+𝑠
+Task
+Task 1
+Figure 2. The overview of our proposed Hyper-LLaVA framework. The process consists of two stages: (Left) The Training Stage,
+comprising (a) standard instruction tuning with task-specific LoRA experts and (b) a Task-aware Modality Reliability Estimation module.
+This module quantifies task separability via Bhattacharyya Distance (DBC) to derive adaptive modality weights (ωv, ωt). (Right) The
+Inference Stage, specifically (c) the Hyperbolic Uncertainty-aware Modality-Balanced Routing. We map features into the Poincar´e ball
+to capture task uncertainty and fuse modality similarities (Sv, St) using the learned weights for precise expert selection.
+baseline for general-purpose multimodal tasks.
+2.2. Continual Instruction Tuning
+While instruction tuning significantly enhances the zero-shot
+capabilities of MLLMs, maintaining these abilities across a
+continuous stream of changing tasks remains a formidable
+challenge due to the phenomenon of catastrophic forgetting.
+Consequently, Multimodal Continual Instruction Tuning
+(MCIT) has emerged as a critical research frontier, aiming
+to balance the stability of previously acquired knowledge
+with the plasticity required for new tasks. To rigorously
+evaluate this capability, comprehensive benchmarks such as
+CoIN (Chen et al., 2024) and CITB (Zhang et al., 2023b)
+have been established, alongside domain-specific settings
+like VQACL (Zhang et al., 2023a), revealing that standard
+fine-tuning strategies suffer severe performance degradation
+in sequential settings. To mitigate this, a dominant trend
+involves parameter-efficient architecture expansion, partic-
+ularly using Mixture-of-Experts frameworks. Approaches
+like MoELoRA (Chen et al., 2024), Continual-LLaVA (Cao
+et al., 2024), and LLaVA-c (Liu et al., 2025a) utilize dy-
+namic adapters, while more advanced frameworks like CL-
+MoE (Huai et al., 2025) and SMoLoRA (Wang et al., 2025)
+introduce dual-momentum updates or dual-forgetting mech-
+anisms to refine expert routing. Other structural innovations
+include BranchLoRA (Zhang et al., 2025b), LoRA in LoRA
+(Che et al., 2025), and Progressive LoRA (Yu et al., 2025),
+which hierarchically expand the parameter space to accom-
+modate new tasks. Additionally, HiDe-LLaVA (Guo et al.,
+2025) proposes a hierarchical decoupling framework, per-
+forming task-specific expansion on top layers while fusing
+task-general knowledge in lower layers. In parallel, regu-
+larization and optimization strategies have been proposed
+to constrain learning trajectories, such as GNSP (Peng
+et al., 2025), which projects gradients into the null space
+of previous tasks, and SEFE (Chen et al., 2025), which
+targets specific types of forgetting via tailored regulariza-
+tion. Furthermore, ModalPrompt (Zeng et al., 2025) exploits
+dual-modality guidance for task retrieval.
+3. The Proposed Method
+3.1. Preliminaries
+Multi-modal Continual Instruction Tuning (MCIT).
+MCIT focuses on a sequential learning scenario where
+a Multi-modal Large Language Model (MLLM), param-
+eterized by θ, is trained on a stream of T tasks T
+=
+{T1, T2, . . . , TT }. Each task Tt consists of a dataset Dt =
+{(xv
+t,i, xs
+t,i, yt,i)Nt
+i=1}, where xv represents the visual input,
+xs is the textual instruction, and y is the target response.
+The goal is to sequentially adapt the model to task Tt while
+retaining the knowledge of previous tasks T1:t−1, without
+accessing their training data.
+3
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+3.2. Task-specific Expert Learning
+Following previous works (Guo et al., 2025), we adopt Low-
+Rank Adaptation (LoRA) as a Parameter-Efficient Fine-
+Tuning (PEFT) strategy to adapt the Multimodal Large Lan-
+guage Model (MLLM) to downstream tasks while mitigat-
+ing computational overhead. LoRA freezes the pre-trained
+model weights W0 ∈Rd×k and injects trainable rank de-
+composition matrices into the linear layers. Specifically, for
+each adapted layer, LoRA introduces two low-rank matrices
+B ∈Rd×r and A ∈Rr×k, with rank r ≪min(d, k). The
+modified forward pass is computed as:
+W ′ = W0 + ∆W = W0 + BA
+(1)
+where W0 remains frozen, A is initialized from a Gaussian
+distribution, and B is initialized to zero. To strictly isolate
+task-specific knowledge and prevent catastrophic forgetting,
+we maintain a pool of LoRA experts E = {E1, . . . , ET }.
+Each expert Et corresponds to the specific parameters
+learned exclusively for task t. Consequently, the weight
+update for a specific task t is expressed as:
+∆Wt = BtAt
+(2)
+where Bt ∈Rd×r and At ∈Rr×k denote the task-specific
+matrices. Given an input image xv and instruction xs, the
+model is optimized to generate response y by minimizing
+the autoregressive cross-entropy loss, updating only the pa-
+rameters of the current expert Et. This isolation prevents
+catastrophic forgetting of previous tasks T1:t−1 at the pa-
+rameter level.
+3.3. Task-aware Modality Weight Generation
+While task-specific experts ensure parameter-level isolation,
+robustly routing inputs to the correct expert during inference
+is non-trivial due to the modality imbalance problem. Static
+fusion strategies often fail when one modality is noisy or
+non-discriminative. To address this, we propose an adaptive
+weighting mechanism governed by the Bhattacharyya Coef-
+ficient (BC), which is computed at the conclusion of each
+training stage.
+We quantify the discriminative power of a specific modal-
+ity by evaluating the separability of task data distributions
+within its feature space. Specifically, at the end of training
+stage t, we compute the pair-wise Bhattacharyya Distance
+DBC between every pair of learned tasks in the current
+pool. To facilitate tractable computation, we assume the
+feature distributions of each task follow a multivariate Gaus-
+sian distribution with independent dimensions. Under this
+assumption, DBC between task Tk and Tj can be analyti-
+cally derived by summing the distances across all feature
+dimensions D:
+DBC(Tk, Tj) = −ln(BC(Tk, Tj))
+= −
+D
+X
+d=1
+ln
+
+BCd
+
+T (d)
+k
+, T (d)
+j
+
+(3)
+where the single-dimension component ln(BCd) is defined
+as:
+ln(BCd) = −1
+4
+(µk,d −µj,d)2
+σ2
+k,d + σ2
+j,d
++ 1
+2 ln
+ 
+2σk,dσj,d
+σ2
+k,d + σ2
+j,d
+!
+(4)
+where, µk,d and σ2
+k,d denote the mean and variance of task
+k at the d-th dimension. Based on these pair-wise dis-
+tances, we derive the separation vectors Qv
+t and Qs
+t for
+visual and instruction modalities, respectively. The element
+corresponding to a given task Tk represents its discriminabil-
+ity score mk, defined as the distance to its nearest neighbor
+among other tasks:
+mM
+k
+= min
+j̸=k DM
+BC(Tk, Tj),
+M ∈{v, s}
+(5)
+A larger mk implies that task k occupies a highly unique
+region in the feature space of modality M, suggesting that
+this modality is reliable for identifying task k. Due to mag-
+nitude inconsistencies, we perform normalization within
+each modality using the average separation scale:
+ˆmM
+k
+=
+mM
+k
+1
+t
+Pt
+j=1 mM
+j
++ ϵ
+,
+M ∈{v, s}
+(6)
+Finally, the normalized scores are passed through a
+temperature-scaled Softmax function to yield the adaptive
+modality weights (ωv, ωs). The calculation method for the
+k-th task is as follows:
+ωv
+k, ωs
+k = Softmax( ˆmv
+k, ˆms
+k)
+(7)
+3.4. Hyperbolic Task Similarity Estimation
+Standard Euclidean metrics for similarity estimation often
+suffer from the “gravity well” effect, where high-variance
+general tasks overshadow low-variance specific tasks. To
+enable precise expert selection, we propose embedding task
+distributions in a Hyperbolic space, specifically the Poincar´e
+ball model (Dd, gp). For each learned task Tk, we construct
+a embedding function H(µ, V ) to project its Euclidean
+statistics (centroid µk and aggregate variance Vk = P σ2
+k)
+into the Poincar´e ball:
+zk = H(µk, Vk) = rk ·
+µk
+∥µk∥2
+(8)
+4
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+Table 1. Comparison of the proposed Hyper-LLaVA method with existing approaches in CoIN Benchmark.
+Accuracy on Each Task (%)
+Aggregate Results (%)
+Method
+Venue
+SQA TVQA ImgNet GQA VizWiz Gron VQAv2 OVQA MFN↑MAA↑MFT↑BWT↑
+Zero-shot
+-
+49.91
+2.88
+0.33
+2.08
+0.90
+0.00
+0.68
+0.17
+7.12
+-
+-
+-
+Multi-task
+-
+56.77 49.35
+95.55
+56.65 53.90 30.09
+59.50
+55.65
+57.18
+-
+-
+-
+LwF
+TPAMI 2017 74.45 49.70
+39.30
+52.00 50.45
+7.05
+62.25
+47.80
+47.88
+59.71
+68.13 -20.26
+EWC
+NAS 2017
+75.20 55.36
+67.50
+54.70 52.90 15.40
+64.45
+35.05
+52.57
+61.63
+65.59 -13.02
+O-LoRA
+CVPR 2023 76.90 42.65
+15.85
+40.25 45.10
+0.30
+54.35
+54.00
+41.18
+56.28
+56.99 -15.82
+MoE-LoRA
+NeurIPS 2024 76.90 42.65
+15.85
+40.25 45.10
+0.30
+54.35
+54.00
+41.18
+56.28
+56.99 -15.82
+HiDe-LLaVA
+ACL 2025
+73.20 56.92
+69.28
+61.33 50.76 59.18
+67.12
+64.76
+62.82
+-
+-
+-
+ModalPrompt
+EMNLP 2025 68.42 56.40
+41.13
+61.11 50.13 36.69
+66.90
+59.68
+55.06
+59.24
+56.39
+-1.33
+SEFE
+ICML 2025
+75.35 58.66
+83.10
+54.25 48.85 16.75
+65.35
+66.25
+58.57
+63.04
+69.02 -10.45
+Hyper-LLaVA
+This Paper
+77.10 59.02
+93.49
+60.54 57.88 51.81
+66.76
+65.13
+66.47
+68.79
+68.77
+-2.30
+The key point lies in encoding the task’s uncertainty Vk into
+the hyperbolic radius rk ∈[0, 1). We employ an adaptive
+scaling strategy to ensure robustness across varying feature
+scales during incremental learning:
+rk = exp
+
+−
+γ
+¯Vt + ϵ · Vk
+
+(9)
+where ¯Vt is the moving average of variances across all
+known tasks, and γ is a scaling constant. This formula-
+tion ensures that specific tasks are mapped to the boundary
+(rk →1), while general tasks are mapped near the center
+(rk →0). For an incoming test input x, we treat it as a
+deterministic point distribution with zero variance, embed-
+ding it to z = H(x, 0) with a radius r ≈1. The similarity
+between the test input and an expert Ek is defined by the
+negative Poincar´e distance:
+Dp(x, Ek) = −arccosh
+
+1 + 2
+∥z −zk∥2
+(1 −∥z∥2)(1 −∥zk∥2)
+
+(10)
+For a specific task located at the boundary (rk →1), the
+denominator (1−∥zk∥2) in the distance formula approaches
+zero. This causes the distance to grow exponentially with
+even minor angular deviations, strictly enforcing specificity.
+Conversely, general tasks near the center remain tolerant
+to variations. Proof as shown in Theorem A.1. This geo-
+metric property effectively resolves the “gravity well” issue,
+preventing high-variance tasks from overshadowing specific
+ones.
+3.5. Dual-Modality Balanced Routing
+In the final inference phase, we integrate the hyperbolic
+similarity measures with the task-aware modality weights
+to perform robust expert routing. For a test input x =
+(xv
+test, xs
+test), we independently compute the Poincar´e dis-
+tance for all available experts in both visual (Dv
+p) and in-
+struction (Ds
+p) modalities. These scores are then fused via
+our Adaptive Balancing mechanism. To ensure dynamic
+range alignment between modalities, we utilize adaptive
+temperatures (τv, τs) derived from the standard deviation of
+the scores:
+pv = Softmax(Dv
+p/τv),
+ps = Softmax(Ds
+p/τs)
+(11)
+The final dual modal decision score pd is computed as
+the weighted sum of the probability distributions from
+both modalities, using the pre-computed reliability weights
+(ωv, ωs):
+pd = ωv ⊙pv + ωs ⊙ps
+(12)
+where ⊙denotes element-wise multiplication. To rigorously
+justify this adaptive weighting strategy, we introduce the
+following theoretical bounds regarding estimation error.
+[Optimality of Variance-Inverse Weighting] Let qv and qs
+be the observed similarity scores from visual and instruction
+modalities, modeled as the true signal perturbed by indepen-
+dent Gaussian noise with variances σ2
+v and σ2
+s, respectively.
+The estimation error of a linear fusion strategy is minimized
+when the weights are inversely proportional to the modality
+uncertainty: w∗= σ2
+s/(σ2
+v + σ2
+s).
+Building on this lemma, we establish the theoretical basis
+for our task-aware modality weighting:
+Theorem 3.1 (Superiority of BC-based Fusion). Under the
+assumption of approximately isotropic Gaussian feature
+distributions, the Bhattacharyya Distance DBC scales in-
+versely with feature variance (DBC ∝1/σ2). Therefore,
+the Dual-Modality Balanced Routing strategy, which as-
+signs weights based on DBC, effectively approximates the
+optimal inverse-variance fusion derived in Lemma 3.5.
+The proof of Lemma 3.5 and Theorem 3.1 are provided in
+Appendix A. Finally, based on the optimized decision score
+pd, the expert Ek∗with the highest similarity is selected to
+perform the specific task reasoning and response generation.
+5
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+4. Experiments
+4.1. Experimental Setup
+Datasets.
+We use the CoIN (Chen et al., 2024) and
+UCIT (Guo et al., 2025) as our benchmark. CoIN con-
+tains eight vision-language tasks: VQAv2 (Goyal et al.,
+2017), ScienceQA (SQA) (Lu et al., 2022), TextVQA
+(TVQA) (Singh et al., 2019), ImageNet (ImgNet) (Deng
+et al., 2009), VizWiz (Gurari et al., 2018),GQA (Hudson
+& Manning, 2019), REC-COCO (Kazemzadeh et al., 2014;
+Mao et al., 2016), OCR-VQA (OVQA) (Mishra et al., 2019).
+UCIT (Guo et al., 2025) is designed to address the potential
+data leakage issue in CoIN (Chen et al., 2024), where down-
+stream tasks might overlap with the MLLM’s pre-training
+data.
+UCIT contains six vision-language tasks, includ-
+ing ArxivQA (Li et al., 2024a), CLEVR-Math (Lindstr¨om
+& Abraham, 2022), IconQA (Lu et al., 2021),ImageNet-
+R (Hendrycks et al., 2021), VizWiz-caption (Gurari et al.,
+2018).
+Evaluation Metrics. we evaluate the two benchmarks with
+four metrics: (1)Mean Fine-tune Accuracy (MFT), the av-
+erage accuracy of each task immediately after it is learned,
+which represents the upper-bound performance or plasticity
+of the model. (2)Mean Final Accuracy (MFN), the average
+accuracy of all tasks after the complete training sequence,
+which reflects the final knowledge retained. (3)Mean Av-
+erage Accuracy (MAA), the average performance of all
+learned tasks at every incremental step. This measures the
+stability of the model throughout the entire life cycle. (4)
+Backward Transfer (BWT), the average drop in performance
+for previous tasks after learning new ones, measuring catas-
+trophic forgetting. The definition of these metrics are pro-
+vided in our Appendix C.
+Compared Methods. We compare Hyper-LLaVA with a
+comprehensive set of baselines that cover both traditional
+continual learning and recent multimodal continual instruc-
+tion tuning methods. The traditional continual learning
+baselines include LwF (Li & Hoiem, 2017), which applies
+knowledge distillation, and EWC (Kirkpatrick et al., 2017),
+which constrains important parameters. We also include O-
+LoRA (Wang et al., 2023), which learns tasks in orthogonal
+subspaces. In addition, several recent multimodal contin-
+ual instruction tuning approaches are included for compari-
+son. MoELoRA (Chen et al., 2024) employs a mixture-of-
+experts adapter design. ModalPrompt (Zeng et al., 2025)
+exploits dual-modality prompts for task adaptation. HiDe-
+LLaVA (Guo et al., 2025) adopts a hierarchical decoupling
+strategy, while SEFE (Chen et al., 2025) focuses on style di-
+versification and regularization. Furthermore, Zero-shot per-
+formance (inference without fine-tuning) and Joint Training
+performance (multi-task learning on all data) are reported
+as the lower and upper bounds, respectively.
+Visual Only
+Text Only
+Static Fusion
+Adaptive Fusion
+40
+45
+50
+55
+60
+65
+70
+75
+MFN (%)
+52.38
+61.78
+58.67
+66.62
+CoIN Benchmark
+Visual Only
+Text Only
+Static Fusion
+Adaptive Fusion
+40
+45
+50
+55
+60
+65
+70
+75
+MFN (%)
+69.15
+69.54
+72.00
+72.81
+UCIT Benchmark
+Figure 3. Ablation study on modality fusion strategies.
+Implementation details. Consistent with the settings in
+CoIN (Chen et al., 2024) , we use LLaVA-v1.5-7B (Liu et al.,
+2024) as our backbone, which integrates a Vicuna-7B LLM
+with a CLIP-L/14-336 (Radford et al., 2021) visual encoder.
+LoRA (Hu et al., 2022) is applied to all linear layers of the
+LLM, with a rank of r = 64, α = 128 in CoIN benchmark
+and r = 48, α = 96 in UCIT benchmark, following the
+previous works (Guo et al., 2025). During training, the
+cosine decay schedule is adopted and the learning rates is
+set to 2e −4 for LoRA modules. We train for 1 epoch per
+task with a batch size of 24, and the warm-up ratio to 0.03.
+The scaling coefficient γ is set to 1.0. All experiments are
+conducted on 8 NVIDIA H800 GPUs.
+4.2. Comparison with Existing Approaches
+Results on CoIN. Table 1 reports the performance compari-
+son on the CoIN benchmark. Classical continual learning
+methods, such as LwF and EWC, show limited final per-
+formance and suffer from severe catastrophic forgetting
+due to continual parameter updates. When compared with
+the state-of-the-art MoE-based method HiDe-LLaVA, our
+approach achieves a 3.65% improvement in MFN. This
+gain is attributed to the proposed Hyperbolic Task Similar-
+ity Estimation mechanism and Dual-Modality Balancing
+scheme, which together enhance expert routing reliability.
+Besides, compared with SEFE, which relies on LoRA merg-
+ing, Hyper-LLaVA yields 7.90% and 5.75% improvements
+in MFN and MAA, respectively. These improvements are
+attributed to the robust expert routing strategy of Hyper-
+LLaVA, which avoids cross-expert fusion that may other-
+wise introduce knowledge interference.
+Results on UCIT. Table 2 summarizes the results on the
+UCIT benchmark. Compared with state-of-the-art MoE-
+based frameworks (O-LoRA, MoE-LoRA, HiDe-LLaVA,
+and ModalPrompt), Hyper-LLaVA achieves at least 8.46%
+and 3.85% improvements in MFN and MAA, respectively.
+These gains demonstrate the effectiveness of the proposed
+Hyperbolic Uncertainty-aware Modality-Balanced Routing
+mechanism in enhancing task prediction reliability. When
+6
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+Table 2. Comparison of the proposed Hyper-LLaVA method with existing approaches in UCIT Benchmark.
+Accuracy on Each Task (%)
+Aggregate Results (%)
+Method
+Venue
+ImgNetR ArxivQA VizWiz IconQA CLEVR Flickr MFN↑MAA↑MFT↑BWT↑
+Zero-shot
+-
+16.27
+53.73
+38.39
+19.20
+20.63
+41.88
+31.68
+-
+-
+-
+Multi-task
+-
+91.67
+90.83
+57.87
+78.43
+76.63
+61.72
+76.19
+-
+-
+-
+LwF
+TPAMI 2017
+40.27
+75.93
+42.76
+44.38
+37.43
+56.34
+49.52
+-
+-
+-
+EWC
+NAS 2017
+39.05
+77.88
+43.24
+45.33
+39.72
+55.94
+50.20
+-
+-
+-
+O-LoRA
+CVPR 2023
+77.50
+78.07
+44.50
+63.13
+64.73
+58.16
+64.35
+78.02
+76.01
+-13.99
+MoE-LoRA
+NeurIPS 2024
+70.07
+77.70
+44.69
+50.03
+54.03
+57.34
+58.98
+75.08
+71.17
+-14.63
+HiDe-LLaVA
+ACL 2025
+84.03
+90.73
+44.43
+58.93
+41.37
+54.25
+62.29
+77.32
+69.96
+-9.20
+ModalPrompt
+EMNLP 2025
+74.43
+92.00
+55.92
+44.27
+53.97
+43.67
+60.70
+70.57
+60.76
+-0.05
+SEFE
+ICML 2025
+80.83
+78.00
+47.01
+69.63
+65.83
+57.92
+66.54
+78.76
+75.98
+-11.33
+Hyper-LLaVA
+This Paper
+87.20
+93.70
+57.24
+75.20
+65.60
+57.92
+72.81
+81.87
+78.03
+-5.22
+High Variance
+(General)
+Boundary: Low Variance (Specific)
+Visual Modality Feature Distribution
+High Variance
+(General)
+Boundary: Low Variance (Specific)
+Instruction Modality Feature Distribution
+(a)
+(b)
+(c)
+E0: ScienceQA
+E1: TextVQA
+E2: ImageNet
+E3: GQA
+E4: VizWiz
+E5: Grounding
+E6: VQAv2
+E7: OCR-VQA
+Figure 4. Ablation study on modality fusion strategies (a), Task feature distributions in the Poincar´e ball (b) and (c).
+Table 3. Ablation study on the effectiveness of Hyperbolic Metric
+and Adaptive Fusion (metric: MFN).
+Metric Space
+Fusion Strategy
+MFN (%)
+Euclidean
+Static
+56.75
+Poincar´e
+Static
+62.67 (+5.92)
+Euclidean
+Adaptive
+66.42 (+9.67)
+Poincar´e
+Adaptive (Ours)
+66.62 (+9.87)
+compared with the expert-merging-based method SEFE,
+improvements of 6.27% in MFN and 3.11% in MAA are
+achieved, further verifying the superiority of the proposed
+strategy in expert selection. Moreover, Hyper-LLaVA es-
+tablishes state-of-the-art MFT performance on the UCIT
+benchmark, with at least a 2.02% improvement over ex-
+isting methods, which further supports its effectiveness in
+selecting appropriate experts.
+It is noted that inferior BWT performance, which reflects
+forgetting, is observed compared with ModalPrompt. This
+behavior arises because ModalPrompt introduces additional
+constraints to explicitly mitigate forgetting on previous tasks.
+While such constraints improve stability, they restrict model
+plasticity and may limit adaptation to new data. In con-
+trast, the overall performance metrics MFN and MAA in-
+dicate that Hyper-LLaVA achieves a more favorable stabil-
+ity–plasticity trade-off than ModalPrompt.
+4.3. Ablation Studies
+Impact of Core Components. To verify the impact of core
+Components on model performance improvement, we iso-
+late the contributions of the hyperbolic metric and BC-based
+adaptive fusion in Table 3. Simply swapping the Euclidean
+7
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+B
+Hide
+A
+Ours
+√
+Task: ScienceQA (Task 1)
+Which of the following 
+fossils is younger? 
+A.
+palm leaf  
+B.
+feather
+What is the object in 
+the image?
+Unanswerable
+Hide
+Envelope
+Ours
+√
+Task: ImageNet (Task 3)
+German shepherd
+Hide
+Dandie dinmont
+Ours
+√
+Task: ImageNet (Task 3)
+What is the object in 
+the image?
+Up
+Hide
+Down
+Ours
+√
+Task: VQAv2 (Task 7)
+Where is he looking?
+Black
+Hide
+Brown
+Ours
+√
+Task: GQA (Task 4)
+What color are the 
+pants?
+drupalcon
+Hide
+copenhagen
+Ours
+√
+Task: TextVQA (Task 2)
+where is drupalcon 
+happening?
+Figure 5. Visualization of model predictions across different tasks in comparison with state-of-the-art Hide (Guo et al., 2025).
+metric for Poincar´e distance yields a consistent performance
+bump (e.g., +5.92% with Static Fusion), confirming that
+hyperbolic geometry provides a superior embedding for cap-
+turing task hierarchy and uncertainty. However, the true
+leap in performance comes from BC-based adaptive fusion.
+This delivers a massive gain of +9.67%, which signals that
+the imbalance of modality is not a minor inconvenience but
+a primary bottleneck in MCIT. The best results are achieved
+only when both components are combined, validating their
+complementary nature.
+Impact of Modality Fusion Strategies. Figure 3 offers
+a fascinating glimpse into how different fusion strategies
+behave within the Poincar´e space. On the CoIN benchmark,
+the system actually performs better using only instructions
+than it does with static fusion. This results in a clear case
+of modality pollution: blindly averaging visual signals in-
+troduces noise that degrades decision-making. This result
+flips on UCIT, where static fusion beats the unimodal base-
+lines, indicating that vision and instruction are cooperat-
+ing effectively. Crucially, BC-based adaptive fusion reigns
+supreme in both scenarios on CoIN and UCIT. This proves
+that the proposed BC-based weighting acts as an effective
+gatekeeper, suppressing harmful modalities when they in-
+troduce noise and amplifying cross-modal synergy when it
+offers a competitive advantage.
+Hyperparameter Sensitivity Analysis. In order to ensure
+robustness across varying feature scales during continual
+learning, we introduce the adaptive scaling strategy, where
+the selection of the scaling coefficient plays an essential
+role in the model performance. In Figure 4 (a), we ana-
+lyze the impact of different scaling coefficients γ. Overall,
+performance follows a bell-shaped curve. The small scal-
+ing coefficients lead to insufficient task separation, whereas
+large coefficients reduce hierarchical distinctions. This in-
+dicates that the critical point γ = 1.0 provides an effective
+balance to take advantage of hyperbolic geometry.
+4.4. Visualization
+Task Geometry in the Poincar´e Ball. Figures 4 (b) and
+(c) show the visualization of task distribution embeddings
+in the Poincar´e disk, which exposes striking cross-modal
+asymmetries. Similar tasks clump together in the visual
+domain, while the instruction domain gives a different re-
+sult. ScienceQA, for instance, is distinct in visual space
+but buried deep within a central cluster in instruction space,
+indicating a clear sign of low instruction discriminability.
+Conversely, due to the low variance of its own data dis-
+tribution, ImageNet hugs the boundary of the instruction
+space, geometrically encoding its high specificity. These
+structural disparities validate our dual-modality balanced
+fusion strategy: the model must dynamically pivot to the
+modality where the task is most separable.
+Visualization of model predictions. To intuitively demon-
+strate the efficacy of Hyper-LLaVA in mitigating task in-
+terference, we present qualitative comparisons in Figure 5.
+The result of ImageNet illustrates the preservation of fine-
+grained discriminative capability. The baselines hallucinate
+generic categories, while Hyper-LLaVA retains the capacity
+to identify a Dandie Dinmont. We also see the “gravity
+well” effect in action, baselines frequently misroute spe-
+cific queries to high-variance experts, resulting in generic
+Unanswerable outputs, whereas Hyper-LLaVA boundary
+mapping enforces the necessary specificity. Beyond clas-
+sification, complex reasoning scenarios further underscore
+the robustness of the framework. By calibrating the signal
+strength of vision versus text on the fly, the model success-
+fully navigates diverse reasoning paths without succumbing
+to the noise of a dominant but irrelevant modality.
+8
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+5. Conclusion
+In this paper, we presented Hyper-LLaVA, a novel frame-
+work for Multimodal Continual Instruction Tuning (MCIT)
+that addresses the fundamental limitations of existing param-
+eter routing mechanisms from an uncertainty-aware perspec-
+tive. Specifically, to improve intra-modality task matching,
+Hyper-LLaVA accesses the sample to task distribution sim-
+ilarity in the Hyperbolic space. Besides, to alleviate the
+degradation brought by unreliable modality, Hyper-LLaVA
+quantifies the task matching ambiguity within each modal-
+ity to achieve adaptive balancing between task matching
+across modalities. Based on the complementary intra- and
+inter-modality task matching enhancement, Hyper-LLaVA
+achieves significantly more accurate parameter routing, out-
+performing state-of-the-art MCIT approaches by a large
+margin. Our results underscore the importance of modeling
+task uncertainty and leveraging non-Euclidean geometries
+for routing in MLLMs. Future work could explore the ex-
+tension of this hyperbolic uncertainty modeling to a broader
+range of multimodal foundation models and experts.
+Acknowledgements
+This work was a research achievement of National Engineer-
+ing Research Center of New Electronic Publishing Technolo-
+gies, and was supported by the National Natural Science
+Foundation of China (62376011), and the National Key
+R&D Program of China (2024YFA1410000).
+Impact Statement
+This paper presents work whose goal is to advance the field
+of Machine Learning. There are many potential societal
+consequences of our work, none which we feel must be
+specifically highlighted here.
+References
+Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I.,
+Aleman, F. L., Almeida, D., Altenschmidt, J., Altman, S.,
+Anadkat, S., et al. Gpt-4 technical report. arXiv preprint
+arXiv:2303.08774, 2023.
+Cao, M., Liu, Y., Liu, Y., Wang, T., Dong, J., Ding, H.,
+Zhang, X., Reid, I., and Liang, X. Continual llava: Con-
+tinual instruction tuning in large vision-language models.
+arXiv preprint arXiv:2411.02564, 2024.
+Che, C., Wang, Z., Yang, P., Wang, Q., Ma, H., and Shi,
+Z. Lora in lora: Towards parameter-efficient architecture
+expansion for continual visual instruction tuning. arXiv
+preprint arXiv:2508.06202, 2025.
+Chen, C., Zhu, J., Luo, X., Shen, H. T., Song, J., and Gao,
+L. Coin: A benchmark of continual instruction tuning for
+multimodel large language models. Advances in Neural
+Information Processing Systems, 37:57817–57840, 2024.
+Chen, J., Cong, R., Zhao, Y., Yang, H., Hu, G., Ip, H. H. S.,
+and Kwong, S. Sefe: Superficial and essential forgetting
+eliminator for multimodal continual instruction tuning.
+arXiv preprint arXiv:2505.02486, 2025.
+Dai, W., Li, J., Li, D., Tiong, A., Zhao, J., Wang, W., Li, B.,
+Fung, P. N., and Hoi, S. Instructblip: Towards general-
+purpose vision-language models with instruction tuning.
+Advances in neural information processing systems, 36:
+49250–49267, 2023.
+Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., and Fei-Fei,
+L. Imagenet: A large-scale hierarchical image database.
+In 2009 IEEE conference on computer vision and pattern
+recognition, pp. 248–255. Ieee, 2009.
+Goyal, Y., Khot, T., Summers-Stay, D., Batra, D., and
+Parikh, D. Making the v in vqa matter: Elevating the
+role of image understanding in visual question answer-
+ing. In Proceedings of the IEEE conference on computer
+vision and pattern recognition, pp. 6904–6913, 2017.
+Guo, H., Zeng, F., Xiang, Z., Zhu, F., Wang, D.-H., Zhang,
+X.-Y., and Liu, C.-L. Hide-llava: Hierarchical decou-
+pling for continual instruction tuning of multimodal large
+language model. arXiv preprint arXiv:2503.12941, 2025.
+Gurari, D., Li, Q., Stangl, A. J., Guo, A., Lin, C., Grauman,
+K., Luo, J., and Bigham, J. P. Vizwiz grand challenge:
+Answering visual questions from blind people. In Pro-
+ceedings of the IEEE conference on computer vision and
+pattern recognition, pp. 3608–3617, 2018.
+He, J., Guo, H., Tang, M., and Wang, J. Continual instruc-
+tion tuning for large multimodal models. arXiv preprint
+arXiv:2311.16206, 2023.
+Hendrycks, D., Basart, S., Mu, N., Kadavath, S., Wang, F.,
+Dorundo, E., Desai, R., Zhu, T., Parajuli, S., Guo, M.,
+Song, D., Steinhardt, J., and Gilmer, J. The many faces
+of robustness: A critical analysis of out-of-distribution
+generalization, 2021. URL https://arxiv.org/
+abs/2006.16241.
+Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang,
+S., Wang, L., Chen, W., et al. Lora: Low-rank adaptation
+of large language models. ICLR, 1(2):3, 2022.
+Huai, T., Zhou, J., Wu, X., Chen, Q., Bai, Q., Zhou, Z., and
+He, L. Cl-moe: Enhancing multimodal large language
+model with dual momentum mixture-of-experts for con-
+tinual visual question answering. In Proceedings of the
+Computer Vision and Pattern Recognition Conference, pp.
+19608–19617, 2025.
+9
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+Hudson, D. A. and Manning, C. D. Gqa: A new dataset for
+real-world visual reasoning and compositional question
+answering. In Proceedings of the IEEE/CVF conference
+on computer vision and pattern recognition, pp. 6700–
+6709, 2019.
+Kazemzadeh, S., Ordonez, V., Matten, M., and Berg, T.
+Referitgame: Referring to objects in photographs of natu-
+ral scenes. In Proceedings of the 2014 conference on em-
+pirical methods in natural language processing (EMNLP),
+pp. 787–798, 2014.
+Kirkpatrick, J., Pascanu, R., Rabinowitz, N., Veness, J., Des-
+jardins, G., Rusu, A. A., Milan, K., Quan, J., Ramalho, T.,
+Grabska-Barwinska, A., et al. Overcoming catastrophic
+forgetting in neural networks. Proceedings of the national
+academy of sciences, 114(13):3521–3526, 2017.
+Li, J., Li, D., Savarese, S., and Hoi, S. Blip-2: Bootstrapping
+language-image pre-training with frozen image encoders
+and large language models. In International conference
+on machine learning, pp. 19730–19742. PMLR, 2023.
+Li, L., Wang, Y., Xu, R., Wang, P., Feng, X., Kong, L.,
+and Liu, Q. Multimodal arxiv: A dataset for improving
+scientific comprehension of large vision-language models.
+arXiv preprint arXiv:2403.00231, 2024a.
+Li, Q., Xu, K., Peng, Y., and Zhou, J. Exemplar-free life-
+long person re-identification via prompt-guided adaptive
+knowledge consolidation. International Journal of Com-
+puter Vision, 132(11):4850–4865, 2024b.
+Li, Z. and Hoiem, D. Learning without forgetting. IEEE
+transactions on pattern analysis and machine intelligence,
+40(12):2935–2947, 2017.
+Lindstr¨om, A. D. and Abraham, S. S. Clevr-math: A dataset
+for compositional language, visual and mathematical rea-
+soning. arXiv preprint arXiv:2208.05358, 2022.
+Liu, H., Li, C., Wu, Q., and Lee, Y. J. Visual instruction tun-
+ing. Advances in neural information processing systems,
+36:34892–34916, 2023.
+Liu, H., Li, C., Li, Y., and Lee, Y. J. Improved baselines
+with visual instruction tuning. In Proceedings of the
+IEEE/CVF conference on computer vision and pattern
+recognition, pp. 26296–26306, 2024.
+Liu, W., Zhu, F., Guo, H., Wei, L., and Liu, C.-L. Llava-
+c: Continual improved visual instruction tuning. arXiv
+preprint arXiv:2506.08666, 2025a.
+Liu, Z., Xu, K., Su, B., Zou, X., Peng, Y., and Zhou, J. Stop:
+Integrated spatial-temporal dynamic prompting for video
+understanding. In Proceedings of the Computer Vision
+and Pattern Recognition Conference, pp. 13776–13786,
+2025b.
+Lu, P., Qiu, L., Chen, J., Xia, T., Zhao, Y., Zhang, W., Yu,
+Z., Liang, X., and Zhu, S.-C. Iconqa: A new benchmark
+for abstract diagram understanding and visual language
+reasoning. arXiv preprint arXiv:2110.13214, 2021.
+Lu, P., Mishra, S., Xia, T., Qiu, L., Chang, K.-W., Zhu,
+S.-C., Tafjord, O., Clark, P., and Kalyan, A. Learn to
+explain: Multimodal reasoning via thought chains for
+science question answering. Advances in Neural Infor-
+mation Processing Systems, 35:2507–2521, 2022.
+Mao, J., Huang, J., Toshev, A., Camburu, O., Yuille, A. L.,
+and Murphy, K. Generation and comprehension of unam-
+biguous object descriptions. In Proceedings of the IEEE
+conference on computer vision and pattern recognition,
+pp. 11–20, 2016.
+Mishra, A., Shekhar, S., Singh, A. K., and Chakraborty, A.
+Ocr-vqa: Visual question answering by reading text in
+images. In 2019 international conference on document
+analysis and recognition (ICDAR), pp. 947–952. IEEE,
+2019.
+Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C.,
+Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A.,
+et al. Training language models to follow instructions
+with human feedback. Advances in neural information
+processing systems, 35:27730–27744, 2022.
+Peng, T., Liu, Y., Yang, S., Hong, Q., and Tian, Y. Gnsp:
+Gradient null space projection for preserving cross-modal
+alignment in vlms continual learning. arXiv preprint
+arXiv:2507.19839, 2025.
+Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G.,
+Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J.,
+et al. Learning transferable visual models from natural
+language supervision. In International conference on
+machine learning, pp. 8748–8763. PmLR, 2021.
+Singh, A., Natarajan, V., Shah, M., Jiang, Y., Chen, X.,
+Batra, D., Parikh, D., and Rohrbach, M. Towards vqa
+models that can read. In Proceedings of the IEEE/CVF
+conference on computer vision and pattern recognition,
+pp. 8317–8326, 2019.
+Team, G., Anil, R., Borgeaud, S., Alayrac, J.-B., Yu, J., Sori-
+cut, R., Schalkwyk, J., Dai, A. M., Hauth, A., Millican,
+K., et al. Gemini: a family of highly capable multimodal
+models. arXiv preprint arXiv:2312.11805, 2023.
+Touvron, H., Lavril, T., Izacard, G., Martinet, X., Lachaux,
+M.-A., Lacroix, T., Rozi`ere, B., Goyal, N., Hambro, E.,
+Azhar, F., et al. Llama: Open and efficient foundation lan-
+guage models. arXiv preprint arXiv:2302.13971, 2023.
+10
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+Wang, X., Chen, T., Ge, Q., Xia, H., Bao, R., Zheng, R.,
+Zhang, Q., Gui, T., and Huang, X.-J. Orthogonal sub-
+space learning for language model continual learning. In
+Findings of the Association for Computational Linguis-
+tics: EMNLP 2023, pp. 10658–10671, 2023.
+Wang, Z., Che, C., Wang, Q., Li, Y., Shi, Z., and Wang, M.
+Smolora: Exploring and defying dual catastrophic forget-
+ting in continual visual instruction tuning. In Proceedings
+of the IEEE/CVF International Conference on Computer
+Vision, pp. 177–186, 2025.
+Xu, K., Zou, X., Peng, Y., and Zhou, J. Distribution-aware
+knowledge prototyping for non-exemplar lifelong person
+re-identification. pp. 16604–16613. IEEE, 2024.
+Xu, K., Zou, X., Hua, G., and Zhou, J. Componential
+prompt-knowledge alignment for domain incremental
+learning. In International Conference on Machine Learn-
+ing, pp. 70032–70046. PMLR, 2025.
+Xu, K., Cheng, H., Li, J., Zou, X., and Zhou, J. Vision-
+language attribute disentanglement and reinforcement for
+lifelong person re-identification. In Proceedings of the
+Computer Vision and Pattern Recognition Conference,
+2026a.
+Xu, K., Feng, Y., Li, J., Qi, Y., and Zhou, J. C2prompt:
+Class-aware client knowledge interaction for federated
+continual learning. Advances in Neural Information Pro-
+cessing Systems, 38:44109–44139, 2026b.
+Yin, S., Fu, C., Zhao, S., Li, K., Sun, X., Xu, T., and Chen, E.
+A survey on multimodal large language models. National
+Science Review, 11(12):nwae403, 2024.
+Yu, Y., Zhang, D., Ren, Y., Zhao, X., Chen, X., and Chu,
+C. Progressive lora for multimodal continual instruction
+tuning. In Findings of the Association for Computational
+Linguistics: ACL 2025, pp. 2779–2796, 2025.
+Zeng, F., Zhu, F., Guo, H., Zhang, X.-Y., and Liu, C.-L.
+Modalprompt: Towards efficient multimodal continual
+instruction tuning with dual-modality guided prompt. In
+Proceedings of the 2025 Conference on Empirical Meth-
+ods in Natural Language Processing, pp. 12137–12152,
+2025.
+Zhai, X., Mustafa, B., Kolesnikov, A., and Beyer, L. Sig-
+moid loss for language image pre-training. In Proceed-
+ings of the IEEE/CVF international conference on com-
+puter vision, pp. 11975–11986, 2023.
+Zhang, C., Xu, K., Liu, Z., Peng, Y., and Zhou, J. Scap:
+Transductive test-time adaptation via supportive clique-
+based attribute prompting. In Proceedings of the Com-
+puter Vision and Pattern Recognition Conference, pp.
+30032–30041, 2025a.
+Zhang, D., Ren, Y., Li, Z.-Z., Yu, Y., Dong, J., Li, C., Ji, Z.,
+and Bai, J. Enhancing multimodal continual instruction
+tuning with branchlora. arXiv preprint arXiv:2506.02041,
+2025b.
+Zhang, X., Zhang, F., and Xu, C. Vqacl: A novel visual
+question answering continual learning setting. In Proceed-
+ings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition, pp. 19102–19112, 2023a.
+Zhang, Z., Fang, M., Chen, L., and Namazi-Rad, M.-R.
+Citb: A benchmark for continual instruction tuning. arXiv
+preprint arXiv:2310.14510, 2023b.
+Zhao, X., Liu, X., Yang, H., Luo, X., Zeng, F., Li, J., Shi,
+Q., and Chen, C. Chartedit: How far are mllms from
+automating chart analysis? evaluating mllms’ capability
+via chart editing. arXiv preprint arXiv:2505.11935, 2025.
+Zheng, J., Ma, Q., Liu, Z., Wu, B., and Feng, H.
+Be-
+yond anti-forgetting: Multimodal continual instruction
+tuning with positive forward transfer.
+arXiv preprint
+arXiv:2401.09181, 2024.
+Zhou, J., Xu, K., Zhuo, F., Zou, X., and Peng, Y.
+Distribution-aware knowledge aligning and prototyping
+for non-exemplar lifelong person re-identification. IEEE
+Transactions on Pattern Analysis and Machine Intelli-
+gence, 2025.
+Zhu, D., Chen, J., Shen, X., Li, X., and Elhoseiny, M.
+Minigpt-4: Enhancing vision-language understanding
+with advanced large language models. arXiv preprint
+arXiv:2304.10592, 2023.
+11
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+A. Theorem
+A.1. Proof of Optimality for Modality-Adaptive Fusion
+[Optimality of Variance-Inverse Weighting] Let qv and qs be the observed similarity scores from visual and instruction
+modalities, modeled as the true signal perturbed by independent Gaussian noise with variances σ2
+v and σ2
+s, respectively.
+The estimation error of a linear fusion strategy is minimized when the weights are inversely proportional to the modality
+uncertainty: w∗= σ2
+s/(σ2
+v + σ2
+s).
+Proof. We define a linear fusion strategy as ˆq = wqv + (1 −w)qs, where w ∈[0, 1] is the weight assigned to the visual
+modality. The mean squared error (MSE) of this estimator is equivalent to its variance:
+L(w) = Var(ˆq) = w2σ2
+v + (1 −w)2σ2
+s
+(13)
+For the Static Fusion strategy, the weights are fixed at w = 0.5. Substituting this into Eq (13):
+Lstatic = 0.52σ2
+v + 0.52σ2
+s = σ2
+v + σ2
+s
+4
+(14)
+For the Adaptive Fusion strategy, we seek the optimal weight w∗that minimizes the error L(w). Differentiating Eq (13)
+with respect to w and setting it to zero:
+∂L(w)
+∂w
+= 2wσ2
+v −2(1 −w)σ2
+s = 0
+(15)
+Solving for w, we obtain the optimal weight which is inversely proportional to the variance:
+w∗=
+σ2
+s
+σ2v + σ2s
+(16)
+Substituting w∗back into Eq. (13), the minimum error for the adaptive strategy is:
+Ladaptive =
+
+σ2
+s
+σ2v + σ2s
+2
+σ2
+v +
+
+σ2
+v
+σ2v + σ2s
+2
+σ2
+s =
+σ2
+vσ2
+s
+σ2v + σ2s
+(17)
+To compare the two strategies, we examine the difference ∆= Lstatic −Ladaptive:
+∆= σ2
+v + σ2
+s
+4
+−
+σ2
+vσ2
+s
+σ2v + σ2s
+= (σ2
+v + σ2
+s)2 −4σ2
+vσ2
+s
+4(σ2v + σ2s)
+(18)
+Expanding the numerator:
+(σ2
+v + σ2
+s)2 −4σ2
+vσ2
+s = σ4
+v + 2σ2
+vσ2
+s + σ4
+s −4σ2
+vσ2
+s = (σ2
+v −σ2
+s)2
+(19)
+Since (σ2
+v −σ2
+s)2 ≥0 and the variances are positive, it follows that ∆≥0. Therefore:
+Ladaptive ≤Lstatic
+(20)
+The equality holds only when σ2
+v = σ2
+s. This completes the proof of the lemma.
+Theorem 3.1 (Superiority of BC-based Fusion). Under the assumption of approximately isotropic Gaussian feature
+distributions, the Bhattacharyya Distance DBC scales inversely with feature variance (DBC ∝1/σ2). Therefore, the
+Dual-Modality Balanced Routing strategy, which assigns weights based on DBC, effectively approximates the optimal
+inverse-variance fusion derived in Lemma 3.5.
+Proof. While Lemma 3.5 establishes that the optimal fusion weight is inversely proportional to the noise variance σ2 (as
+shown in Eq. (16)), estimating this variance directly during inference is intractable. We prove that the Bhattacharyya
+Distance DBC serves as a reliable proxy for the inverse variance.
+12
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+Consider two task feature distributions in a given modality, modeled as multivariate Gaussians Pi(x) = N(µi, Σi) for
+i ∈{1, 2}. The Bhattacharyya distance between P1 and P2 admits the closed-form expression:
+DBC(P1, P2) = 1
+8(µ1 −µ2)⊤Σ−1(µ1 −µ2) + 1
+2 ln
+det Σ
+√det Σ1 det Σ2
+,
+(21)
+where Σ = 1
+2(Σ1 + Σ2).
+Under the common assumption that task features are approximately isotropic with equal variance, i.e., Σ1 = Σ2 = σ2I, the
+second (log-determinant) term in Eq (21) vanishes. The equation simplifies to:
+DBC(P1, P2) =
+1
+8σ2 ∥µ1 −µ2∥2
+2 .
+(22)
+Equation (22) demonstrates that, for a fixed inter-task separation ∥µ1 −µ2∥2, the Bhattacharyya distance scales inversely
+with the variance:
+DBC ∝1
+σ2
+(23)
+Consequently, a larger DBC corresponds to lower feature uncertainty (smaller σ2) and higher discriminability. By assigning
+weights based on DBC via our DIW module, we are effectively approximating the optimal weighting scheme w∗∝1/σ2
+derived in Lemma 3.5. Therefore, our BC-based fusion strategy yields a lower estimation error than static fusion.
+A.2. Proof of the Boundary Sensitivity in Poincar´e Ball.
+Theorem A.1 (Gradient Explosion at the Boundary). Let dD(u, v) be the Poincar´e distance between two points u, v ∈Dn.
+Let u be fixed and v = u + δ be a small perturbation. As the norm ∥u∥→1 (approaching the boundary), the rate of
+change of the hyperbolic distance with respect to the Euclidean perturbation δ approaches infinity. Conversely, as ∥u∥→0
+(approaching the center), the rate of change approaches the Euclidean rate.
+Proof. The Riemannian metric tensor gx of the Poincar´e ball model at a point x is given by a conformal scaling of the
+Euclidean metric gE:
+gx = λ2
+xgE,
+where λx =
+2
+1 −∥x∥2
+(24)
+The infinitesimal hyperbolic distance dsD corresponds to the Euclidean distance dsE scaled by the conformal factor λx:
+dsD = λx∥dx∥2 = 2∥dx∥2
+1 −∥x∥2
+(25)
+Now, consider the sensitivity, defined as the ratio of hyperbolic change to Euclidean change:
+Sensitivity(x) = dsD
+dsE
+=
+2
+1 −∥x∥2
+(26)
+Case 1: General Tasks (Center). For tasks mapped near the center, ∥x∥→0. The sensitivity becomes:
+lim
+∥x∥→0 Sensitivity(x) = 2
+(27)
+This implies that near the center, the hyperbolic distance behaves similarly to Euclidean distance (up to a constant factor of
+2). The metric space is ”flat” and tolerant to perturbations, suitable for high-variance general tasks.
+Case 2: Specific Tasks (Boundary). For tasks mapped near the boundary, ∥x∥→1. The sensitivity becomes:
+lim
+∥x∥→1 Sensitivity(x) = ∞
+(28)
+This implies that at the boundary, even an infinitesimal Euclidean displacement ∥dx∥2 results in an infinitely large hyperbolic
+distance. This geometric property enforces the high selectivity required for specific, low-variance tasks, effectively preventing
+them from being overshadowed by general tasks.
+13
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+A.3. Connection between Bhattacharyya Coefficient and Classification Error.
+Theorem A.2 (Bhattacharyya Bound on Bayes Error). Let P1(x) and P2(x) be the probability density functions of two tasks
+in a specific modality. The discriminability of these two tasks is bounded by the Bhattacharyya Coefficient BC(P1, P2).
+Specifically, the probability of misclassifying a sample from Task 1 as Task 2 (Bayes Error rate Pe) is upper-bounded by the
+Bhattacharyya Coefficient.
+Proof. The Bayes error rate Pe for a binary classification problem between two distributions with equal prior probabilities
+is defined as the integral of the minimum of the two densities:
+Pe =
+Z
+min(P1(x), P2(x))dx
+(29)
+Using the inequality min(a, b) ≤
+√
+ab for any non-negative real numbers a, b, we can write:
+min(P1(x), P2(x)) ≤
+p
+P1(x)P2(x)
+(30)
+Integrating both sides over the domain X:
+Z
+min(P1(x), P2(x))dx ≤
+Z p
+P1(x)P2(x)dx
+(31)
+The right-hand side is exactly the definition of the Bhattacharyya Coefficient BC(P1, P2). Thus, we arrive at the Bhat-
+tacharyya bound:
+Pe ≤BC(P1, P2)
+(32)
+Since the Bhattacharyya Distance is defined as DBC = −ln(BC), minimizing the overlap BC (or maximizing the distance
+DBC) directly minimizes the upper bound of the classification error. Therefore, by assigning higher weights to the modality
+with a larger DBC (smaller BC), our adaptive fusion strategy theoretically prioritizes the feature space with the lower
+potential for routing error.
+14
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+B. Algorithm
+Algorithm 1 Pipeline of Hyper-LLaVA
+1: Input: Sequential task datasets Dt = {(xv
+t,i, xs
+t,i, yt,i)Nt
+i=1}.
+2: Initialize: Base MLLM Θ, Empty Expert Pool E = ∅.
+3: for t = 1 to T do
+4:
+# Training Stage: Acquire new knowledge
+5:
+Initialize LoRA expert Et for task t.
+6:
+for minibatch B ∈Dt do
+7:
+Update Et via autoregressive loss LCE.
+8:
+end for
+9:
+Add Et to Expert Pool E.
+10:
+# Statistics Update
+11:
+Extract features for Dt using frozen encoders.
+12:
+Compute Euclidean centroids µt and variances Vt.
+13:
+Update adaptive scaling factor γ based on {V1, . . . , Vt}.
+14:
+# Hyperbolic Task Similarity Estimation
+15:
+Compute pair-wise Bhattacharyya Distances among {T1, . . . , Tt}.
+16:
+Derive separation vectors Q and modality weights ω via Eq(7).
+17:
+# Inference Stage (for a test input x)
+18:
+for each test input x = (xv
+test, xs
+test) do
+19:
+# Hyperbolic Embedding
+20:
+Map experts to Poincar´e ball: zk = H(µk, Vk) (rk ∝V −1
+k
+).
+21:
+Map query to Poincar´e boundary: z = H(x, 0) (r →1).
+22:
+# Dual-Modality Balanced Routing
+23:
+for k = 1 to t do
+24:
+Calculate Poincar´e similarities qv, qs via Eq(10).
+25:
+Calculate fuse scores qd via Eq (12)
+26:
+end for
+27:
+Select optimal expert: k∗= arg maxk qd.
+28:
+Generate response yi using Expert Ek∗.
+29:
+end for
+30: end for
+15
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+C. Evaluation Metrics
+To comprehensively evaluate the performance of the model in the continual learning setting, we employ four standard
+metrics. Let T denote the total number of tasks in the sequential stream. We define an accuracy matrix A ∈RT ×T , where
+At,i represents the test accuracy on task i after the model has finished learning task t. Based on this formulation, the metrics
+are defined as follows:
+1. Mean Fine-tune Accuracy (MFT). This metric evaluates the model’s plasticity, measuring its capacity to acquire new
+knowledge from the current task. It is calculated as the average accuracy of each task i immediately after it has been learned:
+MFT = 1
+T
+T
+X
+i=1
+Ai,i.
+(33)
+A higher MFT indicates that the model effectively adapts to new domains without being overly constrained by previous
+knowledge.
+2. Mean Final Accuracy (MFN). To assess the overall proficiency of the model upon the conclusion of the continual
+learning curriculum, we report the average accuracy across all T tasks after the final training stage:
+MFN = 1
+T
+T
+X
+i=1
+AT,i.
+(34)
+This metric reflects the final knowledge retention and is the primary indicator of the model’s ultimate performance.
+3. Mean Average Accuracy (MAA). While MFN focuses solely on the final state, MAA provides a holistic view of the
+model’s stability throughout the entire lifecycle. It is computed as the average of the performance at every incremental step
+t:
+MAA = 1
+T
+T
+X
+t=1
+ 
+1
+t
+t
+X
+i=1
+At,i
+!
+.
+(35)
+A high MAA suggests that the model maintains consistent performance across both new and old tasks during the intermediate
+stages of training, rather than fluctuating significantly.
+4. Backward Transfer (BWT). This metric quantifies the influence of learning new tasks on the performance of previously
+acquired tasks. It is defined as the average difference between the final accuracy of a task and its initial accuracy immediately
+after learning:
+BWT = 1
+T
+T
+X
+i=1
+(AT,i −Ai,i).
+(36)
+A negative BWT value indicates catastrophic forgetting, where performance degrades over time. Conversely, a positive
+BWT implies positive backward transfer, where learning new tasks facilitates the performance on older tasks.
+16
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+D. Inter-task Relevance Analysis
+Figure 6 visualizes inter-task relevance using the Log Bhattacharyya Coefficient. The visual modality exhibits clear block-
+diagonal structures, where tasks sharing image sources (e.g., GQA, Grounding, VQAv2) form dense clusters, implying
+high visual overlap and potential routing ambiguity. In contrast, the instruction modality shows a sparse structure with
+low off-diagonal relevance, indicating sharp task boundaries. This contrast motivates our dual-modality balanced routing
+strategy, which down-weights modalities with high task overlap and emphasizes more discriminative ones.
+Figure 6. Log-scale Inter-task Relevance Matrices on CoIN Benchmark
+Figure 7. Log-scale Inter-task Relevance Matrices on UCIT Benchmark
+17
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+E. Task-aware Modality Weight Analysis
+The Figure 8 illustrates the dynamic assignment of modality weights on CoIN (left) and UCIT (right) benchmarks. Row
+t represents the weight distribution used for routing at the end of stage t. We observe significant variation in ωv across
+tasks (columns), confirming that the discriminative power of the visual modality is highly task-dependent. For instance, in
+CoIN, ScienceQA maintains a high throughout all stages, indicating its strong visual distinctiveness, whereas ImageNet
+shows extremely low visual weights, correctly deferring to the instruction modality as intended by our hyperbolic boundary
+mapping. In addition, the values of weights are not all close to 0 or 1. Many task ID predictions require a comprehensive
+judgment based on the integration of two modalities. This adaptive mechanism effectively prevents modality dominance by
+”noisy” modalities.
+Figure 8. Evolution of Task-aware Modality Weight
+18
+
+
+Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning
+F. More Comparison Results
+Figure 9 presents further comparisons with the state-of-the-art HiDe model on the challenging ScienceQA, ImageNet and
+TextVQA benchmarks, which encompass diverse social and natural vision–instruction understanding scenarios. The results
+indicate that more consistent and robust adaptation is achieved by our model.
+Which country is 
+highlighted?
+A.
+Vanuatu
+B.
+Marshall
+C.
+Micronesia
+D.
+Solomon
+C
+Hide
+B
+Ours
+√
+Task: ScienceQA (Task 1)
+…thermal energy was 
+transferred from () to ().
+A.
+refrigerator .  the 
+surroundings
+B.
+ the surroundings. 
+each refrigerator
+A
+Hide
+B
+Ours
+√
+Task: ScienceQA (Task 1)
+…Does this passage 
+describe the weather 
+or the climate?
+A.
+Climate
+B.
+weather
+A
+Hide
+B
+Ours
+√
+Task: ScienceQA (Task 1)
+…Will these 
+magnets attract or 
+repel each other?
+A.
+Repel
+B.
+attract
+A
+Hide
+B
+Ours
+√
+Task: ScienceQA (Task 1)
+What is the object 
+in the image?
+gift basket
+Hide
+Hamper
+Ours
+√
+Task: ImageNet (Task 3)
+What is the object 
+in the image?
+bed
+Hide
+Maillot
+Ours
+√
+Task: ImageNet (Task 3)
+bird
+Hide
+Red-backed sandpiper
+Ours
+√
+Task: ImageNet (Task 3)
+What is the object in 
+the image?
+guitar
+Hide
+Banjo
+Ours
+√
+Task: ImageNet (Task 3)
+What is the object in 
+the image?
+10:50
+Hide
+5:41
+Ours
+√
+Task: TextVQA (Task 2)
+what is the time?
+Figure 9. Visualization of model predictions across different tasks in comparison with state-of-the-art Hide (Guo et al., 2025).
+19

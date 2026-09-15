@@ -1,0 +1,356 @@
+Title: AURA: Unified Multimodal Framework for Conversational Music Editing
+
+URL Source: https://arxiv.org/pdf/2609.14344v1
+
+Published Time: Tue, 15 Sep 2026 01:10:40 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+## AURA: UNIFIED MULTIMODAL FRAMEWORK FOR CONVERSATIONAL MUSIC EDITING 
+
+## Quoc-Huy Trinh 1,4 Minh-Van Nguyen 2,4 Debesh Jha 31Aalto University 2Technical University of Denmark 3University of South Dakota 4OpenRB Lab 
+
+ABSTRACT 
+
+Instruction-guided music editors typically process each re-quest independently, limiting their ability to support work-flows in which users progressively refine a track. We intro-duce AURA, a unified multimodal framework for conversa-tional music editing. AURA uses a multimodal large language model to interpret the complete dialogue history, an optional image, and reference audio, distilling the editing intent into compact concept tokens. A concept-to-audio module injects these tokens and frame-aligned reference features into a frozen MusicGen backbone, enabling precise edits while preserving unaffected content. AURA optimizes only 91M parameters while retaining 1.9B frozen backbone parameters. Experi-ments on Slakh2100 and MoisesDB demonstrate substantial improvements in edit correctness and content preservation over existing instruction-guided methods, including a 4–5×
+
+reduction in FAD for out-of-domain addition and removal. 
+
+https://openrb-lab.github.io/AURA-demo/ 
+
+Index Terms — Music editing, multimodal large language models, controllable music generation, audio conditioning 
+
+1. INTRODUCTION 
+
+Recent advances in text-to-music generation have substantially expanded the possibilities for AI-assisted composition and production. Recent works [1, 2, 3, 4, 5, 6, 7, 8, 9] generate realistic music from textual descriptions using autoregressive or diffusion-based models. This progress has motivated a shift from generation toward controllable music editing, where users modify an existing track through natural-language or visual instructions while preserving its unaffected content. Recent methods, including AUDIT [10], InstructME [11], M2UGen [12], Instruct-MusicGen [13], and LeVo 2 [14], sup-port instruction-guided editing and stem-level operations such as adding, removing, or extracting musical sources. However, these systems generally process each request independently and therefore cannot resolve editing instructions that depend on earlier dialogue turns. This limitation is particularly restric-tive in realistic production workflows, where users progres-sively refine a track and expect each edit to remain consistent with the evolving conversation. To address this limitation, we introduce AURA, a uni-fied multimodal framework for conversational music editing. AURA uses a multimodal large language model to jointly in-terpret the complete dialogue history, an optional image, and reference audio. It distills the editing intent into concept to-kens, which are projected into the conditioning space of a frozen MusicGen backbone. A concept-to-audio (C2A) mod-ule is proposed to combine these semantic representations with reference-music features, enabling the decoder to apply the requested edit while preserving musicality prior. Only the LoRA adapters [15], projectors, and C2A modules are train-able, retaining the pretrained generative prior of the backbone. In summary, our main contributions are: • We propose concept-guided music decoding, which rep-resents multimodal editing intent using compact concept tokens and injects them into a pretrained music decoder through a C2A module. The module combines semantic edit control with frame-aligned reference conditioning to preserve unedited content. • We introduce AURA, a unified multimodal framework that jointly reasons over dialogue history, images, and reference audio for coherent multi-turn music editing. AURA substantially improves edit correctness and con-tent preservation across in-domain and out-of-domain. We train AURA on agent-generated editing conversations constructed from the Slakh2100 training set [16] and evaluate it on Slakh2100-test as an in-domain benchmark and Moi-sesDB [17] as an out-of-domain benchmark. Experiments on single- and multi-turn editing demonstrate strong generaliza-tion and substantially better content preservation than existing instruction-guided approaches. 
+
+2. METHOD 2.1. Overall framework 
+
+Given an optional image I, a multi-turn conversation history 
+
+T , and a reference audio signal Xref , AURA generates an edited audio signal ˆXtgt :
+
+ˆXtgt = g(I, T , X ref ) . (1) AURA separates multimodal intent understanding from audio generation. A multimodal large language model (MLLM) in-fers the desired edit from the complete conversation and input arXiv:2609.14344v1 [cs.SD] 13 Sep 2026 MULTIMODAL LARGE LANGUAGE MODEL    
+
+> VISION ENCODER
+> This track plays over this scene — a green river valley with mist over the mountains. Can you soften the mood to match?
+> AUDIO ENCODER TOKENIZER
+> REFERENCE AUDIO REFERENCE AUDIO
+> The filtered kick is driving it too hard for such a calm view. I'll pull it back and add a soft high-frequency texture. <EDIT_CONCEPT>
+> TARGET AUDIO
+> CODEC ENCODER CODEC ENCODER
+> MASKED MULTI-HEAD SELF-ATTENTION
+> Concept-To- Audio Alignment (CTAA)
+> BiFAM CA FFN
+> TOKEN PROJECTOR AUDIO
+> PROJECTOR
+> LoRA
+> C2A
+> Round X
+> Assistant:
+> Transformer Block N LoRA
+> MusicGen Decoder
+
+Fig. 1 : Overall architecture of AURA. Given an image I, a multi-turn conversation T , and a reference audio Xref , the multimodal LLM gmllm produces a natural-language response together with ⟨EDIT CONCEPT ⟩ tokens that summarize the editing intent inferred from all modalities and the dialogue history. The projector gproj maps the hidden states of these tokens into the music decoder’s conditioning space. The concept-to-audio module gc2a fuses this concept embedding, together with the reference audio stream, into the hidden states of the frozen music decoder, which then generates the edited audio Xtarget .modalities, while a MusicGen-based decoder applies the edit and preserves the unaffected content of the reference audio. As illustrated in Fig. 1, AURA comprises an MLLM, concept and audio projectors, a concept-to-audio (C2A) module plugged in the MusicGen decoder. The pretrained MLLM and Music-Gen backbone parameters remain frozen, while their LoRA adapters, the projectors, and the C2A module are optimized during training. 
+
+2.2. Multimodal large language model 
+
+Prior music-editing models [12, 13, 11, 18] only use the cur-rent instruction and reference audio but do not allow dialogue input, limiting them to single-turn interaction. To support conversational editing, we employ the Thinker component of Qwen2.5-Omni [19] and introduce nc instances of a special 
+
+⟨EDIT CONCEPT ⟩ token. The MLLM jointly processes the conversation history T , image I, and reference audio Xref :
+
+Y = gmllm (I, T , X ref ) , (2) where Y is a natural-language response optionally followed by the concept-token block. Because these tokens attend to all preceding modalities and dialogue turns, their final hidden states compactly encode the editing operation, target instru-ment, desired attributes, and conversational constraints. We denote these states by 
+
+Hconcept ∈ Rnc×dllm , (3) where dllm = 3584 . The concept states provide a compact semantic interface between multimodal understanding and audio generation. When no audio edit is required, the MLLM produces only a textual response and emits no concept tokens. 
+
+2.3. Concept and audio projectors 
+
+The concept and reference-audio representations originate from different feature spaces and must therefore be aligned with the MusicGen hidden space. For the concept tokens, we apply a LayerNorm followed by a two-layer MLP: 
+
+Zconcept = W2 GELU( W1 LN( Hconcept )) , (4) where Zconcept ∈ Rnc×dm and dm is the MusicGen hidden dimension. Layer normalization reduces sensitivity to changes in the scale of the MLLM hidden states during post-training. The resulting nc vectors serve as the keys and values of the concept cross-attention in each decoder layer. In parallel, the frozen EnCodec encoder extracts a frame-level representation of the reference audio. The audio projector maps this representation into the same hidden space: 
+
+Zref = gaud (Ecodec (Xref )) ∈ RL×dm , (5) where L denotes the number of audio frames. The two pro-jected representations have primary roles: Zconcept specifies what should be changed, whereas Zref provides frame-aligned information about the content that should be preserved. 2.4. Music decoder 
+
+The music decoder is based on MusicGen-medium [4], which autoregressively predicts four streams of EnCodec [20] codes at 50 Hz. Its pretrained backbone remains frozen to preserve the learned musical prior. Editing is introduced through train-able LoRA adapters and the proposed C2A module, which integrates the reference-audio representation Zref with the edit representation Zconcept .
+
+Frame-aligned reference fusion. The reference audio forms a generation-independent stream that is aligned with the autore-gressive music stream. Let H(ℓ) 
+
+> r
+
+and H(ℓ) 
+
+> m
+
+denote the reference and music states, respectively, at decoder layer ℓ. The two streams use the same frozen attention projections: 
+
+(Q(ℓ) 
+
+> x
+
+, K(ℓ) 
+
+> x
+
+, V(ℓ) 
+
+> x
+
+) = H(ℓ) 
+
+> x
+
+(W(ℓ) 
+
+> Q
+
+, W(ℓ) 
+
+> K
+
+, W(ℓ) 
+
+> V
+
+), x ∈ { r, m },
+
+(6) Because the reference stream does not attend to the gener-ated sequence, its representations can be computed once and cached throughout autoregressive decoding. Our bidirectional feature-alignment module (BiFAM) uses a shared, position-aligned query to retrieve information from both streams: 
+
+S(ℓ) = α(ℓ) 
+
+> r
+
+Attn 
+
+(
+
+Q(ℓ) 
+
+> r
+
++ Q(ℓ) 
+
+> m
+
+, K(ℓ) 
+
+> r
+
+, V(ℓ) 
+
+> r
+
+; Mfull 
+
+)
+
++ α(ℓ) 
+
+> m
+
+Attn 
+
+(
+
+Q(ℓ) 
+
+> r
+
++ Q(ℓ) 
+
+> m
+
+, K(ℓ) 
+
+> m
+
+, V(ℓ) 
+
+> m
+
+; Mcausal 
+
+)
+
+,
+
+(7) where Mfull and Mcausal denote full and causal attention masks; α(ℓ) 
+
+> r
+
+, and α(ℓ) 
+
+> m
+
+are learned layer-wise weights. Let O(ℓ) 
+
+> m
+
+denote the decoder masked self-attention output. BiFAM modulates this output through a FiLM transformation: 
+
+˜O(ℓ) 
+
+> m
+
+= O(ℓ) 
+
+> m
+
+⊙
+
+[
+
+1 + tanh 
+
+(
+
+g(ℓ))
+
+γ(ℓ)(
+
+S(ℓ))] 
+
++ tanh 
+
+(
+
+g(ℓ))
+
+β(ℓ)(
+
+S(ℓ))
+
+,
+
+(8) where g(ℓ) is a learned gate and [γ(ℓ); β(ℓ)] is produced by a rank-256 bottleneck MLP. The MLP output and gate are initial-ized to zero, making the transformation an identity mapping at initialization. This frame-aligned modulation preserves the reference structure without appending additional tokens to the autoregressive sequence. 
+
+Concept cross-attention. After reference fusion, the projected concept tokens are introduced as a shared semantic memory. At layer ℓ, the decoder attends to Zconcept as 
+
+C(ℓ) 
+
+> m
+
+= Attn 
+
+(
+
+Q(ℓ)
+
+> c
+
+( ˜O(ℓ)
+
+> m
+
+)
+
+, K(ℓ) 
+
+> c
+
+(Zconcept ) , V(ℓ) 
+
+> c
+
+(Zconcept )
+
+)
+
+,̂
+
+O(ℓ) 
+
+> m
+
+= ˜O(ℓ) 
+
+> m
+
++ C(ℓ) 
+
+> m
+
+.
+
+(9) The same nc concept vectors are shared across all decoder layers and generation steps. Rank-64 LoRA adapters are ap-plied only to the key and value projections of the concept cross-attention. The resulting states ̂ O(ℓ) 
+
+> m
+
+are subsequently processed by the layer’s feed-forward network. The zero-initialized BiFAM components and LoRA adapters preserve the behavior of the pretrained MusicGen model at initialization, allowing AURA to learn an editing residual rather than relearning audio generation. Overall, AURA contains 91M trainable parameters, while 1.9B back-bone parameters remain frozen. At inference, classifier-free guidance performs an unconditional pass by replacing Zconcept 
+
+with zero-valued memory while retaining Zref . The resulting guidance direction therefore isolates the requested edit while holding the reference content fixed. 
+
+2.5. Objective function 
+
+AURA is trained end-to-end with a joint objective combining the language-modeling loss over assistant responses and the music decoder’s codebook cross-entropy: 
+
+L = LMLLM + Lmusic . (10) The language loss supervises multi-turn reasoning and the placement of ⟨EDIT CONCEPT ⟩ tokens, while the music loss shapes their representations through the projector. This joint supervision ensures that the learned tokens are both lin-guistically meaningful and useful for audio generation. 
+
+3. EXPERIMENTAL DETAILS 3.1. Experimental setup Training dataset. We train on 66,539 conversational dialogues generated from the Slakh2100 training subset. Each dialogue contains a user turn (source audio + LLM-paraphrased instruc-tion) with an assistant turn containing a typed edit-token block over 10 s EnCodec windows. Every sample is annotated with edit kind, a 10-class instrument label (94.5% coverage). For evaluation, we use 1000 in-domain samples from the Slakh test split (add/remove/extract at 32 kHz) and 1000 out-of-domain samples from MoisesDB with LLM-written instructions. 
+
+Implementation details. The MLLM emits nc = 9 concept tokens, which condition the frozen MusicGen backbone with hidden size dm = 1536 . AdamW is used with a learning rate of 10 −4, an effective batch size of 16, and rank-64 LoRA (α = 128 ) on the cross-attention key and value projections. Inference uses classifier-free guidance with a scale of 2.0. 
+
+Evaluation. We evaluate methods along four criteria: audio quality (FAD ↓ [21], KL ↓), instruction adherence (CLAP ↑ [22]), edit correctness (P-Demucs ↑ [23]), and content preservation (SSIM ↑, SI-SDR ↑, and SI-SDRi ↑) [24]. SI-SDR and SI-SDRi are reported only for removal and extraction tasks, where deterministic targets are available. In our evalua-tion protocol, we conduct single-turn editing and multi-turn editing to assess the effectiveness of AURA. 
+
+3.2. Quantitative results Single-turn editing. Table 1 shows that AURA consistently improves edit correctness and content preservation. On Table 1 : Comparison with SOTA music-editing methods, in-domain (Slakh2100-test) and out-of-domain (MoisesDB). SI-SDR is undefined for add . AURA substantially improves edit correctness and content preservation across both benchmarks.                                                                                                                                                                                         
+
+> Slakh2100-test (in-domain) MoisesDB (out-of-domain) Task Model FAD ↓CLAP ↑KL ↓SSIM ↑P-Dem. ↑SI-SDR ↑SDRi ↑FAD ↓CLAP ↑KL ↓SSIM ↑P-Dem. ↑SI-SDR ↑SDRi ↑
+> Add M2UGen 4.25 0.29 1.19 0.08 0.38 ––4.64 0.28 1.04 0.08 0.45 ––Instruct-MG 2.01 0.28 0.65 0.37 0.48 ––3.84 0.18 0.84 0.32 0.51 ––LeVo 2.30 0.28 0.82 0.11 0.35 ––3.92 0.25 0.87 0.10 0.44 ––
+> AURA 0.52 0.29 0.23 0.78 0.63 ––0.84 0.34 0.22 0.71 0.57 ––Remove M2UGen 3.00 0.27 1.28 0.09 0.36 −46 .01 −52 .43 4.49 0.28 1.37 0.09 0.27 −43 .21 −49 .87
+> Instruct-MG 1.42 0.37 0.50 0.43 0.55 −2.10 −8.53 3.55 0.20 0.71 0.37 0.49 −4.41 −11 .03
+> LeVo 2.20 0.35 0.98 0.10 0.31 −40 .32 −46 .74 3.50 0.31 1.01 0.10 0.26 −41 .85 −48 .47
+> AURA 0.34 0.36 0.12 0.80 0.74 +11 .32 +4.89 0.72 0.33 0.22 0.70 0.78 +9.16 +2.54
+> Extract M2UGen 6.66 0.32 1.36 0.16 0.67 −45 .47 −39 .32 4.26 0.18 1.46 0.14 0.65 −43 .61 −39 .95
+> Instruct-MG 5.32 0.44 0.74 0.27 0.79 −15 .18 −9.05 5.20 0.18 0.72 0.28 0.79 −14 .76 −10 .39
+> LeVo 5.95 0.29 1.76 0.12 0.44 −39 .80 −33 .67 4.44 0.17 1.41 0.09 0.40 −40 .49 −36 .11
+> AURA 4.48 0.41 0.86 0.45 0.80 −7.62 −1.49 4.24 0.26 0.72 0.48 0.89 +2.67 +7.04
+
+Table 2 : Multi-turn editing benchmark MoisesDB (out-of-domain). Turns apply −drums, +bass, +guitar in sequence; each is scored against the exact intermediate target. The con-trol (Ctrl) applies only the final edit to the original mix, without the intermediate turns.                                                      
+
+> Metric Model T1 T2 T3 Ctrl
+> SSIM ↑
+> M2UGen 0.10 0.08 0.10 0.11 Instruct-MG 0.42 0.32 0.22 0.32 LeVo 0.08 0.07 0.08 0.08
+> AURA 0.84 0.79 0.54 0.49
+> SI-SDR ↑
+> M2UGen −44 .8−45 .9−46 .1−47 .1
+> Instruct-MG −0.9−8.7−19 .3−13 .7
+> LeVo −38 .7−49 .8−52 .7−51 .0
+> AURA +21 .3+12 .3+5.1−5.2
+> SI-SDRi ↑
+> M2UGen −59 .6−48 .3−43 .3−44 .4
+> Instruct-MG −15 .7−11 .1−16 .5−10 .9
+> LeVo −47 .3−47 .8−46 .6−45 .0
+> AURA +6.5+9.9+7.9−2.4
+
+Slakh2100, it more than doubles the best baseline SSIM for 
+
+add (0.78 vs. 0.37) and uniquely achieves positive SI-SDR for 
+
+remove (+11 .32 dB ). These gains generalize to MoisesDB, where AURA reduces FAD by 4–5× for add and remove and achieves positive SI-SDR for extract . Although its in-domain CLAP and extraction quality remain less consistent, AURA substantially improves preservation across tasks and domains. 
+
+Multi-turn editing. Table 2 evaluates all methods under the same cascaded protocol. At each turn, M 2UGen, LeVo, and Instruct-MG receive their own previous output as the new refer-ence audio together with the current instruction, while AURA additionally receives the complete dialogue history. AURA maintains positive SI-SDR from +21 .3 to +5 .1 dB and posi-tive SI-SDRi across all turns. In contrast, the strongest base-line, Instruct-MG, degrades from −0.9 to −19 .3 dB , demon-strating greater error accumulation under sequential editing. Applying only the final instruction to the original mixture reduces AURA’s SI-SDR to −5.2 dB , indicating that the dia-
+
+Table 3 : Comparison of the effects of ⟨EDIT CONCEPT ⟩
+
+tokens with fully LLM-generated token hidden states on the MoiseDB dataset. Best results are in bold .                          
+
+> FAD ↓CLAP ↑SSIM ↑
+> Task Text Concept Text Concept Text Concept Add 13.32 0.84 0.10 0.34 0.08 0.71
+> Remove 9.49 0.72 0.15 0.33 0.068 0.70
+> Extract 9.97 4.24 0.14 0.26 0.099 0.48
+
+logue history is necessary to recover the intended editing state. Although AURA’s SSIM decreases from 0.84 to 0.54, it re-mains substantially more robust than the single-turn baselines. 
+
+3.3. Ablation study 
+
+Table 3 compares concept-token fusion with the decoder’s original full-text conditioning. Concept tokens consistently improve audio quality, suggesting that their compact seman-tic representations align more effectively with the music de-coder and are less susceptible to irrelevant variation in the full-sentence hidden states. These results validate the impor-tance of concept-token-based fusion. 
+
+4. CONCLUSION 
+
+We introduced AURA, a unified multimodal framework that brings conversational control to instruction-guided music edit-ing. By routing all multimodal and dialogue context through a compact set of concept tokens, and by injecting the refer-ence audio frame-aligned rather than as a style prompt, AURA separates understanding what to change from producing the result while keeping the pretrained music decoder frozen. Ex-periments on in-domain and out-of-domain benchmarks show large gains in content preservation and edit correctness over prior editors. The main limitation is stem extraction, where a generative decoder cannot match dedicated separation mod-els; coupling AURA with an explicit separation front-end is a natural next step. 5. REFERENCES 
+
+[1] Andrea Agostinelli, Timo I Denk, Zal´ an Borsos, Jesse Engel, Mauro Verzetti, Antoine Caillon, Qingqing Huang, Aren Jansen, Adam Roberts, Marco Tagliasacchi, et al., “Musiclm: Generat-ing music from text,” arXiv preprint arXiv:2301.11325 , 2023. [2] Jan Melechovsky, Zixun Guo, Deepanway Ghosal, Navonil Majumder, Dorien Herremans, and Soujanya Poria, “Mustango: Toward controllable text-to-music generation,” in Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , 2024, pp. 8293–8316. [3] Zach Evans, CJ Carr, Josiah Taylor, Scott H Hawley, and Jordi Pons, “Fast timing-conditioned latent audio diffusion,” arXiv preprint arXiv:2402.04825 , 2024. [4] Jade Copet, Felix Kreuk, Itai Gat, Tal Remez, David Kant, Gabriel Synnaeve, Yossi Adi, and Alexandre D´ efossez, “Sim-ple and controllable music generation,” Advances in Neural Information Processing Systems , vol. 36, 2024. [5] Zach Evans, Julian D Parker, CJ Carr, Zack Zukowski, Josiah Taylor, and Jordi Pons, “Stable audio open,” in ICASSP 2025-2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 2025, pp. 1–5. [6] Zach Evans, Julian D Parker, Matthew Rice, CJ Carr, Zack Zukowski, Josiah Taylor, and Jordi Pons, “Stable audio 3,” 
+
+arXiv preprint arXiv:2605.17991 , 2026. [7] Ziqian Ning, Huakang Chen, Yuepeng Jiang, Chunbo Hao, Guobin Ma, Shuai Wang, Jixun Yao, and Lei Xie, “Diffrhythm: Blazingly fast and embarrassingly simple end-to-end full-length song generation with latent diffusion,” arXiv preprint arXiv:2503.01183 , 2025. [8] Yuepeng Jiang, Huakang Chen, Ziqian Ning, Jixun Yao, Zerui Han, Di Wu, Meng Meng, Jian Luan, Zhonghua Fu, and Lei Xie, “Diffrhythm 2: Efficient and high fidelity song generation via block flow matching,” arXiv preprint arXiv:2510.22950 ,2025. [9] Zihan Liu, Shuangrui Ding, Zhixiong Zhang, Xiaoyi Dong, Pan Zhang, Yuhang Zang, Yuhang Cao, Dahua Lin, and Jiaqi Wang, “Songgen: A single stage auto-regressive transformer for text-to-song generation,” in International Conference on Machine Learning (ICML) , 2025, arXiv:2502.13128. [10] Yuancheng Wang, Zeqian Ju, Xu Tan, Lei He, Zhizheng Wu, Jiang Bian, et al., “Audit: Audio editing by following instruc-tions with latent diffusion models,” Advances in Neural Infor-mation Processing Systems , vol. 36, pp. 71340–71357, 2023. [11] Bing Han, Junyu Dai, Weituo Hao, Xinyan He, Dong Guo, Ji-tong Chen, Yuxuan Wang, Yanmin Qian, and Xuchen Song, “Instructme: An instruction guided music edit and remix framework with latent diffusion models,” arXiv preprint arXiv:2308.14360 , 2023. [12] Shansong Liu, Atin Sakkeer Hussain, Qilong Wu, Chenshuo Sun, and Ying Shan, “M2ugen: Multi-modal music understand-ing and generation with the power of large language models,” 
+
+arXiv preprint arXiv:2311.11255 , 2023. [13] Yixiao Zhang, Yukara Ikemiya, Woosung Choi, Naoki Murata, Marco A Mart´ ınez-Ram´ ırez, Liwei Lin, Gus Xia, Wei-Hsiang Liao, Yuki Mitsufuji, and Simon Dixon, “Instruct-musicgen: Unlocking text-to-music editing for music language models via instruction tuning,” arXiv preprint arXiv:2405.18386 , 2024. [14] Shun Lei, Huaicheng Zhang, Dapeng Wu, Yaoxun Xu, Lishi Zuo, Wei Tan, Hangting Chen, Guangzheng Li, Jianwei Yu, Zhiyong Wu, et al., “Levo 2: Stable and melodious song gener-ation via hierarchical representation modeling and progressive post-training,” arXiv preprint arXiv:2606.30642 , 2026. [15] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen, “Lora: Low-rank adaptation of large language models,” arXiv preprint arXiv:2106.09685 , 2021. [16] Ethan Manilow, Gordon Wichern, Prem Seetharaman, and Jonathan Le Roux, “Cutting music source separation some slakh: A dataset to study the impact of training data quality and quantity,” in 2019 IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (WASPAA) . IEEE, 2019, pp. 45–49. [17] Igor Pereira, Felipe Ara ˜ A¯ ejo, Filip Korzeniowski, and Richard Vogl, “Moisesdb: A dataset for source separation beyond 4-stems,” arXiv preprint arXiv:2307.15913 , 2023. [18] Shun Lei, Yaoxun Xu, Zhiwei Lin, Huaicheng Zhang, Wei Tan, Hangting Chen, Jianwei Yu, Yixuan Zhang, Chenyu Yang, Haina Zhu, Shuai Wang, Zhiyong Wu, and Dong Yu, “Levo: High-quality song generation with multi-preference alignment,” in Advances in Neural Information Processing Systems (NeurIPS) , 2025, arXiv:2506.07520. [19] Jin Xu, Zhifang Guo, Jinzheng He, Hangrui Hu, Ting He, Shuai Bai, Keqin Chen, Jialin Wang, Yang Fan, Kai Dang, Bin Zhang, Xiong Wang, Yunfei Chu, and Junyang Lin, “Qwen2.5-omni technical report,” 2025. [20] Alexandre D´ efossez, Jade Copet, Gabriel Synnaeve, and Yossi Adi, “High fidelity neural audio compression,” arXiv preprint arXiv:2210.13438 , 2022. [21] Kevin Kilgour, Mauricio Zuluaga, Dominik Roblek, and Matthew Sharifi, “Fr \’echet audio distance: A metric for evaluating music enhancement algorithms,” arXiv preprint arXiv:1812.08466 , 2018. [22] Benjamin Elizalde, Soham Deshmukh, Mahmoud Al Ismail, and Huaming Wang, “Clap learning audio concepts from natural language supervision,” in ICASSP 2023-2023 IEEE Interna-tional Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 2023, pp. 1–5. [23] Alexandre D´ efossez, Nicolas Usunier, L´ eon Bottou, and Francis Bach, “Demucs: Deep extractor for music sources with extra unlabeled data remixed,” arXiv preprint arXiv:1909.01174 ,2019. [24] Jonathan Le Roux, Scott Wisdom, Hakan Erdogan, and John R Hershey, “Sdr–half-baked or well done?,” in ICASSP 2019-2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 2019, pp. 626–630.
