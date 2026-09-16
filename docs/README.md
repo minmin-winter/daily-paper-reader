@@ -6,74 +6,48 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-15
-- 运行时间：2026-09-15 22:26:45 UTC
+- 最新运行日期：2026-09-16
+- 运行时间：2026-09-16 22:15:23 UTC
 - 运行状态：成功
-- 本次总论文数：18
-- 精读区：4
-- 速读区：14
+- 本次总论文数：9
+- 精读区：0
+- 速读区：9
 
 ### 今日简报（AI）
-今天共筛出 18 篇论文，精读 4 篇、速读 14 篇，重点集中在多模态持续学习与多模态情感识别两条线上。最值得先看的是精读中的《Hyper-LLaVA》（9.0/10，用双曲不确定性感知与模态平衡路由做多模态持续指令微调）和《ReH-FUSE》（8.0/10，面向对话情感识别的可靠性感知专家分层融合）。普通读者若时间有限，可先读这两篇精读，再按需浏览速读里的多模态双工交互智能体、图记忆多智能体推理与多模态学习信息论统一视角三篇。
-- 详情：[/202609/15/README](/202609/15/README)
+今日速读 9 篇多模态研究，聚焦信息论视角与脑信号基础模型两大高分方向（均 7.0 分）。最值得看的是《Dependency, Compression, and Synergy》用信息论统一解释多模态学习，以及语言引导模型实现脑信号零样本多任务分析。普通读者可先读这两篇摘要，理解多模态"互补与冗余"的核心逻辑。
+- 详情：[/202609/16/README](/202609/16/README)
 
 ### 精读区论文标签
-1. [Hyper-LLaVA: Hyperbolic Uncertainty-aware Modality-Balanced Routing for Multimodal Continual Instruction Tuning](/202609/15/2609.13742v1-hyper-llava-hyperbolic-uncertainty-aware-modality-balanced-routing-for-multimodal-continual-instruction-tuning)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：模态均衡路由，应对模态可靠性差异与不平衡
-2. [ReH-FUSE: Reliability-Aware Hierarchical Fusion of Experts for Multimodal Emotion Recognition in Conversation](/202609/15/2609.13857v1-reh-fuse-reliability-aware-hierarchical-fusion-of-experts-for-multimodal-emotion-recognition-in-conversation)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：决策级路由在单模态混合与跨模态专家之间进行平衡
-3. [Query-Conditioned Spherical Centroid Aggregation for Multimodal Retrieval](/202609/15/2609.15335v1-query-conditioned-spherical-centroid-aggregation-for-multimodal-retrieval)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：按相关性为各模态分配权重以纠正均匀模态影响
-4. [VideoScout: Learning Agentic Active Exploration with Adaptive Reasoning Pacing for Long Video Understanding](/202609/15/2609.15606v1-videoscout-learning-agentic-active-exploration-with-adaptive-reasoning-pacing-for-long-video-understanding)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：智能体式长视频理解与推理
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Multimodal Duplex Interaction Agent](/202609/15/2609.08977v3-multimodal-duplex-interaction-agent)  
+1. [Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning](/202609/16/2609.14421v1-dependency-compression-and-synergy-a-unified-information-theoretic-view-of-multimodal-learning)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：多模态信息共享与协同的信息论视角
+2. [A Language-Guided Multimodal Foundation Model for Zero-Shot and Multi-Task Brain Signal Analysis](/202609/16/2609.15740v1-a-language-guided-multimodal-foundation-model-for-zero-shot-and-multi-task-brain-signal-analysis)  
    标签：评分：7.0/10、query:native-multi
-   evidence：原生多模态双工交互模型支持实时流式处理
-2. [GraMRAG: Orchestrating Multi-Agent Multi-Step Reasoning via Graph Memory with Reinforcement Learning](/202609/15/2609.14066v1-gramrag-orchestrating-multi-agent-multi-step-reasoning-via-graph-memory-with-reinforcement-learning)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：视觉-文本桥接的多模态多步推理
-3. [Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning](/202609/15/2609.14421v1-dependency-compression-and-synergy-a-unified-information-theoretic-view-of-multimodal-learning)  
-   标签：评分：7.0/10、query:unified-mm
-   evidence：多模态学习的统一信息论视角
-4. [PhysBrain 1.5: From Vision-Language Models to Physical Foundation Models](/202609/15/2609.14973v1-physbrain-15-from-vision-language-models-to-physical-foundation-models)  
-   标签：评分：7.0/10、query:unified-mm
-   evidence：统一模型联合优化视觉语言与动作序列
-5. [Reason What Matters: Retrieval-Grounded Reasoning for Universal Multimodal Embeddings](/202609/15/2609.15296v1-reason-what-matters-retrieval-grounded-reasoning-for-universal-multimodal-embeddings)  
-   标签：评分：7.0/10、query:unified-mm
-   evidence：通过接地推理构建统一多模态表示
-6. [The Platonic brain bridge hypothesis: human brain networks as an architectural prior for multimodal large language models](/202609/15/2609.10947v2-the-platonic-brain-bridge-hypothesis-human-brain-networks-as-an-architectural-prior-for-multimodal-large-language-models)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：联合处理视频、音频与文本的全能多模态大模型
-7. [Multimodal Temporal Modeling for Continuous Group Emotion Recognition in Multi-party Dialogues](/202609/15/2609.11164v1-multimodal-temporal-modeling-for-continuous-group-emotion-recognition-in-multi-party-dialogues)  
+   evidence：统一语言-信号对齐框架以桥接脑信号与语言表示
+3. [Noise Adaptive Streaming Audio-Visual Speech Token Enhancement for Robust Full-Duplex Spoken Dialogue Models](/202609/16/2609.08390v1-noise-adaptive-streaming-audio-visual-speech-token-enhancement-for-robust-full-duplex-spoken-dialogue-models)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：融合音视频的多模态联合理解
-8. [OmniHallu: Unified Hallucination Detection for Cross-Modal Comprehension and Generation in Multimodal Large Language Models](/202609/15/2609.11244v1-omnihallu-unified-hallucination-detection-for-cross-modal-comprehension-and-generation-in-multimodal-large-language-models)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：跨图像视频音频的统一框架
-9. [Multi-Modal Controlled Coherent Motion Generation](/202609/15/2609.11439v1-multi-modal-controlled-coherent-motion-generation)  
-   标签：评分：6.0/10、query:balanced-mml
-   evidence：超越加权求和的并发多模态输入融合生成
-10. [LLaDA-UI: Bringing Block-wise Diffusion to Vision-Language GUI Agents](/202609/15/2609.13287v1-llada-ui-bringing-block-wise-diffusion-to-vision-language-gui-agents)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：两阶段训练对齐原生分辨率视觉编码器与扩散语言模型
-11. [GeomVLA: Unifying Scene, Motion, and Action in 3D](/202609/15/2609.13812v1-geomvla-unifying-scene-motion-and-action-in-3d)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：在共享三维坐标系中统一感知、运动与动作
-12. [UniCAR-RL: Seeing Better before Thinking Deeper in Visual Mathematics](/202609/15/2609.13849v1-unicar-rl-seeing-better-before-thinking-deeper-in-visual-mathematics)  
+   evidence：融合唇部视频与噪声音频的音视频语音标记恢复
+4. [Kairos: A Dataset for Fine-Grained Video-Language Modeling over Space, Time, and Dynamics](/202609/16/2609.08755v1-kairos-a-dataset-for-fine-grained-video-language-modeling-over-space-time-and-dynamics)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：解耦感知与推理以提升多模态大模型视觉数学推理
-13. [AURA: Unified Multimodal Framework for Conversational Music Editing](/202609/15/2609.14344v1-aura-unified-multimodal-framework-for-conversational-music-editing)  
+   evidence：带时间分辨标注的细粒度视频-语言建模
+5. [RoES: Rotational Equivariant Selective-frequency Fusion for Multimodal Images](/202609/16/2609.12497v1-roes-rotational-equivariant-selective-frequency-fusion-for-multimodal-images)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：整合文本图像音频的统一多模态框架
-14. [A Generative AI Integrated Multimodal Framework for Low-Latency Multi-Camera Person Re-Identification](/202609/15/2609.14419v1-a-generative-ai-integrated-multimodal-framework-for-low-latency-multi-camera-person-re-identification)  
+   evidence：红外与可见光多模态图像的选择性频率融合
+6. [Beyond OCR Accuracy: Text-Centric VQA Under Image Degradation with Modular and End-to-End](/202609/16/2609.13815v1-beyond-ocr-accuracy-text-centric-vqa-under-image-degradation-with-modular-and-end-to-end)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：结合图像与文本输入的视觉问答
+7. [TwinICL: Diagnosing Multimodal In-Context Learning through Paired Counterfactuals](/202609/16/2609.15028v1-twinicl-diagnosing-multimodal-in-context-learning-through-paired-counterfactuals)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：诊断多模态上下文学习中的跨模态差距
+8. [Hypergraph-Regularized Gramian Volumes for Multimodal Retrieval](/202609/16/2609.15320v1-hypergraph-regularized-gramian-volumes-for-multimodal-retrieval)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：代价感知的多模态框架
+   evidence：文本、视频、音频与字幕嵌入的多模态融合
+9. [MarKey: Marginal Utility Guided Greedy Keyframe Selection for Long Video Understanding](/202609/16/2609.15408v1-markey-marginal-utility-guided-greedy-keyframe-selection-for-long-video-understanding)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：面向长视频多模态理解的关键帧选择
 
 
 <div class="dpr-home-promo-card">
