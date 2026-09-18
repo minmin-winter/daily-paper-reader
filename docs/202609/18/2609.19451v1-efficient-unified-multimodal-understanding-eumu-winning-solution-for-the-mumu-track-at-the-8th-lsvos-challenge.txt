@@ -1,0 +1,393 @@
+Title: Efficient Unified Multimodal Understanding (EUMU): Winning Solution for the MUMU Track at the 8th LSVOS Challenge
+
+URL Source: https://arxiv.org/pdf/2609.19451v1
+
+Published Time: Fri, 18 Sep 2026 00:26:34 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+## Efficient Unified Multimodal Understanding (EUMU): Winning Solution for the MUMU Track at the 8th LSVOS Challenge 
+
+Dayoung Kil 1 and Seong-heum Kim 1⋆
+
+Department of Intelligent Semiconductors, Soongsil University, Seoul, Republic of Korea 
+
+dayoung.k.ssu@gmail.com, seongheum@ssu.ac.kr 
+
+Abstract. The Mobile Unified Multimodal Understanding (MUMU) Challenge requires a single efficient model to jointly perform multi-concept image tagging, open-vocabulary object detection, and image caption-ing. We present Efficient Unified Multimodal Understanding (EUMU), the winning solution for the MUMU Track of the 8th LSVOS Chal-lenge. EUMU builds on a shared pretrained multimodal model, using its prompt-based capabilities for detection and captioning and training lightweight heads on shared visual features to predict quality, scene, and event tags. Rather than treating the three tasks independently, EUMU applies task-aware inference refinement by reusing task outputs as cross-task cues. For detection, caption cues help recover objects missed by the initial detection. For captioning, detection cues help refine the caption to better reflect the detected objects. For tagging, image statistics refine quality predictions, while caption and detection cues refine scene and event predictions. This design unifies all three tasks within a single model while satisfying the challenge’s resource constraints. EUMU contains 239.169M parameters, requires 23.947 GFLOPs, uses 4.5 GB of peak inference memory, and achieves a final challenge score of 17.3409. Code and models are available at https://github.com/Dayoung-Kil/EUMU .
+
+1 Introduction 
+
+The 8th Large-scale Video Object Segmentation (LSVOS) Challenge [12], held in conjunction with ECCV 2026, includes three main tracks for video object understanding. The MOSEv2 track addresses video object segmentation using LVOS [8] and MOSE [3, 5]. The MeViSv2-Text and MeViSv2-Audio tracks ad-dress referring video object segmentation based on MeViS [4], with text and audio guidance, respectively. In addition to these tracks, the challenge also in-troduces the Mobile Unified Multimodal Understanding (MUMU) track [13], which focuses on efficient, unified multimodal understanding. MUMU requires a single model to perform three visual understanding tasks under a shared resource budget: multi-concept image tagging, which predicts  
+
+> ⋆
+
+Corresponding author arXiv:2609.19451v1 [cs.CV] 16 Sep 2026 2 D. Kil and S.-H. Kim 
+
+quality, scene, and event concepts; open-vocabulary object detection, which re-quires generalization to unseen object categories; and image captioning, which generates a natural-language description of an image. Separate task-specific mod-els are not permitted; all three capabilities must be integrated into a single ar-chitecture. The model must also contain no more than 0.5B parameters and use no more than 8 GB of peak inference memory. The challenge therefore evaluates both task performance and resource efficiency. Meeting these requirements is difficult because the three tasks demand differ-ent forms of visual understanding while sharing the same model and computa-tional budget. Conventional pipelines that assign a dedicated model to each task achieve strong per-task accuracy, but their combined parameters, computation, and memory grow with the number of tasks, and each model remains blind to the evidence produced by the others. Recent large multimodal models unify di-verse vision-language tasks within a single architecture, yet their scale of several billion parameters far exceeds the 0.5B-parameter and 8 GB memory budget of MUMU. Compact prompt-based models such as Florence-2 fit the budget and already cover detection and captioning, but they offer no native support for multi-concept tagging of quality, scene, and event labels, and their prompt-based inference runs each task in isolation, so the errors of one task are never corrected by the evidence of another. Fine-tuning such a model to add the missing capa-bility would also increase training cost and risk eroding the pretrained abilities on which detection and captioning depend. To address this challenge, we propose Efficient Unified Multimodal Under-standing (EUMU), which combines a frozen shared backbone with inference-time cooperation between tasks. EUMU shares a single pretrained multimodal model for all three tasks. Detection and captioning rely on its prompt-based capabili-ties, while lightweight heads predict tags from shared visual features. To break the isolation between tasks, EUMU further reuses task outputs as cues to re-fine predictions across tasks. Extending task coverage without fine-tuning the backbone or enlarging the model, this design allows the predictions of one task to improve another. By combining a shared backbone with task-aware refine-ment at inference time, EUMU achieves strong performance under the resource constraints and ranks first in the MUMU Track at the 8th LSVOS Challenge 2026. 
+
+2 Method 
+
+Figure 1 illustrates the overall architecture of the proposed system for Efficient Unified Multimodal Understanding. EUMU uses a single pretrained multimodal model to support tagging, detection, and captioning within a unified framework. The input image is encoded into a shared visual representation through the image encoder and transformer encoder. Multi-concept tagging is performed directly on these visual features using lightweight tagging heads for quality, scene, and event prediction. Detection and captioning, in contrast, use task-specific prompts and the pretrained decoder without fine-tuning the shared model. EUMU: Winning Solution for the MUMU Track 3Image 
+
+> Prompt
+> Object Detection Prompt
+> <OD>
+> Open-Vocabulary Detection Prompt
+> <OPEN_VOCABULARY_DETECTION>
+> Phrase Grounding Prompt
+> <CAPTION_TO_PHRASE_GROUNDING>
+> Caption Prompt
+> <MORE_DETAILED_CAPTION>
+> Image
+> Encoder
+> Visual embeddings  Text embeddings
+> Transformer Encoders
+> Transformer Decoders
+> Tagging
+> Quality Head
+> Scene Head
+> Event Head
+> Detection
+> Base Detection
+> Open-Vocabulary Expansion
+> Phrase Grounding
+> Initial Caption
+> The image shows a baseball game in progress. The batter is at home plate
+> and He is …
+> "tags ": {
+> "quality ": [
+> "quality_good "
+> ],
+> "scene ": [
+> "stadium "
+> ],
+> "event ": [
+> "sports_event "
+> ]}
+> Caption Refinement
+> The image shows a baseball
+> game in progress. The batter is at home plate and He is wearing black shoes.
+> Visual tokens
+> Text tokens
+> Detection Refinement Caption
+> Cues
+> Detection
+> Cues
+> Detection / Caption
+> Cues
+> Statistics
+> Cues
+> Tagging Refinement
+
+Fig. 1: Overview of EUMU. EUMU shares a single pretrained multimodal model [15] across multi-concept image tagging, open-vocabulary object detection, and image captioning. Lightweight tagging heads predict tags from shared visual features, while detection and captioning use prompt-based inference. Task outputs are selectively reused as cross-task cues for task-aware inference refinement. 
+
+EUMU applies task-aware inference refinement in a directed sequence, reusing task outputs as cross-task cues. EUMU first obtains initial tag predictions, base detections, and a context caption. The context caption provides additional object and phrase cues for open-vocabulary detection and phrase grounding, produc-ing the refined detections. The final detections then guide caption refinement. Finally, image statistics refine the quality predictions, while cues from the fi-nal caption and detections refine the scene and event predictions. This process produces the final tags, detections, and caption within a single unified model. 
+
+2.1 Multi-Concept Image Tagging 
+
+For multi-concept image tagging, EUMU introduces three lightweight MLP tag-ging heads on top of the shared visual features for quality, scene, and event prediction. Each head produces label-wise scores used to obtain the initial tags. Since tagging operates directly on the shared visual representation without us-ing the transformer decoder, EUMU can predict all three types of tags without fine-tuning the pretrained multimodal model. The initial tag predictions are further refined using additional cues relevant to each label group. Quality labels are closely associated with low-level image characteristics and degradations. We therefore complement the prediction scores with image statistics such as brightness distribution, contrast, gradient, noise, and compression artifacts. For example, brightness statistics are used to refine low-light, underexposure, and overexposure predictions, while contrast-related statistics adjust the corresponding quality labels. Once the final caption and de-tections are obtained, scene and event predictions are further refined using their 4 D. Kil and S.-H. Kim 
+
+semantic cues. Scene predictions are refined using location cues from the caption together with detected objects, allowing generic predictions such as outdoor to be replaced with more specific scene categories. Event predictions are refined by combining action cues from the caption with object cues from the detections, e.g., stage and microphone for performance or race number and finish line for sports events. Event predictions that are inconsistent with the caption, scene tags, and detection cues are removed. 
+
+2.2 Open-Vocabulary Object Detection 
+
+EUMU augments base object detection with caption-guided open-vocabulary detection and phrase grounding to improve object coverage. It first performs base object detection to obtain bounding boxes and labels. To recover objects missed by the base detection, EUMU extracts additional object and phrase cues from the context caption. These cues are used to detect additional objects through open-vocabulary detection and localize caption phrases through phrase grounding. The context caption therefore serves to expand the detection candidates before final refinement. Detection candidates from the three stages are merged and refined. The predicted labels are normalized to the evaluation vocabulary, while invalid bounding boxes are removed and non-maximum suppression (NMS) is applied to suppress duplicate predictions. The remaining bounding boxes, labels, and confidence scores form the final detections. 
+
+2.3 Image Captioning 
+
+EUMU uses the <MORE_DETAILED_CAPTION> prompt to generate a context cap-tion for detection candidate expansion. After obtaining the final detections, EUMU refines the context caption using detection cues. We compare the de-tected object labels with the words in the caption and use their overlap as an additional cue for caption refinement. The refined caption is then post-processed to satisfy the challenge length limits while maintaining sentence completeness. Overly long outputs are truncated to the allowed length, and incomplete sen-tence endings caused by truncation are removed. We also remove unnecessary whitespace and line breaks and add sentence-ending punctuation when needed. The final caption is subsequently used as a semantic cue for scene and event tagging refinement. 
+
+3 Experiments 
+
+3.1 Experimental Setup Datasets. EUMU trains the lightweight tagging heads using the official MUMU training data. To address the sparsity of quality and event labels, we construct additional training samples from the same training split. For quality, we generate synthetic examples by applying degradations such as blur, noise, low light, and EUMU: Winning Solution for the MUMU Track 5Captioning 
+
+Input  Tagging 
+
+"tags ": { 
+
+"quality ": [ 
+
+"overexposure ", 
+
+"low_light ", 
+
+"low_contrast "], 
+
+"scene ": [ 
+
+"stage "], 
+
+"event ": [ 
+
+"concert ", 
+
+"performance “
+
+]}, 
+
+"The  image  shows  a band 
+
+performing  on  a stage .
+
+The  stage  is  lit  up  with  red 
+
+and  yellow  lights , creating 
+
+a dramatic  atmosphere .
+
+The  band  members  are 
+
+playing  various 
+
+instruments ." 
+
+"tags": { 
+
+"quality": [ 
+
+"quality_good"], 
+
+"scene": [ 
+
+"stadium"], 
+
+"event": [ 
+
+"sports_event" 
+
+]
+
+}, 
+
+"The image shows a young man playing soccer on a grassy field. He is 
+
+wearing a red jersey with 
+
+blue shorts and white socks. He has short dark hair." 
+
+"tags": { 
+
+"quality": [ 
+
+"quality_good"], 
+
+"scene": [ 
+
+"office"], 
+
+"event": [ 
+
+"conference", 
+
+"exhibition" 
+
+]
+
+}, 
+
+"The image shows a man standing on a stage with a microphone attached to his shirt. He is holding a microphone in his right hand and appears to be giving." 
+
+"tags": { 
+
+"quality": [ 
+
+"quality_good"], 
+
+"scene": [ 
+
+"stage"], 
+
+"event": [ 
+
+"festival", 
+
+"parade" 
+
+]
+
+}, 
+
+"The image shows a group of four young women and a man performing a traditional Hawaiian dance. They are wearing black and white skirts with fringes and white pom-poms hanging." 
+
+"tags": { 
+
+"quality": [ 
+
+"quality_good"], 
+
+"scene": [ 
+
+"stadium"], 
+
+"event": [ 
+
+"sports_event" 
+
+]
+
+}, 
+
+"The image shows a baseball game in progress. The batter is at home plate and is in the process of swinging at a pitch. He is wearing a black." 
+
+"tags": { 
+
+"quality": [ 
+
+"motion_blur", 
+
+"quality_good"], 
+
+"scene": [ 
+
+"park"], 
+
+"event": [ 
+
+"wedding" 
+
+]
+
+}, 
+
+"The image shows a young woman standing on a yellow pedestal in a park. She is wearing a long white dress with a 
+
+lace overlay and a long 
+
+train." 
+
+"tags": { 
+
+"quality": [ 
+
+"quality_good"], 
+
+"scene": [ 
+
+"outdoor"], 
+
+"event": [ 
+
+"festival", 
+
+"celebration", 
+
+"marathon", 
+
+"sports_event" 
+
+]}, 
+
+"The image shows a group of people participating in a marathon. There are three women in the foreground, all wearing white tank tops and black shorts. The woman." 
+
+"tags": { 
+
+"quality": [ 
+
+"motion_blur", 
+
+"quality_good"], 
+
+"scene": [ 
+
+"classroom"], 
+
+"event": [ 
+
+"conference", 
+
+"award_ceremony" 
+
+]}, 
+
+"The image shows a woman speaking into a microphone in a conference room. She is standing in front of a group of people sitting in rows of chairs, attentively listening.", 
+
+Captioning Detection  Input  Tagging  Captioning Detection 
+
+Fig. 2: Qualitative results of EUMU. Each example shows the input image to-gether with the final outputs for multi-concept image tagging, open-vocabulary object detection, and image captioning after task-aware inference refinement. The examples cover diverse image conditions, scenes, and events, illustrating how EUMU captures both low-level quality attributes and high-level semantic information within a single unified model. 
+
+overexposure to the training images. For event prediction, we extract event-related cues from the training captions and use them to generate additional event labels. Detection and captioning require no additional training and instead rely on the pretrained prompt-based capabilities of Florence-2-base [15]. For model selection and inference strategy validation, we use task-specific local validation sets. We use KonIQ-10k [9] for quality, Places365 [17] for scene, USED-test [1] for event, LVIS v1 [6] for detection, and the COCO Karpathy validation split [10, 11] and Flickr30K validation set [16] for captioning. 
+
+Implementation Details. EUMU uses a frozen Florence-2-base [15] shared across all three tasks. Only the lightweight tagging heads are trained, while de-tection and captioning rely on the pretrained prompt-based capabilities without additional fine-tuning. For tagging, the quality and scene/event heads are trained with AdamW for 6 and 10 epochs, using learning rates of 2 × 10 −4 and 1 × 10 −4
+
+and batch sizes of 256 and 384, respectively. Both use cosine scheduling, a 0.08 warmup ratio, 0.04 weight decay, and 0.25 dropout. The final EUMU model con-tains 239.169M parameters, requires 23.947 GFLOPs, and uses 4.5 GB of peak inference memory. 
+
+Evaluation Metrics. MUMU evaluates both task performance and model ef-ficiency. Multi-concept image tagging is evaluated using Macro-F1, while open-vocabulary object detection is measured by novel-aware mAP@[0.5:0.95]. Image 6 D. Kil and S.-H. Kim 
+
+Table 1: Effect of task-specific refinement strategies on local validation sets. 
+
+Metrics are reported in their task-specific scales. Values in parentheses indicate the performance gain over the preceding setting, and the best result for each task is shown in bold. 
+
+Task Setting Local Metric Tagging 
+
+> (Macro-F1)
+
+Lightweight tagging heads 0.4300 + task-aware refinement 0.4634 (+0.0334) 
+
+Detection 
+
+> (mAP@[.5:.95])
+
+Base object detection 0.195 + phrase grounding 0.269 (+0.074) 
+
++ open-vocab. expansion 0.277 (+0.008) 
+
+Full pipeline 0.334 (+0.057) 
+
+Captioning 
+
+> (composite)
+
+Context caption 30.49 + caption refinement 30.63 (+0.14) 
+
+captioning is evaluated using 0.4 CIDEr [14] + 0 .3 SPICE [2] + 0 .3 CLIPScore [7]. The final challenge score combines the three task scores with an efficiency factor. 
+
+3.2 Qualitative Results 
+
+Figure 2 presents qualitative examples of EUMU across diverse images. For each input, EUMU produces quality, scene, and event tags, object detections, and an image caption within a single unified model. The results show that EUMU cap-tures both image quality characteristics and high-level scene, event, and object information across the three tasks. 
+
+3.3 Quantitative Results 
+
+We evaluate EUMU on task-specific local validation sets to analyze the effec-tiveness of the proposed refinement strategies, and report the final performance on the official MUMU Challenge leaderboard. 
+
+Effect of Task-Aware Inference Refinement. Table 1 reports the effect of the major refinement strategies on the task-specific local validation sets. For tagging, task-aware inference refinement improves the Macro-F1 from 0.4300 to 0.4634. For detection, adding phrase grounding and open-vocabulary expansion increases mAP from 0.195 to 0.334. Caption refinement also improves the com-posite score from 30.49 to 30.63. These results show that the proposed refinement strategies consistently improve local validation performance without fine-tuning the pretrained multimodal model. 
+
+Challenge Results. Table 2 reports the official Codabench leaderboard re-sults for the MUMU Challenge. EUMU achieves the highest final challenge score EUMU: Winning Solution for the MUMU Track 7
+
+Table 2: Official MUMU Challenge 2026 [13] results and resource usage of EUMU. EUMU ranks 1st while satisfying the challenge resource constraints (Params 
+
+≤ 0.5B and Peak Memory ≤ 8 GB). The final score is computed as (0 .3A + 0 .4B +0.3C) × E, where E denotes the efficiency factor.                      
+
+> Rank Final Score Tagging Detection Captioning
+> (Task A) (Task B) (Task C)
+> 1st 17.3409 27.1808 8.2151 47.3354
+> (a) Task performance.
+> Params FLOPs Peak Mem. Eff. Factor
+> (M) (G) (GB) (E)
+> 239.169 23.947 4.5 0.676
+> (b) Resource efficiency.
+
+of 17.3409 and ranks 1st while satisfying the challenge’s efficiency constraints. These results show that EUMU supports unified multimodal understanding ef-ficiently by sharing a pretrained multimodal model across tasks and improving predictions through lightweight tagging heads and task-aware inference refine-ment. 
+
+4 Conclusion 
+
+We presented EUMU, the first-place solution to the MUMU Track of the 8th LSVOS Challenge. EUMU handles multi-concept image tagging, open-vocabulary object detection, and image captioning within a single pretrained multimodal backbone. Lightweight tagging heads extend the shared backbone to multi-concept tagging, while detection and captioning retain its pretrained prompt-based capabilities without additional fine-tuning. EUMU further enables coop-eration across the three tasks by reusing their outputs as complementary cues for task-aware inference refinement. This design avoids separate task-specific models while improving task predictions within the constrained resource budget. With 239.169M parameters, 23.947 GFLOPs, and 4.5 GB of peak inference memory, EUMU achieves a final challenge score of 17.3409 and ranks first in the MUMU Challenge. 
+
+Acknowledgements 
+
+This work was supported by G-LAMP Program of the National Research Foun-dation of Korea (NRF) grant funded by the Ministry of Education (No. RS-2025-25441317) and the Ministry of Science and ICT and the National IT Industry Promotion Agency (NIPA) through the Advanced GPU Utilization Support Pro-gram (02-26-01-0499). This work was also supported by the National Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (RS-2025-16071992). This research was also supported by Korea Institute for Advancement of Technology (KIAT) grant funded by the Korea Government (MOTIE) (RS-2026-25530975, HRD Program for Industrial Innovation). 8 D. Kil and S.-H. Kim 
+
+References 
+
+1. Ahmad, K., Conci, N., Boato, G., De Natale, F.G.B.: USED: A large-scale social event detection dataset. In: Proceedings of the 7th ACM International Confer-ence on Multimedia Systems. pp. 50:1–50:6 (2016). https://doi.org/10.1145/ 2910017.2910624 
+
+2. Anderson, P., Fernando, B., Johnson, M., Gould, S.: SPICE: Semantic proposi-tional image caption evaluation. In: ECCV. pp. 382–398 (2016) 3. Ding, H., Liu, C., He, S., Jiang, X., Torr, P.H.S., Bai, S.: MOSE: A new dataset for video object segmentation in complex scenes. In: ICCV. pp. 20224–20234 (2023) 4. Ding, H., Liu, C., He, S., Ying, K., Jiang, X., Loy, C.C., Jiang, Y.G.: MeViS: A multi-modal dataset for referring motion expression video segmentation. IEEE TPAMI 47 (12), 11400–11416 (2025). https://doi.org/10.1109/TPAMI.2025. 3600507 
+
+5. Ding, H., Ying, K., Liu, C., He, S., Jiang, X., Jiang, Y.G., Torr, P.H.S., Bai, S.: MOSEv2: A more challenging dataset for video object segmentation in complex scenes. arXiv preprint arXiv:2508.05630 (2025) 6. Gupta, A., Dollár, P., Girshick, R.: LVIS: A dataset for large vocabulary instance segmentation. In: CVPR. pp. 5356–5364 (2019) 7. Hessel, J., Holtzman, A., Forbes, M., Le Bras, R., Choi, Y.: CLIPScore: A reference-free evaluation metric for image captioning. In: EMNLP. pp. 7514–7528 (2021). 
+
+https://doi.org/10.18653/v1/2021.emnlp-main.595 
+
+8. Hong, L., Chen, W., Liu, Z., Zhang, W., Guo, P., Chen, Z., Zhang, W.: LVOS: A benchmark for long-term video object segmentation. In: ICCV. pp. 13480–13492 (2023) 9. Hosu, V., Lin, H., Sziranyi, T., Saupe, D.: KonIQ-10k: An ecologically valid database for deep learning of blind image quality assessment. IEEE TIP 29 , 4041– 4056 (2020) 10. Karpathy, A., Fei-Fei, L.: Deep visual-semantic alignments for generating image descriptions. In: CVPR. pp. 3128–3137 (2015) 11. Lin, T.Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., Dollár, P., Zitnick, C.L.: Microsoft COCO: Common objects in context. In: ECCV. pp. 740–755 (2014) 12. LSVOS Challenge: 8th LSVOS workshop & challenge. https://lsvos.github.io/ 
+
+(2026), workshop in conjunction with ECCV 2026 13. MUMU Challenge: MUMU Challenge 2026: Mobile unified multimodal understand-ing challenge. https://lsvos.github.io/mumu (2026) 14. Vedantam, R., Zitnick, C.L., Parikh, D.: CIDEr: Consensus-based image descrip-tion evaluation. In: CVPR. pp. 4566–4575 (2015) 15. Xiao, B., Wu, H., Xu, W., Dai, X., Hu, H., Lu, Y., Zeng, M., Liu, C., Yuan, L.: Florence-2: Advancing a unified representation for a variety of vision tasks. In: CVPR. pp. 4818–4829 (2024) 16. Young, P., Lai, A., Hodosh, M., Hockenmaier, J.: From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions. Transactions of the Association for Computational Linguistics 2, 67–78 (2014) 17. Zhou, B., Lapedriza, A., Khosla, A., Oliva, A., Torralba, A.: Places: A 10 million image database for scene recognition. IEEE TPAMI 40 (6), 1452–1464 (2018)
