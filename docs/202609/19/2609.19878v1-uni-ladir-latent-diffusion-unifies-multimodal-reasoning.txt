@@ -1,0 +1,619 @@
+Title: Uni-LaDiR: Latent Diffusion Unifies Multimodal Reasoning
+
+URL Source: https://arxiv.org/pdf/2609.19878v1
+
+Published Time: Fri, 18 Sep 2026 01:04:49 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+Preprint 
+
+# UNI -L ADIR: L ATENT DIFFUSION UNIFIES 
+
+# MULTIMODAL REASONING 
+
+Haoqiang Kang 1 Yizhe Zhang 2 Nikki Lijing Kuang 1 Yi-An Ma 1 Lianhui Qin 11UC San Diego 2Meta 
+
+## ABSTRACT 
+
+Multimodal reasoning requires models to draw on information from multiple modalities throughout the reasoning process. Yet existing methods often concate-nate or interleave modality-specific thought tokens in a single sequence, leaving the model to bridge representational differences as it reasons across modalities. We introduce Uni-LaDiR ( Uni fied La tent Di ffusion Reasoner), a framework that brings these thoughts into a shared latent space for reasoning. A unified encoder maps teacher reasoning steps from different modalities into shared thought to-kens, trained to preserve the information needed for later reasoning steps and the final answer or action. Because the same context can support multiple valid next steps, we use diffusion to predict the next block of thought tokens from the in-put and preceding blocks. Jointly training the encoder and diffusion reasoner with shared model weights encourages thought tokens to be both useful for the task and predictable from the available context. At inference, the model generates these to-kens without teacher observations. Across eleven vision-language model (VLM) benchmarks and two vision-language-action (VLA) suites, Uni-LaDiR achieves relative gains over the strongest evaluated baselines of 7.3% in average mathemat-ical and logical reasoning accuracy and 6.1% in RLBench manipulation success. 
+
+## 1 INTRODUCTION 
+
+A world can be observed in different modalities. An image shows how it looks like, language describes what is happening, and 3D point clouds reveal the geometry and robot states represent the interaction. These modalities provide complementary evidence. Many multimodal problems can only be solved by combining them (Lu et al., 2022b; 2024; Hao et al., 2025) and a capable multimodal reasoner should therefore be able to use information from different modalities in its reasoning process (Gao et al., 2024; Gu et al., 2025). Recent work has explored several ways to combine multimodal information in Chain-of-Thought reasoning. For vision-language models (VLMs), prior work interleaves text with visual reason-ing steps, where the visual content takes the form of generated images (Li et al., 2025c; Gu et al., 2025) or latent visual tokens (Li et al., 2025b; Yang et al., 2025). For vision-language-action mod-els (VLAs), prior work combines language, visual inputs, and actions (Brohan et al., 2023; Kim et al., 2024; Zhao et al., 2025), with some methods also incorporating 3D information and robot states (Zhen et al., 2024; Qu et al., 2025; Liu et al., 2026). Despite their differences, most methods follow a similar pattern: each modality is encoded into its own tokens or features, which are then concatenated or interleaved in the LLM sequence (Gao et al., 2024; Li et al., 2025b; Yang et al., 2025; Liu et al., 2026). As a result, reasoning still happens over modality-specific representations. When intermediate reasoning repeatedly transfers information between modalities, this entangles 
+
+cross-modal representation conversion with reasoning dynamics . The model needs to determine not only how the underlying reasoning state should change, but also how that state is expressed in the representation of the next modality. We argue that while perception can remain modality-dependent, reasoning dynamics should operate over a unified reasoning space . Each modality is specialized for extracting different evidence from the world, but reasoning only requires the task-relevant information that this evidence implies. Once such information is encoded into a shared space, subsequent reasoning can evolve independently of 1arXiv:2609.19878v1 [cs.LG] 17 Sep 2026 Preprint One world context, many views  
+
+> Text
+> The blue book is on the table.
+> Image
+> 3D Point Cloud Robot state VLA only
+> Same world context
+> q = [q 1, q 2, …]
+
+Task input x  
+
+> VLM Text + Image
+> What is beside the blue book?
+> VLA Text + Image + Robot state
+> Pick up the red mug.
+
+Existing multimodal CoT 
+
+> Encode, then concatenate
+
+Uni-LaDiR (Ours)      
+
+> Encode into one reasoning space
+> Image
+> image enc.
+> 3D
+> 3d enc.
+> State
+> state enc.
+> Image
+> image enc.
+> 3D
+> 3d enc.
+> State
+> state enc.
+> Concat
+> Reasoning chain
+> step 1 step 2 step 3
+> …
+> modality-switching gap
+> Unified Encoder (LLM)
+> Reasoning chain Diffusion step 1 step 2 step 3
+> …
+> Unified latent space
+
+Output y
+
+> Task-dependent
+> VLM · Text answer
+
+A red mug. 
+
+> VLA · Action sequence
+> [a 1, a 2, …]
+
+Figure 1: Multimodal reasoning in a shared latent space. Modality-specific reasoning (left) switches representations between steps. Uni-LaDiR (right) uses a shared latent space and diffu-sion to generate thought tokens for answers or actions. the observation modality. This design gives subsequent reasoning a shared token interface instead of requiring modality-specific latent formats (Kaelbling et al., 1998; Hafner et al., 2019; 2020). Based on this idea, we introduce Uni-LaDiR, a unified latent diffusion framework for multimodal reasoning. Unlike prior approaches that directly concatenate outputs from modality-specific en-coders, Uni-LaDiR introduces a unified encoder that maps heterogeneous modality features into a 
+
+shared latent reasoning space . Specifically, every teacher reasoning step is encoded into a fixed-width latent block as thought tokens, and each block is trained to support the generation of future reasoning steps and the final task output, rather than to reconstruct its source modality. This encour-ages the thought tokens to preserve information according to its utility for subsequent reasoning, while factoring out modality-specific representational differences that are irrelevant to the task. However, learning to predict these thought tokens is not trivial. First, the next reasoning step is often not unique: the same context may support multiple valid intermediate thoughts or actions. We therefore use diffusion to model the conditional distribution of the next thought tokens given the input and preceding thought tokens (Ho et al., 2020; Rombach et al., 2022; Chi et al., 2023; Kang et al., 2025; 2026). Second, useful thought tokens should satisfy two properties: reasoning sufficiency and context predictability . They should preserve the information needed for subsequent reasoning and the final answer, while remaining predictable from the available context at inference time. We therefore jointly train the unified encoder and the latent diffusion reasoner, allowing the representation space and the reasoning model to adapt to each other. This encourages thought tokens that retain task-relevant information and can be generated from the available context. We evaluate Uni-LaDiR on eleven VLM reasoning benchmarks and two VLA manipulation suites. Compared with the strongest reported modality-specific latent reasoning baseline in each setting, Uni-LaDiR improves mean accuracy by 7.3% relative across four mathematical and logical VLM benchmarks and mean success by 6.1% relative across ten RLBench manipulation tasks. Within the 2Preprint unified latent space, flow matching improves the average by 14.9% over direct L2 prediction and 
+
+19.5% over cosine similarity loss (Figure 6). These results support Uni-LaDiR’s approach of sepa-rating modality-specific perception from shared latent reasoning, with thought-token representations and their prediction learned together for the task. 
+
+## 2 PRELIMINARIES 
+
+Problem formulation. Given an input x containing multimodal observations and a query or in-struction, the reasoner generates K intermediate thought-token blocks z1: K before predicting the task output y, which is a text answer for VLMs or a robot action for VLAs. The intermediate blocks integrate task-relevant evidence across modalities and mediate prediction of y.
+
+Latent multimodal CoT. Existing latent multimodal CoT represents intermediate reasoning with modality-specific latent tokens. In VLMs, these tokens can encode intermediate visual content (Li et al., 2025b; Yang et al., 2025); in VLAs, they can encode future visual observations, 3D geometry, or robot states (Liu et al., 2026). The resulting blocks are concatenated or interleaved in the model sequence: 
+
+pθ (z1: K , y | x) = 
+
+> K
+
+Y
+
+> i=1
+
+pθ (zi | [x; z<i ]) 
+
+| {z }
+
+> intermediate reasoning
+
+pθ (y | [x; z1: K ]) 
+
+| {z }
+
+> final output
+
+. (1) Here [ ; ] denotes sequence concatenation. During training, a modality-specific encoder maps the 
+
+i-th teacher reasoning step, such as an intermediate image or robot state, to features si that supervise the corresponding thought block zi. At inference, the teacher steps are unavailable, and the model must generate each zi from x and the preceding thought blocks. 
+
+## 3 UNIFIED LATENT DIFFUSION REASONING 
+
+Uni-LaDiR unifies different reasoning steps from different modalities into the same latent space to provide a shared interface for reasoning across modalities. In this section, we first formalize the requirements of this shared reasoning space (Section 3.1), then describe how teacher steps are mapped to shared thought tokens (Section 3.2), how downstream supervision grounds these tokens in subsequent reasoning and task prediction (Section 3.3), and how latent diffusion learns to generate them from the context available at inference (Section 3.4). Figure 2 provides an overview. 3.1 MOTIVATION 
+
+Modality-specific latent CoT couples each reasoning step with a change in representation: predicting the next step requires determining not only its task-relevant content, but also how that content is expressed in the target modality. We instead require every intermediate step to inhabit a shared latent reasoning space, independent of the modality from which its supervision originates. A useful shared representation must satisfy two complementary properties. Reasoning sufficiency 
+
+requires each thought block to retain the information needed for subsequent reasoning steps and the final output. Context predictability requires the same block to be recoverable from the input and pre-ceding thought tokens available at inference. We enforce the former through downstream grounding supervision and the latter through latent diffusion joint training, while sharing the backbone between representation construction and generation (Duggal et al., 2026). 3.2 CONSTRUCTING SHARED THOUGHT TOKENS 
+
+We train a unified encoder to map each teacher reasoning step to the corresponding thought tokens 
+
+z⋆i in a unified reasoning space (Figure 2a). After modality-specific encoding, we append a fixed-length block of learnable embeddings q to each teacher feature si. Then our unified encoder maps the last hidden states at the q positions to the clean thought tokens z⋆i .Every modality uses the same q, output projection, and number of thought tokens per block. Dur-ing training, we pack multiple teacher steps and their corresponding copies of q into one forward pass. The construction mask isolates the steps: each copy of q attends only to itself and its asso-ciated teacher features, preventing information exchange across reasoning steps (Figure 2a). Thus, all teacher modalities are now encoded into a shared latent space, where downstream supervision determines which information is retained for better subsequent reasoning. 3Preprint (a) Latent construction 
+
+> text cot text encoder visual cot visual encoder 3d cot 3d encoder
+
+llm backbone 
+
+> latents Attention mask
+
+(b) Grounding  
+
+> input output predict input sequence
+
+(c) Diffusion  
+
+> input conditioning context
+> denoised latent gt
+
+Inference input output step learnable embedding clean latent noisy latent stop grad. loss s1qs2qsiqz*1z*2z*
+
+> i
+
+s1s1qqs2s2qqsisiqqxz*1z*2z*
+
+> i
+
+si + 1 si + 2 yground (CE/L2) xz*1z*2z*  
+
+> i−1
+
+z tîziz*
+
+> i
+
+## diff xz1z2ziysiqz* 
+
+> izti
+
+Figure 2: Uni-LaDiR overview. During training, a shared backbone (a) encodes teacher steps into thought tokens, (b) grounds them through downstream predictions, and (c) learns their generation by diffusion. At inference, it generates thought tokens from the task input to predict an answer or action. 3.3 GROUNDING THOUGHT TOKENS IN DOWNSTREAM REASONING 
+
+Grounding trains each thought block to preserve information needed by subsequent reasoning. Given 
+
+x and the prefix z⋆<i , the backbone predicts the next teacher target sGT  
+
+> i
+
+; given the complete sequence 
+
+z⋆ 
+
+> 1: K
+
+, it predicts the final output y (Figure 2b). For example, z⋆ 
+
+> 1
+
+contributes to predicting sGT 2 , while 
+
+(z⋆ 
+
+> 1
+
+, z ⋆ 
+
+> 2
+
+) contribute to predicting sGT 3 . A grounding attention mask computes these predictions in one forward pass while exposing each prediction only to its permitted thought-token prefix and hiding later blocks and raw teacher steps (Appendix A.1). Let ˆsi and ˆy denote the corresponding predictions. We optimize 
+
+Lground =
+
+> K
+
+X
+
+> i=2
+
+ℓ(ˆ si, s GT  
+
+> i
+
+)
+
+| {z }
+
+> reasoning steps
+
++λy ℓ(ˆ y, y )
+
+| {z } 
+
+> final output
+
+, ℓ(ˆ u, u ) = 
+
+CE(ˆ u, u ), u is text ,
+
+∥ˆu − u∥22, u is continuous . (2) Here u denotes either a reasoning-step target or the final output, and λy weights final-output super-vision. The continuous reasoning-step targets are image and 3D point-cloud features and robot-state vectors, supervised by the L2 term above. For VLAs, the final action y is instead produced by a flow-matching action head, so its term ℓ(ˆ y, y ) is that head’s flow-matching loss rather than an L2 re-gression. The targets sGT  
+
+> i
+
+and y are fixed, and any encoder used to construct target features is frozen. Gradients from Lground pass through z⋆i into the unified encoder and shared backbone, learning the latent thought tokens to optimize their utility for subsequent reasoning. 3.4 GENERATING THOUGHT TOKENS WITH JOINT DIFFUSION TRAINING 
+
+The diffusion objective trains the backbone to generate each thought block from the context avail-able at inference (Figure 2c). Diffusion models a conditional distribution over the next thought tokens, allowing different valid thoughts under the same input and preceding thought tokens (Kang et al., 2025; 2026). During training, Gaussian noise perturbs each clean block z⋆i to produce zti .Conditioned on x, the preceding clean blocks z⋆<i , and noise level t, the shared backbone predicts the denoising velocity ˆvi.4Preprint We again process all reasoning steps in one forward pass. The diffusion mask restricts each noisy block to its own tokens, x, and the preceding clean thought blocks, preventing access to future thought blocks (Appendix A.1). We optimize the flow-matching objective (Lipman et al., 2023) 
+
+Ldiff = Et,ϵ 
+
+" KX
+
+> i=1
+
+∥ˆvi − v⋆i ∥22
+
+#
+
+, (3) where v⋆i is the target velocity induced by the sampled noise ϵ and time t. The predicted velocity guides denoising to generate the thought-token block ˆzi. Here, t indexes denoising within a block, while i indexes reasoning steps. 
+
+Joint training. Inspired by Duggal et al. (2026), we jointly train the unified encoder and diffu-sion reasoner with a shared backbone, optimizing the latent thought tokens to be both useful for downstream reasoning and predictable from the available context. We optimize 
+
+L = Lground + λLdiff , (4) where λ balances the two objectives. On the diffusion branch, we stop gradients through the clean thought tokens z⋆i , including both the conditioning prefix and the noising target. Thus, Lground 
+
+updates the unified encoder and shared backbone through z⋆i , whereas Ldiff updates the shared backbone while treating the current clean tokens as fixed targets. Because the same backbone con-structs and predicts the latent representations, the two objectives jointly improve the thought-token representations and the model that predicts them. 
+
+Inference. At inference, the teacher reasoning steps and unified encoding path are not required. Starting from x, the model generates z1, . . . , z K sequentially by denoising one latent block at a time, with each block conditioned on the previously generated blocks (Figure 2, bottom). The complete latent sequence then conditions prediction of the final answer or action y.
+
+## 4 EXPERIMENTS 
+
+Our experiments test whether a shared latent reasoning space improves both visual reasoning and robotic manipulation. Section 4.1 introduces the benchmarks and baselines; Section 4.2 reports task performance and manipulation inference efficiency; Section 4.3 isolates the effect of unifying teacher modalities; and Section 4.4 examines the training objectives and joint optimization. 4.1 EVALUATION PROTOCOL 
+
+Visual reasoning. We train on Zebra-CoT (Li et al., 2025a), which interleaves text and visual reasoning steps, and use Qwen2.5-VL-7B for the main experiment. We report accuracy on seven vision-centric benchmarks: VisualPuzzles (Song et al., 2025), ChartQA (Masry et al., 2022), V ∗ (Wu & Xie, 2024), BLINK-Jigsaw (Fu et al., 2024), MMVP (Tong et al., 2024b), SAT (Ray et al., 2024), and CV-Bench (Tong et al., 2024a). We also evaluate four mathematical or logical benchmarks: MathVista (Lu et al., 2024), MathVision (Wang et al., 2024b), VisuLogic (Xu et al., 2025b), and EMMA (Hao et al., 2025). Appendix B.3 reports results with additional backbones. 
+
+VLA manipulation. We evaluate LIBERO (Liu et al., 2023) and RLBench (James et al., 2020). In this setting, future images, 3D point clouds, and robot states serve as training-only teacher CoTs; continuous actions remain task outputs. Following Liu et al. (2026), our VLA backbone is a mixture-of-transformers (MoT) that couples two Janus-Pro-1.5B experts (3.3B parameters total), and actions are produced by a flow-matching action head trained with the same action objective. We report success rate and, on RLBench, control frequency without action chunking. 
+
+Baselines. For VLMs, we compare with the Qwen2.5-VL base model and explicit reasoners DeepEyes (Zheng et al., 2025), PixelReasoner (Wang et al., 2025), Vision-R1 (Huang et al., 2025b), and Open-Vision-Reasoner (Wei et al., 2025). Latent reasoning baselines include LVR (Li et al., 2025b), Mirage (Yang et al., 2025), CoVT (Qin et al., 2025), Monet (Wang et al., 2026), VaLR-M (Jeon et al., 2026), SLVR (Xu et al., 2026a), Mull-Tokens (Ray et al., 2025), and ILVR (Dong et al., 2026). For VLAs, we consider three groups. Action policies include Open-VLA (Kim et al., 2024), SpatialVLA (Qu et al., 2025), CogACT (Li et al., 2024), π0.5 (Physi-cal Intelligence et al., 2025), OpenVLA-OFT (Kim et al., 2025), HybridVLA (Liu et al., 2025), and UniVLA (Bu et al., 2025). Explicit reasoning models include ManipLLM (Li et al., 2023a), 5Preprint Table 1: Comparison on VLM reasoning benchmarks. Accuracy (%) of Uni-LaDiR and baselines with Qwen2.5-VL-7B on (a) vision-centric and (b) mathematical and logical benchmarks. Best results are highlighted in bold.                                                                                                                                                   
+
+> (a) Vision-Centric Perception, Search, and Spatial Reasoning.
+> Method VisPuz. ChartQA V∗BLINK-J MMVP SAT CV-B Avg.
+> Explicit Text and Visual Reasoning
+> Qwen2.5-VL (base) 34.75 78.12 76.44 59.33 77.33 51.33 75.20 64.64 DeepEyes 48.03 82.52 90.10 72.00 78.00 64.00 84.00 74.09 PixelReasoner 44.01 81.52 84.30 70.00 76.00 60.00 81.99 71.12
+> Visual Latent Reasoning
+> LVR 45.98 81.00 81.70 52.00 71.70 60.00 84.00 68.05 Mirage 44.01 80.52 83.77 88.00 74.00 72.00 83.02 75.05 CoVT 41.01 79.52 78.00 68.00 58.70 61.33 80.00 66.65 Monet 35.02 79.00 83.25 65.33 50.00 55.33 71.10 62.72 VaLR-M 45.03 82.00 86.90 72.00 60.30 65.33 87.60 71.31 SLVR 34.20 77.20 82.20 68.00 74.00 62.00 83.02 68.66 Mull-Tokens 48.03 81.00 83.77 74.67 76.00 77.00 84.00 74.92
+> Unified Latent Reasoning Uni-LaDiR 57.36 84.20 83.77 75.33 82.00 65.33 86.20 76.31 (b) Visual Mathematics and Logic.
+> Method MathVista MathVision VisuLogic EMMA Avg.
+> Explicit Text and Visual Reasoning
+> Qwen2.5-VL (base) 68.20 25.40 26.00 26.00 36.40 Vision-R1 73.50 40.99 15.20 24.30 38.50 Open-Vision-Reasoner 69.50 51.80 27.20 29.99 44.62 DeepEyes 70.10 26.60 27.80 29.02 38.38 PixelReasoner 68.90 34.21 23.40 23.50 37.50
+> Visual Latent Reasoning
+> Mirage 68.60 40.49 26.60 27.00 40.67 Monet 62.50 33.82 10.60 22.10 32.26 ILVR 71.10 49.01 29.30 33.30 45.68
+> Unified Latent Reasoning Uni-LaDiR 73.20 54.28 33.00 35.62 49.03
+
+WorldVLA (Cen et al., 2025), CoT-VLA (Zhao et al., 2025), FlowVLA (Zhong et al., 2025), and FUTURE-VLA (Xu et al., 2026b). Latent reasoning models include FiS-VLA (Chen et al., 2025a), ConsisVLA-4D (Li et al., 2026c), LaST 0 (Liu et al., 2026), AVA-VLA (Lei & Shan, 2026), and PearlVLA with and without PRL (Yang & Shan, 2026). Full settings appear in Appendix B. 4.2 MAIN RESULTS 
+
+VLM visual reasoning. On the seven vision-centric benchmarks, Uni-LaDiR improves average accuracy over Qwen2.5-VL-7B by 18.1% ; on the four mathematical and logical benchmarks, the relative gain is 34.7% (Table 1). It also outperforms the strongest modality-specific latent baseline in each group: 1.7% over Mirage and 7.3% over ILVR on average. The gains over modality-specific baselines reach 30.3% on VisualPuzzles over Mirage, and 10.8% on MathVision and 12.6% on Vi-suLogic over ILVR. The advantage over modality-specific baselines suggests that sharing reasoning representations benefits both visual reasoning and mathematical tasks. 
+
+VLA manipulation. Uni-LaDiR improves average success over the strongest prior latent policies by 0.45 percentage points over PearlVLA + PRL on LIBERO and 6.1% relative to LaST 0 on RL-Bench (Tables 3 and 2). On RLBench, it improves nine of ten tasks and matches the remaining one; the largest gain is 16.7% on Plants. These reported means place Uni-LaDiR among the strongest policies in this comparison. Without action chunking, Uni-LaDiR runs at 16.5 Hz , a 7.1% higher inference rate than LaST 0 and 15.0 × the rate of explicit CoT-VLA. 4.3 ANALYSIS 
+
+In this section, we test whether progressively unifying teacher modalities reduces the modality-switching gap and improves reasoning. All variants use the same teacher modalities, reasoning backbone, step order, latent-token budget, and training schedule; we only change how teacher signals are represented. In the separate baseline, each modality bypasses the unified encoder and directly uses its modality-specific features as latent targets. In the partially shared variants, only the specified modalities pass through the same unified encoder to form shared thought tokens, while the remaining modalities keep their original modality-specific targets. Full sharing routes all available teacher modalities through the unified encoder (Appendix B.2). As shown in Figure 3a, for visual reasoning, moving text and image from separate targets into the shared space improves mean accuracy by 9.0% 
+
+6Preprint Table 2: Comparison of Uni-LaDiR and baselines on RLBench. We report mean success rates (%) and inference speed (Hz) without action chunking. Var. is the variance of mean success rate across three random seeds. Best results are highlighted in bold.                                                                                                                                                           
+
+> Method Size Box Laptop Toilet Sweep Fridge Phone Umbrella Frame Wine Plants Mean Var. Hz
+> Direct Policies
+> OpenVLA 7B 60.0 35.0 75.0 55.0 85.0 20.0 30.0 15.0 20.0 5.0 40.0 0.02 6.3 SpatialVLA –80.0 70.0 85.0 20.0 80.0 15.0 25.0 40.0 15.0 30.0 46.0 0.03 7.9 CogACT 7B 90.0 80.0 95.0 50.0 85.0 50.0 55.0 45.0 30.0 25.0 61.0 0.04 9.8
+> π0.53B 90.0 95.0 85.0 75.0 100.0 5.0 10.0 80.0 75.0 35.0 65.0 0.04 13.8 HybridVLA 7B 85.0 95.0 100.0 90.0 100.0 50.0 50.0 70.0 50.0 50.0 74.0 0.04 6.1
+> Explicit Reasoning
+> ManipLLM 7B 50.0 80.0 40.0 20.0 80.0 35.0 10.0 25.0 15.0 20.0 38.0 0.04 2.2 CoT-VLA –95.0 75.0 100.0 80.0 65.0 50.0 40.0 50.0 55.0 50.0 66.0 0.03 1.1
+> Latent Reasoning
+> FiS-VLA 7B 100.0 100.0 95.0 55.0 90.0 50.0 50.0 70.0 55.0 20.0 69.0 0.03 21.9
+> LaST 03.3B 95.0 95.0 100.0 80.0 85.0 75.0 75.0 70.0 85.0 60.0 82.0 0.03 15.4
+> Unified Latent Reasoning Uni-LaDiR 3.3B 100.0 100.0 100.0 85.0 90.0 80.0 80.0 75.0 90.0 70.0 87.0 0.03 16.5
+
+Table 3: Comparison of Uni-LaDiR and baselines on LIBERO. We report success rates (%) across four suites. Best results are highlighted in bold. 
+
+Method Size Spatial Object Goal Long Mean 
+
+Direct Policies 
+
+UniVLA – 92.6 93.8 86.6 63.0 84.0 OpenVLA 7B 84.7 88.4 79.2 53.7 76.5 SpatialVLA – 88.2 89.9 78.6 55.5 78.1 CogACT 7B 97.2 98.0 90.2 88.8 93.6 
+
+π0.5 3B 98.8 98.2 98.0 92.4 96.9 OpenVLA-OFT 7B 97.6 98.4 97.9 94.5 97.1 
+
+Explicit Reasoning 
+
+WorldVLA – 85.6 89.0 82.6 59.0 79.1 CoT-VLA – 87.5 91.6 87.6 69.0 83.9 FlowVLA 8.5B 93.2 95.0 91.6 72.6 88.1 FUTURE-VLA 4B 89.6 99.0 95.2 81.2 91.3 
+
+Latent Reasoning 
+
+ConsisVLA-4D 7B 98.8 99.8 98.0 95.6 98.1 LaST 0 3.3B 99.2 99.6 98.0 95.6 98.1 AVA-VLA 7B 97.8 99.4 97.8 98.1 98.3 PearlVLA 7B 99.2 99.6 98.2 96.8 98.5 PearlVLA + PRL 7B 99.4 99.8 98.4 97.2 98.7 
+
+Unified Latent Reasoning Uni-LaDiR 3.3B 100.0 99.0 100.0 97.6 99.15 
+
+relative. On RLBench, sharing any two of the visual, 3D, and state modalities improves success by 
+
+1.8–3.0% , while sharing all three yields a 6.1% gain over separate targets and a 3.0% gain over the best pair (Figure 3b). These growining gains with more unified modalities suggest that our method effectively reduce the modality-switching gap, allowing the reasoning model is able to focus more on evolving the reasoning state rather than adapting between modality-specific representations. Separate Text + Image 
+
+60 64 68 
+
+> Average Performance (%)
+
+(a) Visual Reasoning 
+
+1 Modality 2 Modalities 
+
+62.97 67.75 
+
++7.6% Relative 
+
+Separate Visual + 3D Visual + State 3D + State All Three 
+
+80 82 84 86 88 90 
+
+> Success Rate (%)
+
+(b) RLBench 
+
+1 Modality 2 Modalities 3 Modalities 
+
+82.00 83.50 84.50 84.50 88.00 
+
++7.3% Relative 
+
+Figure 3: Results of unifying more modalities. (a) Qwen2.5-VL-7B mean accuracy on V ∗, MMVP, MathVista, and EMMA. (b) RLBench success with different modality groupings. Error bars denote standard deviation across three seeds. 7Preprint 4.4 ABLATION STUDY 
+
+Grounding objective. We first test how thought tokens should be supervised. With the model, teachers, latent-token budget, and training schedule fixed, we replace source reconstruction with prediction of later reasoning steps. Both variants retain the same final-output supervision and its gradients into the encoder (Appendix B.2). Downstream supervision improves the six-benchmark average by 5.4% relative to reconstruction, with gains of 26.0% on V ∗ and 7.4% on RLBench (Figure 4). The gain spans five of six benchmarks, while MathVista decreases by 4.20 percentage points; downstream grounding improves the aggregate without benefiting every task. V* MMVP MathVista EMMA LIBERO RLBench Avg.    
+
+> 025 50 75 100
+> Performance (%)
+> +5.5% +5.9% +6.1% +15.9% +1.4% +7.4% +5.9%
+> Reconstruction Downstream Utility
+
+Figure 4: Results of different grounding objectives. We compare frozen latent targets, an encoder trained before the reasoner, and joint training under the same architecture and teacher supervision. Joint training improves the six-benchmark mean by 11.3% relative to separate stages and 21.9% relative to frozen targets (Figure 5). Relative to separate stages, it improves all six benchmarks, with gains of 8.8% on EMMA and 15.0% on RLBench. These results favor learning the representation and its predictor together over fixing the representation before training the reasoner. V* MMVP MathVista EMMA LIBERO RLBench Avg.     
+
+> 025 50 75 100
+> Benchmark score (%)
+> +2.3% +3.3% +3.3% +8.8% +0.6% +3.0% +2.9%
+> Frozen targets Separate stages Joint training
+
+Figure 5: Results of joint versus separate training of the encoder and reasoner. 
+
+Diffusion objective. Finally, we test whether diffusion improves thought-token prediction when the latent targets are fixed. We compare flow matching with direct thought-token prediction trained using squared L2 or cosine similarity loss (Appendix B.2). Flow matching improves the six-benchmark average by 14.9% relative to L2 and 19.5% relative to cosine similarity loss (Figure 6). These gains support diffusion-based thought-token prediction as an effective alternative to direct regression for downstream reasoning and manipulation. V* MMVP MathVista EMMA LIBERO RLBench Avg.     
+
+> 025 50 75 100
+> Benchmark score (%)
+> +14.5% +13.5% +15.3% +39.3% +11.8% +13.5% +15.5%
+> Cosine similarity loss L2 loss Flow matching (ours)
+
+Figure 6: Results of different latent prediction objectives. 8Preprint 
+
+## 5 RELATED WORK 
+
+Unified multimodal models. Early generalist models cast heterogeneous tasks as a shared se-quence problem, spanning vision–language understanding, generation, and embodied control (Wang et al., 2022; Lu et al., 2022a; 2023; Reed et al., 2022; Mizrahi et al., 2023; Bachmann et al., 2024). Large-scale vision–language models then connected pretrained language models to visual inputs through learned interfaces (Alayrac et al., 2022; Chen et al., 2022; 2023; Huang et al., 2023; Peng et al., 2023). Autoregressive any-to-any systems further represented multiple modalities in a com-mon token stream (Sun et al., 2023a;b; Yu et al., 2023; Ge et al., 2023; Jin et al., 2023; Wu et al., 2023b; Zhan et al., 2024; Chameleon Team, 2024; Wang et al., 2024c), while hybrid autoregressive– diffusion architectures unified discrete and continuous generation (Tang et al., 2023; Zhou et al., 2024a; Xie et al., 2024; Sun et al., 2024; Wu et al., 2024; Chen et al., 2025b; Deng et al., 2025a; Xu et al., 2025a; Bai et al., 2025). Whereas these models unify what is read and generated—their inputs, outputs, and task interfaces—Uni-LaDiR unifies the reasoning in between, learning a single latent space in which the intermediate thoughts from every modality are represented and predicted. 
+
+Multimodal reasoning. Multimodal chain-of-thought methods supervise or elicit textual ratio-nales from visual evidence (Lu et al., 2022b; Zhang et al., 2024; Rose et al., 2023; Xu et al., 2024; Dong et al., 2024; Guo et al., 2024; Yao et al., 2024; Huang et al., 2025b). A complementary line externalizes computation through programs, tools, image operations, spatial abstractions, or visual scratchpads (Gupta & Kembhavi, 2022; Suris et al., 2023; Yang et al., 2023b; Wu et al., 2023a; Hu et al., 2023; Chen et al., 2024; Hu et al., 2024; Zhou et al., 2024b). Recent work interleaves language with visual thoughts rather than forcing every step into text (Gao et al., 2024; Li et al., 2025a; Gu et al., 2025; Li et al., 2026b). In embodied settings, language plans, visual predictions, and state or action trajectories have been used to guide control (Ahn et al., 2022; Huang et al., 2022; Driess et al., 2023; Brohan et al., 2023; Jiang et al., 2022; Li et al., 2023b; Kim et al., 2024; Li et al., 2024; Zhao et al., 2025; Zhong et al., 2026; Bai et al., 2026; Liu et al., 2026). These methods still reason by switching between modality-specific representations—textual rationales, generated images, or fixed domain-specific latents—whereas Uni-LaDiR reasons inside one shared interface into which text, images, 3D structure, and robot state are all encoded; actions remain task outputs. 
+
+Latent reasoning. Latent-computation methods internalize explicit rationales, distill hidden rea-soning, or allocate additional computation without decoding every step (Zelikman et al., 2022; Goyal et al., 2023; Deng et al., 2023; 2024; Pfau et al., 2024; Zelikman et al., 2024; Yu et al., 2024; Wang et al., 2024a). Recurrent and concept-level models instead treat depth, loops, or continuous seman-tic states as the substrate of computation (Dehghani et al., 2018; Giannou et al., 2023; Yang et al., 2023a; Barrault et al., 2024; Kohli et al., 2026; Jeddi et al., 2026; Yang et al., 2026). Continuous chain-of-thought approaches directly optimize hidden vectors that replace or compress language ra-tionales (Hao et al., 2024; Shen et al., 2025; Xu et al., 2025c;d; Deng et al., 2025b). Multimodal variants construct continuous thoughts from visual features, dense perceptual teachers, helper im-ages, or task loss (Pham & Ngo, 2025; Li et al., 2025b; Yang et al., 2025; Qin et al., 2025; Wang et al., 2026; Jeon et al., 2026; Viveiros et al., 2026a; Li et al., 2026a; Xu et al., 2026a; Ray et al., 2025; Hu et al., 2026), while diffusion-based approaches model multimodal or multi-step latent tra-jectories (Kang et al., 2025; 2026; He et al., 2023; Huang et al., 2025a; Bai et al., 2026; Liu et al., 2026; Viveiros et al., 2026b; Wu et al., 2026; Fan et al., 2026). Prior latent reasoners either com-press rationales within a single modality or give each modality its own latent format; Uni-LaDiR instead learns one representation and one diffusion predictor shared across heterogeneous reasoning modalities, and directly tests whether this sharing outperforms matched modality-specific designs. 
+
+## 6 CONCLUSION 
+
+We introduce Uni-LaDiR, a unified latent diffusion framework for multimodal reasoning. A shared encoder maps teacher steps from different modalities into thought tokens, and a jointly trained dif-fusion reasoner predicts these tokens under downstream reasoning and task supervision. This gives heterogeneous intermediate steps a unified latent space, allowing the model to reason without gen-erating modality-specific representations or accessing teacher observations at inference. Across eleven VLM benchmarks and two VLA suites, Uni-LaDiR achieves relative improvements of 7.3% and 6.1% over strong prior baselines, respectively. 9Preprint AI USE STATEMENT 
+
+OpenAI Codex assisted with drafting, literature search, feedback on method formulation, mathemat-ical objectives and experimental design, result interpretation, figures, plotting code, and numerical checks. The authors verified all reported experimental results and retain responsibility for the final text, code, citations, figures, and claims. ETHICS STATEMENT 
+
+Experiments use existing visual benchmarks and simulated manipulation tasks. The method may inherit biases from pretrained models and teacher data; simulation performance does not establish safety or reliability on physical robots. REPRODUCIBILITY STATEMENT 
+
+Section 3 describes the model and training objectives. Appendix A details the attention masks, and Appendix B reports evaluation protocols and supplementary results. 
+
+## REFERENCES 
+
+Michael Ahn, Anthony Brohan, Noah Brown, et al. Do as i can, not as i say: Grounding language in robotic affordances. arXiv preprint arXiv:2204.01691 , 2022. Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, et al. Flamingo: A visual language model for few-shot learning. Advances in Neural Information Processing Systems , 2022. Roman Bachmann, O˘ guzhan Fatih Kar, David Mizrahi, et al. 4M-21: An any-to-any vision model for tens of tasks and modalities. arXiv preprint arXiv:2406.09406 , 2024. Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, et al. Qwen3-VL technical report. arXiv preprint arXiv:2511.21631 , 2025. Shuanghao Bai, Jing Lyu, Wanqi Zhou, Zhe Li, Dakai Wang, Lei Xing, Xiaoguang Zhao, Peng-wei Wang, Zhongyuan Wang, Cheng Chi, Badong Chen, and Shanghang Zhang. Latent rea-soning VLA: Latent thinking and prediction for vision-language-action models. arXiv preprint arXiv:2602.01166 , 2026. Loic Barrault et al. Large concept models: Language modeling in a sentence representation space. 
+
+arXiv preprint arXiv:2412.08821 , 2024. Anthony Brohan, Noah Brown, Justice Carbajal, et al. RT-2: Vision-language-action models transfer web knowledge to robotic control. arXiv preprint arXiv:2307.15818 , 2023. Qingwen Bu, Yanting Yang, Jisong Cai, Shenyuan Gao, Guanghui Ren, Maoqing Yao, Ping Luo, and Hongyang Li. Univla: Learning to act anywhere with task-centric latent actions. arXiv preprint arXiv:2505.06111 , 2025. Jun Cen et al. Worldvla: Towards autoregressive action world model. arXiv preprint , 2025. Chameleon Team. Chameleon: Mixed-modal early-fusion foundation models. arXiv preprint arXiv:2405.09818 , 2024. Boyuan Chen et al. Spatialvlm: Endowing vision-language models with spatial reasoning capabili-ties. arXiv preprint arXiv:2401.12168 , 2024. Hao Chen, Jiaming Liu, Chenyang Gu, Zhuoyang Liu, Renrui Zhang, Xiaoqi Li, Xiao He, Yandong Guo, Chi-Wing Fu, Shanghang Zhang, and Pheng-Ann Heng. Fast-in-slow: A dual-system vla model unifying fast manipulation within slow reasoning. In Advances in Neural Information Processing Systems , 2025a. Xi Chen, Xiao Wang, Soravit Changpinyo, et al. PaLI: A jointly-scaled multilingual language-image model. arXiv preprint arXiv:2209.06794 , 2022. Xi Chen et al. PaLI-X: On scaling up a multilingual vision and language model. arXiv preprint arXiv:2305.18565 , 2023. Xiaokang Chen, Zhiyu Wu, Xingchao Liu, Zizheng Pan, Wen Liu, Zhenda Xie, Xingkai Yu, and Chong Ruan. Janus-pro: Unified multimodal understanding and generation with data and model scaling. arXiv preprint arXiv:2501.17811 , 2025b. 10 Preprint Cheng Chi, Zhenjia Xu, Siyuan Feng, Eric Cousineau, Yilun Du, Benjamin Burchfiel, Russ Tedrake, and Shuran Song. Diffusion policy: Visuomotor policy learning via action diffusion. In Pro-ceedings of Robotics: Science and Systems , 2023. doi: 10.15607/RSS.2023.XIX.026. URL 
+
+https://www.roboticsproceedings.org/rss19/p026.html .Mostafa Dehghani, Stephan Gouws, Oriol Vinyals, et al. Universal transformers. arXiv preprint arXiv:1807.03819 , 2018. Chaorui Deng, Deyao Zhu, Kunchang Li, Chenhui Gou, Feng Li, Zeyu Wang, Shu Zhong, Wei-hao Yu, Xiaonan Nie, Ziang Song, Guang Shi, and Haoqi Fan. Emerging properties in unified multimodal pretraining. arXiv preprint arXiv:2505.14683 , 2025a. Jingcheng Deng, Liang Pang, Zihao Wei, Shicheng Xu, Zenghao Duan, Kun Xu, Yang Song, Huawei Shen, and Xueqi Cheng. LLM latent reasoning as chain of superposition. arXiv preprint arXiv:2510.15522 , 2025b. Yuntian Deng et al. Implicit chain of thought reasoning via knowledge distillation. arXiv preprint arXiv:2311.01460 , 2023. Yuntian Deng et al. From explicit cot to implicit cot: Learning to internalize cot step by step. arXiv preprint arXiv:2405.14838 , 2024. Shuai Dong, Siyuan Wang, Xingyu Liu, Chenglin Li, Haowen Hou, and Zhongyu Wei. Interleaved latent visual reasoning with selective perceptual modeling. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 29316– 29335, 2026. Yuhao Dong et al. Insight-V: Exploring long-chain visual reasoning with multimodal large language models. arXiv preprint arXiv:2411.14432 , 2024. Danny Driess, Fei Xia, Mehdi S. M. Sajjadi, et al. PaLM-E: An embodied multimodal language model. arXiv preprint arXiv:2303.03378 , 2023. Shivam Duggal, Xingjian Bai, Zongze Wu, Richard Zhang, Eli Shechtman, Antonio Torralba, Phillip Isola, and William T. Freeman. End-to-end training for unified tokenization and latent denoising. 
+
+arXiv preprint arXiv:2603.22283 , 2026. URL https://arxiv.org/abs/2603.22283 .Ying Fan et al. Bridging the gap between latent and explicit reasoning with looped transformers. 
+
+arXiv preprint arXiv:2606.31779 , 2026. Xingyu Fu, Yushi Hu, Bangzheng Li, Yu Feng, Haoyu Wang, Xudong Lin, Dan Roth, Noah A. Smith, Wei-Chiu Ma, and Ranjay Krishna. BLINK: Multimodal large language models can see but not perceive. In European Conference on Computer Vision , 2024. Jun Gao, Yongqi Li, Ziqiang Cao, and Wenjie Li. Interleaved-modal chain-of-thought. arXiv preprint arXiv:2411.19488 , 2024. Yuying Ge, Yixiao Ge, Ziyun Zeng, et al. Planting a SEED of vision in large language model. arXiv preprint arXiv:2307.08041 , 2023. Angeliki Giannou, Shashank Rajput, Jy-Yong Sohn, Kangwook Lee, and Dimitris Papailiopoulos. Looped transformers as programmable computers. arXiv preprint arXiv:2301.13196 , 2023. Sachin Goyal, Ziwei Ji, Ankit Singh Rawat, et al. Think before you speak: Training language models with pause tokens. arXiv preprint arXiv:2310.02226 , 2023. Jiawei Gu, Yunzhuo Hao, Huichen Will Wang, Linjie Li, Michael Qizhe Shieh, Yejin Choi, Ranjay Krishna, and Yu Cheng. Thinkmorph: Emergent properties in multimodal interleaved chain-of-thought reasoning. arXiv preprint arXiv:2510.27492 , 2025. Jarvis Guo et al. MAmmoTH-VL: Eliciting multimodal reasoning with instruction tuning at scale. 
+
+arXiv preprint arXiv:2412.05237 , 2024. Tanmay Gupta and Aniruddha Kembhavi. Visual programming: Compositional visual reasoning without training. arXiv preprint arXiv:2211.11559 , 2022. Danijar Hafner, Timothy Lillicrap, Ian Fischer, Ruben Villegas, David Ha, Honglak Lee, and James Davidson. Learning latent dynamics for planning from pixels. In Proceedings of the 36th International Conference on Machine Learning , volume 97, pp. 2555–2565, 2019. URL 
+
+https://proceedings.mlr.press/v97/hafner19a.html .Danijar Hafner, Timothy Lillicrap, Jimmy Ba, and Mohammad Norouzi. Dream to control: Learning behaviors by latent imagination. In International Conference on Learning Representations , 2020. URL https://openreview.net/forum?id=S1lOTC4tDS .11 Preprint Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. Training large language models to reason in a continuous latent space. arXiv preprint arXiv:2412.06769 , 2024. Yunzhuo Hao, Jiawei Gu, Huichen Will Wang, Linjie Li, Zhengyuan Yang, Lijuan Wang, and Yu Cheng. Can MLLMs reason in multimodality? EMMA: An enhanced multimodal reason-ing benchmark. arXiv preprint arXiv:2501.05444 , 2025. Liqi He et al. Multi-modal latent space learning for chain-of-thought reasoning in language models. 
+
+arXiv preprint arXiv:2312.08762 , 2023. Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. In Advances in Neural Information Processing Systems , volume 33, 2020. URL https://arxiv.org/ abs/2006.11239 .Lianyu Hu, Shengqian Qin, Zeqin Liao, Qing Guo, Liang Wan, Wei Feng, and Yang Liu. CoLT: Teaching multi-modal models to think with chain of latent thoughts. arXiv preprint arXiv:2606.31986 , 2026. Yushi Hu, Weijia Shi, Xingyu Fu, et al. Visual sketchpad: Sketching as a visual chain of thought for multimodal language models. arXiv preprint arXiv:2406.09403 , 2024. Yushi Hu et al. Visual program distillation: Distilling tools and programmatic reasoning into vision-language models. arXiv preprint arXiv:2312.03052 , 2023. Chi-Pin Huang et al. Thinkact: Vision-language-action reasoning via reinforced visual latent plan-ning. arXiv preprint arXiv:2507.16815 , 2025a. Shaohan Huang, Li Dong, Wenhui Wang, et al. Language is not all you need: Aligning perception with language models. arXiv preprint arXiv:2302.14045 , 2023. Wenlong Huang, Fei Xia, Ted Xiao, et al. Inner monologue: Embodied reasoning through planning with language models. arXiv preprint arXiv:2207.05608 , 2022. Wenxuan Huang et al. Vision-R1: Incentivizing reasoning capability in multimodal large language models. arXiv preprint arXiv:2503.06749 , 2025b. Stephen James, Zicong Ma, David Rovick Arrojo, and Andrew J. Davison. RLBench: The robot learning benchmark and learning environment. IEEE Robotics and Automation Letters , 5(2): 3019–3026, 2020. Ahmadreza Jeddi et al. LoopFormer: Elastic-depth looped transformers for latent reasoning via shortcut modulation. arXiv preprint arXiv:2602.11451 , 2026. Byungwoo Jeon, Yoonwoo Jeong, Hyunseok Lee, Minsu Cho, and Jinwoo Shin. Vision-aligned latent reasoning for multi-modal large language models. arXiv preprint arXiv:2602.04476 , 2026. Yunfan Jiang, Agrim Gupta, Zichen Zhang, et al. VIMA: General robot manipulation with multi-modal prompts. arXiv preprint arXiv:2210.03094 , 2022. Yang Jin, Kun Xu, Kun Xu, et al. LaVIT: Unified language-vision pretraining in llm with dynamic discrete visual tokenization. arXiv preprint arXiv:2309.04669 , 2023. Leslie Pack Kaelbling, Michael L. Littman, and Anthony R. Cassandra. Planning and acting in partially observable stochastic domains. Artificial Intelligence , 101(1–2):99–134, 1998. doi: 10.1016/S0004-3702(98)00023-X. Haoqiang Kang, Yizhe Zhang, Nikki Lijing Kuang, Nicklas Majamaki, Navdeep Jaitly, Yi-An Ma, and Lianhui Qin. LaDiR: Latent diffusion enhances LLMs for text reasoning. arXiv preprint arXiv:2510.04573 , 2025. Haoqiang Kang, Yizhe Zhang, Nikki Lijing Kuang, Yi-An Ma, and Lianhui Qin. LaDi-RL: La-tent diffusion reasoning prevents entropy collapse in reinforcement learning. arXiv preprint arXiv:2602.01705 , 2026. Moo Jin Kim, Karl Pertsch, Siddharth Karamcheti, Ted Xiao, Ashwin Balakrishna, Suraj Nair, Rafael Rafailov, Ethan Foster, Grace Lam, Pannag Sanketi, et al. Openvla: An open-source vision-language-action model. arXiv preprint arXiv:2406.09246 , 2024. Moo Jin Kim, Chelsea Finn, and Percy Liang. Fine-tuning vision-language-action models: Opti-mizing speed and success. arXiv preprint arXiv:2502.19645 , 2025. Harsh Kohli et al. Loop, think, & generalize: Implicit reasoning in recurrent-depth transformers. 
+
+arXiv preprint arXiv:2604.07822 , 2026. Dianqiao Lei and Lianlei Shan. Think less, act early: Reinforced latent reasoning with early exit in vision-language-action models. arXiv preprint arXiv:2606.15099 , 2026. 12 Preprint Ang Li, Charles Wang, Deqing Fu, Kaiyu Yue, Zikui Cai, Wang Bill Zhu, Ollie Liu, Peng Guo, Willie Neiswanger, Furong Huang, Tom Goldstein, and Micah Goldblum. Zebra-cot: A dataset for interleaved vision language reasoning. arXiv preprint arXiv:2507.16746 , 2025a. Bangzheng Li, Ximeng Sun, Jiang Liu, Ze Wang, Jialian Wu, Xiaodong Yu, Hao Chen, Emad Bar-soum, Muhao Chen, and Zicheng Liu. Latent visual reasoning. arXiv preprint arXiv:2509.24251 ,2025b. Chengzu Li, Wenshan Wu, Huanyu Zhang, Yan Xia, Shaoguang Mao, Li Dong, Ivan Vuli´ c, and Furu Wei. Imagine while reasoning in space: Multimodal visualization-of-thought. arXiv preprint arXiv:2501.07542 , 2025c. Kelvin Li, Chuyi Shang, Leonid Karlinsky, Rogerio Feris, Trevor Darrell, and Roei Herzig. Latent implicit visual reasoning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2026a. Pengyu Li, Zhitao Gao, Lingling Zhang, Muye Huang, Yuanming Li, Zesheng Yang, Fangzhi Xu, and Jun Liu. Visual-opsd: Cross-modal on-policy self-distillation for efficient unified multimodal reasoning. arXiv preprint arXiv:2606.18974 , 2026b. Qixiu Li, Yaobo Liang, Zeyu Wang, Lin Luo, Xi Chen, Mozheng Liao, Fangyun Wei, Yu Deng, Sicheng Xu, Yizhong Zhang, et al. Cogact: A foundational vision-language-action model for synergizing cognition and action in robotic manipulation. arXiv preprint arXiv:2411.19650 , 2024. Wei Li, Jizhihui Liu, Li Yixing, Junwen Tong, Rui Shao, and Liqiang Nie. Consisvla-4d: Advancing spatiotemporal consistency in efficient 3d-perception and 4d-reasoning for robotic manipulation. 
+
+arXiv preprint arXiv:2605.05126 , 2026c. Xiaoqi Li, Mingxu Zhang, Yiran Geng, Haoran Geng, Yuxing Long, Yan Shen, Renrui Zhang, Jiaming Liu, and Hao Dong. Manipllm: Embodied multimodal large language model for object-centric robotic manipulation. arXiv preprint arXiv:2312.16217 , 2023a. Xinghang Li, Minghuan Liu, Hanbo Zhang, et al. Vision-language foundation models as effective robot imitators. arXiv preprint arXiv:2311.01378 , 2023b. Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maximilian Nickel, and Matt Le. Flow matching for generative modeling. In International Conference on Learning Representations , 2023. URL 
+
+https://openreview.net/forum?id=PqvMRDCJT9t .Bo Liu, Yifeng Zhu, Chongkai Gao, Yihao Feng, Qiang Liu, Yuke Zhu, and Peter Stone. LIBERO: Benchmarking knowledge transfer for lifelong robot learning. In Advances in Neural Information Processing Systems , volume 36, 2023. Jiaming Liu, Hao Chen, Pengju An, Zhuoyang Liu, Renrui Zhang, Chenyang Gu, Xiaoqi Li, Ziyu Guo, Sixiang Chen, Mengzhen Liu, et al. Hybridvla: Collaborative diffusion and autoregression in a unified vision-language-action model. arXiv preprint arXiv:2503.10631 , 2025. Zhuoyang Liu, Jiaming Liu, Hao Chen, Jiale Yu, Ziyu Guo, Chengkai Hou, Chenyang Gu, Xiangju Mi, Renrui Zhang, Kun Wu, Zhengping Che, Jian Tang, Pheng-Ann Heng, and Shanghang Zhang. LaST 0: Latent spatio-temporal chain-of-thought for robotic vision-language-action model. arXiv preprint arXiv:2601.05248 , 2026. Jiasen Lu, Christopher Clark, Rowan Zellers, Roozbeh Mottaghi, and Aniruddha Kembhavi. Unified-io: A unified model for vision, language, and multi-modal tasks. arXiv preprint arXiv:2206.08916 , 2022a. Jiasen Lu, Christopher Clark, Sangho Lee, Zichen Zhang, Savya Khosla, Ryan Marten, Derek Hoiem, and Aniruddha Kembhavi. Unified-IO 2: Scaling autoregressive multimodal models with vision, language, audio, and action. arXiv preprint arXiv:2312.17172 , 2023. Pan Lu, Swaroop Mishra, Tony Xia, et al. Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in Neural Information Processing Systems , 2022b. Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. Mathvista: Evaluating mathematical reasoning of foundation models in visual contexts. In International Conference on Learning Representations ,2024. Ahmed Masry, Do Xuan Long, Jia Qing Tan, Shafiq Joty, and Enamul Hoque. Chartqa: A bench-mark for question answering about charts with visual and logical reasoning. In Findings of the Association for Computational Linguistics: ACL 2022 , 2022. 13 Preprint David Mizrahi, Roman Bachmann, Oguzhan Fatih Kar, Teresa Yeo, Mingfei Gao, Afshin Dehghan, and Amir Zamir. 4M: Massively multimodal masked modeling. arXiv preprint arXiv:2312.06647 ,2023. Zhiliang Peng, Wenhui Wang, Li Dong, et al. Kosmos-2: Grounding multimodal large language models to the world. arXiv preprint arXiv:2306.14824 , 2023. Jacob Pfau, William Merrill, and Samuel R. Bowman. Let’s think dot by dot: Hidden computation in transformer language models. arXiv preprint arXiv:2404.15758 , 2024. Tan-Hanh Pham and Chris Ngo. Multimodal chain of continuous thought for latent-space reasoning in vision-language models. arXiv preprint arXiv:2508.12587 , 2025. Physical Intelligence, Kevin Black, Noah Brown, James Darpinian, Karan Dhabalia, Danny Driess, Adnan Esmail, Michael Equi, Chelsea Finn, et al. π0.5: A vision-language-action model with open-world generalization. arXiv preprint arXiv:2504.16054 , 2025. Yiming Qin, Bomin Wei, Jiaxin Ge, Konstantinos Kallidromitis, Stephanie Fu, Trevor Darrell, and Xudong Wang. Chain-of-visual-thought: Teaching VLMs to see and think better with continuous visual tokens. arXiv preprint arXiv:2511.19418 , 2025. Delin Qu, Haoming Song, Qizhi Chen, Yuanqi Yao, Xinyi Ye, Yan Ding, Zhigang Wang, Jinwei Gu, et al. Spatialvla: Exploring spatial representations for visual-language-action model. arXiv preprint arXiv:2501.15830 , 2025. Arijit Ray, Jiafei Duan, Ellis Brown, Reuben Tan, Dina Bashkirova, Rose Hendrix, Kiana Ehsani, Aniruddha Kembhavi, Bryan A. Plummer, Ranjay Krishna, Kuo-Hao Zeng, and Kate Saenko. SAT: Dynamic spatial aptitude training for multimodal language models. arXiv preprint arXiv:2412.07755 , 2024. Arijit Ray, Ahmed Abdelkader, Chengzhi Mao, Bryan A. Plummer, Kate Saenko, Ranjay Krishna, Leonidas Guibas, and Wen-Sheng Chu. Mull-tokens: Modality-agnostic latent thinking. arXiv preprint arXiv:2512.10941 , 2025. Scott Reed, Konrad Zolna, Emilio Parisotto, et al. A generalist agent. Transactions on Machine Learning Research , 2022. Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Bj¨ orn Ommer. High-resolution image synthesis with latent diffusion models. In Proceedings of the IEEE/CVF Con-ference on Computer Vision and Pattern Recognition , 2022. URL https://arxiv.org/ abs/2112.10752 .Daniel Rose et al. Visual chain of thought: Bridging logical gaps with multimodal infillings. arXiv preprint arXiv:2305.02317 , 2023. Zhenyi Shen, Hanqi Yan, Linhai Zhang, Zhanghao Hu, Yali Du, and Yulan He. CODI: Compressing chain-of-thought into continuous space via self-distillation. arXiv preprint arXiv:2502.21074 ,2025. Yueqi Song, Tianyue Ou, Yibo Kong, Zecheng Li, Graham Neubig, and Xiang Yue. Visualpuz-zles: Decoupling multimodal reasoning evaluation from domain knowledge. arXiv preprint arXiv:2504.10342 , 2025. Quan Sun, Yufeng Cui, Xiaosong Zhang, et al. Emu: Generative pretraining in multimodality. arXiv preprint arXiv:2307.05222 , 2023a. Quan Sun, Yufeng Cui, Xiaosong Zhang, et al. Emu2: Generative multimodal models are in-context learners. arXiv preprint arXiv:2312.13286 , 2023b. Yutao Sun, Hangbo Bao, Wenhui Wang, Zhiliang Peng, Li Dong, Shaohan Huang, Jianyong Wang, and Furu Wei. Multimodal latent language modeling with next-token diffusion. arXiv preprint arXiv:2412.08635 , 2024. Didac Suris, Sachit Menon, and Carl Vondrick. ViperGPT: Visual inference via python execution for reasoning. arXiv preprint arXiv:2303.08128 , 2023. Zineng Tang, Ziyi Yang, Chenguang Zhu, Michael Zeng, and Mohit Bansal. Any-to-any generation via composable diffusion. arXiv preprint arXiv:2305.11846 , 2023. Shengbang Tong, Ellis Brown, Penghao Wu, Sanghyun Woo, Manoj Middepogu, Sai Charitha Akula, Jihan Yang, Shusheng Yang, Adithya Iyer, Xichen Pan, Ziteng Wang, Rob Fergus, Yann LeCun, and Saining Xie. Cambrian-1: A fully open, vision-centric exploration of multimodal LLMs. In Advances in Neural Information Processing Systems , 2024a. 14 Preprint Shengbang Tong, Zhuang Liu, Yuexiang Zhai, Yi Ma, Yann LeCun, and Saining Xie. Eyes wide shut? exploring the visual shortcomings of multimodal LLMs. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024b. Andr´ e G. Viveiros, Nuno Gonc ¸alves, Matthias Lindemann, and Andr´ e Martins. LanteRn: Latent visual structured reasoning. arXiv preprint arXiv:2603.25629 , 2026a. Andr´ e G. Viveiros et al. What is holding back latent visual reasoning? arXiv preprint arXiv:2605.18445 , 2026b. Boshi Wang et al. Grokked transformers are implicit reasoners: A mechanistic journey to the edge of generalization. arXiv preprint arXiv:2405.15071 , 2024a. Haozhe Wang, Alex Su, Weiming Ren, Fangzhen Lin, and Wenhu Chen. Pixel reasoner: In-centivizing pixel-space reasoning with curiosity-driven reinforcement learning. arXiv preprint arXiv:2505.15966 , 2025. Ke Wang, Junting Pan, Weikang Shi, Zimu Lu, Houxing Ren, Aojun Zhou, Mingjie Zhan, and Hongsheng Li. Measuring multimodal mathematical reasoning with the MATH-Vision dataset. In Advances in Neural Information Processing Systems Datasets and Benchmarks Track , 2024b. Peng Wang et al. OFA: Unifying architectures, tasks, and modalities through a simple sequence-to-sequence learning framework. arXiv preprint arXiv:2202.03052 , 2022. Qixun Wang, Yang Shi, Yifei Wang, Yuanxing Zhang, Pengfei Wan, Kun Gai, Xianghua Ying, and Yisen Wang. Monet: Reasoning in latent visual space beyond images and language. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2026. Xinlong Wang, Xiaosong Zhang, Zhengxiong Luo, et al. Emu3: Next-token prediction is all you need. arXiv preprint arXiv:2409.18869 , 2024c. Yana Wei, Liang Zhao, Jianjian Sun, Kangheng Lin, Jisheng Yin, Jingcheng Hu, Yinmin Zhang, En Yu, Haoran Lv, Zejia Weng, Jia Wang, Chunrui Han, Yuang Peng, Qi Han, Zheng Ge, Xiangyu Zhang, Daxin Jiang, and Vishal M. Patel. Open vision reasoner: Transferring linguistic cognitive behavior for visual reasoning. arXiv preprint arXiv:2507.05255 , 2025. Chenfei Wu, Shengming Yin, Weizhen Qi, et al. Visual chatgpt: Talking, drawing and editing with visual foundation models. arXiv preprint arXiv:2303.04671 , 2023a. Chengyue Wu, Xiaokang Chen, Zhiyu Wu, et al. Janus: Decoupling visual encoding for unified multimodal understanding and generation. arXiv preprint arXiv:2410.13848 , 2024. Penghao Wu and Saining Xie. V*: Guided visual search as a core mechanism in multimodal LLMs. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024. Shengqiong Wu, Hao Fei, Leigang Qu, Wei Ji, and Tat-Seng Chua. NExT-GPT: Any-to-any multi-modal llm. arXiv preprint arXiv:2309.05519 , 2023b. Yueh-Hua Wu et al. Continuous reasoning for vision-language-action. arXiv preprint arXiv:2606.00229 , 2026. Jinheng Xie, Weijia Mao, Zechen Bai, et al. Show-o: One single transformer to unify multimodal understanding and generation. arXiv preprint arXiv:2408.12528 , 2024. Guowei Xu et al. LLaVA-CoT: Let vision language models reason step-by-step. arXiv preprint arXiv:2411.10440 , 2024. Jin Xu et al. Qwen2.5-Omni technical report. arXiv preprint arXiv:2503.20215 , 2025a. Tianrun Xu, Yue Sun, Qixun Wang, Jingyi Lu, Yuan Wang, Tianren Zhang, Longteng Guo, Fengyun Rao, Jing Lyu, Feng Chen, and Jing Liu. Semantic-enriched latent visual reasoning. arXiv preprint arXiv:2605.19342 , 2026a. Weiye Xu, Jiahao Wang, Weiyun Wang, Zhe Chen, Wengang Zhou, Aijun Yang, Lewei Lu, Houqiang Li, Xiaohua Wang, Xizhou Zhu, Wenhai Wang, Jifeng Dai, and Jinguo Zhu. Visu-logic: A benchmark for evaluating visual reasoning in multi-modal large language models. arXiv preprint arXiv:2504.15279 , 2025b. Xiaoxu Xu, Hao Li, Jinhui Ye, Yilun Chen, Jia Zeng, Xinyi Chen, Linning Xu, Dahua Lin, Weixin Li, and Jiangmiao Pang. Futurevla: Joint visuomotor prediction for vision-language-action model. 
+
+arXiv preprint arXiv:2603.10712 , 2026b. Yige Xu et al. Softcot: Soft chain-of-thought for efficient reasoning with llms. arXiv preprint arXiv:2502.12134 , 2025c. Yige Xu et al. Softcot++: Test-time scaling with soft chain-of-thought reasoning. arXiv preprint arXiv:2505.11484 , 2025d. 15 Preprint Bochen Yang and Lianlei Shan. Pearlvla: Progressive embodied action-plan refinement in latent space. arXiv preprint arXiv:2606.17924 , 2026. Liu Yang et al. Looped transformers are better at learning learning algorithms. arXiv preprint arXiv:2311.12424 , 2023a. Xiao-Wen Yang et al. Stabilizing recurrent dynamics for test-time scalable latent reasoning in looped language models. arXiv preprint arXiv:2605.26733 , 2026. Zeyuan Yang, Xueyang Yu, Delin Chen, Maohao Shen, and Chuang Gan. Machine mental imagery: Empower multimodal reasoning with latent visual tokens. arXiv preprint arXiv:2506.17218 ,2025. Zhengyuan Yang, Linjie Li, Kevin Lin, et al. MM-REACT: Prompting chatgpt for multimodal reasoning and action. arXiv preprint arXiv:2303.11381 , 2023b. Huanjin Yao et al. Mulberry: Empowering mllm with o1-like reasoning and reflection via collective monte carlo tree search. arXiv preprint arXiv:2412.18319 , 2024. Lili Yu, Bowen Shi, Ram Pasunuru, et al. Scaling autoregressive multi-modal models: Pretraining and instruction tuning. arXiv preprint arXiv:2309.02591 , 2023. Ping Yu et al. Distilling system 2 into system 1. arXiv preprint arXiv:2407.06023 , 2024. Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah D. Goodman. STaR: Bootstrapping reasoning with reasoning. Advances in Neural Information Processing Systems , 2022. Eric Zelikman, Georges Harik, Yijia Shao, et al. Quiet-star: Language models can teach themselves to think before speaking. arXiv preprint arXiv:2403.09629 , 2024. Jun Zhan, Junqi Dai, Jiasheng Ye, et al. AnyGPT: Unified multimodal llm with discrete sequence modeling. arXiv preprint arXiv:2402.12226 , 2024. Zhuosheng Zhang, Aston Zhang, Mu Li, Hai Zhao, George Karypis, and Alex Smola. Multimodal chain-of-thought reasoning in language models. Transactions on Machine Learning Research ,2024. Qingqing Zhao, Yao Lu, Moo Jin Kim, Zipeng Fu, Zhuoyang Zhang, Yecheng Wu, Zhaoshuo Li, Qianli Ma, Song Han, Chelsea Finn, Ankur Handa, Ming-Yu Liu, Donglai Xiang, Gordon Wet-zstein, and Tsung-Yi Lin. Cot-vla: Visual chain-of-thought reasoning for vision-language-action models. arXiv preprint arXiv:2503.22020 , 2025. Haoyu Zhen, Xiaowen Qiu, Peihao Chen, Jincheng Yang, Xin Yan, Yilun Du, Yining Hong, and Chuang Gan. 3D-VLA: A 3D vision-language-action generative world model. arXiv preprint arXiv:2403.09631 , 2024. Ziwei Zheng, Michael Yang, Jack Hong, Chenxiao Zhao, Guohai Xu, Le Yang, Chao Shen, and Xing Yu. Deepeyes: Incentivizing thinking with images via reinforcement learning. arXiv preprint arXiv:2505.14362 , 2025. Zhide Zhong, Haodong Yan, Junfeng Li, Xiangchen Liu, Xin Gong, Wenxuan Song, Jiayi Chen, and Haoang Li. FlowVLA: Visual chain of thought-based motion reasoning for vision-language-action models. arXiv preprint arXiv:2508.18269 , 2025. Zhide Zhong, Junfeng Li, Junjie He, Haodong Yan, Xin Gong, Guanyi Zhao, Yingjie Cai, Jiantao Gao, Xu Yan, Bingbing Liu, Yingcong Chen, Liuqing Yang, and Haoang Li. DualCoT-VLA: Visual-linguistic chain of thought via parallel reasoning for vision-language-action models. arXiv preprint arXiv:2603.22280 , 2026. Chunting Zhou, Lili Yu, Arun Babu, Kushal Tirumala, Michihiro Yasunaga, Leonid Shamis, Jacob Kahn, Xuezhe Ma, Luke Zettlemoyer, and Omer Levy. Transfusion: Predict the next token and diffuse images with one multi-modal model. arXiv preprint arXiv:2408.11039 , 2024a. Qiji Zhou et al. Image-of-thought prompting for visual reasoning refinement in multimodal large language models. arXiv preprint arXiv:2405.13872 , 2024b. 16 Preprint 
+
+## A METHOD DETAILS 
+
+A.1 ATTENTION MASKS FOR PARALLEL BLOCK TRAINING 
+
+Figure 7 illustrates the three masks for K reasoning steps packed into each pass; ellipses indicate omitted intermediate blocks. The restrictions apply at every layer, preventing masked information from reaching predictions through other hidden states. Queries 
+
+(a) Construction 
+
+> Keys / values
+
+s1 q s2 q sK qs1
+
+qs2
+
+qsK
+
+q
+
+⋯⋮ ⋱
+
+> One teacher step per query block
+
+(b) Grounding 
+
+> Keys / values
+
+x z ⋆1 s2 z ⋆2 z ⋆ 
+
+> K
+
+yxz ⋆1
+
+s2
+
+z ⋆2
+
+z ⋆
+
+> K
+
+y
+
+⋯⋮ ⋱
+
+> Targets read preceding clean thought blocks
+
+(c) Diffusion 
+
+> Keys / values
+
+x zt 
+
+> 1
+
+z ⋆1 zt 
+
+> 2
+
+z ⋆2 ztK z ⋆
+
+> K
+
+xzt
+
+> 1
+
+z ⋆1
+
+zt
+
+> 2
+
+z ⋆2
+
+ztK
+
+z ⋆
+
+> K
+
+⋯⋮ ⋱ 
+
+> Noisy blocks read preceding clean blocks Allowed Blocked
+
+Figure 7: Attention masks for parallel block training. Rows attend to columns; each cell rep-resents a token block. Grounding interleaves clean thought blocks with target streams; diffusion interleaves noisy and clean thought blocks. Clean blocks cannot read target or noisy streams. 
+
+Construction. The packed sequence contains pairs [si; q] for all teacher steps. Attention is isolated within each pair: the learnable block reads its own teacher features and itself, but neither the task input nor other pairs. 
+
+Grounding. The packed sequence is [x; z⋆ 
+
+> 1
+
+; s2; z⋆ 
+
+> 2
+
+; s3; . . . ; z⋆K ; y], where si and y label target pre-diction streams. A prediction of sGT  
+
+> i
+
+can read x and z⋆<i ; the final-output prediction can read x and all z⋆ 
+
+> 1: K
+
+. The conditioning stream preserves this prefix order and cannot read the target streams. Different target streams are isolated from one another. Within a text target, standard causal attention permits earlier tokens of that target; continuous predictions cannot read their ground-truth values. 
+
+Diffusion. The packed sequence is [x; zt
+
+> 1
+
+; z⋆ 
+
+> 1
+
+; zt
+
+> 2
+
+; z⋆ 
+
+> 2
+
+; . . . ; ztK ; z⋆K ]. Each noisy block zti can read 
+
+x, the clean prefix z⋆<i , and all tokens within itself. It cannot read its own clean target, later clean blocks, or other noisy blocks. The clean conditioning stream follows block-causal attention and cannot read noisy blocks. 
+
+## B ADDITIONAL EXPERIMENTS 
+
+B.1 EXPERIMENTAL SETTINGS 
+
+Benchmarks and scoring. All methods in Tables 1 and 5 use the same evaluation examples within each benchmark. Table 4 lists the evaluation splits, sample counts, and scoring units for the eleven visual benchmarks (Song et al., 2025; Masry et al., 2022; Wu & Xie, 2024; Fu et al., 2024; Tong et al., 2024b; Ray et al., 2024; Tong et al., 2024a; Lu et al., 2024; Wang et al., 2024b; Xu et al., 2025b; Hao et al., 2025). VisualPuzzles and VisuLogic use their released evaluation collections, even when the hosting service names the split train . VisuLogic evaluation uses the original 1,000-question benchmark (Xu et al., 2025b), rather than the current 1,003-row hosted collection. 17 Preprint Table 4: Shared visual evaluation sets. Splits, example counts, and scoring units used for the benchmark comparisons.                                     
+
+> Benchmark Split Size Scoring unit
+> VisualPuzzles Released collection 1,168 Question accuracy ChartQA Test 2,500 Relaxed answer accuracy V∗Test 191 Question accuracy BLINK-Jigsaw Validation, Jigsaw 150 Question accuracy MMVP Full 300 Question accuracy SAT Real-image test 150 Question accuracy CV-Bench Test 2,638 Mean of 2D and 3D scores MathVista Testmini 1,000 Answer accuracy MathVision Test 3,040 Answer accuracy VisuLogic Original benchmark 1,000 Question accuracy EMMA Test, four subjects 2,788 Question accuracy
+
+VLM training. We train on Zebra-CoT (Li et al., 2025a), using its interleaved text and image steps as teacher supervision. We use AdamW with a peak learning rate of 10 −5, cosine decay, a global batch size of 64, and one epoch of training, informed by prior multimodal fine-tuning recipes (Li et al., 2025a; Hu et al., 2026). We use bf16, a maximum sequence length of 8,192, 3% warmup, weight decay of 0.01, and gradient clipping at 1.0. Each backbone retains its native image processor. The unified encoder and shared reasoning backbone are optimized jointly; teacher traces are omitted at evaluation. 
+
+Thought tokens and latent sampling. We use four 512-dimensional thought tokens per block, with learned projections to and from the backbone width, and loss weights λy = 1 and λ = 5 ,taking the token budget and weights from a latent-diffusion reference configuration (Kang et al., 2025). Training retains the annotated reasoning-step sequence; the inference budget is four blocks, or 16 thought tokens, followed by greedy answer decoding with a 512-token limit for VLMs. The VLA reasoning horizon is four steps. For flow matching, we draw ϵ ∼ N (0 , I ) and t ∼ U [0 , 1] , set zti = (1 −t)ϵ+tz ⋆i , and use v⋆i = z⋆i −ϵ
+
+as the velocity target (Lipman et al., 2023). At inference, we integrate from t = 0 to 1 per block with one sampled trajectory and no classifier-free guidance. 
+
+RLBench. We evaluate ten tasks with a Franka Panda in CoppeliaSim, using 100 waypoint-generated training demonstrations per task and keyframe sampling (Liu et al., 2026). Inputs include a front-view RGB image resized to 384 × 384 , a point cloud sampled to 1,024 points, the task in-struction, and proprioception. We evaluate the final checkpoint with 20 rollouts per task and seed, giving 600 rollouts across three seeds. 
+
+LIBERO. We train a separate policy for each of the four suites, each containing ten tasks and 500 training demonstrations. Inputs use third-person and wrist RGB views resized to 384 × 384 . We omit the point-cloud teacher because this modality is unavailable, and sample intermediate teacher steps every eight frames (Liu et al., 2026). We evaluate the final checkpoint with 50 rollouts per task and seed, giving 6,000 rollouts across the four suites and three seeds. Both benchmarks use their native success conditions. 
+
+Seeds and aggregation. Our experiments use three random seeds. For question-level accuracy or rollout success on N examples per seed, the mean is ¯s = 100 3N
+
+P3
+
+> r=1
+
+PNj=1 crj , where crj ∈ { 0, 1}
+
+indicates correctness or success. Grouped metrics retain the benchmark’s aggregation rule: CV-Bench averages its 2D and 3D scores. For MMVP, we report question-level accuracy over 300 questions, matching the VLMEvalKit protocol used by the relevant comparison methods (Gu et al., 2025; Li et al., 2026b). Each answer is scored independently against its correct option; the reported result is the mean of the three seed-level accuracies. Benchmark averages give equal weight to each reported benchmark or suite. Relative gains are 100( sours /s baseline − 1) ; rounding follows aggregation. RLBench Table 2 retains the baseline paper’s variance convention (Liu et al., 2026). Reported gains describe differences in mean scores; they do not denote statistical significance. 18 Preprint 
+
+VLA training. We train for 300 epochs with AdamW, using a peak learning rate of 10 −4, cosine decay to zero, no weight decay or warmup, and gradient clipping at 1.0 (Liu et al., 2026). Training uses eight NVIDIA A800 GPUs with bf16 and DeepSpeed ZeRO-1. The batch size is eight per device and 64 globally, without gradient accumulation. Actions are seven-dimensional, with ten flow-matching steps in the action head and a four-step reasoning horizon. We mix reasoning-to-action ratios of 1:1, 1:2, and 1:4 during training and use 1:4 at evaluation. The latent diffusion objective is defined in Section 3. 
+
+Inference speed. All inference rates in Table 2, including those of the baselines, are measured on the same single NVIDIA RTX 4090, without action chunking, using one reasoning update per four action decisions (Liu et al., 2026). We use batch size one and bf16, with 100 warmup decisions fol-lowed by 1,000 timed decisions per seed. Wall-clock timing is synchronized with CUDA before and after the timed sequence and includes observation preprocessing, host-to-device transfer, reasoning updates, and action prediction; simulator stepping and rendering are excluded. Each method uses the same inputs and timing boundary. Throughput is the number of decisions divided by elapsed time, averaged across three seeds. The reported 16.5 Hz corresponds to 60.6 ms per decision. B.2 ABLATION PROTOCOLS 
+
+Modality grouping. Figure 3 varies how many teacher modalities share one latent space. Every variant encodes each modality with the same learned encoder, which reuses the reasoning back-bone’s weights (Section 3.4); what changes is only the latent interface—the query tokens q and output projection—that defines each space. In the separate variant, every modality has its own query tokens and projection, so each is encoded into a private latent target space. For each RLBench pair-wise variant, the named pair shares one set of query tokens and one projection, forming a common space, while the remaining modality keeps its own; full sharing maps all three modalities into a single shared space. The visual-reasoning comparison likewise gives text and image either separate spaces or one shared space. All variants retain every teacher modality, the reasoning backbone, step order, latent-token budget, and training schedule. Because the learned encoder and its capacity are identical across variants, this study isolates the effect of unifying the latent interface rather than of introducing learned compression. 
+
+Grounding objective. In Figure 4, reconstruction predicts the source teacher features from each thought block; downstream grounding predicts later teacher steps. Both variants retain the same final-output loss λy ℓ(ˆ y, y ) and propagate its gradients through the thought tokens into the unified encoder and shared backbone. Text CE is averaged over supervised tokens, and continuous L2 loss is averaged over target elements, using the same reduction and loss weights in both variants. Teacher targets remain fixed. Thus, the comparison changes intermediate supervision while preserving the encoder’s access to final-task supervision. 
+
+Thought-token prediction. Figure 6 uses fixed clean thought-token targets for all three objectives. L2 and cosine regression directly predict the next clean thought block. Flow matching predicts the velocity along the noisy-to-clean path, using the sampler specified in Appendix B.1. Each method conditions on the same input and preceding thought blocks and supplies its predicted tokens to the downstream reasoner. This comparison reports downstream performance for the respective predic-tion procedures. B.3 ADDITIONAL RESULTS 
+
+Reasoning across backbones. We evaluate Uni-LaDiR with BAGEL-7B, Qwen3-VL-8B, and Janus-Pro at 1.5B and 7B to test whether the gains extend beyond the main backbone (Table 5). On the seven vision-centric benchmarks, the average improves over the corresponding base models by 29.5% , 12.4% , 35.9% , and 51.5% , respectively. With BAGEL, Uni-LaDiR also improves the average over Visual-OPSD by 2.5% , leading on six of seven benchmarks; with Qwen3-VL, it im-proves over CoLT by 13.3% . On BAGEL’s mathematical and logical benchmarks, the average gains are 27.9% over the base model and 20.0% over Uni-CoT, including a 28.3% gain on EMMA over Uni-CoT. These improvements across model families and sizes suggest that shared latent reasoning is useful beyond a single backbone. 19 Preprint Table 5: Reasoning across backbones. Accuracy (%) on (a) seven vision-centric benchmarks and 
+
+(b) four mathematical and logical benchmarks. Bold marks the best result within each backbone. 
+
+(a) Vision-centric reasoning 
+
+Method VisPuz. ChartQA V∗ BLINK-J MMVP SAT CV-B Avg. 
+
+BAGEL-7B 
+
+Base 35.00 61.82 55.49 67.33 70.33 44.67 76.03 58.67 Visual-OPSD 86.00 78.79 64.92 77.33 77.33 54.00 80.64 74.14 ThinkMorph 79.00 78.10 67.02 72.00 80.33 52.67 80.82 72.85 
+
+Uni-LaDiR 75.09 83.76 69.11 80.00 83.00 54.67 86.35 76.00 Qwen3-VL-8B 
+
+Base 37.00 82.55 84.29 68.66 77.66 54.00 85.63 69.97 CoLT 39.04 74.70 82.20 70.00 78.00 58.00 84.00 69.42 
+
+Uni-LaDiR 60.27 86.12 85.86 78.00 84.00 67.33 89.08 78.67 Janus-Pro-1.5B 
+
+Base 28.00 52.00 41.88 48.00 58.00 24.00 63.99 45.12 
+
+Uni-LaDiR 58.73 68.24 57.07 64.00 69.33 38.67 73.12 61.31 Janus-Pro-7B 
+
+Base 33.50 43.08 38.22 50.67 63.33 22.00 67.83 45.52 
+
+Uni-LaDiR 69.78 75.16 64.40 70.00 76.33 46.67 80.25 68.94 (b) Mathematical and logical reasoning: BAGEL-7B 
+
+Method MathVista MathVision VisuLogic EMMA Avg. Base 72.50 35.99 28.90 28.70 41.52 Uni-CoT 73.30 48.49 25.00 30.20 44.25 Bagel-Zebra-CoT 72.10 43.49 0.00 20.60 34.05 ThinkMorph 67.80 41.51 6.50 22.40 34.55 
+
+Uni-LaDiR 79.80 57.93 35.90 38.74 53.09 
+
+Qualitative manipulation comparison. Figure 8 compares a LaST 0 rollout with a successful Uni-LaDiR rollout from the same initial scene. LaST 0 approaches the phone but does not secure a grasp within ten decisions. Uni-LaDiR grasps the phone, transfers it to the base, and releases it, reaching success at 7.05 seconds of simulation time. This selected episode illustrates a difference at the grasping stage; aggregate success rates are reported in Table 2. Phone placement Time (s) → LaST 0                     
+
+> Failure 0.00 2.30 4.70 5.95 7.05 8.05 9.15 10.45
+> Uni-LaDiR
+> Success 0.00 2.30 4.70 5.95 7.05 8.05 9.15 10.45 Start Approach Grasped Transfer Released Final frame Held Held
+
+Figure 8: Phone placement in RLBench. LaST 0 does not grasp the phone within ten recorded decisions (top), while Uni-LaDiR completes placement (bottom). Columns share simulation times-tamps, excluding inference latency; the final frame is held after each recording ends. 20
