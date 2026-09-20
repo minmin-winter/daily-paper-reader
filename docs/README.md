@@ -6,50 +6,60 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-19
-- 运行时间：2026-09-19 22:04:11 UTC
+- 最新运行日期：2026-09-20
+- 运行时间：2026-09-20 21:30:26 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：2
-- 速读区：8
+- 本次总论文数：12
+- 精读区：1
+- 速读区：11
 
 ### 今日简报（AI）
-今日精读 2 篇、速读 8 篇，共处理 10 篇论文，重点聚焦多模态推理与多模态学习的理论框架。最值得看的是 9.0 分的 Uni-LaDiR 用潜在扩散统一多模态推理，以及 8.0 分那篇从信息论视角梳理依赖、压缩与协同的统一分析。普通读者可先读这两篇精读，再按需扫一眼速读里的边缘视觉语言模型量化与视频生成工作。
-- 详情：[/202609/19/README](/202609/19/README)
+今日扫描 12 篇多模态论文，其中 1 篇精读、11 篇速读，焦点落在 3D 无人机定位与多模态信息论。
+
+最值得看的是精读的 PRI-Net（9.0/10）轻量级多模态 3D 无人机定位框架，其次是速读中从信息论统一视角梳理多模态学习的 Dependency、Compression、Synergy 一文（7.0/10）。
+
+普通读者可先读 PRI-Net 的框架与实验部分，再按兴趣挑一篇速读，重点关注多模态融合的效率与可解释性。
+- 详情：[/202609/20/README](/202609/20/README)
 
 ### 精读区论文标签
-1. [Uni-LaDiR: Latent Diffusion Unifies Multimodal Reasoning](/202609/19/2609.19878v1-uni-ladir-latent-diffusion-unifies-multimodal-reasoning)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：将不同模态的推理思维 token 映射到共享潜在空间以统一多模态推理
-2. [Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning](/202609/19/2609.14421v1-dependency-compression-and-synergy-a-unified-information-theoretic-view-of-multimodal-learning)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：多模态信息共享、冗余与协同的统一信息论视角
+1. [PRI-Net: A Lightweight Multimodal Framework for 3D UAV Localization](/202609/20/2609.14469v1-pri-net-a-lightweight-multimodal-framework-for-3d-uav-localization)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：残差注意力融合缓解模态不平衡与模态偏置
 
 ### 速读区论文标签
-1. [Efficient Quantization-Aware Distillation with Cross-Modal Alignment for Edge Vision-Language Models](/202609/19/2609.16689v1-efficient-quantization-aware-distillation-with-cross-modal-alignment-for-edge-vision-language-models)  
+1. [Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning](/202609/20/2609.14421v1-dependency-compression-and-synergy-a-unified-information-theoretic-view-of-multimodal-learning)  
    标签：评分：7.0/10、query:balanced-mml
-   evidence：RGB与非RGB模态监督相同导致模态失衡
-2. [LynnReal-Omni: Native multi-modal Video Generation for Agentic Visual Workflows](/202609/19/2609.15863v1-lynnreal-omni-native-multi-modal-video-generation-for-agentic-visual-workflows)  
+   evidence：模态冗余、独特与协同的信息论视角
+2. [SparseTalk - Sparsifying 3D Gaussian Language Fields for Efficient 3D Visual Question Answering](/202609/20/2609.15137v1-sparsetalk---sparsifying-3d-gaussian-language-fields-for-efficient-3d-visual-question-answering)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：具空间接地表示的三维视觉问答推理
+3. [V-ICAL Bench: Evaluating Video In-Context Learning for Multimodal Agents in Interactive Environments](/202609/20/2609.15683v1-v-ical-bench-evaluating-video-in-context-learning-for-multimodal-agents-in-interactive-environments)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：对视频示范的理解与推理
+4. [Counterfactual Reasoning for Robust Visual Question Answering](/202609/20/2609.16567v1-counterfactual-reasoning-for-robust-visual-question-answering)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：面向鲁棒VQA的反事实对比学习
+5. [VideoMM: Adaptive Macro-Micro Inference for Efficient Video MLLMs](/202609/20/2609.16722v1-videomm-adaptive-macro-micro-inference-for-efficient-video-mllms)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：面向高效视频多模态大模型的自适应推理
+6. [Not Another Text Benchmark: Putting the "Visual" Back in Visual Question Answering for Large Video Models](/202609/20/2609.17112v1-not-another-text-benchmark-putting-the-visual-back-in-visual-question-answering-for-large-video-models)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：以视觉为中心的视觉问答评测基准
+7. [Aligned Consensus Teaching for Label-Efficient Oriented Object Detection in Weakly-Aligned Visible-Infrared Imagery](/202609/20/2609.18124v1-aligned-consensus-teaching-for-label-efficient-oriented-object-detection-in-weakly-aligned-visible-infrared-imagery)  
    标签：评分：6.0/10、query:native-multi
-   evidence：原生多模态视频生成框架
-3. [Vision And Text Transformer For Predicting Answerability On Visual Question Answering](/202609/19/2609.16565v1-vision-and-text-transformer-for-predicting-answerability-on-visual-question-answering)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：利用视觉与文本 Transformer 特征预测图像和问题的可回答性
-4. [ViD: Vision-Dominant Gender Bias Mitigation for Large Vision-Language Models](/202609/19/2609.16647v1-vid-vision-dominant-gender-bias-mitigation-for-large-vision-language-models)  
-   标签：评分：6.0/10、query:balanced-mml
-   evidence：通过交叉注意力缓解LVLM性别偏见，应对语言先验
-5. [Layers, Sinks, and Scaling: Adaptive Evidence Selection for Multimodal Large Language Models](/202609/19/2609.16795v1-layers-sinks-and-scaling-adaptive-evidence-selection-for-multimodal-large-language-models)  
-   标签：评分：6.0/10、query:balanced-mml
-   evidence：在视觉与文本模态间自适应分配证据
-6. [CapMem: A Benchmark for Caption-Based Episodic Memory in Egocentric Video](/202609/19/2609.17688v1-capmem-a-benchmark-for-caption-based-episodic-memory-in-egocentric-video)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：面向第一人称视频理解与问答的基准
-7. [Divide and Conquer: Mixture-of-Bottleneck Experts in Informative Ordinal Space for Video-based Multimodal Sentiment Analysis](/202609/19/2609.18470v1-divide-and-conquer-mixture-of-bottleneck-experts-in-informative-ordinal-space-for-video-based-multimodal-sentiment-analysis)  
+   evidence：可见光-红外双模态检测中的跨模态对齐
+8. [CapMap-MS-TTA: 3rd Place Solution for the MUMU Track of the 8th LSVOS Challenge at ECCV 2026](/202609/20/2609.18206v1-capmap-ms-tta-3rd-place-solution-for-the-mumu-track-of-the-8th-lsvos-challenge-at-eccv-2026)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：融合文本、音频与图像并捕获独特与协同线索
-8. [Less Is More: Graph-free Multimodal RAG via Multi-signal Late Fusion](/202609/19/2609.19417v1-less-is-more-graph-free-multimodal-rag-via-multi-signal-late-fusion)  
+   evidence：用于标注、检测与描述的单一统一多模态模型
+9. [Multimodal Aspect-Level Sentiment Analysis Based on Gated Noise Filtering and Emotion-Relevance Interaction](/202609/20/2609.18404v1-multimodal-aspect-level-sentiment-analysis-based-on-gated-noise-filtering-and-emotion-relevance-interaction)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：多模态检索信号的后融合
+   evidence：门控噪声过滤与情感相关性交互实现跨模态融合
+10. [Align, Integrate, and Fire: Efficient Token-Level Alignment for Zero-Shot SpeechLLMs](/202609/20/2609.18516v1-align-integrate-and-fire-efficient-token-level-alignment-for-zero-shot-speechllms)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：语音与文本模态的token级对齐
+11. [AgriScope: Pixel-Grounded Multimodal Understanding for Agricultural Images](/202609/20/2609.20325v1-agriscope-pixel-grounded-multimodal-understanding-for-agricultural-images)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：统一的像素级多模态图像理解框架
 
 
 <div class="dpr-home-promo-card">

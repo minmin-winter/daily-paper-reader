@@ -1,0 +1,181 @@
+Title: CapMap-MS-TTA: 3rd Place Solution for the MUMU Track of the 8th LSVOS Challenge at ECCV 2026
+
+URL Source: https://arxiv.org/pdf/2609.18206v1
+
+Published Time: Thu, 17 Sep 2026 00:41:42 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# CapMap-MS-TTA: 3rd Place Solution for the MUMU Track of the 8th LSVOS Challenge at ECCV 2026 
+
+Chengfeng Qiu 1
+
+Kaifeng Wei 1
+
+> 1
+
+Netease YiDun AI Lab, Hangzhou, China 
+
+qiuchengfeng@corp.netease.com , hzweikaifeng@corp.netease.com 
+
+Abstract. The MUMU track of the 8th Large-scale Video Object Seg-mentation (LSVOS) Challenge requires a single unified multimodal model to jointly solve image tagging (Task A), open-vocabulary object detec-tion (Task B), and English captioning (Task C) under strict resource constraints ( ≤0.5B parameters and ≤8 GB peak GPU memory). We present CapMap-MS-TTA, a training-free submission built on Microsoft Florence-2-base ( ∼231M parameters), combining caption keyword map-ping with multi-scale flip test-time augmentation. Task C uses the native 
+
+<DETAILED_CAPTION> pathway with length/token sanitization. Task A maps the same detailed caption into the official quality/scene/event vo-cabularies via an expanded keyword lexicon with whole-word matching and a lightweight expand-hints stage. Task B runs Florence-2 open de-tection ( <OD> ) with multi-scale and horizontal-flip test-time augmenta-tion (TTA), followed by label-aware non-maximum suppression (NMS). Without fine-tuning, the system improves our reproduced Florence-2 baseline from 15.16 to a best public score of 16.4815 , and ranks 3rd 
+
+on the final MUMU leaderboard. 
+
+## 1 Introduction 
+
+The Large-scale Video Object Segmentation (LSVOS) Challenge series has be-come a major benchmark venue for advancing video segmentation under realistic conditions [2, 3, 5, 6]. The 8th LSVOS Challenge , held in conjunction with 
+
+ECCV 2026 , features four tracks :
+
+– MUMU Track (this report): Multi-task Unified Multimodal Understand-ing. Participants must deploy one shared model to produce (i) hierarchical image tags, (ii) object detections with open-vocabulary labels, and (iii) En-glish captions, under tight compute limits. Evaluation is performed on a held-out still-image test set (1,038 images in the public phase we target). 
+
+– Classic VOS Track : Semi-supervised video object segmentation, typically evaluated on long, complex sequences such as LVOS [3] and MOSE [2], mea-suring temporal mask consistency given first-frame masks. arXiv:2609.18206v1 [cs.CV] 16 Sep 2026 2 Chengfeng Qiu and Kaifeng Wei 
+
+– Referring VOS (RVOS) Track : Language-conditioned video segmenta-tion, commonly centered on motion-focused datasets such as MeViS [4], re-quiring joint vision–language grounding. 
+
+– Complex VOS Track (MOSEv2-style settings [5]): Stress-tests robustness to small objects, frequent appearance/disappearance, heavy occlusion, ad-verse weather/lighting, and other real-world factors. Across tracks, LSVOS emphasizes generalization beyond curated short clips :long-term identity preservation, crowded scenes, and multimodal conditioning where applicable. Datasets historically associated with LSVOS include LVOS [3], MOSE / MOSEv2 [2, 5], and MeViS [4], while the MUMU track introduces a unified tagging–detection–captioning protocol on challenge images with an of-ficial Codabench evaluation pipeline. Unlike classic VOS, MUMU requires a 
+
+single checkpoint to serve three heterogeneous outputs. Training three sepa-rate specialists violates the unified-model rule; large MLLMs often exceed the 0.5B / 8 GB budgets. We therefore adopt a compact vision–language foundation model—Florence-2-base [1]—and invest effort in prompt routing , deterministic post-processing , and detection TTA , rather than fine-tuning. Our best submis-sion ranks 3rd on the final MUMU leaderboard with Final=16.4815 (A=26.49, B=5.45, C=44.05). 
+
+Contributions (1) A practical Florence-2 recipe for MUMU that maintains one backbone for all tasks. (2) Caption-driven Task A tagging with expanded lexicon and expand-hints fusion. (3) Multi-scale + flip OD TTA with NMS for Task B, yielding denser, more stable boxes. 
+
+## 2 Related Work 
+
+Unified vision–language models. Florence-2 [1] formulates vision tasks as sequence generation with task tokens ( <CAPTION> , <DETAILED_CAPTION> , <OD> ,etc.), enabling one set of weights to cover captioning and detection. Other unified models exist, but Florence-2-base uniquely fits MUMU’s size limit while expos-ing native OD and detailed caption heads. MUMU adds strict parameter and memory budgets on top of the standard tagging–detection–captioning protocol, making compactness a first-class design goal. 
+
+Tagging from language. Zero-shot / weakly supervised tagging often maps free-form text to a closed vocabulary via lexicons or CLIP-style matching [7]. We adopt a lexicon-based pipeline: it is bit-stable across machines and produces tags guaranteed to lie inside the official vocabulary. The main cost is coverage of rare scene/event categories. 
+
+TTA for detection. Flips and multi-scale inference are standard in object detection [8, 9]. Because Florence-2 OD often outputs boxes without calibrated CapMap-MS-TTA: 3rd Place Solution for MUMU Track 3Input image I           
+
+> Florence-2-base
+> θshared
+> <DETAILED_CAPTION>
+> raw text y
+> sanitize Task C
+> Lexicon Map
+> +expand-hints Task A
+> tags
+> <OD> MS +Flip TTA
+> S × { id ,hflip }
+> NMS Task B
+> unified outputs
+> Fig. 1: Overview of CapMap-MS-TTA. One Florence-2-base checkpoint θserves all MUMU tasks. Task A/C share the detailed-caption pathway; Task B uses multi-view OD TTA + NMS.
+
+scores, we rely on geometric redundancy + NMS rather than score thresholding; when scores are constant, weighted averaging degenerates to plain averaging, so geometric NMS is the natural fusion rule. 
+
+## 3 Method 
+
+3.1 Unified Backbone 
+
+We use microsoft/Florence-2-base [1] with |θ| ≈ 231 .41 × 10 6 ≤ 0.5 × 10 9
+
+and peak memory Mpeak ≈ 0.6 GB at batch size 1 ( ≤ 8 GB ). All tasks share 
+
+θ; we do not fine-tune for the final submission. Florence-2 casts each task as conditional sequence generation o = Decode( fθ (I, τ )) , where τ is a task token. This choice is driven by three practical considerations: ample headroom under the 0.5B cap, native task tokens for both detailed captioning and open detection (one checkpoint, no task-specific heads), and peak memory well under 8 GB so the full pipeline runs on a single consumer GPU. 
+
+3.2 Task C: Detailed Captioning 
+
+For each image I, we set τ = <DETAILED_CAPTION> and obtain raw text y. The submitted caption is 
+
+c = Π≤30 (Trunc ≤300 (Norm( y))) , (1) where Norm collapses whitespace, Trunc ≤300 enforces the character cap, and 
+
+Π≤30 greedily drops trailing whitespace-separated evaluator tokens until the token count is ≤ 30 . Decoding uses beam search ( num _beams = 3 ), with 
+
+batch _size = 1 fixed: padding in larger batches changes Florence generations and breaks reproducibility. The pipeline is intentionally simple and determinis-tic. Florence’s detailed captions are often 50–80 words long, far exceeding the 4 Chengfeng Qiu and Kaifeng Wei 
+
+30-token budget, so truncation is unavoidable; we preserve the leading subject and setting and accept the loss of trailing attribute lists. 
+
+3.3 Task A: Caption Keyword Mapping + Expand-Hints 
+
+MUMU Task A requires three tag lists from closed vocabularies Vq (quality), Vs
+
+(scene), and Ve (event); let V = Vq ∪ V s ∪ V e.
+
+Lexicon matching. We maintain a phrase →tag dictionary M : phrase 7 → t ∈ V 
+
+(e.g., “shopping mall” 7 → shopping_mall ). For ˜y = lower( y), the hit set is 
+
+Map( y; M) = {M (p) | p ∈ dom( M), p occurs in ˜y as a whole phrase } , (2) i.e., whole-word / whole-phrase matching. This avoids substring pitfalls such as 
+
+ski ⊂ skin and mall ⊂ small ; naive substring matching produced hundreds of false scene tags per thousand images in early versions of our lexicon. 
+
+Image-stat quality priors. Let G be the grayscale image and ∆ a discrete Laplacian operator. We compute v = Var( ∆G ) and μ = Mean( G) and produce heuristic quality tags Q(v, μ ) ⊆ V q (blur / low-light / under-/over-exposure thresholds), used as a fallback when caption cues are weak. 
+
+Expand-hints fusion. Starting from a base-stage tag set T0 (same caption pathway), 
+
+T = T0 ∪ Map( y; M) ∪ Q(v, μ ), (3) i.e., we only add tags, then apply indoor/outdoor cleanup: 
+
+if {indoor , outdoor } ⊆ Ts then Ts ← Ts \ { outdoor },
+
+else if Ts ∩ I̸ = ∅ then Ts ← Ts ∪ { indoor },
+
+else if Ts ∩ O̸ = ∅ then Ts ← Ts ∪ { outdoor },
+
+(4) where Ts = T ∩ V s and I, O are indoor-/outdoor-indicative scene subsets. The add-only rule guarantees expand-hints never reduces recall relative to the base stage; the cleanup then removes mutually exclusive pairs. 
+
+3.4 Task B: Multi-Scale + Flip OD TTA 
+
+Let S = {0.75 , 1.0, 1.25 } and H( ·) denote horizontal flip. For scale s with resized size (Ws, H s) and original size (W, H ), a box bs = ( x1, y 1, x 2, y 2) is mapped back by Φs(bs) = ( x1 WWs , y 1 HHs , x 2 WWs , y 2 HHs ), and flip-space boxes are reflected before Φs: H−1(b) = ( W − x2, y 1, W − x1, y 2). The proposal pool is 
+
+P = [
+
+> s∈S
+
+ Φs(OD( Is)) ∪ Φs
+
+ H−1(OD(H( Is))))  . (5) CapMap-MS-TTA: 3rd Place Solution for MUMU Track 5
+
+Label-aware NMS keeps a box b against kept set K iff ∀k ∈ K : label( b)̸ = label( k)
+
+∨ IoU( b, k ) ≤ τ , with τ = 0 .5 and |K| ≤ 300 ; malformed labels (commas/colons/ length >60 ) are discarded for schema validity. The three scales balance coverage and cost: smaller scales recover small objects missed at native resolution, larger scales help crowded scenes, and the flip view adds complementary proposals for asymmetric objects. Florence OD often returns empty score lists; we then set 
+
+s(b) ≡ 0.85 . With constant scores thresholding cannot rank boxes, so geometric TTA + NMS is our main source of gain. 
+
+3.5 Inference Recipe and Design Principles 
+
+Putting everything together: (i) y ← caption with τ = <DETAILED_CAPTION> ,
+
+c ← Eq. (1); (ii) T ← Eqs. (2)–(4) (Task A); (iii) K ← NMS on P from Eq. (5) (Task B); (iv) emit {T, K, c } with official model_info fields only ( parameters_m ,
+
+gflops_224 , peak_memory_gb ). Three principles guided all changes: do not hurt Task C (captioning dominates the Final score, so its path is fixed once matching the 15.16 run); prefer deterministic post-processing over fine-tuning ; and spend test-time compute where scores improve .
+
+## 4 Experiments 
+
+Setup. Public MUMU test split: 1,038 images. We do not use private labels; all ablations use online Codabench scores or offline prediction statistics. Our repro-duced baseline runs the official inference script unchanged ( <DETAILED_CAPTION> 
+
+for C, official tag mapping for A, single-view <OD> for B), yielding Final=15.1568 (A=21.15, B=4.77, C=44.05). Task C is evaluated with CIDEr-D, SPICE, and CLIPScore; since C dominates the Final score, we preserve caption quality and mainly improve A/B. Implementation: PyTorch + HuggingFace Transformers, 
+
+trust_remote_code=True , FP16 on a single consumer GPU; full test inference with multi-scale TTA takes roughly 50–70 minutes at ∼0.25 img/s. 
+
+Main results. Table 1 summarizes the progression. Expand-hints + flip TTA lifts Final to 16.4496 (+1.29), with A ≈+5.3 and B ≈+0.6 while C is unchanged; multi-scale TTA further improves Final to 16.4815 via denser and more ac-curate boxes. Our best Task C run achieves CIDEr-D=41.26, SPICE=16.31, CLIPScore=75.52. 
+
+Task analysis. Task A : expand-hints lifts A from 21.15 to 26.49 (+5.34), almost entirely from recall; precision is preserved because we only add tags. Task B : flip TTA raises B from 4.77 to 5.34 (+0.57) by recovering boxes missed under hor-izontal asymmetry; adding multi-scale TTA increases average boxes per image from 9.93 to 11.44 and reduces empty detections from 17 to 16 (Table 2), giving the final 5.45. Task C : stays at 44.05 across all rows by design—the sanitiza-tion pipeline is applied identically and the <DETAILED_CAPTION> path is never modified, which isolates the A/B contributions. 6 Chengfeng Qiu and Kaifeng Wei                           
+
+> Table 1: Public Codabench scores on the MUMU test set (1,038 images). “Hints” = expand-hints for Task A; “Flip” = horizontal-flip OD TTA; “MS” = multi-scale OD TTA {0.75 ,1.0,1.25 }. Row 3 is the final leaderboard entry with Final=16.4815. Method Final A / B / C Florence-2-base, bs=1 (baseline) 15.1568 21.15 / 4.77 / 44.05 + Hints + Flip TTA 16.4496 26.49 / 5.34 / 44.05 + Hints + MS+Flip TTA (best) 16.4815 26.49 / 5.45 / 44.05
+> Table 2: Offline Task B statistics on the full test set, same A/C as the 16.4815 sub-mission. Detection recipe Avg. #boxes Empty Max Single-view OD (baseline) 8.91 19 74 + Flip TTA + NMS@0.5 9.93 17 84 + MS {0.75 ,1,1.25 }+ Flip + NMS@0.5 11.44 16 92
+
+Ablations and negative results. Batch size : bs >1 changes captions due to padding and breaks reproducibility of the 15.16 baseline, so we fix bs=1. 
+
+Florence-2-base-ft : the fine-tuned checkpoint underperformed ( ∼8 Final), likely due to distribution shift and shorter captions hurting C. Score thresholds : IoU sweeps at {0.4, 0.5, 0.6} change flip-only results by less than 0.1 Final. Prompt-Gen / Danbooru taggers : shorter captions (hurting C) and non-MUMU vocabu-laries; after remapping they still cannot outperform CapMap-MS-TTA. Substring lexicon bugs : early substring matching produced false tags such as snow from “skin” and shopping_mall from “small”; whole-phrase matching plus cleanup was the single most impactful fix for Task A precision. 
+
+Error analysis. Task A : failures come from captions missing scene nouns (close-up portraits, product shots) and events requiring world knowledge. Task B :empty detections persist on textureless landscapes and abstract images where no clear object boundary exists. Task C : the 30-token limit forces aggressive truncation; a learned ranker selecting the best 30-token subsequence could re-cover some lost attribute information. 
+
+## 5 Discussion and Conclusion 
+
+MUMU rewards systems that are small, unified, and carefully post-processed . Our gains come almost entirely from (i) better use of Florence captions for closed-vocabulary tagging and (ii) extra test-time compute for detection. Remaining headroom lies in Task C (better selection under the 30-token limit) and cali-brated detection scores for smarter box fusion. Our system has three limitations: Task C is capped by the 30-token budget; Task B still produces empty detec-tions on textureless imagery; and the Task A lexicon is hand-curated and may CapMap-MS-TTA: 3rd Place Solution for MUMU Track 7
+
+not cover rare categories in future phases. Promising future directions include fine-tuning Florence-2 within the 0.5B/8 GB envelope, learning a lightweight caption ranker, and calibrating OD scores for score-based fusion. We described CapMap-MS-TTA, our 3rd-place submission to the MUMU Track of the 8th LSVOS Challenge at ECCV 2026, achieving a final score of 
+
+16.4815 . Built on Florence-2-base, it combines detailed captioning, lexicon-based tagging with expand-hints, and multi-scale flip OD TTA under strict re-source limits. The pipeline is training-free and reproducible, showing that careful prompting and TTA can be strong tools when model size is capped. 
+
+Acknowledgements. We thank the LSVOS Challenge organizers and Cod-abench maintainers for the evaluation platform and baseline releases. 
+
+## References 
+
+1. B. Xiao, H. Wu, W. Xu, X. Dai, H. Hu, Y. Lu, M. Zeng, C. Liu, and L. Yuan. Florence-2: Advancing a unified representation for a variety of vision tasks. In 
+
+CVPR , 2024. 2. H. Ding, C. Liu, S. He, X. Jiang, and C. C. Loy. MOSE: A new dataset for video object segmentation in complex scenes. In ICCV , 2023. 3. L. Hong, W. Chen, Z. Liu, W. Zhang, P. Guo, Z. Chen, J. Han, and H. Li. LVOS: A long video object segmentation benchmark. In ICCV , 2023. 4. H. Ding, C. Liu, S. He, X. Jiang, and C. C. Loy. MeViS: A large-scale benchmark for video segmentation with referring expressions. In ICCV , 2023. 5. H. Ding, K. Ying, C. Liu, S. He, X. Jiang, Y.-G. Jiang, P. H. S. Torr, and S. Bai. MOSEv2: More diverse video object segmentation with complex scenes. arXiv:2508.05630, 2025. 6. C. Liu, H. Ding, K. Ying, L. Hong, N. Xu, L. Yang, Y. Fan, M. Gao, J. Chen, Y. Miao, G. Wu, Z. Qin, J. Han, Z. Zhang, S. Ding, X. Dong, Y. Zang, Y. Cao, J. Wang, C. S. Lim, J. Moon, D. Cho, T. Li, Y. Li, Y. Yang, A. Yan, L. Cao, F. Lu, R. Hong, Y. Jiang, F. Zhu, Y. Xie, H. Zhang, Z. Liu, S. Ruan, Q. Niu, D. Gong, S. Chen, T. Zhang, Y. Zhou, H. Yuan, L. Qi, X. Li, S. Ji, A. Nekrasov, A. Athar, D. de Geus, A. Hermans, and B. Leibe. LSVOS 2025 Challenge Report: Advances in complex video object segmentation. arXiv:2510.11063, 2025. 7. A. Radford, J. W. Kim, C. Hallacy, et al. Learning transferable visual models from natural language supervision. In ICML , 2021. 8. W. Liu, D. Anguelov, D. Erhan, C. Szegedy, S. Reed, C.-Y. Fu, and A. C. Berg. SSD: Single shot multibox detector. In ECCV , 2016. 9. T.-Y. Lin, P. Dollár, R. Girshick, K. He, B. Hariharan, and S. Belongie. Feature pyramid networks for object detection. In CVPR , 2017. 10. T. Li, Y. Li, and Y. Yang. The 1st Solution for MOSE Challenge 2025: CGFSeg. arXiv:2509.03142, 2025.
