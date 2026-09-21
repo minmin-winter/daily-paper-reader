@@ -6,60 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-20
-- 运行时间：2026-09-20 21:30:26 UTC
+- 最新运行日期：2026-09-21
+- 运行时间：2026-09-21 22:20:51 UTC
 - 运行状态：成功
-- 本次总论文数：12
+- 本次总论文数：7
 - 精读区：1
-- 速读区：11
+- 速读区：6
 
 ### 今日简报（AI）
-今日扫描 12 篇多模态论文，其中 1 篇精读、11 篇速读，焦点落在 3D 无人机定位与多模态信息论。
-
-最值得看的是精读的 PRI-Net（9.0/10）轻量级多模态 3D 无人机定位框架，其次是速读中从信息论统一视角梳理多模态学习的 Dependency、Compression、Synergy 一文（7.0/10）。
-
-普通读者可先读 PRI-Net 的框架与实验部分，再按兴趣挑一篇速读，重点关注多模态融合的效率与可解释性。
-- 详情：[/202609/20/README](/202609/20/README)
+今日汇总7篇多模态/语音/临床AI论文，精读1篇《Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning》（8.0/10），速读6篇。  
+最值得关注的是多模态学习的信息论统一视角，以及语音情感识别的共享-特定三视图学习、多模态推理的密集推理轨迹、临床VLM中ECG利用不足的揭示与缓解。  
+普通读者可先读精读篇建立框架，再按兴趣选读语音情感或临床心电方向速读篇。
+- 详情：[/202609/21/README](/202609/21/README)
 
 ### 精读区论文标签
-1. [PRI-Net: A Lightweight Multimodal Framework for 3D UAV Localization](/202609/20/2609.14469v1-pri-net-a-lightweight-multimodal-framework-for-3d-uav-localization)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：残差注意力融合缓解模态不平衡与模态偏置
+1. [Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning](/202609/21/2609.14421v1-dependency-compression-and-synergy-a-unified-information-theoretic-view-of-multimodal-learning)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：多模态学习与融合的统一信息论视角
 
 ### 速读区论文标签
-1. [Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning](/202609/20/2609.14421v1-dependency-compression-and-synergy-a-unified-information-theoretic-view-of-multimodal-learning)  
+1. [Consensus-Guided Shared-Specific Tri-View Learning for Speech Emotion Recognition](/202609/21/2609.19826v2-consensus-guided-shared-specific-tri-view-learning-for-speech-emotion-recognition)  
    标签：评分：7.0/10、query:balanced-mml
-   evidence：模态冗余、独特与协同的信息论视角
-2. [SparseTalk - Sparsifying 3D Gaussian Language Fields for Efficient 3D Visual Question Answering](/202609/20/2609.15137v1-sparsetalk---sparsifying-3d-gaussian-language-fields-for-efficient-3d-visual-question-answering)  
+   evidence：以共识引导与自适应门控整合共享与特异视图
+2. [DRT: Dense Reasoning Trace for Efficient and Grounded Multimodal Reasoning](/202609/21/2609.21675v1-drt-dense-reasoning-trace-for-efficient-and-grounded-multimodal-reasoning)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：面向多模态大模型的结构化推理迹推理
+3. [ECG Mirage: Revealing and Mitigating the Underutilisation of ECGs in Vision-Language Models for Clinical Prediction](/202609/21/2609.21755v1-ecg-mirage-revealing-and-mitigating-the-underutilisation-of-ecgs-in-vision-language-models-for-clinical-prediction)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：视觉语言模型忽视或混淆ECG模态
+4. [SceneBench: A Hierarchical Benchmark for Vision-Language Understanding of 3D Scenes](/202609/21/2609.16233v1-scenebench-a-hierarchical-benchmark-for-vision-language-understanding-of-3d-scenes)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：具空间接地表示的三维视觉问答推理
-3. [V-ICAL Bench: Evaluating Video In-Context Learning for Multimodal Agents in Interactive Environments](/202609/20/2609.15683v1-v-ical-bench-evaluating-video-in-context-learning-for-multimodal-agents-in-interactive-environments)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：对视频示范的理解与推理
-4. [Counterfactual Reasoning for Robust Visual Question Answering](/202609/20/2609.16567v1-counterfactual-reasoning-for-robust-visual-question-answering)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：面向鲁棒VQA的反事实对比学习
-5. [VideoMM: Adaptive Macro-Micro Inference for Efficient Video MLLMs](/202609/20/2609.16722v1-videomm-adaptive-macro-micro-inference-for-efficient-video-mllms)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：面向高效视频多模态大模型的自适应推理
-6. [Not Another Text Benchmark: Putting the "Visual" Back in Visual Question Answering for Large Video Models](/202609/20/2609.17112v1-not-another-text-benchmark-putting-the-visual-back-in-visual-question-answering-for-large-video-models)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：以视觉为中心的视觉问答评测基准
-7. [Aligned Consensus Teaching for Label-Efficient Oriented Object Detection in Weakly-Aligned Visible-Infrared Imagery](/202609/20/2609.18124v1-aligned-consensus-teaching-for-label-efficient-oriented-object-detection-in-weakly-aligned-visible-infrared-imagery)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：可见光-红外双模态检测中的跨模态对齐
-8. [CapMap-MS-TTA: 3rd Place Solution for the MUMU Track of the 8th LSVOS Challenge at ECCV 2026](/202609/20/2609.18206v1-capmap-ms-tta-3rd-place-solution-for-the-mumu-track-of-the-8th-lsvos-challenge-at-eccv-2026)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：用于标注、检测与描述的单一统一多模态模型
-9. [Multimodal Aspect-Level Sentiment Analysis Based on Gated Noise Filtering and Emotion-Relevance Interaction](/202609/20/2609.18404v1-multimodal-aspect-level-sentiment-analysis-based-on-gated-noise-filtering-and-emotion-relevance-interaction)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：门控噪声过滤与情感相关性交互实现跨模态融合
-10. [Align, Integrate, and Fire: Efficient Token-Level Alignment for Zero-Shot SpeechLLMs](/202609/20/2609.18516v1-align-integrate-and-fire-efficient-token-level-alignment-for-zero-shot-speechllms)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：语音与文本模态的token级对齐
-11. [AgriScope: Pixel-Grounded Multimodal Understanding for Agricultural Images](/202609/20/2609.20325v1-agriscope-pixel-grounded-multimodal-understanding-for-agricultural-images)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：统一的像素级多模态图像理解框架
+   evidence：面向视觉语言三维空间推理的基准
+5. [AVT-Fabric: Active Visuo-Tactile Perception via Adaptive Evidence Selection for Efficient Robotic Fabric Comparison](/202609/21/2609.21377v1-avt-fabric-active-visuo-tactile-perception-via-adaptive-evidence-selection-for-efficient-robotic-fabric-comparison)  
+   标签：评分：6.0/10、query:balanced-mml
+   evidence：依据比较难度自适应选择视觉与触觉证据
+6. [Refine Then Fusion: Training-Free 3D Point Cloud Adaptation with Priority Refinement and Multi-Modal Knowledge Fusion](/202609/21/2609.21522v1-refine-then-fusion-training-free-3d-point-cloud-adaptation-with-priority-refinement-and-multi-modal-knowledge-fusion)  
+   标签：评分：6.0/10、query:balanced-mml
+   evidence：样本相关的模态可靠性与自适应融合
 
 
 <div class="dpr-home-promo-card">

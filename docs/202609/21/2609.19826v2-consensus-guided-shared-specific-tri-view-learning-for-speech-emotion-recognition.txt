@@ -1,0 +1,259 @@
+Title: Consensus-Guided Shared-Specific Tri-View Learning for Speech Emotion Recognition
+
+URL Source: https://arxiv.org/pdf/2609.19826v2
+
+Published Time: Mon, 21 Sep 2026 00:31:50 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# CONSENSUS-GUIDED SHARED-SPECIFIC TRI-VIEW LEARNING FOR SPEECH EMOTION RECOGNITION 
+
+# Bing Huang 1† Yujian Ma 2† Xikun Lu 2∗ Xianquan Jiang 3 Jinqiu Sang 11 School of Computer Science and Technology, East China Normal University, China 
+
+2 Shanghai Institute of Artificial Intelligence for Education, East China Normal University, China 
+
+3 Boin Hearing Technology (Shanghai) Co., LTD, China 
+
+ABSTRACT 
+
+Speech emotion recognition (SER) benefits from heterogeneous acoustic representations, but views derived from the same utterance contain both overlapping emotional evidence and representation-dependent cues. Direct fusion may therefore propagate redundant information or obscure complementary details. To address this issue, we propose Tri-view Consensus-Guided Fusion (TriCGF) for jointly modeling spectrogram, Mel-frequency cepstral coefficients, and Hu-BERT representations. TriCGF organizes each view into common and view-specific components before fusion. Cross-view Consensus Learning aggregates the common components into a global refer-ence, while View-wise Gated Integration adaptively combines this reference with each view-specific component. A soft difference reg-ularizer further discourages excessive information overlap. Under speaker-independent evaluation, TriCGF achieves 74.19% weighted accuracy (WA) and 75.17% unweighted accuracy (UA) on IEMO-CAP, and 94.36% WA and 94.28% UA on EmoDB, outperforming representative SER methods on both datasets. 
+
+Index Terms — Speech emotion recognition, multi-view learn-ing, shared-specific representation, consensus-guided fusion. 
+
+1. INTRODUCTION 
+
+Speech emotion recognition (SER) aims to infer a speaker’s emo-tional state from speech and supports applications in affective human-computer interaction and speech-based behavioral analy-sis [1, 2]. Emotional expression is conveyed through prosodic, spectral, and temporal variations [3], which are preserved differ-ently across speech representations. Spectrograms retain detailed time-frequency structures [4], Mel-frequency cepstral coefficients (MFCCs) provide a compact description of the spectral envelope [5], and self-supervised models encode higher-level contextual in-formation [6, 7]. Since no individual representation preserves all emotion-related cues equally well, single-view SER may provide only a partial description of emotional expression. Recent studies have strengthened emotion modeling within individual representation spaces. TIM-Net captures emotional dy-namics at multiple temporal scales [8], while AMH-Net focuses on frequency-dependent emotional cues through formant-guided multi-band modeling [9]. ICAPM-Net further learns relationships among acoustic parameter groups to improve both recognition and interpretability [10]. These methods enhance the extraction and organization of emotion-related information within a selected rep- 
+
+> †
+
+These authors contributed equally (co-first authors). 
+
+∗ Corresponding author: Xikun Lu (xikunlu@stu.ecnu.edu.cn) 
+
+resentation, but do not explicitly exploit the complementary cues distributed across heterogeneous views. Multi-view SER addresses this limitation by combining repre-sentations with different acoustic properties. AMSNet integrates handcrafted and deep representations through connection attention [11], while CA-MSER employs co-attention to model their interac-tions [12]. SMW CAT progressively fuses multiple acoustic views using cross-attention [13], whereas Pairwise-CL promotes agree-ment among self-supervised, spectral, and paralinguistic represen-tations through contrastive learning [14]. Although these methods demonstrate the benefits of heterogeneous acoustic representations, they mainly focus on strengthening cross-view interaction or align-ment. However, acoustic views derived from the same utterance are neither independent nor equally informative. Directly fusing these representations may repeatedly propagate overlapping emotional ev-idence while obscuring weaker but complementary view-dependent cues. The key challenge is therefore not merely how to combine multiple views, but how to organize their shared and representation-dependent information before fusion. Shared–specific representation learning provides a useful per-spective on this issue. Domain Separation Networks distinguish shared information from domain-dependent characteristics [15], while MISA and DLF separate common and modality-specific representations for multimodal affective analysis [16, 17]. Disentan-glement has also been explored in SER. DTNet uses identity-related information to guide the extraction of emotion-relevant features from acoustic representations [18]. Unlike these settings, the acous-tic views considered here originate from the same utterance but differ in statistical structure and abstraction level. They therefore contain overlapping emotional evidence as well as cues determined by their respective representation mechanisms, motivating explicit shared–specific organization before cross-view fusion. To this end, we propose Tri -view Consensus-Guided Fusion (TriCGF )1 for jointly modeling spectrogram, MFCC, and HuBERT representations. The main contributions are summarized as follows: (i) We formulate tri-view SER as a shared–specific representation problem, explicitly organizing overlapping emotional evidence and representation-dependent cues before fusion. (ii) We introduce Cross-view Consensus Learning (CCL) to form a global reference from the common representations and View-wise Gated Integration (VGI) to incorporate each view-specific component adaptively. (iii) Experiments on IEMOCAP and EmoDB demonstrate consistent effectiveness across two speaker-independent evaluation settings, while view-combination and component ablations verify the contri-butions of the proposed design. 
+
+> 1
+
+Our source codes are available online: https://github.com/ Luxikun669/TriCGF    
+
+> © 2026 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses, in any current or future media, including reprinting/republishing this material for advertising or promotional purposes, creating new collective works, for resale or redistribution to servers or lists, or reuse of any copyrighted component of this work in other works. arXiv:2609.19826v2 [eess.AS] 18 Sep 2026 2D CNN Bi-LSTM HuBERT Specific Encoder  Common Encoder 2 FC Layers
+> Cross-view Consensus Learning (CCL) View-wise Gated Integration (VGI)
+> Spectrogram MFCCs Audio Segments
+> Acoustic View Encoding Shared–specific View Factorization Consensus-guided Adaptive Fusion
+
+Fig. 1 . Overview of the proposed TriCGF framework. Three acoustic views are encoded into utterance-level representations and factorized into common ( hcm) and view-specific ( hpm) components, with Ldiff encouraging their separation. Cross-view Consensus Learning (CCL) constructs a global consensus, which is adaptively integrated with each view-specific component through View-wise Gated Integration (VGI) for emotion prediction. 
+
+2. PROPOSED METHOD 
+
+TriCGF integrates three heterogeneous acoustic views through shared–specific representation learning and consensus-guided fu-sion. As illustrated in Fig. 1, the three views are first encoded into utterance-level representations and then factorized into common and view-specific components. The common components are aggregated into a cross-view consensus, which adaptively guides the integration of view-specific information for emotion prediction. 
+
+2.1. Heterogeneous Acoustic View Encoding 
+
+Given a speech utterance, we construct three heterogeneous acoustic views: a spectrogram, MFCCs, and the raw waveform. Their inputs are denoted by: 
+
+Xspec ∈ RB×F ×Ts , Xmfcc ∈ RB×Tm×Dm , Xwav ∈ RB×L. (1) where B denotes the batch size, F is the number of spectrogram frequency bins, Ts and Tm denote the number of time frames, Dm
+
+is the MFCC dimension, and L is the waveform segment length. The spectrogram view is encoded using a four-layer 2-D con-volutional network (CNN) followed by Convolutional Block Atten-tion Module (CBAM) [19], while the MFCC and waveform views are processed by a two-layer bidirectional long short-term mem-ory (Bi-LSTM) network [20] and HuBERT-base [6], respectively. The resulting frame- or location-level features are aggregated into utterance-level representations through a learnable weighted pool-ing operation. Linear projections are then used where necessary to align the three representations to the same dimension: 
+
+um ∈ RB×dh , m ∈ M = {spec , mfcc , hubert }. (2) where dh denotes the unified representation dimension. During fine-tuning, only the last k Transformer encoder layers of HuBERT are updated, while the remaining HuBERT parameters are frozen. 
+
+2.2. Shared–Specific View Factorization 
+
+The three acoustic views contain overlapping emotion-related infor-mation as well as characteristics determined by their respective rep-resentation mechanisms. To distinguish these two forms of informa-tion, each utterance-level representation is projected into a common component hcm and a view-specific component hpm:
+
+hcm = Ec(um; θc), hpm = Epm(um; θpm). (3) The common encoder Ec is a parameter-shared two-layer mul-tilayer perceptron (MLP). It contains a GELU activation function, dropout, and layer normalization. Applying the same encoder to all three views encourages their common components to occupy a comparable latent space. Each view-specific encoder Epm adopts the same two-layer architecture but maintains an independent set of pa-rameters. These independent mappings allow the specific branches to preserve information associated with the statistical properties and abstraction level of each representation. 
+
+2.3. Consensus-Guided Adaptive Fusion 
+
+The factorized representations are integrated in two stages. CCL first aggregates the common representations into a global consen-sus. VGI then combines this consensus with each corresponding view-specific representation through a feature-wise gate, adaptively balancing common and view-specific information. 
+
+2.3.1. Cross-view Consensus Learning 
+
+The three common representations are concatenated and mapped to a global consensus vector: 
+
+hc 
+
+> global
+
+= Egl 
+
+ [hc
+
+> spec
+
+; hc
+
+> mfcc
+
+; hc
+
+> hubert
+
+]; θgl , (4) where [·; ·] denotes feature concatenation. The consensus encoder 
+
+Egl is implemented as a two-layer MLP that maps the concatenated 3dh-dimensional representation to a dh-dimensional global repre-sentation. The resulting hc 
+
+> global
+
+summarizes common emotion-related information across the three views and provides a shared reference for subsequent fusion. 
+
+2.3.2. View-wise Gated Integration 
+
+For each view m, the global consensus hc 
+
+> global
+
+and the corresponding specific representation hpm are concatenated and passed through a view-dependent gating network: 
+
+gm = σ Gm([ hc
+
+> global
+
+; hpm]; θgt m ), (5) where Gm is a view-specific MLP, σ(·) denotes the sigmoid func-tion, and gm ∈ [0 , 1] dh . The fused representation is computed as: 
+
+rm = gm ⊙ hc 
+
+> global
+
++ (1 − gm) ⊙ hpm, (6) where ⊙ denotes element-wise multiplication. The gate adaptively balances global consensus with view-specific information. Finally, the three fused representations are concatenated for emotion predic-tion: 
+
+ˆy = Fcls 
+
+ [rspec ; rmfcc ; rhubert ]; θcls . (7) Here, Fcls denotes a two-layer MLP classifier that maps the con-catenated 3 dh-dimensional representation to C emotion classes. 
+
+2.4. Training Objective 
+
+The overall training objective combines the emotion classification loss with a difference regularization term: 
+
+L = Ltask + αLdiff , (8) where α controls the contribution of the regularization term. The task loss is defined using cross-entropy: 
+
+Ltask = − 1
+
+B
+
+> B
+
+X
+
+> i=1
+> C
+
+X
+
+> c=1
+
+y(i) 
+
+> c
+
+log ˆ y(i) 
+
+> c
+
+, (9) where y(i) 
+
+> c
+
+and ˆy(i) 
+
+> c
+
+denote the ground-truth label and predicted prob-abilities of the i-th utterance for emotion class, respectively. The task loss ensures that the fused representation remains dis-criminative for emotion recognition, but it does not directly regulate the information learned by the common and specific branches. We therefore employ a soft orthogonality-based difference loss [15, 16]. For a mini-batch, let Hcm and Hpm denote the common and spe-cific representation matrices of view m. After zero-mean and ℓ2-norm, the difference loss is defined as: 
+
+Ldiff = 13
+
+X
+
+> m∈M
+
+∥ ˜Hc⊤ 
+
+> m
+
+˜Hpm∥2 
+
+> F
+
++ 13
+
+X
+
+> (m1,m 2)∈P
+
+∥ ˜Hp⊤
+
+> m1
+
+˜Hpm2 ∥2 
+
+> F
+
+. (10) where P = {(spec , mfcc ), (spec , hubert ), (mfcc , hubert )}. The first term discourages linear dependence between the common and view-specific components within each view, while the second penalizes excessive overlap among the view-specific components of different views. Both terms serve as soft regularizers rather than strict inde-pendence constraints. 
+
+Table 1 . Dataset-specific training settings for TriCGF.                     
+
+> Hyperparameter IEMOCAP EmoDB
+> Early stop patience 815 Batch size 128 32 Initial learning rate 1.1×10 −48×10 −5
+> Difference loss weight α0.6 0.5 Dropout 0.20 0.30 HuBERT unfrozen layers k68
+
+Table 2 . Comparison with representative SER methods under five-fold speaker-independent cross-validation.                                                    
+
+> Model Year IEMOCAP EmoDB
+> WA (%) UA (%) WA (%) UA (%) SFF-NEC [24] 2022 64.52 62.90 82.84 81.45 TLGCNN [25] 2024 66.82 64.21 ––WADAN+DNN [26] 2020 66.92 64.51 84.49 83.35 SkipGCNGAT [27] 2024 67.37 65.61 ––hc-former [28] 2025 68.13 61.80 91.59 90.78 AMSNet [11] 2023 69.22 70.51 88.34 88.56 SAMT [29] 2025 69.26 –––CA-MSER [12] 2022 69.80 71.05 ––
+> TriCGF (ours) –74.19 75.17 94.36 94.28
+
+3. EXPERIMENTS 3.1. Datasets and Evaluation Metrics 
+
+TriCGF is evaluated on IEMOCAP [21] and EmoDB [22]. For IEMOCAP, happy and excited are merged into a single category, re-sulting in four emotion classes consisting of angry, sad, happy, and neutral. The resulting subset contains 5,531 utterances and is evalu-ated using five-fold leave-one-session-out cross-validation. EmoDB contains 535 German utterances produced by ten speakers and is evaluated using five-fold speaker-independent cross-validation. We report weighted accuracy (WA) and unweighted accuracy (UA) [23]. WA measures overall classification accuracy, whereas UA averages class-wise recall and is therefore less affected by class imbalance. 
+
+3.2. Experimental Setup 
+
+All audio signals are resampled to 16 kHz and adjusted to a duration of 3 s. Spectrogram and MFCC features are extracted using a 40-ms Hamming window with a 10-ms hop, with 200 frequency bins re-tained. The model is trained using Adam with cosine learning-rate annealing for up to 100 epochs, and early stopping is applied based on validation performance. The same network architecture is used for both datasets, while the dataset-specific training hyperparame-ters are summarized in Table 1. All experiments are implemented in PyTorch and conducted on a single NVIDIA RTX 4090 GPU. 
+
+4. RESULTS AND ANALYSIS 4.1. Overall Results and Visualization 
+
+Table 2 compares TriCGF with representative SER methods. TriCGF achieves the best reported WA and UA among the compared meth-ods on both datasets. On IEMOCAP, TriCGF outperforms the competitive CA-MSER method by 4.39% in WA and 4.12% in Fig. 2 . Normalized confusion matrices of TriCGF on IEMOCAP (left) and EmoDB (right). Rows represent ground-truth labels and columns represent predicted labels. 
+
+Fig. 3 . t-SNE visualization of TriCGF representations on IEMOCAP (left) and EmoDB (right). Colors denote emotion categories, and each point corresponds to an utterance sample. UA. On EmoDB, it further surpasses hc-former, yielding gains of 2.77% in WA and 3.50% in UA. These consistent improvements across datasets with different characteristics further demonstrate the robustness and generalization capability of the proposed framework. Fig. 2 shows the normalized confusion matrices on IEMOCAP and EmoDB. The predictions are largely concentrated along the di-agonal on both datasets, which is consistent with the overall im-provements in WA and UA. This indicates that TriCGF achieves sta-ble and discriminative performance across emotion categories. The t-SNE projections in Fig. 3 further visualize the fused rep-resentation space. On IEMOCAP, the emotion classes form distin-guishable but partially overlapping clusters, which reflects the con-tinuous and ambiguous nature of spontaneous emotional expression. EmoDB shows more compact intra-class distributions and clearer inter-class boundaries. These patterns are consistent with the quan-titative differences between the two datasets. 
+
+4.2. Ablation Study 
+
+We further analyze the contribution of different design choices through detailed ablation studies. 
+
+4.2.1. Effect of Multi-view Design 
+
+Table 3 reveals that the contributions of the three views are non-uniform. HuBERT provides the strongest single-view performance, reflecting the effectiveness of contextual self-supervised represen-tations. Adding the spectrogram view consistently improves Hu-BERT on both datasets, suggesting that fine-grained time-frequency structures retain complementary emotional cues. The MFCC view provides a smaller and more dataset-dependent contribution when paired with HuBERT alone, but further improves the full tri-view configuration, particularly on EmoDB. These results indicate that the benefit of multi-view modeling does not arise from treating all 
+
+Table 3 . Effect of acoustic-view combinations on TriCGF perfor-mance.                                  
+
+> View IEMOCAP EmoDB
+> WA (%) UA (%) WA (%) UA (%) MFCC only 54.69 56.37 41.51 35.66 Spec only 56.43 57.53 48.33 45.03 HuBERT only 72.51 73.70 90.99 90.01 Spec + MFCC 55.95 57.55 62.24 56.82 MFCC + HuBERT 72.90 73.79 90.39 90.26 Spec + HuBERT 73.89 74.83 92.57 91.62
+> TriCGF (tri-view) 74.19 75.17 94.36 94.28
+
+Table 4 . Ablation of the major components in TriCGF.                       
+
+> Model Variant IEMOCAP EmoDB
+> WA (%) UA (%) WA (%) UA (%)
+> TriCGF (full model) 74.19 75.17 94.36 94.28
+> w/o Ldiff 73.49 74.61 90.10 86.76 w/o CCL 72.63 74.27 93.30 93.02 w/o VGI 72.64 74.39 92.67 92.14
+
+representations as equally informative. Instead, the views provide different amounts and types of complementary information, moti-vating their shared-specific organization and adaptive integration. 
+
+4.2.2. Impact of Key Components 
+
+Table 4 reports the ablation results of the major components in TriCGF. Removing Ldiff causes moderate performance degradation on IEMOCAP but substantially reduces performance on EmoDB, where WA and UA decrease by 4.26% and 7.52%, respectively. This result indicates that the soft difference regularization is important for limiting excessive overlap between the common and view-specific representations on EmoDB. Removing either CCL or VGI also de-grades performance on both datasets. On IEMOCAP, the removal of CCL and VGI produces larger decreases than removing Ldiff , high-lighting the importance of cross-view consensus construction and adaptive integration under spontaneous emotional speech. Overall, the full TriCGF achieves the best results across both datasets. 
+
+5. CONCLUSION 
+
+This work presented TriCGF, a multi-view speech emotion recogni-tion framework that organizes common and view-specific informa-tion before fusion. TriCGF constructs a cross-view consensus from the common representations and uses it to guide the adaptive inte-gration of view-dependent cues. Experiments on IEMOCAP and EmoDB demonstrate consistent improvements over representative SER methods, while the ablation results confirm the effectiveness of shared–specific factorization, consensus learning, and adaptive fu-sion. These findings indicate that the benefit of multi-view modeling depends not only on combining heterogeneous representations, but also on appropriately organizing their shared and view-specific in-formation. 6. REFERENCES 
+
+[1] Adil Chakhtouna, Sara Sekkate, and Abdellah Adib, “Speech emotion recognition: A systematic mega-review of techniques and pipelines,” Inform. Fusion , p. 104161, 2026. [2] Stefanie Schelinski and Katharina von Kriegstein, “The rela-tion between vocal pitch and vocal emotion recognition abili-ties in people with autism spectrum disorder and typical devel-opment,” J. Autism Dev. Disord. , vol. 49, pp. 68–82, 2019. [3] Taiba Majid Wani, Teddy Surya Gunawan, Syed Asif Ahmad Qadri, Mira Kartiwi, and Eliathamby Ambikairajah, “A com-prehensive review of speech emotion recognition systems,” 
+
+IEEE Access , vol. 9, pp. 47795–47814, 2021. [4] Abdul Malik Badshah, Jamil Ahmad, Nasir Rahim, and Sung Wook Baik, “Speech emotion recognition from spec-trograms with deep convolutional neural network,” in Proc. PlatCon , 2017, pp. 1–5. [5] Fang Zheng, Guoliang Zhang, and Zhanjiang Song, “Compar-ison of different implementations of mfcc,” J. Comput. Sci. Tech. , vol. 16, no. 6, pp. 582–589, 2001. [6] Wei-Ning Hsu, Benjamin Bolte, Yao-Hung Hubert Tsai, Kushal Lakhotia, Ruslan Salakhutdinov, and Abdelrahman Mohamed, “HuBERT: Self-supervised speech representation learning by masked prediction of hidden units,” IEEE/ACM Trans. Audio, Speech, Lang. Process. , vol. 29, pp. 3451–3460, 2021. [7] Sanyuan Chen, Chengyi Wang, Zhengyang Chen, Yu Wu, Shu-jie Liu, Zhuo Chen, Jinyu Li, Naoyuki Kanda, Takuya Yosh-ioka, Xiong Xiao, et al., “WavLM: Large-scale self-supervised pre-training for full stack speech processing,” IEEE J. Sel. Top. Signal Process. , vol. 16, no. 6, pp. 1505–1518, 2022. [8] Jiaxin Ye, Xin-Cheng Wen, Yujie Wei, Yong Xu, Kunhong Liu, and Hongming Shan, “Temporal modeling matters: A novel temporal emotional modeling approach for speech emo-tion recognition,” in Proc. ICASSP , 2023, pp. 1–5. [9] Hengrui Li, Yongbing Zhang, and Shaohui Liu, “AMH-Net: Adaptive multi-band hybrid-aware network for emotion recog-nition in speech,” IEEE Signal Process. Lett. , vol. 32, pp. 2344–2348, 2025. [10] Hailun Lian, Cheng Lu, Hao Yang, Yan Zhao, Sunan Li, and Yuan Zong, “An interpretable collaborative acoustic parame-ter modeling network for speech emotion recognition,” IEEE Trans. Comput. Soc. Syst. , pp. 1–17, 2026. [11] Zengzhao Chen, Jiawen Li, Hai Liu, Xuyang Wang, Hu Wang, and Qiuyu Zheng, “Learning multi-scale features for speech emotion recognition with connection attention mechanism,” 
+
+Expert Syst. Appl. , vol. 214, pp. 118943, 2023. [12] Heqing Zou, Yuke Si, Chen Chen, Deepu Rajan, and Eng Siong Chng, “Speech emotion recognition with co-attention based multi-level acoustic information,” in Proc. ICASSP , 2022, pp. 7367–7371. [13] Yurun He, Nobuaki Minematsu, and Daisuke Saito, “Multi-ple acoustic features speech emotion recognition using cross-attention transformer,” in Proc. ICASSP , 2023, pp. 1–5. [14] Bulat Khaertdinov, Pedro Jeuris, Annanda Sousa, and Enrique Hortal, “Exploring self-supervised multi-view contrastive learning for speech emotion recognition with limited annota-tions,” in Proc. Interspeech , 2024. [15] Konstantinos Bousmalis, George Trigeorgis, Nathan Silber-man, Dilip Krishnan, and Dumitru Erhan, “Domain separation networks,” in Proc. NeurIPS , 2016, pp. 343–351. [16] Devamanyu Hazarika, Roger Zimmermann, and Soujanya Po-ria, “MISA: Modality-invariant and-specific representations for multimodal sentiment analysis,” in Proc. ACM MM , 2020, pp. 1122–1131. [17] Pan Wang, Qiang Zhou, Yawen Wu, Tianlong Chen, and Jing-tong Hu, “DLF: Disentangled-language-focused multimodal sentiment analysis,” in Proc. AAAI , 2025, vol. 39, pp. 21180– 21188. [18] Zhichen Yuan, C. L. Philip Chen, Shuzhen Li, and Tong Zhang, “Disentanglement network: Disentangle the emotional fea-tures from acoustic features for speech emotion recognition,” in Proc. ICASSP , 2024, pp. 11686–11690. [19] Sanghyun Woo, Jongchan Park, Joon-Young Lee, and In So Kweon, “CBAM: convolutional block attention module,” in 
+
+Proc. ECCV , 2018, vol. 11211, pp. 3–19. [20] Alex Graves and J¨ urgen Schmidhuber, “Framewise phoneme classification with bidirectional lstm and other neural network architectures,” Neural Netw. , vol. 18, no. 5-6, pp. 602–610, 2005. [21] Carlos Busso, Murtaza Bulut, Chi-Chun Lee, Abe Kazemzadeh, Emily Mower, Samuel Kim, Jeannette NChang, Sungbok Lee, and Shrikanth S Narayanan, “IEMO-CAP: Interactive emotional dyadic motion capture database,” 
+
+Lang. Resour. Eval. , vol. 42, pp. 335–359, 2008. [22] Felix Burkhardt, Astrid Paeschke, M. Rolfes, Walter F. Sendlmeier, and Benjamin Weiss, “A database of german emo-tional speech,” in Proc. Interspeech-Eurospeech , 2005, pp. 1517–1520. [23] Bj¨ orn W. Schuller, Stefan Steidl, and Anton Batliner, “The IN-TERSPEECH 2009 emotion challenge,” in Proc. Interspeech ,2009, pp. 312–315. [24] Ramakrishna Thirumuru, Krishna Gurugubelli, and Anil Ku-mar Vuppala, “Novel feature representation using single fre-quency filtering and nonlinear energy operator for speech emo-tion recognition,” Digi. Signal Process. , vol. 120, pp. 103293, 2022. [25] Jingjie Yan, Haihua Li, Fengfeng Xu, Xiaoyang Zhou, Ying Liu, and Yuan Yang, “Speech emotion recognition based on temporal-spatial learnable graph convolutional neural net-work,” Electronics , vol. 13, no. 11, pp. 2010, 2024. [26] Lu Yi and Man-Wai Mak, “Improving speech emotion recogni-tion with adversarial data augmentation network,” IEEE Trans. Neural Netw. Learn. Syst. , vol. 33, no. 1, pp. 172–184, 2020. [27] Han Wang and Deok-Hwan Kim, “Graph neural network-based speech emotion recognition: A fusion of skip graph con-volutional networks and graph attention networks,” Electron-ics , vol. 13, no. 21, pp. 4208, 2024. [28] Yonghong Fan, Heming Huang, and Henry Han, “Hierarchical convolutional neural networks with post-attention for speech emotion recognition,” Neurocomputing , vol. 615, pp. 128879, 2025. [29] Xiaohan Shi, Xingfeng Li, and Tomoki Toda, “Speaker-aware multi-task learning for speech emotion recognition,” in Proc. Interspeech , 2025.
