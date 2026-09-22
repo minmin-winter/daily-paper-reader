@@ -6,43 +6,52 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-21
-- 运行时间：2026-09-21 22:20:51 UTC
+- 最新运行日期：2026-09-22
+- 运行时间：2026-09-22 22:37:11 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：1
-- 速读区：6
+- 本次总论文数：10
+- 精读区：2
+- 速读区：8
 
 ### 今日简报（AI）
-今日汇总7篇多模态/语音/临床AI论文，精读1篇《Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning》（8.0/10），速读6篇。  
-最值得关注的是多模态学习的信息论统一视角，以及语音情感识别的共享-特定三视图学习、多模态推理的密集推理轨迹、临床VLM中ECG利用不足的揭示与缓解。  
-普通读者可先读精读篇建立框架，再按兴趣选读语音情感或临床心电方向速读篇。
-- 详情：[/202609/21/README](/202609/21/README)
+2026-09-22日报：10篇多模态论文中精读2篇、速读8篇，聚焦多模态学习平衡与视觉语言推理。
+最值得看：GeoBalance（10分）用几何感知监控与不对称优化提升多模态平衡；INTCORT（8分）免训练增强视觉语言模型空间推理。
+普通读者可先读这两篇精读，速读再按需扫医学视觉编码器、多模态意图和视频理解基准。
+- 详情：[/202609/22/README](/202609/22/README)
 
 ### 精读区论文标签
-1. [Dependency, Compression, and Synergy: A Unified Information-Theoretic View of Multimodal Learning](/202609/21/2609.14421v1-dependency-compression-and-synergy-a-unified-information-theoretic-view-of-multimodal-learning)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：多模态学习与融合的统一信息论视角
+1. [GeoBalance: Geometry-Aware Monitoring and Reconstruction with Asymmetric Optimization for Balanced Multimodal Learning](/202609/22/2609.23533v1-geobalance-geometry-aware-monitoring-and-reconstruction-with-asymmetric-optimization-for-balanced-multimodal-learning)  
+   标签：评分：10.0/10、query:balanced-mml
+   evidence：针对模态主导与失衡的平衡多模态学习
+2. [INTCORT: Training-Free Spatial Reasoning Enhancement for Vision-Language Models via Input Transformations and Confidence Routing](/202609/22/2609.24813v1-intcort-training-free-spatial-reasoning-enhancement-for-vision-language-models-via-input-transformations-and-confidence-routing)  
+   标签：评分：8.0/10、query:mm-reasoning
+   evidence：增强视觉语言模型的空间推理
 
 ### 速读区论文标签
-1. [Consensus-Guided Shared-Specific Tri-View Learning for Speech Emotion Recognition](/202609/21/2609.19826v2-consensus-guided-shared-specific-tri-view-learning-for-speech-emotion-recognition)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：以共识引导与自适应门控整合共享与特异视图
-2. [DRT: Dense Reasoning Trace for Efficient and Grounded Multimodal Reasoning](/202609/21/2609.21675v1-drt-dense-reasoning-trace-for-efficient-and-grounded-multimodal-reasoning)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：面向多模态大模型的结构化推理迹推理
-3. [ECG Mirage: Revealing and Mitigating the Underutilisation of ECGs in Vision-Language Models for Clinical Prediction](/202609/21/2609.21755v1-ecg-mirage-revealing-and-mitigating-the-underutilisation-of-ecgs-in-vision-language-models-for-clinical-prediction)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：视觉语言模型忽视或混淆ECG模态
-4. [SceneBench: A Hierarchical Benchmark for Vision-Language Understanding of 3D Scenes](/202609/21/2609.16233v1-scenebench-a-hierarchical-benchmark-for-vision-language-understanding-of-3d-scenes)  
+1. [Pretraining of Medical Visual Encoders Toward Multi-modal Large Language Models](/202609/22/2609.23860v1-pretraining-of-medical-visual-encoders-toward-multi-modal-large-language-models)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：对齐视觉编码器与大语言模型的多模态预训练
+2. [Omni Demand Understanding: A Benchmark for Contextual User-Intent Inference in Multimodal Interaction](/202609/22/2609.21392v1-omni-demand-understanding-a-benchmark-for-contextual-user-intent-inference-in-multimodal-interaction)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：面向视觉语言三维空间推理的基准
-5. [AVT-Fabric: Active Visuo-Tactile Perception via Adaptive Evidence Selection for Efficient Robotic Fabric Comparison](/202609/21/2609.21377v1-avt-fabric-active-visuo-tactile-perception-via-adaptive-evidence-selection-for-efficient-robotic-fabric-comparison)  
+   evidence：结合视听线索进行联合意图理解
+3. [VidOmni-Bench: A Benchmark for Fine-Grained Video Understanding via Spatio-Temporal Event Verification across Complexity and Duration](/202609/22/2609.21521v1-vidomni-bench-a-benchmark-for-fine-grained-video-understanding-via-spatio-temporal-event-verification-across-complexity-and-duration)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：细粒度视频理解与事件验证基准
+4. [Discrete vs. Continuous: A Comprehensive Study of Unified Audio Understanding in LALMs](/202609/22/2609.22851v1-discrete-vs-continuous-a-comprehensive-study-of-unified-audio-understanding-in-lalms)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：大型音频语言模型的统一音频理解
+5. [SPACE: Semantic Projection and Alignment of CLIP Embeddings for Domain Adaptation](/202609/22/2609.23248v1-space-semantic-projection-and-alignment-of-clip-embeddings-for-domain-adaptation)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：通过语义锚点对齐视觉语言表示
+6. [Knowing When to Trust Images: Reliability-Aware Multi-modal Entity Alignment](/202609/22/2609.23267v1-knowing-when-to-trust-images-reliability-aware-multi-modal-entity-alignment)  
    标签：评分：6.0/10、query:balanced-mml
-   evidence：依据比较难度自适应选择视觉与触觉证据
-6. [Refine Then Fusion: Training-Free 3D Point Cloud Adaptation with Priority Refinement and Multi-Modal Knowledge Fusion](/202609/21/2609.21522v1-refine-then-fusion-training-free-3d-point-cloud-adaptation-with-priority-refinement-and-multi-modal-knowledge-fusion)  
-   标签：评分：6.0/10、query:balanced-mml
-   evidence：样本相关的模态可靠性与自适应融合
+   evidence：融合中按可靠性自适应改进不可靠视觉模态
+7. [Look Where It Counts: A Free, Label-Free Visual Evidence Signal for Fine-Grained Vision-Language Reasoning](/202609/22/2609.24244v1-look-where-it-counts-a-free-label-free-visual-evidence-signal-for-fine-grained-vision-language-reasoning)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：利用免标签视觉证据信号提升细粒度视觉语言推理
+8. [VLM-in-Sandbox: Visual Workspaces for Agentic Visual Reasoning](/202609/22/2609.24362v1-vlm-in-sandbox-visual-workspaces-for-agentic-visual-reasoning)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：结合视觉与语言证据的智能体式多模态推理
 
 
 <div class="dpr-home-promo-card">
