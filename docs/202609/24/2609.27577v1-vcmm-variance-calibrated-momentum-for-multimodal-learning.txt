@@ -1,0 +1,334 @@
+Title: VCMM: Variance-Calibrated Momentum for Multimodal Learning
+
+URL Source: https://arxiv.org/pdf/2609.27577v1
+
+Published Time: Thu, 24 Sep 2026 00:55:21 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# VCMM: VARIANCE-CALIBRATED MOMENTUM FOR MULTIMODAL LEARNING 
+
+# Zhongjing Gu, Chenyang Huang, Yufa Feng, Chong He, Qinxu Ding, Yiming Cui 
+
+ABSTRACT 
+
+Multimodal joint training often suffers from modality imbalance, where a dominant modality suppresses the optimization of others. Existing methods mainly balance modality learning by modulat-ing gradient magnitudes or directions, modifying optimization ob-jectives, or adjusting training strategies, with most interventions focusing on the current update. However, when combined with widely used momentum-based optimizers, the update also incor-porates accumulated information from previous gradients, which is not explicitly addressed by current-step modulation alone. To address this issue, we propose Variance-Calibrated Momentu M(VCMM) , which adapts gradient memory to modality-specific gra-dient dynamics. Specifically, VCMM estimates minibatch noise and temporal drift online and uses their relative strength to determine modality-specific momentum through a Kalman-inspired controller. We further center the control signal across modalities and apply exact bias correction for the time-varying first moment, enabling adaptive gradient memory without extra network passes or explicit learning-rate scaling. Experiments on four multimodal benchmarks demonstrate consistent improvements with modest training over-head. 
+
+Index Terms — multimodal learning, modality imbalance, stochastic optimization, adaptive momentum, gradient variance 
+
+1. INTRODUCTION 
+
+Multimodal learning integrates complementary information from different modalities [1, 2, 3], but joint training often suffers from op-timization imbalance [4, 5, 6, 7]. A dominant modality can suppress the learning of others, leading to under-optimized unimodal repre-sentations and limiting the benefit of multimodal fusion [4, 6, 8]. Existing methods for modality imbalance mainly intervene through gradient modulation , objective optimization , or training strategy adjustment . Gradient-based methods regulate modality-wise gradient magnitudes [5, 9], with recent work further con-sidering gradient directions [10]. Objective-based methods coor-dinate multimodal and unimodal learning objectives [11], while training-based methods adjust modality update schedules or sample sequences [12, 13]. Although these methods adopt different bal-ancing mechanisms, most of them primarily regulate the current optimization step. Indeed, with momentum-based optimizers, the current update also incorporates gradient information accumulated from previous steps [14, 15, 16]. This cross-step accumulation is typically governed by a shared momentum coefficient across modal-ities, implicitly assuming that different modalities require the same 
+
+gradient memory .However, the assumption of shared gradient memory across modalities may not always hold. Momentum governs the trade-off between suppressing minibatch noise and tracking temporal gradient changes [17]. A larger momentum provides stronger smoothing but responds more slowly to gradient drift, whereas a smaller momen-tum tracks gradient changes faster but retains more stochastic noise. 1 10 20 30 40 50 −5 −4 −3 −2 −1 0Training epoch                                      
+
+> (a) Modal heterogeneity
+> log( Q/R)Text Image 72.01 71.48 71.48 73.26 73.26 71.84 71.93 71.52 71.66 73.17 73.43 72.28 71.85 71.75 71.57 72.73 73.17 72.28 71.75 71.84 71.39 72.73 73.26 71.66 71.66 71.66 71.57 72.99 72.65 71.57 71.84 71.75 71.48 72.99 73.17 71.75
+> 0.1 0.3 0.5 0.7 0.8 0.9 0.3 0.7 0.9 Text memory βt
+> Image memory  βi
+> (b) Optimization consequence
+
+Fig. 1 . (a) Drift-to-noise ratios Q/R of Image and Text. (b) Perfor-mance under shared and asymmetric momentum settings. Therefore, the appropriate gradient memory should depend on the relative strength of minibatch noise and temporal drift . As illus-trated in Fig. 1, we characterize this relation using the drift-to-noise ratio Q/R , where Q and R denote temporal drift and minibatch noise, respectively. Figures 1 (a) show that different modalities exhibit distinct Q/R dynamics and that these differences evolve throughout training. Furthermore, Fig. 1 (b) shows that the best asymmetric momentum setting outperforms the best shared setting. These observations suggest that a shared momentum coefficient may be suboptimal for multimodal joint training. Therefore, differ-ent modalities require distinct and time-varying gradient memory. To this end, we propose Variance-Calibrated Momentu M(VCMM) , which adapts gradient memory to modality-specific gradient dynamics. Specifically, VCMM models each minibatch gradient as a noisy observation of a time-varying latent gradient [18] and estimates the minibatch noise and temporal drift of each modal-ity online. The resulting drift-to-noise ratio is then mapped to a modality-specific momentum coefficient through a Kalman-inspired controller [19]. We further center the control signal and apply exact bias correction to the time-varying first moment, preserving relative modal differences while anchoring the control signal to the base mo-mentum and correcting initialization bias. Together, these designs enable VCMM to adapt modality-specific gradient memory without extra network passes or modality-specific learning-rate scaling. Ex-periments on four benchmarks show consistent improvements over competitive baselines. 
+
+2. VARIANCE-CALIBRATED MOMENTUM 
+
+In this section, we present VCMM, whose overall framework is il-lustrated in Figure 2. We first introduce the multimodal learning set-ting in Section 2.1, and in Section 2.2, we estimate modality-specific minibatch noise and temporal drift to characterize the gradient dy-namics of different modalities. Based on these estimates, we intro-duce the centered memory controller in Section 2.3, which converts modal dynamics into modality-specific momentum coefficients. Fi-nally, in Section 2.4, we incorporate the resulting momentum into multimodal joint optimization with bias correction. arXiv:2609.27577v1 [cs.LG] 23 Sep 2026 Online Modal Dynamics Estimation Probe   
+
+> Previous step
+> 𝐠 𝑚 ,t −1
+> 𝑝
+> Current step
+> 𝐠 𝑚 ,t
+> 𝑝
+> A minibatch
+> ⋯
+> Half A
+> ⋯
+> Half B
+> ⋯
+> Compare (Noise Level)
+
+Centered Memory Controller Controller      
+
+> ⋮⋮⋮⋮⋮⋮
+> Stored Memory Current Gradient First Moment
+> Exact Bias Correction
+> Classifier Classifier Fusion Shared fusion parameters retain Backprop
+
+Multimodal Data Multimodal Joint Training 
+
+> Encoder
+> Center Across Modality
+> Encoder Classifier Classifier
+> Analytic Classifier Probe
+> Remove Noise (Temporal Drift)
+> Temporal Drift Minibatch Noise
+
+Modal Parameter Update Base Optimizer Step    
+
+> Encoder
+> 𝑅𝑚 ,t ,𝑅𝑚 ,t-1
+> EMA EMA
+
+Fig. 2 . Overview of Variance-Calibrated MomentuM (VCMM). VCMM estimates modality-wise gradient dynamics with a lightweight probe and converts them into modality-specific momentum through a centered Kalman-inspired controller for adaptive gradient memory. 
+
+2.1. Multimodal Learning 
+
+We consider a multimodal classification task with M modalities. Let D = {(x1,i , . . . , xM,i , yi)}Ni=1 denote the training set, where 
+
+xm,i is the input of modality m and yi ∈ { 0, 1}C is the one-hot label over C classes. Each modality is processed by an encoder 
+
+ϕm(·; θm), yielding the representation hm,i = ϕm(xm,i ; θm)
+
+and modal logits zm,i . The modal predictions are fused as pi =Fusion( z1,i , . . . , zM,i ). The model parameters Θ are jointly opti-mized using the cross-entropy objective: 
+
+L(Θ) = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+y⊤ 
+
+> i
+
+log pi. (1) 
+
+2.2. Online Modal Dynamics Estimation 
+
+The appropriate gradient memory of each modality depends on the relative strength of stochastic noise and temporal gradient variation. Therefore, the key challenge is to estimate these two dynamics on-line during joint training. Directly collecting gradient statistics over all modality-specific parameters, however, would introduce consid-erable computational overhead. To make this estimation practical, we construct a lightweight classifier probe that reuses the represen-tations and logits from the original forward pass. 
+
+Analytic Classifier Probe. At iteration t, Hm, Zm, and Y stack 
+
+h⊤ 
+
+> m,j
+
+, z⊤ 
+
+> m,j
+
+, and y⊤ 
+
+> j
+
+as rows. Let Pm = softmax( Zm). For a minibatch of size n, the classifier gradients are GW,m = 1 
+
+> n
+
+(Pm −
+
+Y)⊤Hm and gb,m = 1
+
+> n
+
+Pnj=1 (pm,j −yj ). Flattening and concate-nating them yields gpm,t without an additional encoder forward or backward pass. To distinguish random minibatch fluctuations from genuine temporal changes, we model the probe gradient as: 
+
+gpm,t = sm,t + ϵm,t , sm,t = sm,t −1 + ωm,t , (2) where ϵm,t and ωm,t denote minibatch noise and temporal drift. This decomposition separates stochastic fluctuations from tempo-ral changes, providing the basis for estimating the two dynamics independently. Accordingly, we denote the average per-dimension strengths of minibatch noise and temporal drift by Rm,t and Qm,t ,which are estimated online from the observed probe gradients. 
+
+Minibatch Noise. At fixed model parameters, the discrepancy be-tween two subsets of the same minibatch mainly reflects stochastic sampling noise. We therefore split each minibatch into two inter-leaved halves and estimate the full-minibatch noise from their probe gradients gp,A m,t and gp,B m,t ,
+
+eRm,t = 14 mean 
+
+
+
+gp,A m,t − gp,B m,t 
+
+2
+
+. (3) Here, the factor 1/4 rescales the disagreement between two half-batch gradients to the noise level of the full-minibatch gradient, since each half contains only half of the samples. 
+
+Temporal Drift. Unlike minibatch noise, temporal drift should cap-ture the change of the underlying gradient across consecutive itera-tions. However, the difference between consecutive probe gradients also contains sampling noise. Let ∆gpm,t = gpm,t − gpm,t −1. We therefore estimate the temporal drift as: 
+
+eQm,t = max ∥∆gpm,t ∥22
+
+dm
+
+− eRm,t − eRm,t −1, γ q
+
+∥gpm,t ∥22
+
+dm
+
+!
+
+.
+
+(4) The subtraction removes sampling-noise contributions from the inter-step variation, allowing eQm,t to better capture the underlying temporal gradient change, while the second term prevents the esti-mate from becoming excessively small. EMA smoothing then yields the stabilized Rm,t and Qm,t .2.3. Centered Memory Controller 
+
+With Rm,t and Qm,t estimated, we characterize the trade-off be-tween noise suppression and temporal tracking by the drift-to-noise ratio ρm,t = Qm,t /R m,t . This ratio normalizes temporal varia-tion by noise, providing a scale-consistent measure of the tracking– smoothing trade-off across modalities. We therefore use it as the control signal for determining modality-specific gradient memory. 
+
+Drift-to-Noise Gain. Although ρm,t characterizes the relative gradi-ent dynamics of each modality, it does not provide a valid coefficient for temporal memory. We therefore map this signal to a temporal gain using the steady-state random-walk relation [19], 
+
+ρm,t = K2
+
+> m,t
+
+1 − Km,t 
+
+, Km,t =
+
+q
+
+ρ 2 
+
+> m,t
+
++ 4 ρm,t − ρm,t 
+
+2 . (5) Here, Km,t acts as the temporal gain that controls the response to current-gradient information relative to accumulated history. This mapping provides a model-derived basis for subsequent gradient-memory assignment rather than heuristic momentum scaling. 
+
+Cross-Modal Centering. The obtained Km,t reflects the tracking demand of each modality. However, its absolute value is determined by the modality-specific drift-to-noise ratio, and directly using these gains may collectively shift the gradient memory away from the set-ting of the base optimizer. We therefore preserve their relative dif-ferences while anchoring the common memory level to the base mo-mentum β0. Let K0 = 1 − β0 and ℓm,t = logit( Km,t ). We center the modal gains in log-odds space as: 
+
+eℓm,t = logit( K0) + λ ℓm,t − 1
+
+M
+
+> M
+
+X
+
+> j=1
+
+ℓj,t 
+
+!
+
+, (6) where the subtraction removes the cross-modal common shift and re-centers the residual modal differences around logit( K0). Thus, the controller responds to relative modal dynamics while retaining the base optimizer as the memory reference, with λ controlling the strength of cross-modal differentiation. 
+
+Modal Memory Assignment. After cross-modal centering, eℓm,t re-mains in log-odds space and cannot be directly used as a momentum coefficient. We therefore map it back to a bounded temporal gain and convert the gain into modality-specific momentum, 
+
+eKm,t = clip 
+
+
+
+σ(eℓm,t ), K min , K max 
+
+
+
+, βm,t = 1 − eKm,t .
+
+(7) Here, σ maps the centered signal to (0 , 1) , while clipping restricts the temporal gain to a stable range. Together with βm,t = 1 −
+
+eKm,t , this converts the centered control signal into a valid modality-specific momentum coefficient for adaptive gradient memory. 
+
+2.4. Modal Parameter Update 
+
+With the modality-specific momentum βm,t obtained, we incorpo-rate the adaptive gradient memory into multimodal joint optimiza-tion. Since βm,t varies throughout training, the conventional bias correction for a fixed momentum coefficient is no longer applicable. We therefore update and correct the first moment jointly as: 
+
+mm,t = βm,t mm,t −1+(1 −βm,t )gθm,t , emm,t = mm,t 
+
+1 − Qtτ =1 βm,τ 
+
+,
+
+(8) 
+
+Table 1 . Comparison with representative multimodal learning meth-ods. The best results are highlighted in bold . The underline de-notes the second-best performance. Gray-shaded results indicate that multimodal performance is lower than that of the best unimodal ap-proach.                                                                                                                                   
+
+> Method CREMA-D KSounds Twitter NVGesture Acc. mAP Acc. mAP Acc. F1 Acc. F1 Unimodal-1 .6317 .5879 .5412 .5669 .5863 .4333 .7822 .7833 Unimodal-2 .4583 .6861 .5562 .5837 .7367 .6849 .7863 .7865 Unimodal-3 ––––––.8154 .8183 Concat .6361 .6841 .6455 .7130 .7011 .6386 .8237 .8270 G-Blend [4] .6465 .7392 .6722 .7274 .7309 .6799 .8299 .8305 OGM [5] .6612 .7372 .6582 .7159 .7058 .6435 ––PMR [20] .6659 .7058 .6675 .7274 .7357 .6636 ––MLA [21] .7943 .8572 .7004 .7945 .7352 .6713 .8340 .8372 ReconBoost [12] .7557 .8140 .6855 .7662 .7442 .6832 .8386 .8434 LFM [22] .8362 .9006 .7253 .7897 .7501 .7057 .8436 .8468 InfoReg [23] .7498 .8603 .7189 .7986 .7403 .6847 ––AUG [24] .8515 .9103 .7263 .7901 .7512 .6962 .8501 .8533 DecAlign [25] .8426 .9027 .7298 .7926 .7396 .6786 .8397 .8429
+> VCMM .8562 .9148 .7534 .8218 .7570 .7098 .8532 .8558
+> ±0.0024 ±0.0036 ±0.0025 ±0.0037 ±0.0018 ±0.0023 ±0.0018 ±0.0011
+
+where gθm,t denotes the joint-training gradient of modality m, and 
+
+mm,t accumulates its gradient history under the time-varying mo-mentum. The product Qtτ =1 βm,τ accounts for the complete mo-mentum history, yielding the bias-corrected first moment emm,t . The corrected moment is then passed to the base optimizer. Modality-specific parameters use βm,t , while shared and fusion parameters retain β0, allowing VCMM to adapt gradient memory without intro-ducing an explicit modality-specific learning-rate multiplier. 
+
+3. EXPERIMENTS 3.1. Experimental Setup Datasets and Metrics. We evaluate VCMM on four multimodal benchmarks: CREMA-D [26] and KSounds [27] for audio–visual learning, Twitter [28] for image–text learning, and NVGesture [29] with RGB, optical flow, and depth. Following dataset-specific pro-tocols, we report accuracy (Acc.), mAP, and Macro-F1. 
+
+Implementation Details. Following OGM [5], we use ResNet-18 [30] for CREMA-D and KSounds, BERT [31] and ResNet-50 for Twitter, and pretrained I3D [32] for NVGesture. CREMA-D, KSounds, and NVGesture are optimized with Adam [33] using mo-mentum 0.9, weight decay 1 × 10 −4, and an initial learning rate of 1 × 10 −2, while Twitter uses Adam [33] with a learning rate of 2 × 10 −5 and weight decay 2 × 10 −4. The batch sizes are 64, 32, 32, and 2 for CREMA-D, KSounds, Twitter, and NVGesture, respectively. For VCMM, we set the base momentum to β0 = 0 .9,the statistics EMA coefficient to a = 0 .95 , the adaptation strength to λ = 1 , and the drift floor to γq = 10 −4, with the temporal gain clipped to [0 .01 , 0.30] . The same VCMM hyperparameters are used across all datasets. All models are implemented with PyTorch and experiments are conducted on NVIDIA GeForce RTX 4090 GPUs. 
+
+3.2. Main Results Comparison with Multimodal Baselines. Table 1 compares VCMM with representative multimodal learning methods. Gray cells denote results below the best unimodal model. VCMM achieves the best performance on all eight metrics across the four datasets, showing consistent improvements across audio–visual, image–text, and trimodal settings. The gains are particularly clear on KSounds, where VCMM achieves 75.34% Acc and 82.18% mAP, −2  −1  0 1 2             
+
+> Probe Qm(normalized log)
+> −2
+> −1
+> 0
+> 1
+> 2
+> Encoder  Qm (normalized log)
+> r=0.9439 ρ=0.9460
+> (a) Drift Qm
+> Image
+> Text
+> −2 −1 012
+> Probe Rm(normalized log)
+> −2
+> −1
+> 0
+> 1
+> 2r=0.9306 ρ=0.9303
+> (b) Noise Rm
+
+Fig. 3 . Agreement between the classifier probe and encoder-level estimates of (a) temporal drift Qm and (b) minibatch noise Rm.1.0 1.5 2.0 2.5 3.0 0.6 0.7 0.8 0.9 Training Time Accuracy       
+
+> (a) Accuracy-time trade-off
+> Naive 0.6361 MLA 0.7943
+> VCMM 0.8562
+> ReconBoost 0.7557 LFM 0.8362 PMR 0.6659 00.25 0.5 0.75 11.5 271 72 73 74 75 76 Adaptation strength λ
+> Accuracy (%)
+> (b) Sensitivity to λ
+> shared optimum: λ=1 Kinetics-Sounds Twitter
+
+Fig. 4 . (a) Accuracy–training time trade-off on CREMA-D. (b) Sen-sitivity to the adaptation strength λ on KSounds and Twitter. outperforming the strongest baselines by 2.36% and 2.32% respec-tively. VCMM also consistently improves the best competing results on CREMA-D, Twitter, and NVGesture. These results demon-strate that adapting gradient memory to modality-specific gradient dynamics effectively improves multimodal joint optimization. 
+
+3.3. Ablation Study 
+
+We conduct ablation studies on KSounds and Twitter with the backbone, optimizer, and training configuration fixed across all variants. Shared β uses β = 0.9 for all modalities and fixed asymmetric selects modality-specific momentum coefficients from 
+
+{0.70 , 0.80 , 0.90 , 0.95 , 0.99 } on the validation set and keeps them fixed throughout training. Frozen VCMM runs VCMM during the initial 10% of training and then fixes each modal momentum to its average over the final part of this period. As shown in Table 2, fixed asymmetric momentum consistently improves over shared β,indicating the benefit of modality-specific gradient memory. Full VCMM further outperforms Frozen VCMM by 7.21% and 1.58% on KSounds and Twitter, respectively, demonstrating the importance of time-varying adaptation. Removing noise subtraction, log-odds cen-tering, or exact bias correction consistently degrades performance. Noise subtraction has the largest impact on KSounds, while log-odds centering contributes most on Twitter, highlighting the importance of reliable dynamics estimation and cross-modal calibration. 
+
+3.4. Further Analysis Computational Efficiency. As illustrated in figure 4 (a) and ta-ble 3, VCMM achieves 85.62% accuracy with only 13.6% memory overhead over Concat, while maintaining competitive training time. These results demonstrate a favorable accuracy–efficiency trade-off, enabled by the lightweight probe without additional encoder passes. 
+
+Alleviation of Modality Imbalance. As shown in Figure 5, vanilla training exhibits a clear modality gap, whereas VCMM enables video to continue improving while maintaining audio performance. 
+
+Table 2 . Ablation on KSounds and Twitter.                 
+
+> Variant KSounds Twitter
+> Shared β0.6455 0.7011 Fixed asymmetric 0.6773 0.7396 Frozen VCMM 0.6813 0.7412 w/o noise subtraction 0.6935 0.7499 w/o log-odds centering 0.7070 0.7452 w/o exact bias corr. 0.7208 0.7513
+> Full VCMM 0.7534 0.7570
+
+Table 3 . Training memory cost on CREMA-D.                               
+
+> Method Alloc. Overhead (GiB) (%)
+> Concat 8.89 Base MLA [21] 11.13 +25.2 PMR [20] 12.38 +39.3 LFM [22] 10.88 +22.3 ReconBoost [12] 11.37 +27.9
+> VCMM 10.10 +13.6 050 100 150 200 0.1 0.3 0.5 0.7 0.9 Epoch Accuracy (Vanilla)
+> (a) Vanilla
+> Multimodal Audio Video 050 100 150 200 0.1 0.3 0.5 0.7 0.9 Epoch Accuracy (VCMM)
+> (b) VCMM
+> Multimodal Audio Video 050 100 150 200 0.0 0.5 1.0 1.5 2.0 Epoch Loss
+> (a) Training loss
+> Multimodal Audio Video 050 100 150 200 0.1 0.3 0.5 0.7 0.9 Epoch Accuracy (VCMM)
+> (b) VCMM
+> Multimodal Audio Video
+
+Fig. 5 . Modality-wise validation accuracy during joint training. (a) Vanilla. (b) VCMM. The narrowing gap indicates that adaptive gradient memory sustains optimization of the slower modality without degrading the faster one, thereby alleviating modality imbalance. 
+
+Agreement with Encoder-Level Dynamics. As shown in Fig. 3, the classifier probe closely matches the encoder-level estimates of temporal drift Qm and minibatch noise Rm, with Pearson correla-tions of 0.9439 and 0.9306 . This validates the lightweight probe as an efficient surrogate for encoder-level gradient dynamics. 
+
+Effect of Adaptation Strength λ. Figure 4 (b) shows similar trends on KSounds and Twitter, with the best performance around λ =1. Moderate cross-modal differentiation benefits adaptive gradient memory, whereas overly large λ can overemphasize modal differ-ences and degrade performance. The consistent trend across both datasets indicates robustness around λ = 1 .
+
+4. CONCLUSION 
+
+In this work, we revisit modality imbalance from the perspective of gradient memory and show that different modalities exhibit distinct and time-varying gradient dynamics, making shared momentum po-tentially suboptimal for multimodal joint training. Based on this ob-servation, we propose Variance-Calibrated Momentu M (VCMM ), which adapts modality-specific gradient memory according to on-line estimates of minibatch noise and temporal drift without explicit learning-rate scaling. Experiments across four multimodal bench-marks demonstrate consistent improvements over joint training and competitive baselines with modest computational overhead, while effectively alleviating modality imbalance. 5. COMPLIANCE WITH ETHICAL STANDARDS 
+
+This study uses only publicly available datasets and does not involve the collection of new human or animal subject data. Therefore, ethi-cal approval was not required. 
+
+6. REFERENCES 
+
+[1] J. Ngiam, A. Khosla, M. Kim, J. Nam, H. Lee, and A. Y. Ng, “Multimodal deep learning,” in Proc. ICML , 2011, pp. 689– 696. [2] T. Baltrusaitis, C. Ahuja, and L.-P. Morency, “Multimodal ma-chine learning: A survey and taxonomy,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 41, no. 2, pp. 423–443, 2019. [3] Y. Huang, C. Du, Z. Xue, X. Chen, H. Zhao, and L. Huang, “What makes multi-modal learning better than single (Prov-ably),” in Adv. Neural Inf. Process. Syst. , 2021, vol. 34, pp. 10944–10956. [4] W. Wang, D. Tran, and M. Feiszli, “What makes training multi-modal classification networks hard?,” in Proc. CVPR , 2020, pp. 12692–12702. [5] X. Peng, Y. Wei, A. Deng, D. Wang, and D. Hu, “Balanced multimodal learning via on-the-fly gradient modulation,” in 
+
+Proc. CVPR , 2022, pp. 8238–8247. [6] N. Wu, S. Jastrzebski, K. Cho, and K. J. Geras, “Characterizing and overcoming the greedy nature of learning in multi-modal deep neural networks,” in Proc. ICML , 2022, vol. 162 of Proc. Mach. Learn. Res. , pp. 24043–24055. [7] Y. Zhou, X. Liang, Y. Xu, and B. Gao, “Sample-level self-paced learning to tackle multimodal imbalance problem,” in 
+
+Proc. ICASSP , 2025, pp. 1–5. [8] Y. Huang, J. Lin, C. Zhou, H. Yang, and L. Huang, “Modality competition: What makes joint training of multi-modal net-work fail in deep learning? (Provably),” in Proc. ICML , 2022, vol. 162 of Proc. Mach. Learn. Res. , pp. 9226–9259. [9] H. Li, X. Li, P. Hu, Y. Lei, C. Li, and Y. Zhou, “Boosting multi-modal model performance with adaptive gradient modulation,” in Proc. ICCV , 2023, pp. 22214–22224. [10] Z. Guo, T. Jin, J. Chen, and Z. Zhao, “Classifier-guided gra-dient modulation for enhanced multimodal learning,” in Adv. Neural Inf. Process. Syst. , 2024, vol. 37. [11] Y. Wei and D. Hu, “MMPareto: Boosting multimodal learning with innocent unimodal assistance,” in Proc. ICML , 2024, vol. 235 of Proc. Mach. Learn. Res. , pp. 52559–52572. [12] C. Hua, Q. Xu, S. Bao, Z. Yang, and Q. Huang, “ReconBoost: Boosting can achieve modality reconcilement,” in Proc. ICML ,2024, vol. 235 of Proc. Mach. Learn. Res. , pp. 19573–19597. [13] Z.-H. Guan, Q.-Y. Jiang, and Y. Yang, “Balance-aware se-quence sampling makes multi-modal learning better,” in Proc. IJCAI , 2025, pp. 2838–2846. [14] I. Sutskever, J. Martens, G. Dahl, and G. Hinton, “On the importance of initialization and momentum in deep learning,” in Proc. ICML , 2013, vol. 28 of Proc. Mach. Learn. Res. , pp. 1139–1147. [15] I. Gitman, H. Lang, P. Zhang, and L. Xiao, “Understanding the role of momentum in stochastic gradient methods,” in Adv. Neural Inf. Process. Syst. , 2019, vol. 32. [16] J. Zhang and I. Mitliagkas, “YellowFin and the art of momen-tum tuning,” in Proc. Mach. Learn. Syst. , 2019, vol. 1, pp. 289–308. [17] Z. Yao, R. Yu, G. Chang, Y. Li, Y. Zhang, and D. Li, “Dynamic momentum recalibration in online gradient learning,” in Proc. CVPR , 2026, pp. 12902–12912. [18] J. Vuckovic, “Kalman gradient descent: Adaptive vari-ance reduction in stochastic optimization,” arXiv preprint arXiv:1810.12273 , 2018. [19] R. E. Kalman, “A new approach to linear filtering and predic-tion problems,” J. Basic Eng. , vol. 82, no. 1, pp. 35–45, 1960. [20] Y. Fan, W. Xu, H. Wang, J. Wang, and S. Guo, “PMR: Pro-totypical modal rebalance for multimodal learning,” in Proc. CVPR , 2023, pp. 20029–20038. [21] X. Zhang, J. Yoon, M. Bansal, and H. Yao, “Multimodal rep-resentation learning by alternating unimodal adaptation,” in 
+
+Proc. CVPR , 2024, pp. 27456–27466. [22] Y. Yang, F. Wan, Q.-Y. Jiang, and Y. Xu, “Facilitating mul-timodal classification via dynamically learning modality gap,” in Adv. Neural Inf. Process. Syst. , 2024, vol. 37, pp. 62108– 62122. [23] C. Huang, Y. Wei, Z. Yang, and D. Hu, “Adaptive unimodal regulation for balanced multimodal information acquisition,” in Proc. CVPR , 2025, pp. 25854–25863. [24] Q.-Y. Jiang, L. Huang, and Y. Yang, “Rethinking multimodal learning from the perspective of mitigating classification abil-ity disproportion,” in Adv. Neural Inf. Process. Syst. , 2025, vol. 38. [25] C. Qian, S. Xing, S. Li, Y. Zhao, and Z. Tu, “DecAlign: Hier-archical cross-modal alignment for decoupled multimodal rep-resentation learning,” in Proc. ICLR , 2026. [26] H. Cao, D. G. Cooper, M. K. Keutmann, R. C. Gur, A. Nenkova, and R. Verma, “CREMA-D: Crowd-sourced emo-tional multimodal actors dataset,” IEEE Trans. Affect. Com-put. , vol. 5, no. 4, pp. 377–390, 2014. [27] R. Arandjelovic and A. Zisserman, “Look, listen and learn,” in 
+
+Proc. ICCV , 2017, pp. 609–617. [28] J. Yu and J. Jiang, “Adapting BERT for target-oriented mul-timodal sentiment classification,” in Proc. IJCAI , 2019, pp. 5408–5414. [29] P. Molchanov, X. Yang, S. Gupta, K. Kim, S. Tyree, and J. Kautz, “Online detection and classification of dynamic hand gestures with recurrent 3D convolutional neural networks,” in 
+
+Proc. CVPR , 2016, pp. 4207–4215. [30] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proc. CVPR , 2016, pp. 770–778. [31] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “BERT: Pre-training of deep bidirectional transformers for language understanding,” in Proc. NAACL-HLT , 2019, pp. 4171–4186. [32] J. Carreira and A. Zisserman, “Quo vadis, action recognition? a new model and the Kinetics dataset,” in Proc. CVPR , 2017, pp. 4724–4733. [33] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” in Proc. ICLR , 2015.

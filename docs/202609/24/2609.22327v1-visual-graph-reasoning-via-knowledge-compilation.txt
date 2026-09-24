@@ -1,0 +1,450 @@
+Title: Visual Graph Reasoning via Knowledge Compilation
+
+URL Source: https://arxiv.org/pdf/2609.22327v1
+
+Published Time: Tue, 22 Sep 2026 00:09:14 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Visual Graph Reasoning via Knowledge Compilation 
+
+## Rongzheng Wang 
+
+wangrongzheng@std.uestc.edu.cn University of Electronic Science and Technology of China Chengdu, China 
+
+## Zhe Wang 
+
+wzhe@std.uestc.edu.cn University of Electronic Science and Technology of China Chengdu, China 
+
+## Ke Qin †
+
+qinke@uestc.edu.cn University of Electronic Science and Technology of China Chengdu, China 
+
+## Rongwei Wang 
+
+wrw24@mails.tsinghua.edu.cn Tsinghua Shenzhen International Graduate School Shenzhen, China 
+
+## Muquan Li 
+
+muquanli831@foxmail.com University of Electronic Science and Technology of China Chengdu, China 
+
+## Yizhuo Ma 
+
+myz@std.uestc.edu.cn University of Electronic Science and Technology of China Chengdu, China 
+
+## Yihong Huang 
+
+2021080910004@std.uestc.edu.cn University of Electronic Science and Technology of China Chengdu, China 
+
+## Jielei Wang †
+
+jieleiwang_uestc@163.com University of Electronic Science and Technology of China Chengdu, China 
+
+## Shuang Liang ∗† 
+
+shuangliang@uestc.edu.cn University of Electronic Science and Technology of China Chengdu, China 
+
+## Abstract 
+
+Visual graph reasoning requires answering graph-theoretic ques-tions directly from graph images, where graph topology and state are conveyed visually rather than given in symbolic form. De-spite recent progress of vision-language models (VLMs), current approaches to visual graph reasoning still fail on simple visual graph problems. This reveals a fundamental limitation of existing approaches: they prioritize final-answer supervision over the inter-mediate recovery of an explicit graph representation that preserves graph topology and state from visual input. To address this limi-tation, we propose VGCompiler , a compilation-centric paradigm for visual graph reasoning via knowledge compilation. VGCom-piler organizes reasoning around two compilers: a representation compiler that recovers a structure-preserving intermediate graph representation from visual input, and an operation compiler that compiles query intent under the recovered graph state into an ex-ecutable graph operation. Specifically, we build VGCompiler on Qwen3-VL-8B and train it with reinforcement learning guided by a layered reward over executability, compiled graph validity, repre-sentation quality, and operation quality. VGCompiler uses a frozen observer to summarize graph and question conditions into light-weight signatures, enabling archive retrieval and code reuse across similar regimes. Experiments on three benchmarks GVLQA, Vision-Graph, and VGCURE, show that Qwen-VGCompiler, built on an 8B backbone, surpasses the strongest closed-source VLM baseline by 28.9% and the strongest code-based baseline by 23.7%, while maintaining high efficiency. We further evaluate VGCompiler on three real-world domains, including metro routing, logistics de-livery, and network fault assessment, where it generalizes across heterogeneous visual graphs and domain-grounded tasks. 
+
+> ∗Corresponding author.
+> †Also with Ubiquitous Intelligence and Trusted Services Key Laboratory of Sichuan Province.
+
+## CCS Concepts 
+
+• Computing methodologies → Computer vision tasks ; Knowl-edge representation and reasoning ; Reinforcement learning .
+
+## Keywords 
+
+Visual Graph Reasoning, Visual Language Model, Knowledge Com-pilation, Reinforcement Learning 
+
+## 1 Introduction 
+
+Vision-language models (VLMs) [1, 7, 17, 25, 29] have shown strong capability on broad multimodal reasoning benchmarks [26, 42], yet current VLM-based methods still struggle with even simple visual graph reasoning tasks [24, 40, 43]. Visual graph reasoning asks a model to answer graph queries such as reachability, cycle existence, and shortest path directly from graph images, where graph topol-ogy and state are conveyed visually rather than given in symbolic form [24, 40]. Reliable solving therefore depends on recovering an explicit graph representation from visual input. However, existing approaches often prioritize the final answer over this intermediate recovery, so they may still produce plausible but incorrect answers from partial or incorrect graph representations. Figure 1 illustrates this failure: even for a simple reachability query, strong VLMs re-main unreliable across visually diverse graph renderings. This failure reveals two explicit limitations. (1) Graph style af-fects representation recovery . Unlike text graph reasoning, where relational structure is directly available in symbolic or textual form, visual graph reasoning must recover a faithful graph representa-tion from visually varied renderings. Benchmarks such as Visual Graph Arena [3] show that severe errors can persist even when graph semantics remain unchanged and only layout or style is altered, indicating that visually irrelevant factors can destabilize this recovery. (2) Graph state affects downstream operation . Even with a recovered graph representation, solving a graph query still arXiv:2609.22327v1 [cs.MM] 16 Sep 2026 Rongzheng Wang et al. Performance Summary Strong VLMs         
+
+> ChatGPT Claude Gemini Qwen
+> Task: Can node #1 reach node #6? Ans: Yes / No
+> Model Accuracy GPT-5-mini 0.63 GPT-5.2 0.74 Gemini-3-pro 0.81 Claude-4.5-sonnet 0.48 qwen3-max 0.66
+> Visual Graph Examples
+
+Figure 1: Representative visual graph examples together with a simple reachability evaluation across mainstream VLMs. 
+
+requires an operation consistent with the graph state. For exam-ple, shortest-path reasoning [4, 14, 15] over unweighted graphs, nonnegative-weighted graphs, and graphs with negative edges re-lies on different executable procedures [31, 38]. Text-based methods such as GraphTool-Instruction [35] and GraphCogent [33] assume explicit graph states and therefore select downstream operations more directly, whereas visual graph reasoning must infer graph state first. Consequently, early state-recognition errors directly propagate into downstream execution. These two limitations originate from the same mismatch: vi-sual graphs present graph semantics in a visual form whose ap-pearance varies with style, layout, and rendering, whereas graph queries require an explicit graph representation together with a valid downstream operation. Visual graph reasoning therefore re-quires recovering a faithful graph representation from the input and identifying an operation consistent with the recovered graph state. This makes it a knowledge compilation problem [11], where the visual input acts as a weak source language and is mapped into a target representation that preserves graph semantics and supports downstream operations. This view reframes visual graph reason-ing into two compilers: a representation compiler that compiles the visual graph into a structure-preserving graph representation, and an operation compiler that determines the executable graph operation required by the query under the recovered graph state. Inspired by the knowledge compilation view, we propose VG-Compiler , a compilation-centric paradigm for visual graph reason-ing via knowledge compilation. In VGCompiler, executable code serves as the basic unit of learning and reuse, and organizes rea-soning around two compilers: the representation compiler maps a visual graph into a structure-preserving intermediate represen-tation; the operation compiler determines the executable graph operation required under the recovered graph state. To learn code that adapts to different graph-question conditions, VGCompiler uses a VLM as the code generator and trains it with reinforcement learning to generate candidate code conditioned on the current graph-question pair. The optimization is driven by a layered reward over executability, compiled graph validity, representation quality, and operation quality. To archive similar graph-question pairs and enable code reuse, VGCompiler employs a frozen observer to ex-tract lightweight cues from each pair. These cues serve as compact condition signatures for organizing archived code during training and retrieving the most compatible archived code during inference. Switch1 Switch2 Router1 PC1 PC2 PC3 Printer1 Printer2 Smartphone1 
+
+Figure 2: Three representative real-world visual graph reason-ing scenarios: metro routing, logistics delivery, and network fault assessment. 
+
+We further fine-tune Qwen3-VL-8B [32] with reinforcement learning to obtain Qwen-VGCompiler. Across three public bench-marks, GVLQA [40], VisionGraph [24], and VGCURE [43], Qwen-VGCompiler demonstrates strong effectiveness and generalization, outperforming prior state-of-the-art methods by 28.9%. We further evaluate VGCompiler on three real-world scenarios, as illustrated in Figure 2: metro routing, logistics delivery, and network fault assessment. Across these heterogeneous settings, VGCompiler also demonstrates real-world generalization. Our contributions are summarized as follows: (1) We formulate visual graph reasoning under a knowledge compilation view, where solving a visual graph query requires both recovering a structure-preserving graph representation from visual input and identifying a valid downstream operation under the recovered graph state; (2) We propose VGCompiler, a compilation-centric paradigm that instantiates this view through VLM-generated executable code. VGCompiler comprises a representation compiler and an opera-tion compiler, together with a reusable code archive indexed by lightweight graph-question signatures for retrieval and reuse; (3) We introduce a layered reward over executability, compiled graph validity, representation quality, and operation quality to guide rein-forcement learning, and we validate strong effectiveness on public benchmarks together with real-world generalization across hetero-geneous visual graph scenarios. 
+
+## 2 Related Work 2.1 LLMs for Graph Reasoning 
+
+LLM-based graph reasoning was first studied mainly in text-based settings, where the graph is already given in symbolic form and the main challenge lies in selecting and executing the correct graph operation. Representative methods strengthen this process through explicit programs [34], tool use [27], and multi-step collaboration, including Chain-of-Thought prompting [39], Self-Consistency [37], PAL [16], ReAct [41], and Toolformer [30]. Attention-based mech-anisms offer another direction for graph reasoning by improving long-context information selection and adaptively controlling rea-soning generation [18, 20]. Graph-specific systems such as Graph-Wiz [6], GraphTool-Instruction [35], GraphCogent [33], and Neu-roPath [19] further adapt these ideas to graph reasoning. However, these methods assume that graph topology and state are already externalized. More recently, graph reasoning has been extended to visual graph inputs, where the graph must first be recovered from images. GITA [40], VisionGraph [24], VGCURE [43], and GraphVis [13] move in this direction through graph-aware model-ing, staged reasoning, or task-specific visual adaptation. However, current visual methods still weakly model the interface between Visual Graph Reasoning via Knowledge Compilation 
+
+graph recovery and downstream graph operation, especially under style variation and heterogeneous graph-state conditions [3]. 
+
+## 2.2 Visual Graph Reasoning Benchmarks 
+
+Beyond broad multimodal benchmarks such as MMMU [42] and MathVista [26], recent work has begun to study visual graph rea-soning as a distinct problem. Visual graph reasoning studies how to answer graph-theoretic questions when the graph is presented in vi-sual form rather than as a symbolic input, where graph-structured information is widely conveyed through diagrams, maps, inter-faces, and other visual media. GITA [40] introduces GVLQA for vision-language graph reasoning, VisionGraph [24] expands the set-ting to a broader range of graph-theoretic tasks in visual contexts, and VGCURE [43] further distinguishes graph understanding from graph reasoning. More recently, Visual Graph Arena [3] shifts the focus to robustness under layout and style variation, showing that visually irrelevant rendering changes can still alter model behavior even when graph semantics are preserved. These benchmarks indi-cate that topology recovery, graph-state grounding, and robustness to visual variation remain core challenges in visual graph reasoning. 
+
+## 2.3 Knowledge Compilation 
+
+Knowledge compilation studies how to map a source representation into a target language that preserves semantics while better sup-porting downstream queries and operations [9–11]. Classical work focuses on symbolic forms such as BDDs [5] and DNNF [8]. This perspective is directly relevant to visual graph reasoning, where graph topology and state are visually encoded rather than explic-itly given in symbolic form. We follow this view by compiling a visual graph into an attributed adjacency list that preserves graph semantics and supports downstream graph operations. From a com-plementary compression perspective, recent dataset-distillation methods retain task-relevant information through adaptive quanti-zation, topology-aware dynamic retrieval, and efficient inner-loop optimization [21–23], providing potential principles for scaling vi-sual graph compilation while preserving the exact graph semantics required for downstream execution. 
+
+## 3 Knowledge Compilation in Visual Graph Reasoning 3.1 Visual Graphs as a Weak Source Language 
+
+The central challenge of visual graph reasoning lies in a mismatch between how graph semantics are presented and how graph queries should be solved. Visual graphs present graph semantics in a style-variable visual form, whereas graph queries require a faithful graph representation together with a valid downstream operation. Vi-sual graph reasoning therefore requires recovering a reliable graph representation from the rendered input and identifying the valid downstream operation under the recovered graph state. Knowledge compilation frames this mismatch as a gap between the visual source language in which the graph is presented and the target representation required for reliable downstream reasoning. Let 𝑔 (𝑥 ) denote the graph semantics of image 𝑥 , consisting of topol-ogy 𝑡 (𝑥 ) and graph state 𝑠 (𝑥 ). A target representation 𝑧 should faithfully encode these semantics and support the valid operations Base Node Edge Layout 0.0 0.2 0.4 0.6 0.8 1.0        
+
+> Task Accuracy
+> (a) Graph-Style Sensitivity
+> Visual Direct QA AdjList QA AdjList F1 Reachability Topological Sort Shortest Path Maximum Flow 0.0 0.2 0.4 0.6 0.8 1.0
+> Task Accuracy
+> (b) Graph-State Sensitivity
+> Visual Direct QA Visual + Code AdjList F1 0.0 0.2 0.4 0.6 0.8 1.0
+> AdjList F1
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> AdjList F1
+
+Figure 3: Graph style and graph state sensitivity: (a) varies visual style while fixing the graph; (b) varies graph-state conditions and downstream operations while fixing style and layout. The results show that robust visual graph reasoning depends on both graph compilation and graph operation. 
+
+required by question 𝑞 under graph state 𝑠 (𝑥 ). Let Sem (𝑧 ) denote the graph semantics represented by 𝑧 , and let O( 𝑞, 𝑠 (𝑥 )) and Q ( 𝑧 )
+
+denote the required and supported operation sets. We then require: Sem (𝑧 ) = 𝑔 (𝑥 ), O( 𝑞, 𝑠 (𝑥 )) ⊆ Q ( 𝑧 ), (1) where O( 𝑞, 𝑠 (𝑥 )) is the set of valid operations induced by question 
+
+𝑞 under graph state 𝑠 (𝑥 ), and Q ( 𝑧 ) is the operation set supported by 𝑧 . Visual graphs therefore form a weak source language for reasoning, since the underlying graph is not directly exposed in a form suitable for reliable downstream operation. Figure 3(a) studies graph style sensitivity by fixing the underlying graph topology and varying node style, edge style, and layout over 100 reachability queries from GVLQA. We compare three quantities: direct visual QA by Qwen3-VL-8B, QA with the complete adjacency list provided, and the F1 of the recovered adjacency list. Direct visual QA is sensitive to these perturbations, whereas QA with the explicit adjacency list remains more stable. The recovered adjacency F1 also drops under the same perturbations, indicating that style variation mainly degrades representation recovery and that the resulting errors then propagate to downstream reasoning. These observations motivate a code-based formulation. In VG-Compiler, the target representation is instantiated as an attributed adjacency list, which preserves graph semantics while exposing local structure and state attributes in executable form. We therefore use the attributed adjacency list as the target representation: 
+
+𝑧 = {( 𝑣 𝑖 , N ( 𝑣 𝑖 ))} 𝑛 𝑖 =1 , N ( 𝑣 𝑖 ) = (𝑣 𝑗 , 𝑎 𝑖 𝑗 ) , (2) with 𝑛 the number of nodes, N ( 𝑣 𝑖 ) the attributed neighbor set of 𝑣 𝑖 ,and 𝑎 𝑖 𝑗 encoding edge attributes such as direction and weight. This representation preserves graph semantics and provides a unified interface for downstream reasoning. Under this interface, visual graph reasoning can be organized around two compilers: 
+
+𝑧 = Comp (𝑥 ; 𝑐 rep ), ˆ𝑦 = Exec (𝑧, 𝑞 ; 𝑐 op ), (3) Rongzheng Wang et al. 
+
+where 𝑐 rep serves as the representation compiler, which maps visual evidence into an attributed adjacency list encoding graph semantics, and 𝑐 op serves as the operation compiler, which determines the ex-ecutable graph operation required under the recovered graph state; this operation is then carried out on the compiled representation to produce the predicted answer ˆ 𝑦 .
+
+## 3.2 Representation and Operation Conditions 
+
+Figure 3(b) studies graph state sensitivity by fixing the rendering style and layout and comparing four graph-question settings with different graph state conditions (e.g., direction and edge weights) and downstream operations. We compare direct visual QA by Qwen3-VL-8B, code-based QA from the same visual input, and the F1 of adjacency-list recovery via code generation. Even under the same style and layout, the variation in adjacency-list F1 shows that graph state conditions still affect representation recovery. Although code-based QA outperforms direct visual QA, its accuracy still varies substantially across settings, indicating that graph state affects not only representation recovery but also downstream operation. This observation reveals the second source of difficulty. Un-like style variation, which mainly affects representation recovery, graph-state conditions also affect how the recovered graph should be operated on. In settings such as involving direction or weights, small recovery errors are more likely to alter both the recovered representation and the validity of the downstream operation. Reli-able solving therefore depends on faithful representation recovery and state-consistent execution. 
+
+## 4 Method 4.1 Overview of VGCompiler 
+
+Motivated by the above observations, we propose VGCompiler .Unlike previous paradigms that directly map graph images to an-swers, VGCompiler treats executable code as the basic unit of learn-ing and reuse for visual graph reasoning. Each generated code instance consists of two coupled code blocks, 𝑐 = (𝑐 rep , 𝑐 op ), where 
+
+𝑐 rep is the representation compiler that maps a visual graph into a standardized attributed adjacency list, and 𝑐 op is the operation compiler that determines the executable graph operation required under the recovered graph state. As shown in Figure 4, VGCompiler combines three core com-ponents: a frozen observer, a trainable code policy, and a code archive. The observer summarizes representation and operation cues from each graph-question pair into a lightweight condition signature; the code policy is trained with reinforcement learning guided by a layered reward over executability, compiled graph va-lidity, representation quality, and operation quality; and the code archive accumulates reusable priors during training and provides retrievable priors for condition-aware code reuse at inference. 
+
+## 4.2 Conditioned Code Generation 
+
+A single code solution is not equally effective for all graph-question pairs. The representation compiler depends on visual graph style, whereas the operation compiler depends on both query intent and visible state cues such as direction or edge weights. We therefore condition code generation on the current graph-question pair. Given 
+
+(𝑥, 𝑞 ), we freeze the VLM parameters and use it as an observer: 
+
+(𝑢, 𝜏 ) = Obs 𝜓 (𝑥, 𝑞 ), ℎ = Sig (𝑢, 𝜏 ), (4) where 𝜓 denotes the frozen parameters of the observer VLM, 𝑢 
+
+denotes representation cues , i.e., lightweight textual descriptions of graph attributes relevant to representation recovery, including nodes, edges, edge weights, and their visual realization such as shape, heterogeneity, and color distinction. The variable 𝜏 denotes 
+
+operation cues , namely lightweight descriptions of the operation requirements implied by the query together with visible state cues relevant to downstream execution. The signature ℎ serves as a compact condition descriptor. During inference, using Hamming distance over condition sig-natures, we retrieve the nearest archived code prior from the code archive C★:
+
+𝑠 ★ = arg min       
+
+> (ℎ𝑠 ,ˆ𝑐 𝑠 ,¯𝑅 𝑠 ) ∈ C ★
+
+𝑑 𝐻 (ℎ, ℎ 𝑠 ), 𝑐 prior = ˆ𝑐 𝑠 ★, (5) where 𝑠 ★ is the retrieved archive index, and ℎ𝑠 ★ is the signature associated with the retrieved prior 𝑐 prior .The retrieved prior may either match or mismatch the current graph-question pair. A valid match requires both operation com-patibility and representation coverage. Let (𝑢 𝑠 ★, 𝜏 𝑠 ★ ) denote the decoded condition associated with ℎ𝑠 ★ . We define the matching indicator as: 
+
+𝑚 = I𝜏 = 𝜏 𝑠 ★ ∧ Cov rep (𝑢, 𝑢 𝑠 ★ ) = 1 , (6) where Cov rep (𝑢, 𝑢 𝑠 ★ ) checks whether the representation capabil-ity encoded by the retrieved prior covers the topology and state requirements implied by the current representation cues 𝑢 .
+
+Matched . When 𝑚 = 1, the retrieved prior is regarded as com-patible with the current graph-question condition. In this case, we directly reuse 𝑐 prior as the final code instance for execution. 
+
+Mismatched . When 𝑚 = 0, the retrieved prior does not cover the current condition. This occurs when the operation cue is inconsis-tent (e.g., the current query requires shortest-path execution while the retrieved prior corresponds to max-flow computation), or when the representation capability is insufficient (e.g., the current graph is weighted while the retrieved prior only supports unweighted graph representation). In this case, we use the retrieved prior only as contextual guidance and let the VLM write a new code instance conditioned on the current input, the current signature, and the mismatched prior: 
+
+𝑐 = VLM 𝜃 (𝑥, 𝑞, ℎ, 𝑐 prior ). (7) This inference process is designed to serve as a reusable prior when conditions are compatible, while still enabling the model to generate new code when prior reuse is not sufficient. 
+
+## 4.3 Layered Objective for Representation and Operation (LORO) 
+
+We model visual graph reasoning as generating a paired compiler code instance for representation recovery and downstream opera-tion, and train the code policy with reinforcement learning guided by a layered reward, denoted as LORO. Instead of rewarding final answers only, LORO applies reward in layers aligned with the task structure: the code must first be executable, then produce a valid compiled graph object, and only then receive semantic credit for Visual Graph Reasoning via Knowledge Compilation Code Archive          
+
+> (a) Visual Graph Input (d) Code Archive & Inference Mismatched Matched
+> Checking
+> Representation coverage Operation compatibility
+> Question 𝐀
+> Find the shortest path from node 1 to node 5.
+> ✓
+> Graph lmage Compiler Code Operation Code Answer Attributed Adjacency List
+> Graph 𝐀
+> Metro Logistics Network Connectivity Routing Relation
+> Reuse (b) Condition Signature (c) Layered Objective for Representation and Operation
+
+h     
+
+> VLM
+> VLM
+> Shortest path Degree calculation Bellman-Ford
+> Representation Cues 𝐀
+> Nodes Edges 3Weights Nodes shapes Edges style Colors
+> Operation Cues 𝐀
+> Cycle detection Dijkstra BFS
+> Group sampling
+> ✓
+> 1
+> ✓
+> 10
+> 𝐀 ∙ 𝐀
+> 1.3 Reward
+> Group Computation
+> 3.0 1.0 5.0
+> Hamming distance
+
+𝐀 𝐀𝐀𝐀𝐀𝐀 
+
+…     
+
+> …
+> 𝐀 𝐀 𝐀 𝐀 𝐀 𝐀𝐀
+> 117632
+> …
+> ∙
+> 2.0
+> 𝐀 + 𝐀 ∙ 𝐀
+> ……
+> —
+> -1.0 -1.0 -1.0 …offset Policy update
+> 16254378
+> 223334421123
+> 32-3 -2 1
+> A
+> VLM
+
+Figure 4: Overview of VGCompiler. A frozen observer summarizes each graph-question pair into a lightweight condition signature. Guided by a layered reward, the code policy learns a paired code instance for representation recovery and downstream operation. At inference, the signature retrieves the nearest archived code prior and either reuses it directly or revises it into new code according to representation coverage and operation compatibility. 
+
+representation and operation quality. This design reduces ambigu-ous credit assignment between representation quality and opera-tion quality, and suppresses shortcut solutions built on incomplete compiled representations. Conditioned on the current graph-question pair and the observer signature, we denote by 𝜋 𝜃 (· | 𝑥, 𝑞, ℎ ) the code-generation policy induced by the VLM parameterized by 𝜃 , from which we sample 𝐺 
+
+candidate code instances: 
+
+𝑐 (1) , . . . , 𝑐 (𝐺 ) ∼ 𝜋 𝜃 (· | 𝑥, 𝑞, ℎ ) . (8) For a candidate paired code instance 𝑐 (𝑔 ) , the system first exe-cutes 𝑐 rep ,(𝑔 ) to produce a compiled representation 𝑧 (𝑔 ) , and then executes 𝑐 op ,(𝑔 ) to produce a final answer ˆ 𝑦 (𝑔 ) . We use 𝐸 (𝑔 ) ∈ { 0, 1}
+
+to indicate whether the code is executable, and 𝑉 (𝑔 ) ∈ { 0, 1} to in-dicate whether the compiled representation can be instantiated as a valid graph object under the target schema, regardless of whether the recovered graph is semantically correct. For valid code, we further define: 
+
+𝐶 (𝑔 ) = 1
+
+|M ( 𝑥, 𝑞 )| ∑︁ 𝑚 ∈ M ( 𝑥,𝑞 )
+
+F1 (𝑔 ) 
+
+> 𝑚
+
+, 𝑂 (𝑔 ) = J𝑞 ( ˆ𝑦 (𝑔 ) , 𝑦 ★), (9) where M ( 𝑥, 𝑞 ) denotes the set of topology and state attributes that must be recovered for the current graph-question pair, such as node set, edge set, direction, and edge weight; F1 (𝑔 ) 
+
+> 𝑚
+
+is the F1 score on attribute 𝑚 ; and J𝑞 (· , ·) ∈ [ 0, 1] is a task-specific operation score normalized to [0, 1], with 𝑦 ★ denoting the reference answer. In particular, J𝑞 is exact match for binary questions, and a normalized score for scalar outputs such as shortest path length. LORO defines the reward for candidate 𝑔 as: 
+
+𝑟 (𝑔 ) = 𝐸 (𝑔 )𝑉 (𝑔 ) 
+
+𝐶 (𝑔 ) + 𝐶 (𝑔 )𝑂 (𝑔 ) 
+
+− 1. (10) The −1 offset assigns a common failure penalty 𝑟 (𝑔 ) = −1 to unusable code, keeps rewards in [− 1, 1], and makes positive reward possible only when representation recovery and downstream op-eration jointly reach sufficient quality. The factor 𝐸 (𝑔 )𝑉 (𝑔 ) gates semantic credit to executable code that produces a valid compiled graph object, preventing malformed compilations with nontrivial attribute-level F1 from receiving reward. Within this valid branch, 
+
+𝐶 (𝑔 ) rewards faithful representation recovery, while 𝐶 (𝑔 )𝑂 (𝑔 ) re-wards downstream operation only through representation quality. This coupling suppresses shortcut codes that solve the query from a small local fragment and instead drives optimization toward faithful graph recovery before downstream task success. For the 𝐺 candidates sampled from the same input, we compute group-relative advantages directly from their rewards: ˆ𝐴 (𝑔 ) =
+
+𝑟 (𝑔 ) − mean 
+
+
+
+𝑟 (1: 𝐺 )
+
+
+
+std  𝑟 (1: 𝐺 )  + 𝜖 . (11) We then update the code policy with the following objective, where 𝜖 is a small constant for numerical stability, 𝛽 is the KL regularization coefficient, and 𝜋 ref is the reference policy: 
+
+L( 𝜃 ) = − 1
+
+𝐺 
+
+> 𝐺
+
+∑︁ 
+
+> 𝑔 =1
+
+ˆ𝐴 (𝑔 ) log 𝜋 𝜃 
+
+
+
+𝑐 (𝑔 ) | 𝑥, 𝑞, ℎ 
+
+
+
++ 𝛽 KL (𝜋 𝜃 ∥𝜋 ref ) . (12) 
+
+## 4.4 Code Archive and Inference 
+
+During training, VGCompiler pairs a frozen observer with a train-able code policy. In our main experiments, both are instantiated from Qwen3-VL-8B [32]. For each graph-question pair, the observer produces a condition signature, and the code policy samples a group of 𝐺 candidate code instances. LORO evaluates these candidates by Rongzheng Wang et al. 
+
+checking executability and compiled graph validity, then assign-ing representation and operation rewards within the valid branch before updating the policy with the group-relative objective. In parallel, VGCompiler accumulates stable code under similar graph-question conditions into a code archive, without using the archive to assist the current training sample: 
+
+C★ = {( ℎ𝑠 , ˆ𝑐 𝑠 , ¯𝑅 𝑠 )} 𝑆 𝑠 =1, (13) where 𝑆 is the archive size, ℎ𝑠 is the condition signature, ˆ 𝑐 𝑠 is the retained code, and ¯ 𝑅 𝑠 is its average validation reward. In practice, we group candidate code by condition signature, retain only executable candidates with valid compiled graphs, and keep the highest-reward code as the archive entry. During inference, both the observer and the code policy are frozen, and the fixed code archive is queried for reuse. Given a new graph-question pair (𝑥, 𝑞 ), VGCompiler computes its condition signature, retrieves the nearest code prior, checks representation coverage and operation compatibility, and either directly executes the matched prior or generates a new code instance conditioned on the current input and the mismatched prior. 
+
+## 5 Experiments 5.1 Experimental Setup 
+
+Benchmarks and data splits. We train and evaluate VGCompiler on three public visual graph reasoning benchmarks: GVLQA from GITA [40], VisionGraph [24], and VGCURE [43]. GVLQA is reported on GVLQA-Base , the clean benchmark with seven graph-theoretic tasks, and GVLQA-AUG , which keeps the same tasks but introduces rendering perturbations. Both are evaluated under Vis.-Only , which uses only the rendered graph, and Hybrid VL , which additionally provides the adjacency-list input. For VisionGraph, we report Node Recognition and Edge Recognition , which test node counting and full edge-set recovery. For VGCURE, we report Graph Understanding ,which covers basic structural queries, and Graph Reasoning , which covers relation-based and path-based reasoning over entity-relation graphs. For training and evaluation, we follow the default settings of the three benchmarks. 
+
+Baselines. We compare VGCompiler with four groups of base-lines: (1) Closed-source VLMs, including GPT-5-mini [28], GPT-5.2 [28], Gemini-3.1-Flash [12], Gemini-3.1-pro [12], Claude-Haiku-4.5 [2], and Claude-Sonnet-4.5 [2]; (2) Open-source VLMs, including LLaVA-1.5-7B [25], LLaVA-1.5-13B [25], InternVL3.5-8B [36], and Qwen3-VL-8B [32]; (3) Direct-visual methods, including GITA [40], which is trained on top of LLaVA-1.5-7B [25] and LLaVA-1.5-13B [25], and MCDGraph [43], which we reproduce with Qwen3-VL-8B [32]; and (4) Code-based methods, including Description Programming Reasoning (DPR) [24], instantiated with GPT-5.2 [28], Qwen3-VL-8B + Code based on Qwen3-VL-8B [32], a prompt-only control that uses our prompting scheme without training and without code-archive retrieval, and our Qwen-VGCompiler. 
+
+Evaluation protocol. We use exact-match Accuracy as the primary metric, reported as percentages and shown as mean ±
+
+standard deviation over five runs. 
+
+Implementation details. Both the trainable code policy and the frozen observer are initialized from Qwen3-VL-8B [32]. Dur-ing training, we sample 𝐺 = 8 candidate programs per input and maintain a key-value code archive indexed by condition signatures, which is queried only at inference by Hamming-distance retrieval. At inference, the observer uses temperature 0 and the code policy uses temperature 0.7. Both training and inference are conducted on 8 × NVIDIA A800 80GB GPUs. We set 𝛽 = 0.01, with 𝜋 ref taken as a frozen copy of the initial code policy before LORO training. Our experiment is designed to answer the following three re-search questions: 
+
+• RQ1 (Main Results) : How effective and efficient is VGCompiler on public visual graph reasoning benchmarks? 
+
+• RQ2 (Ablation and Mechanism Analysis) : Why does VGCom-piler work, how do its key designs contribute to the gains? 
+
+• RQ3 (Generalization and Case Analysis) : How does VGCom-piler generalize beyond synthetic benchmarks and reuse code? 
+
+## 5.2 Main Results (RQ1) 
+
+Table 1 reports the main results on three public benchmarks. Overall, VGCompiler achieves the best average accuracy, surpassing the strongest closed-source VLM baseline by 28.89% and the closed-source code-based baseline DPR by 23.69%, despite using an 8B open-source backbone. We draw the following observations: 
+
+• VGCompiler outperforms all baselines across the benchmarks. The gain is largest when representation recovery is the main bottleneck, especially on VisionGraph Edge Recognition, which requires exact recovery of the full graph topology. This shows that a major source of VGCompiler’s advantage lies in improving representation faithfulness from visual input. 
+
+• The gain does not come from code generation alone. Although Qwen3-VL-8B + Code outperforms direct visual methods in sev-eral settings, it remains unstable and can even fall behind direct Qwen3-VL-8B on some tasks. This indicates that generated code is useful only when the compiled graph is sufficiently faithful. 
+
+• The advantage of VGCompiler is not limited to representation recovery. Its lead remains clear on reasoning settings that require state-matched downstream operation, rather than only graph understanding, showing that faithful compilation must be paired with valid operation on the recovered graph state. 
+
+• Compared with prior code-based pipeline DPR, VGCompiler is stronger not only because it compiles graphs more faithfully, but also because it more reliably couples representation recovery with downstream graph operation. This is especially important for tasks whose answers are sensitive to edge completeness, direction, weights, and the validity of the executed operation. Table 2 shows that VGCompiler also has a clear inference effi-ciency advantage. Compared with Gemini-3.1-pro, it achieves sub-stantially lower latency, suggesting that code execution can be more efficient than relying on heavy closed-source internal reasoning. Compared with DPR, VGCompiler is faster because DPR depends on a closed-source model to recover graph structure through staged prompting, whereas VGCompiler uses a lightweight VLM observer to extract cues and delegates the downstream graph operation to code execution. Compared with Qwen3-VL-8B + Code, VGCompiler slightly increases input tokens due to archive retrieval and prior code prompting, but reduces output tokens and latency, leading to a better overall efficiency-accuracy trade-off. Visual Graph Reasoning via Knowledge Compilation 
+
+Table 1: Main results on three public visual-graph benchmarks. Vis.-Only denotes visual graph input only, Hybrid VL denotes the setting that combines visual input with adjacency-list input. We report mean ± standard deviation over five runs. 
+
+Method GVLQA-Base GVLQA-AUG VisionGraph VGCURE Average Vis.-Only Hybrid VL Vis.-Only Hybrid VL Node Rec. Edge Rec. Graph Und. Graph Reas. 
+
+Closed-source VLMs 
+
+GPT-5-mini 49 .40 ± 0.98 45 .20 ± 1.00 46 .40 ± 4.81 47 .60 ± 2.80 85 .70 ± 1.92 1.80 ± 0.07 75 .00 ± 3.45 60 .11 ± 2.62 50 .29 ± 2.11 GPT-5.2 53 .60 ± 5.51 45 .20 ± 4.79 59 .51 ± 7.75 51 .20 ± 5.49 91 .70 ± 1.03 14 .30 ± 1.68 85 .72 ± 1.75 68 .51 ± 3.80 57 .55 ± 3.96 Gemini-3.1-Flash 54 .80 ± 8.95 53 .00 ± 12 .63 47 .60 ± 8.56 56 .00 ± 15 .77 91 .10 ± 0.06 6.00 ± 0.92 83 .92 ± 0.11 77 .40 ± 1.07 57 .46 ± 6.01 Gemini-3.1-pro 59 .11 ± 5.85 52 .00 ± 6.78 62 .51 ± 8.54 57 .40 ± 9.46 96 .88 ± 0.73 18 .00 ± 1.41 90 .68 ± 1.25 75 .51 ± 2.98 62 .83 ± 4.62 Claude-Haiku-4.5 20 .20 ± 1.00 48 .80 ± 0.96 24 .40 ± 1.07 44 .00 ± 1.01 69 .60 ± 7.63 0.03 ± 0.06 70 .80 ± 1.03 61 .91 ± 3.71 41 .18 ± 2.15 Claude-Sonnet-4.5 49 .86 ± 4.16 47 .20 ± 3.46 55 .51 ± 5.83 51 .51 ± 3.95 89 .72 ± 3.03 13 .53 ± 1.15 84 .84 ± 1.65 68 .94 ± 3.86 56 .45 ± 3.40 
+
+Open-source VLMs 
+
+LLaVA-1.5-7B 9.51 ± 2.10 11 .31 ± 4.16 11 .91 ± 1.56 11 .91 ± 2.10 3.58 ± 1.37 0.10 ± 0.10 16 .08 ± 3.61 14 .29 ± 1.36 9.33 ± 1.94 LLaVA-1.5-13B 10 .80 ± 2.01 13 .37 ± 3.82 13 .20 ± 1.74 13 .66 ± 2.15 4.20 ± 1.44 0.07 ± 0.11 18 .24 ± 3.04 16 .51 ± 1.52 10 .68 ± 1.89 InternVL3.5-8B 32 .14 ± 1.47 20 .83 ± 3.91 29 .17 ± 5.81 26 .20 ± 4.20 63 .70 ± 2.33 0.12 ± 0.12 61 .32 ± 0.81 55 .94 ± 2.28 35 .13 ± 2.63 Qwen3-VL-8B 32 .74 ± 2.40 23 .80 ± 0.82 34 .51 ± 0.87 23 .20 ± 1.41 73 .20 ± 0.07 0.70 ± 0.78 75 .00 ± 0.14 58 .34 ± 2.40 38 .83 ± 1.11 
+
+Direct-visual methods 
+
+GITA-7B 17 .86 ± 0.68 21 .37 ± 0.73 20 .83 ± 0.26 22 .11 ± 0.27 16 .57 ± 0.65 0.12 ± 0.15 22 .00 ± 0.32 19 .29 ± 0.29 17 .03 ± 0.42 GITA-13B 16 .86 ± 0.71 24 .77 ± 0.67 20 .26 ± 0.27 25 .60 ± 0.31 16 .80 ± 0.62 0.15 ± 0.16 28 .00 ± 0.37 24 .00 ± 0.32 18 .86 ± 0.42 MCDGraph-8B 48 .80 ± 3.89 39 .29 ± 1.83 42 .26 ± 1.02 47 .63 ± 8.61 85 .12 ± 3.56 5.35 ± 2.87 72 .04 ± 1.08 63 .11 ± 3.89 49 .49 ± 3.42 
+
+Code-based methods 
+
+DPR + GPT-5.2 51 .20 ± 0.95 91 .06 ± 0.41 47 .63 ± 4.86 98 .43 ± 2.56 86 .30 ± 3.48 37 .75 ± 1.92 75 .60 ± 0.95 60 .11 ± 2.55 68 .03 ± 2.24 Qwen3-VL-8B + Code 31 .20 ± 1.03 82 .06 ± 0.44 36 .63 ± 5.26 87 .80 ± 5.99 79 .10 ± 5.04 23 .00 ± 1.96 60 .32 ± 0.98 58 .46 ± 2.67 56 .99 ± 3.00 Qwen-VGCompiler 91 .09 ± 1.04 97 .20 ± 1.06 88 .23 ± 0.33 98 .91 ± 1.00 96 .30 ± 0.78 77 .75 ± 3.74 95 .64 ± 0.33 91 .11 ± 1.09 91 .72 ± 1.23 0 100 200 300 400 500                            
+
+> Step
+> −0.50 −0.25 0.00 0.25 0.50
+> Reward
+> (a) Reward
+> 0100 200 300 400 500
+> Step
+> 0.70 0.75 0.80 0.85 0.90 0.95
+> Rate
+> (b) Executability
+> 0100 200 300 400 500
+> Step
+> 0.65 0.70 0.75 0.80 0.85 0.90 0.95
+> F1
+> (c) Compiled Graph F1
+> 0100 200 300 400 500
+> Step
+> 0.55 0.60 0.65 0.70 0.75 0.80 0.85
+> Accuracy
+> (d) Task Accuracy
+> LORO-Direct ( 2O− 1 )LORO-Uncoupled ( C+O− 1 )LORO-Flat ( C+CO − 1 )LORO ( EV (C+CO ) − 1 )
+
+Figure 5: Training dynamics of four optimization objectives. We report smoothed reward, executable rate, compiled graph F1, and final task accuracy during training. LORO-Direct uses result-only reward, LORO-Uncoupled removes representation-operation coupling, LORO-Flat removes executability-and-validity gating, and LORO uses the full layered reward. Table 2: Inference efficiency on the public benchmarks. For code-based methods, Time includes both model generation and code execution; for closed-source VLMs, the Input/Out-put tokens are taken from API usage statistics. 
+
+Method Accuracy In Tokens Out Tokens Time GPT-5-mini 50.29 1.89k 0.05k 4.8s GPT-5.2 57.55 1.91k 0.13k 7.3s Gemini-3.1-pro 62.83 1.17k 1.02k 13.1s DPR + GPT-5.2 68.03 5.26k 3.34k 18.9s Qwen3-VL-8B + Code 56.99 3.01k 1.91k 12.8s Qwen-VGCompiler 91.72 3.98k 1.10k 7.7s 
+
+## 5.3 Ablation and Mechanism Analysis (RQ2) 
+
+Table 3 shows that the advantage of the attributed adjacency list does not mainly come from representational completeness. All three target languages can encode the required graph semantics, and adjacency matrices and edge lists already achieve relatively 
+
+Table 3: Ablation on target language. We report task accuracy, executable rate, compiled graph validity, and compiled graph F1 denote as Accuracy, 𝐸 , 𝑉 , and F1, respectively. 
+
+Target language Accuracy 𝐸 𝑉 F1 Adjacency matrix 82.7 89.7 85.6 76.5 Edge list 84.8 94.0 91.4 80.3 Attr. adjacency list 91.7 96.8 92.8 94.6 
+
+high compiled graph validity under the current definition of 𝑉 . The key difference lies in how the target language shapes compilation and operation. Adjacency matrices encourage one-shot global re-covery and are therefore more sensitive to visual ambiguity and style variation. Edge lists recover the graph edge by edge, mak-ing them more vulnerable to missing local relations that break the semantics required by reasoning. By contrast, the attributed adja-cency list preserves local neighborhood structure while directly Rongzheng Wang et al. 
+
+Table 4: Factorizing the effect of archive priors and LORO on the public benchmarks. 
+
+Variant Accuracy 𝐸 𝑉 F1 Qwen3-VL-8B + Code 57.0 72.3 74.1 69.8 VGCompiler w/o Archive 80.1 91.0 88.5 89.1 VGCompiler w/o LORO 71.6 94.1 85.4 87.4 VGCompiler 91.7 96.8 92.8 94.6 Qwen3-VL-8B + Code     
+
+> 58.5
+> 5.5 9.5 13.5 13.0
+> VGCompiler w/o Archive
+> 78.5
+> 4.5 4.5 7.0 5.5
+> VGCompiler w/o LORO
+> 70.5
+> 10.0 10.5 6.0 3.0
+> VGCompiler
+> 90.5
+> 2.5 3.5 2.0 1.5
+> Non-exec Invalid graph Low-F1 compile Wrong operation Correct
+
+Figure 6: Error analysis on 200 sampled cases. We classify errors into four categories: non executable code, invalid com-piled graph, low fidelity compilation, and wrong operation. Table 5: Archive concentration for path-style queries. Top-1 and Top-2 report dominant-signature coverage, and main split cues summarize the factors separating signature groups.                     
+
+> Family #Sig. Top-1 Top-2 Main split cues GVLQA-Base 447% 79% Text support; Edge.density GVLQA-AUG 11 19% 37% Node.style; Edge.thickness VisionGraph 727% 50% Node.density; Weight.placement VGCURE 631% 59% Edge.label; Direction
+
+exposing direction, weight, and state in executable form, leading to the strongest compiled graph F1 and final task accuracy. Figure 5 compares four optimization objectives to verify the effect of LORO. LORO-Direct uses a result-only reward 2 𝑂 − 1, LORO-Uncoupled uses 𝐶 + 𝑂 − 1, LORO-Flat uses 𝐶 + 𝐶𝑂 − 1, and LORO uses 𝐸𝑉 (𝐶 + 𝐶𝑂 ) − 1. The curves show that LORO-Direct improves reward and executability early on, but soon saturates in compiled graph F1 and final task accuracy because it is too weak to sustain faithful graph recovery. LORO-Uncoupled already improves both metrics, showing the importance of directly rewarding rep-resentation quality, but its operation reward remains independent of representation fidelity and can still favor codes with valid com-piled graphs but low fidelity. LORO-Flat further improves compiled graph F1 and final task accuracy, indicating that coupling operation reward to representation fidelity is the key step for suppressing such shortcut behavior. Full LORO then further restricts semantic credit to executable code with valid compiled graph objects, pre-venting malformed but answer-sufficient programs from receiving reward. These results show that LORO improves visual graph rea-soning by combining faithful compilation with validity-aware and operation-aware optimization. Table 4 and Figure 6 jointly clarify how archive reuse and LORO contribute to VGCompiler. Relative to Qwen3-VL-8B + Code, intro-ducing LORO already brings substantial gains in compiled graph validity, compiled graph F1, and final task accuracy. Removing the archive from VGCompiler mainly lowers executability, while re-moving LORO more directly influences compiled graph validity and final task accuracy. Figure 6 shows the same pattern at the error level: removing the archive mainly increases non executable and invalid compiled graph errors, whereas removing LORO mainly increases low fidelity compilation and wrong operation errors. To-gether, these results suggest that archive reuse mainly stabilizes executable code under matched conditions, while LORO provides the stronger semantic optimization over faithful compilation and downstream operation. 
+
+## 5.4 Generalization and Case Analysis (RQ3) 
+
+Table 5 shows that the code archive does not collapse each bench-mark family into a single universal program. Instead, each family is covered by a small set of dominant signatures. GVLQA-Base is the most concentrated, mainly split by text support and edge density, whereas GVLQA-AUG is the most diverse because style perturba-tions expand the signature space through node appearance and edge thickness. VisionGraph remains relatively diverse because dense weighted renderings require distinct representation routes, while VGCURE is mainly separated by relation labels and direction cues. These results suggest archive retrieval is organized around a small number of reusable but non-universal graph-reasoning programs. We further evaluate whether VGCompiler generalizes beyond synthetic benchmarks to real-world graph diagrams. To this end, we build a real-world benchmark with three domains: metro routing, logistics delivery, and network fault assessment, and evaluate VG-Compiler directly without training. Each task requires both faithful graph representation recovery and a domain-grounded downstream operation. Metro reasoning requires least-transfer routing, logistics reasoning requires capacity-constrained warehouse assignment, and network reasoning requires single-point network fault assess-ment. Table 6 shows that Qwen-VGCompiler achieves the best perfor-mance in both final task accuracy and compiled graph F1 across these heterogeneous real-world settings, outperforming all base-lines. Compared with the strongest baseline DPR, the gains re-main consistent across all three domains, despite their different visual conventions and operational objectives. This suggests that the advantage of VGCompiler is not limited to benchmark-specific patterns, but comes from a more general ability to recover structure-preserving graph representations from visually diverse diagrams and support valid downstream operations reliably. Logistics remains the hardest setting in Accuracy for all methods, which is consis-tent with the fact that warehouse assignment still requires reliable state recovery together with capacity-aware customer allocation. Meanwhile, network fault assessment provides a complementary challenge, as heterogeneous device types and semantically richer links make the mapping from visual evidence to graph structure and downstream operation more explicit. Figure 7 further provides a concrete real-world case from network fault assessment, showing how VGCompiler compiles device connectivity from the diagram and then executes final analysis. 
+
+## 6 Conclusions 
+
+We present VGCompiler, a compilation-centric paradigm for visual graph reasoning under a knowledge compilation view. VGCompiler organizes reasoning through graph representation recovery and valid downstream operation. It further combines condition-aware code retrieval with reinforcement learning guided by a layered Visual Graph Reasoning via Knowledge Compilation 
+
+Table 6: Results on the real-world generalization benchmark. We report final task accuracy and compiled graph F1.          
+
+> Method Metro Logistics Network Accuracy Graph F1 Accuracy Graph F1 Accuracy Graph F1 GPT-5.2
+
+45 .7 ± 2.1 63 .8 ± 1.6 30 .5 ± 1.8 46 .5 ± 1.7 43 .2 ± 2.3 59 .7 ± 2.0 
+
+> Gemini-3.1-pro
+
+48 .2 ± 2.4 65 .1 ± 1.8 33 .5 ± 2.0 49 .1 ± 1.8 46 .3 ± 1.6 62 .4 ± 1.6 
+
+> InternVL3.5-8B
+
+19 .2 ± 1.6 34 .8 ± 1.7 11 .8 ± 1.2 27 .8 ± 1.1 23 .7 ± 1.9 39 .5 ± 1.5 
+
+> Qwen3-VL-8B
+
+23 .8 ± 1.2 39 .7 ± 1.1 15 .0 ± 1.3 31 .7 ± 1.2 27 .3 ± 1.2 42 .7 ± 1.3 
+
+> GITA-7B
+
+11 .3 ± 0.8 25 .9 ± 0.9 8.2 ± 0.6 20 .4 ± 0.7 14 .8 ± 1.0 29 .2 ± 1.0 
+
+> DPR + GPT-5.2
+
+61 .7 ± 1.4 77 .3 ± 1.0 45 .5 ± 1.8 60 .4 ± 1.4 58 .0 ± 1.7 72 .6 ± 1.2 
+
+> Qwen-VGCompiler
+
+90 .3 ± 0.8 91 .8 ± 0.8 63 .5 ± 1.5 81 .2 ± 1.2 70 .0 ± 1.3 82 .2 ± 1.1Case of Network Fault Assessment Original query . If Switch2 goes offline, which devices will lose connectivity?   
+
+> Signature . Node.shape = {router, ...}, Node.density = {sparse, ...}, Node.text, ... ; Edge.color = {gold, ...}, Edge.style, ... ; Weight = {None}; Direction = {None}; ... ;
+> Operation process . The code first grounds device types and connectivity edges, then treats Switch2 as the failed node and performs downstream reachability analysis on the compiled graph to collect failure devices.
+> Returned answer . Printer2, PC3.
+> Switch1 Switch2 Router1 PC1 PC2 PC3 Printer1 Printer2 Smartphone1
+
+Figure 7: A real-world case from network fault assessment. The left panel summarizes the query, signature, operation process, and returned answer, while the right panel shows the corresponding network diagram. 
+
+reward over executability, compiled graph validity, representation quality, and operation quality. Across three public benchmarks and real-world scenarios, VGCompiler consistently outperforms prior methods while remaining efficient. The results suggest that treating visual graph reasoning as a knowledge compilation process with reusable executable code provides an effective foundation for robust reasoning over heterogeneous visual graphs. 
+
+## References 
+
+[1] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch, Katherine Millican, Malcolm Reynolds, Roman Ring, Eliza Rutherford, Serkan Cabi, Tengda Han, Zhitao Gong, Sina Samangooei, Marianne Monteiro, Jacob L. Menick, Sebastian Borgeaud, Andy Brock, Aida Nematzadeh, Sahand Sharifzadeh, Mikolaj Binkowski, Ricardo Bar-reira, Oriol Vinyals, Andrew Zisserman, and Karén Simonyan. 2022. Flamingo: a Visual Language Model for Few-Shot Learning. In NeurIPS . New Orleans, LA, USA. [2] Anthropic. 2026. Claude 4.5 System Cards . https://www.anthropic.com/system-cards [3] Zahra Babaiee, Peyman M. Kiasari, Daniela Rus, and Radu Grosu. 2025. Visual Graph Arena: Evaluating Visual Conceptualization of Vision and Multimodal Large Language Models. In ICML . Vancouver, BC, Canada. [4] Richard Bellman. 1958. On a Routing Problem. Quart. Appl. Math. 16, 1 (1958), 87–90. [5] Randal E. Bryant. 1986. Graph-Based Algorithms for Boolean Function Manipu-lation. IEEE Trans. Comput. 35, 8 (1986), 677–691. [6] Nuo Chen, Yuhan Li, Jianheng Tang, and Jia Li. 2024. GraphWiz: An Instruction-Following Language Model for Graph Computational Problems. In KDD .Barcelona, Spain, 353–364. [7] Wenliang Dai, Junnan Li, Dongxu Li, Anthony Meng Huat Tiong, Junqi Zhao, Weisheng Wang, Boyang Li, Pascale Fung, and Steven C. H. Hoi. 2023. In-structBLIP: Towards General-purpose Vision-Language Models with Instruction Tuning. In NeurIPS . New Orleans, LA, USA. [8] Adnan Darwiche. 1999. Compiling Knowledge into Decomposable Negation Normal Form. In IJCAI . Stockholm, Sweden, 284–289. [9] Adnan Darwiche. 2001. Decomposable negation normal form. J. ACM 48, 4 (2001), 608–647. [10] Adnan Darwiche. 2002. A Compiler for Deterministic, Decomposable Negation Normal Form. In AAAI . Edmonton, Alberta, Canada, 627–634. [11] Adnan Darwiche and Pierre Marquis. 2002. A Knowledge Compilation Map. 
+
+Journal of Artificial Intelligence Research 17 (2002), 229–264. [12] Google DeepMind. 2026. Gemini 3.1 Model Cards . https://deepmind.google/ models/model-cards/ [13] Yihe Deng, Chenchen Ye, Zijie Huang, Mingyu Derek Ma, Yiwen Kou, and Wei Wang. 2024. GraphVis: Boosting LLMs with Visual Knowledge Graph Integration. In NeurIPS . Vancouver, BC, Canada. [14] Edsger W. Dijkstra. 1959. A Note on Two Problems in Connexion with Graphs. 
+
+Numer. Math. 1, 1 (1959), 269–271. [15] Robert W. Floyd. 1962. Algorithm 97: Shortest Path. Commun. ACM 5, 6 (1962), 345–345. [16] Luyu Gao, Aman Madaan, Shuyan Zhou, Uri Alon, Pengfei Liu, Yiming Yang, Jamie Callan, and Graham Neubig. 2023. PAL: Program-aided Language Models. In ICML . Honolulu, Hawaii, USA, 10764–10799. [17] Junnan Li, Dongxu Li, Silvio Savarese, and Steven C. H. Hoi. 2023. BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models. In ICML . Honolulu, Hawaii, USA, 19730–19742. [18] Jiakai Li, Ke Qin, Rongzheng Wang, Yizhuo Ma, Qizhi Chen, Muquan Li, and Shuang Liang. 2026. Stop When Further Reasoning Won’t Help: Attention-State Adaptive Generation in Reasoning Models. CoRR abs/2606.15070 (2026). [19] Junchen Li, Rongzheng Wang, Yihong Huang, Qizhi Chen, Jiasheng Zhang, and Shuang Liang. 2025. NeuroPath: Neurobiology-Inspired Path Tracking and Reflection for Semantically Coherent Retrieval. In NeurIPS . San Diego, CA, USA / Mexico City, Mexico. [20] Jiakai Li, Rongzheng Wang, Yizhuo Ma, Shuang Liang, Guangchun Luo, and Ke Qin. 2025. DSAS: A Universal Plug-and-Play Framework for Attention Optimiza-tion in Multi-Document Question Answering. In NeurIPS . San Diego, CA, USA / Mexico City, Mexico, 174538–174564. [21] Muquan Li, Hang Gou, Yingyi Ma, Rongzheng Wang, Ke Qin, and Tao He. 2026. Fixed Anchors Are Not Enough: Dynamic Retrieval and Persistent Homology for Dataset Distillation. In CVPR . Denver, CO, USA, 33963–33972. [22] Muquan Li, Hang Gou, Dongyang Zhang, Shuang Liang, Xiurui Xie, Deqiang Ouyang, and Ke Qin. 2025. Beyond Random: Automatic Inner-loop Optimization in Dataset Distillation. In NeurIPS . San Diego, CA, USA / Mexico City, Mexico. [23] Muquan Li, Dongyang Zhang, Qiang Dong, Xiurui Xie, and Ke Qin. 2025. Adap-tive Dataset Quantization. In AAAI . Philadelphia, PA, USA, 12093–12101. [24] Yunxin Li, Baotian Hu, Haoyuan Shi, Wei Wang, Longyue Wang, and Min Zhang. 2024. VisionGraph: Leveraging Large Multimodal Models for Graph Theory Problems in Visual Context. In ICML . Vienna, Austria, 27903–27919. [25] Haotian Liu, Chunyuan Li, Yuheng Li, and Yong Jae Lee. 2024. Improved Baselines with Visual Instruction Tuning. In CVPR . Seattle, WA, USA, 26286–26296. [26] Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. 2024. MathVista: Evaluating Mathematical Reasoning of Foundation Models in Visual Contexts. In ICLR . Vienna, Austria. [27] Yizhuo Ma, Rongzheng Wang, Shuang Liang, Guangchun Luo, and Ke Qin. 2026. TopoLLM: LLM-Driven Adaptive Tool Learning for Real-Time Emergency Network Topology Planning. Digital Communications and Networks 12, 2 (2026), 273–282. [28] OpenAI. 2026. OpenAI GPT-5 System Card. CoRR abs/2601.03267 (2026). [29] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. 2021. Learning Transferable Visual Models From Natural Language Supervision. In ICML . Virtual Event, 8748–8763. [30] Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom. 2023. Toolformer: Language Models Can Teach Themselves to Use Tools. In NeurIPS .New Orleans, LA, USA. [31] Robert Endre Tarjan. 1972. Depth-First Search and Linear Graph Algorithms. 
+
+SIAM J. Comput. 1, 2 (1972), 146–160. [32] Qwen Team. 2025. Qwen3-VL Technical Report. CoRR abs/2511.21631 (2025). [33] Rongzheng Wang, Qizhi Chen, Yihong Huang, Yizhuo Ma, Muquan Li, Jiakai Li, Ke Qin, Guangchun Luo, and Shuang Liang. 2025. GraphCogent: Overcoming LLMs’ Working Memory Constraints via Multi-Agent Collaboration in Complex Graph Understanding. CoRR abs/2508.12379 (2025). [34] Rongzheng Wang, Yihong Huang, Muquan Li, Jiakai Li, Di Liang, Bob Simons, Pei Ke, Shuang Liang, and Ke Qin. 2026. Rethinking LLM-Driven Heuristic Design: Generating Efficient and Specialized Solvers via Dynamics-Aware Optimization. 
+
+CoRR abs/2601.20868 (2026). [35] Rongzheng Wang, Shuang Liang, Qizhi Chen, Jiasheng Zhang, and Ke Qin. 2025. GraphTool-Instruction: Revolutionizing Graph Reasoning in LLMs through Decomposed Subtask Instruction. In KDD . Toronto, ON, Canada, 1492–1503. [36] Weiyun Wang, Zhangwei Gao, Lixin Gu, Hengjun Pu, Long Cui, Xingguang Wei, Zhaoyang Liu, Linglin Jing, Shenglong Ye, Jie Shao, Zhaokai Wang, Zhe Chen, Hongjie Zhang, Ganlin Yang, Haomin Wang, Qi Wei, Jinhui Yin, Wenhao Li, Erfei Cui, Guanzhou Chen, Zichen Ding, Changyao Tian, Zhenyu Wu, JingJing Xie, Zehao Li, Bowen Yang, Yuchen Duan, Xuehui Wang, Zhi Hou, Haoran Hao, Tianyi Zhang, Songze Li, Xiangyu Zhao, Haodong Duan, Nianchen Deng, Bin Fu, Yinan He, Yi Wang, Conghui He, Botian Shi, Junjun He, Yingtong Xiong, Han Lv, Lijun Wu, Wenqi Shao, Kaipeng Zhang, Huipeng Deng, Biqing Qi, Jiaye Rongzheng Wang et al. 
+
+Ge, Qipeng Guo, Wenwei Zhang, Songyang Zhang, Maosong Cao, Junyao Lin, Kexian Tang, Jianfei Gao, Haian Huang, Yuzhe Gu, Chengqi Lyu, Huanze Tang, Rui Wang, Haijun Lv, Wanli Ouyang, Limin Wang, Min Dou, Xizhou Zhu, Tong Lu, Dahua Lin, Jifeng Dai, Weijie Su, Bowen Zhou, Kai Chen, Yu Qiao, Wenhai Wang, and Gen Luo. 2025. InternVL3.5: Advancing Open-Source Multimodal Models in Versatility, Reasoning, and Efficiency. CoRR abs/2508.18265 (2025). [37] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V. Le, Ed H. Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2023. Self-Consistency Improves Chain of Thought Reasoning in Language Models. In ICLR . Kigali, Rwanda. [38] Stephen Warshall. 1962. A Theorem on Boolean Matrices. J. ACM 9, 1 (1962), 11–12. [39] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. In NeurIPS . New Orleans, LA, USA. [40] Yanbin Wei, Shuai Fu, Weisen Jiang, Zejian Zhang, Zhixiong Zeng, Qi Wu, James T. Kwok, and Yu Zhang. 2024. GITA: Graph to Visual and Textual In-tegration for Vision-Language Graph Reasoning. In NeurIPS . Vancouver, BC, Canada. [41] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R. Narasimhan, and Yuan Cao. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In ICLR . Kigali, Rwanda. [42] Xiang Yue, Yuansheng Ni, Tianyu Zheng, Kai Zhang, Ruoqi Liu, Ge Zhang, Samuel Stevens, Dongfu Jiang, Weiming Ren, Yuxuan Sun, Cong Wei, Botao Yu, Ruibin Yuan, Renliang Sun, Ming Yin, Boyuan Zheng, Zhenzhu Yang, Yibo Liu, Wenhao Huang, Huan Sun, Yu Su, and Wenhu Chen. 2024. MMMU: A Massive Multi-Discipline Multimodal Understanding and Reasoning Benchmark for Expert AGI. In CVPR . Seattle, WA, USA, 9556–9567. [43] Yingjie Zhu, Xuefeng Bai, Kehai Chen, Yang Xiang, Jun Yu, and Min Zhang. 2025. Benchmarking and Improving Large Vision-Language Models for Fundamental Visual Graph Understanding and Reasoning. In ACL . Vienna, Austria, 30678– 30701.
