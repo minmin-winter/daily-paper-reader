@@ -6,59 +6,68 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-24
-- 运行时间：2026-09-24 22:29:02 UTC
+- 最新运行日期：2026-09-25
+- 运行时间：2026-09-25 22:42:34 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：4
-- 速读区：9
+- 本次总论文数：15
+- 精读区：1
+- 速读区：14
 
 ### 今日简报（AI）
-今日精读4篇、速读9篇，多模态学习成为绝对主线。最值得看的是VCMM以10分提出方差校准动量，以及9分的“置信度不足”揭示优化中的不对称确定性收益会拖累多模态分类。普通读者可优先读这两篇，再借EDCT-Bench了解VLM解释忠实度的评测缺口。
-- 详情：[/202609/24/README](/202609/24/README)
+- 今日共生成 15 篇推荐（精读 1 篇，速读 14 篇）
+- 精读：《Uni-LaDiR: Latent Diffusion Unifies Multimodal Reasoning》（9.0/10）
+- 速读：《Cross-Modal Attention Acts as a Frequency Filter: Why Verbose Prompts Improve Robustness in Vision-Language Models》（7.0/10）, 《Virtual Encoders in Multimodal Transformers》（7.0/10）, 《AV-GRPO: Modality-Anchored Decoupling Diffusion Reinforcement Learning for Joint Audio-Video Generation》（7.0/10）
+- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
+- 详情：[/202609/25/README](/202609/25/README)
 
 ### 精读区论文标签
-1. [VCMM: Variance-Calibrated Momentum for Multimodal Learning](/202609/24/2609.27577v1-vcmm-variance-calibrated-momentum-for-multimodal-learning)  
-   标签：评分：10.0/10、query:balanced-mml
-   evidence：通过校准梯度记忆解决多模态训练中的模态失衡
-2. [Confidence Falls Short: Asymmetric Certainty Gains from Optimization Hinder Multimodal Classification](/202609/24/2609.28165v1-confidence-falls-short-asymmetric-certainty-gains-from-optimization-hinder-multimodal-classification)  
-   标签：评分：9.0/10、query:balanced-mml
-   evidence：多模态学习中的模态不平衡与贡献失衡
-3. [Uni-LaDiR: Latent Diffusion Unifies Multimodal Reasoning](/202609/24/2609.19878v2-uni-ladir-latent-diffusion-unifies-multimodal-reasoning)  
-   标签：评分：8.0/10、query:mm-reasoning
-   evidence：共享潜空间统一多模态推理
-4. [All modalities are equal, but video is more equal: Closing the Cross-Attention Gap in Joint Video Generation](/202609/24/2609.27901v1-all-modalities-are-equal-but-video-is-more-equal-closing-the-cross-attention-gap-in-joint-video-generation)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：跨模态对应不对称与模态失衡
+1. [Uni-LaDiR: Latent Diffusion Unifies Multimodal Reasoning](/202609/25/2609.19878v2-uni-ladir-latent-diffusion-unifies-multimodal-reasoning)  
+   标签：评分：9.0/10、query:mm-reasoning
+   evidence：统一潜空间融合多模态推理思维
 
 ### 速读区论文标签
-1. [EDCT-Bench: Uncovering Faithfulness Gaps in VLMs via Explanation-Driven Counterfactual Testing](/202609/24/2609.17953v1-edct-bench-uncovering-faithfulness-gaps-in-vlms-via-explanation-driven-counterfactual-testing)  
+1. [Cross-Modal Attention Acts as a Frequency Filter: Why Verbose Prompts Improve Robustness in Vision-Language Models](/202609/25/2609.20139v1-cross-modal-attention-acts-as-a-frequency-filter-why-verbose-prompts-improve-robustness-in-vision-language-models)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：视觉与语言间的跨模态注意力交互
+2. [Virtual Encoders in Multimodal Transformers](/202609/25/2609.26513v2-virtual-encoders-in-multimodal-transformers)  
+   标签：评分：7.0/10、query:native-multi
+   evidence：无需专用感知编码器的整合式多模态架构
+3. [AV-GRPO: Modality-Anchored Decoupling Diffusion Reinforcement Learning for Joint Audio-Video Generation](/202609/25/2609.29816v1-av-grpo-modality-anchored-decoupling-diffusion-reinforcement-learning-for-joint-audio-video-generation)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：模态锚定解耦缓解单模态保真度不平衡与跨模态同步问题
+4. [Mind What Matters for Reasoning: Aligning Cross-Modal Attention via Selective Probability Mass Concentration](/202609/25/2609.29940v1-mind-what-matters-for-reasoning-aligning-cross-modal-attention-via-selective-probability-mass-concentration)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：多模态大模型过度依赖语言先验，引导注意力关注视觉证据
+5. [Multimodal Thinking with Renderable Programs](/202609/25/2609.30130v1-multimodal-thinking-with-renderable-programs)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：将图像生成融入多模态推理链
+6. [The Alignment Illusion in Multimodal Large Language Models](/202609/25/2609.30210v1-the-alignment-illusion-in-multimodal-large-language-models)  
+   标签：评分：7.0/10、query:native-multi
+   evidence：多模态大模型视觉-文本对齐分析
+7. [Video-STLayout Pre-training](/202609/25/2609.24031v1-video-stlayout-pre-training)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：通过对比损失将视频特征与布局特征跨模态对齐
+8. [TimeLitmus: A Diagnostic Benchmark for Cross-Modal Understanding and Explanation Faithfulness in Event-Conditioned Time-Series Prediction](/202609/25/2609.24677v1-timelitmus-a-diagnostic-benchmark-for-cross-modal-understanding-and-explanation-faithfulness-in-event-conditioned-time-series-prediction)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：对视觉语言模型推理的解释驱动反事实测试
-2. [Visual Graph Reasoning via Knowledge Compilation](/202609/24/2609.22327v1-visual-graph-reasoning-via-knowledge-compilation)  
+   evidence：时间序列与文本输入的跨模态整合
+9. [Qwen-Audio-3.1-Realtime: Towards Reliable Agentic Voice Interaction](/202609/25/2609.25176v2-qwen-audio-31-realtime-towards-reliable-agentic-voice-interaction)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：多模态模型中发展原生音频能力的实时语音交互
+10. [Metric-Bench: Exploring In-context Spatial Metric Reasoning in VLMs for Indoor Scenes](/202609/25/2609.25841v1-metric-bench-exploring-in-context-spatial-metric-reasoning-in-vlms-for-indoor-scenes)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：结合图像与语言的视觉推理
-3. [Detecting Phone-Induced Pedestrian Distraction via a Multimodal Fusion Transformer](/202609/24/2609.23507v1-detecting-phone-induced-pedestrian-distraction-via-a-multimodal-fusion-transformer)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：融合姿态与外观特征的多模态融合Transformer
-4. [BindCLIP: One Balanced Coupling For Compositional Vision Language Scoring](/202609/24/2609.23717v1-bindclip-one-balanced-coupling-for-compositional-vision-language-scoring)  
+   evidence：视觉语言模型结合图像与文本进行空间度量推理
+11. [Confidence-Guided Cross-Modal Knowledge Transfer for Multimodal Anomaly Detection in Microservice Systems](/202609/25/2609.25856v1-confidence-guided-cross-modal-knowledge-transfer-for-multimodal-anomaly-detection-in-microservice-systems)  
    标签：评分：6.0/10、query:balanced-mml
-   evidence：平衡的令牌-图块-深度最优传输耦合
-5. [0.5%>100%: Bidirectional Reciprocal Learning for Referring Image Segmentation](/202609/24/2609.24510v2-05100-bidirectional-reciprocal-learning-for-referring-image-segmentation)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：双向跨模态交互与视觉语言对齐
-6. [CableVLA: Simulation-Privileged Global-Local Representation Learning for Cable Routing](/202609/24/2609.25606v1-cablevla-simulation-privileged-global-local-representation-learning-for-cable-routing)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：端到端多模态视觉-语言-动作框架
-7. [S2A:Semantic-to-Spatial Alignment for Alignment-Free RGB-T Salient Object Detection](/202609/24/2609.27413v1-s2asemantic-to-spatial-alignment-for-alignment-free-rgb-t-salient-object-detection)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：语义到空间对齐在融合前对齐RGB与热红外的跨模态表征
-8. [BiCFlow-MER: Orchestrating Discriminative and Generative Multimodal Emotion Recognition via Conditional Transport](/202609/24/2609.27615v1-bicflow-mer-orchestrating-discriminative-and-generative-multimodal-emotion-recognition-via-conditional-transport)  
+   evidence：置信度引导跨模态迁移，应对模态可靠性动态变化
+12. [Hierarchical Floorplan-Guided Vision-Language Exploration for Embodied Question Answering](/202609/25/2609.26360v1-hierarchical-floorplan-guided-vision-language-exploration-for-embodied-question-answering)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：具身环境中的视觉语言探索与问答
+13. [MMAP: Multimodal Missing-Aware Pretraining for Longitudinal Alzheimer's Prediction](/202609/25/2609.26617v1-mmap-multimodal-missing-aware-pretraining-for-longitudinal-alzheimers-prediction)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：整合多模态互补线索与跨模态融合
-9. [From Alignment to Fusion in 3D Vision-Language](/202609/24/2609.28222v1-from-alignment-to-fusion-in-3d-vision-language)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：先对齐后融合的框架，在融合前对齐异构三维表示
+   evidence：多模态缺失感知对齐预训练
+14. [ROAM-ASD: Robust Open-World Active Speaker Detection with Flexible Multimodal Fusion](/202609/25/2609.26648v2-roam-asd-robust-open-world-active-speaker-detection-with-flexible-multimodal-fusion)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：统一联合自注意力与模态丢弃实现灵活多模态融合
 
 
 <div class="dpr-home-promo-card">

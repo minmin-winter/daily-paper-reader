@@ -1,0 +1,700 @@
+Title: Confidence-Guided Cross-Modal Knowledge Transfer for Multimodal Anomaly Detection in Microservice Systems
+
+URL Source: https://arxiv.org/pdf/2609.25856v1
+
+Published Time: Wed, 23 Sep 2026 00:51:35 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 1
+
+# Confidence-Guided Cross-Modal Knowledge Transfer for Multimodal Anomaly Detection in Microservice Systems 
+
+Peipeng Wang, Xiuguo Zhang ∗, Lihua Zhang, Zhiying Cao ∗, Jingchun Zhou, Senior Member, IEEE , Zheng Li, 
+
+Senior Member, IEEE 
+
+Abstract —Accurate anomaly detection is essential for reliable and secure operations of microservice systems. While an increas-ing number of studies have shifted from unimodal modeling to multimodal interaction and fusion, effectively leveraging reliable cross-modal information remains challenging. The challenge pri-marily stems from two aspects. Firstly, different modalities are influenced by factors like load fluctuations, leading to dynamically changing reliability. Secondly, multimodal data exhibit hetero-geneity in both structure and semantics. Therefore, we propose a confidence-guided Cross-Modal knowledge Transfer method for multimodal Anomaly Detection (CMT-AD). It jointly models metrics and logs within a unified deep clustering framework and estimates modality reliability through the soft clustering distributions, where clustering uncertainty is quantified into confidence scores. Guided by these confidence scores, the model actively analyzes the contributions of each modality in cross-modal interactions and supplements low-confidence modalities with knowledge from high-confidence ones. To further mitigate cross-modal heterogeneity, we introduce a gated intermediate modality and design structural and semantic consistency con-straints that align the original modalities with the intermediate modality to preserve similarity structures and semantic distri-butions across modalities. Furthermore, intra-modal and cross-modal regularization terms are incorporated to enhance cluster compactness and mitigate negative transfer. We evaluated CMT-AD on three large-scale datasets, and the results demonstrate that CMT-AD outperforms state-of-the-art approaches and achieves an F1-score higher than 0.9. 
+
+Index Terms —microservice systems, multimodal, anomaly de-tection, deep clustering, knowledge transfer. 
+
+I. Introduction 
+
+# IN recent years, microservice architecture has been widely adopted in enterprise applications. As system scale contin-ues to expand, functional structures have become increasingly complex, and dependencies between different microservices have grown tighter [1]. While the service decoupling and flexible composition architectural pattern enhances system scalability and development efficiency, it also makes over-all stability more dependent on the health of each individ-ual service. Therefore, to ensure business continuity, service providers must prioritize improving system reliability and           
+
+> Peipeng Wang, Xiuguo Zhang, Lihua Zhang, Zhiying Cao, and Jingchun Zhou are with Dalian Maritime University, Liaoning, Dalian, 116026, China. E-mail: {wpp7, zhangxg, zhang lihua, czysophy }@dlmu.edu.cn, zhou-jingchun03@gmail.com. Zheng Li is with Queen’s University Belfast, BT9 5AF Belfast, UK. E-mail: zheng.li@qub.ac.uk. * Xiuguo Zhang and Zhiying Cao are the corresponding authors. This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible.
+
+stability. Building efficient and automated anomaly detection methods is fundamental to achieving this goal [2]. In microservice systems, the operational status is typically recorded through various types of monitoring data. Among these, performance metrics and log data, representing system states and discrete events, respectively, are the two most fundamental forms of representation. Some studies analyze the temporal features of metrics while incorporating structural dependencies between different metrics [3], [4]. Others treat logs as natural language, employing word embedding models to extract log semantics [5] and temporal models to capture contextual information [6]. However, unimodal approaches struggle to comprehensively detect all system anomalies due to the inherent limitations of relying on a single type of monitoring data. As shown in Table I, metrics and logs exhibit distinct detection capabilities across different anomaly categories, indicating that their complementary characteristics are essential for achieving more comprehensive and accurate anomaly detection. Recent studies have begun to jointly model metric and log data, enhancing anomaly detection performance through cross-modal interaction and fusion mechanisms [7], [8]. However, these approaches still struggle to effectively leverage reliable cross-modal information to identify complex anomalies that are difficult to detect using single-modal meth-ods. The main reasons for this include two key points: 
+
+(1) Reliability of dynamic changes in multimodal data. 
+
+In microservice systems, the observability, sensitivity, and discrimination capabilities of different modalities for detecting anomalies are not always consistent. This inconsistency is influenced by the operating mechanisms of the microservice system and the observation mechanisms associated with dif-ferent modal data. Some anomalies develop through a grad-ual accumulation and diffusion process, exhibiting distinct behavioral characteristics at various stages. For example, as shown in Table I, logs record early warnings such as “request timeout”, yet these warnings do not necessarily indicate critical failures. As the anomaly evolves, log events may diminish or disappear, while substantial deviations would emerge in perfor-mance metrics. Additionally, due to noise and data collection mechanisms, metric values may fluctuate temporarily, and logs may lack critical information because of rate-limiting issues. This can result in a situation where one modality struggles to provide exception clues at a given moment, while another modality proves more reliable. Existing methods overlook this dynamic reliability, leading to information conflicts and dilution of valuable data after fusion or interaction, which causes cross-modal information distortion. 
+
+(2) Heterogeneity in multimodal data structure and arXiv:2609.25856v1 [cs.SE] 22 Sep 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 2
+
+TABLE I: ANOMALY CHARACTERISTICS IN DIFFER-ENT MODALITIES           
+
+> Anomaly types Metric Log Thread blocking Latency ↑–Request timed out Timeout Rate ↑Warning request timed out Login failed –Login failed error Database connection failed Error rate ↑Connection failed error
+
+semantics. Metric data consists of multivariate time series with temporal dependencies, continuously collected from the system’s operational state. In contrast, log data is generated in an event-driven manner, predefined by the programmer, and populated with specific contextual information at runtime. Logs are semi-structured text representing discrete event se-quences [9]. This makes it challenging to directly correlate metrics and logs at the same time step. Some studies have converted logs into time series [10], [11] and performed multimodal fusion, but this approach results in the loss of semantic information inherent in the logs. Furthermore, met-rics represent the system state through numerical changes, with their semantics being implicit, whereas logs explicitly describe the system state. In anomaly detection scenarios, variations in a specific metric variable do not necessarily indicate a unique anomaly type. For example, a continuous increase in memory usage may be caused by either memory leaks or frequent garbage collection, while logs provide a fine-grained description of explicit events related to these anomalies. This heterogeneity in data structure and semantic expression complicates the direct alignment of information from different modalities within a unified representation space, thereby increasing the difficulty of cross-modal joint analysis. To address these challenges, we propose CMT-AD, innova-tively integrating deep clustering paradigm and cross-modal transfer methods into anomaly detection based on metrics and logs. We first dynamically evaluate sample reliability over time across modalities using the soft clustering assignments, and quantify it as confidence scores. This enables us to supple-ment low-confidence modalities with knowledge from high-confidence modalities during cross-modal knowledge transfer, adaptively adjusting the amount of transferred information based on confidence differences. Furthermore, an intra-modal regularization term is introduced to bring representations within the same cluster closer together while pushing apart those from different clusters, thereby stabilizing transferable knowledge. To further mitigate instability introduced by direct cross-modal interaction, we employ gating mechanisms and confi-dence scores to integrate reliable knowledge from different modalities, creating an intermediate modality. Within this shared representation space, we impose two complementary transfer constraints. The structural consistency constraint pre-serves the geometric similarity relationships among samples across modalities, while the semantic consistency constraint aligns modality-specific representations with shared seman-tic prototypes in the intermediate modality. A cross-modal regularization term is designed to preserve discriminative boundaries, thus preventing negative transfer. The main contributions are summarized as follows:  
+
+> •
+
+We introduce deep clustering and cross-modal transfer learning into anomaly detection for microservice systems, enabling unified analysis of metric and log data within an unsupervised framework to enhance detection accuracy and robustness.  
+
+> •
+
+We design a confidence estimation method based on soft clustering assignment,to quantify modality reliability over time, mitigating the influence of unreliable modalities. Ad-ditionally, an intra-modal regularization term is introduced to promote compact and separable representations within each modality.  
+
+> •
+
+We construct an intermediate modality and introduce structural and semantic consistency constraints to allevi-ate heterogeneity across representations. A cross-modal regularization term is further developed to guide modal interaction and enhance the effectiveness of knowledge transfer. II. Related Work 
+
+A. Anomaly Detection with Single-modal Data 
+
+Metrics: Existing research treats metrics as multivariate time series and employs deep learning methods to enhance anomaly detection performance. OmniAnomaly [12] utilized a GRU-based VAE model to reconstruct the normal state of multivariate time series. AnomalyTrans [13] leveraged Transformer to model time series and introduces an association difference loss function to quantify the disparity between normal and abnormal sequences. Dual-TF [14] incorporated contrastive learning into the Transformer to address the issue of time-frequency granularity mismatch. Several studies have identified correlations between different metric variables. CGAD [15] employed transfer entropy to construct a causal graph among variables and utilized weighted GCN alongside to analyze its structural and temporal relationships. MUTANT [16] also applied GCN and LSTM to learn the correlations between variable. Luo et al. [17] modeled time series features as intra-signal graphs and different variables as inter-signal graphs. Moon [18] introduced a multivariate Markov transfer field technique to transform time series data into graph structures and used multimodal CNNs to analyze their spatiotemporal features. 
+
+Logs: Existing logs anomaly detection approaches typically divide the process into three stages: log parsing, feature extraction, and anomaly detection. Commonly used log parsing methods include Drain [19], IPLoM [20], and SwissLog [6]. Zhu et al. [21] demonstrated that Drain can effectively parse complete log events from noisy data. Feature extraction methods are generally categorized into two types: index-based and semantic-based approaches. DeepLog [22] mapped log events to unique IDs and employed an LSTM model to learn the log index sequence. LogAnomaly [23] calculated the frequency of each log index at a given time to obtain statistical features. LogRobust [24] pointed out that the log index ignores semantics and reduces the robustness of anomaly detection models. LogMTC [25] and DeepSysLog [26] used Word2vect to extract log word vectors, LightLog [27] combines Word2vec and post-processing algorithms to generate low-dimensional word vectors, Chai [28] et al. utilized BERT to obtain log sentence JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 3
+
+features, and LogGraph [29] used a pre-trained GloVe model to generate log semantic. In the process of anomaly detection, IST-GCN [30] employed both directed and undirected graphs to capture the temporal and spatial features of log events. SpikeLog [31] designed a Spiking Neural Network to perform anomaly detection. SLNALog [32] utilized linear attention to address the key-value interaction challenges inherent in traditional attention mechanisms. LogDLR [33] incorporated adversarial training within a Transformer to learn invariant latent representations from log entries. R-Log [34] integrated a reinforcement learning inference mechanism into a large language model to improve the adaptability of log analysis methods across different domains. These methods analyze metrics and log characteristics from various perspectives, effectively enhancing detection results. However, they remain limited to a single type of monitoring data, which makes it challenging to meet real-world operational requirements. 
+
+B. Anomaly Detection with Multimodal Data 
+
+In recent years, an increasing number of studies have combined metrics and logs to enhance anomaly detection performance. SCWarn [8] transformed logs into time series and employed different LSTM models to learn features from both metrics and log temporal feature. Although it effectively performed joint analysis of metrics and logs, it overlooked cross-modal interactions. Some studies have further incorporated trace data. HG-PAD [35] construct a multirelational heterogeneous graph using three types of monitoring data. FAMOS [36] intro-duced a novel Gaussian attention mechanism to emphasize the relationships among the three modalities. While these methods leverage traces to enrich multimodal features, trace collection requires pre-instrumentation and incurs higher computational costs compared to logs and metrics. Therefore, this paper focuses on anomaly detection based on metrics and logs. KANAD [37] designed a graph structure based on K-nearest neighbors for metrics and a word-level graph structure for logs, achieving feature fusion through cross-modal interaction. Hades [7] applied an attention mechanism to facilitate cross-modal interaction. However, these methods typically rely on labeled data for training, limiting their applicability in unsuper-vised scenarios. To address this, MAD-CMC [38] employed clustering methods and contrastive learning to enhance the model’s ability to distinguish samples from different clusters. UAC-AD [39] developed an adversarial training mechanism for hard samples in anomaly detection, which automatically identi-fies these hard samples and adjusts their weights accordingly. While these methods effectively facilitate cross-modal in-teractions, they overlook the fact that different modalities exhibit varying reliabilities over time. Furthermore, interaction mechanisms such as attention-based methods, which rely on weighted feature fusion remain susceptible to cross-modal heterogeneity. Therefore, we analyze modality reliability across time and model cross-modal features from both structural and semantic perspectives, thereby mitigating performance degradation caused by heterogeneity. III. Motivation 
+
+(1) Existing methods rely on the static fusion assumption, which treats knowledge from different modalities as equally reliable during the anomaly detection process. 
+
+Although recent research has shifted from unimodal to mul-timodal approaches, most interaction mechanisms adopt fixed fusion strategies that ignore the temporal variability of modality reliability. In real-world microservice systems, anomalies evolve progressively, exhibiting stage-dependent characteristics. As a result, different modalities demonstrate varying discrimina-tion capabilities at different stages of anomaly progression. Moreover, data collection noise, sampling inconsistencies, and environmental disturbances may cause certain modalities to temporarily provide incomplete or misleading signals. These factors challenges the effectiveness of static fusion methods. Therefore, we explicitly model modality reliability as a time-dependent confidence score to dynamically adjust cross-modal interactions. 
+
+(2) Direct cross-modal fusion or alignment overlooks the structural and semantic differences between modalities, leading to unstable interaction and degraded anomaly detection performance. 
+
+Metric and log data exhibit fundamentally different represen-tational characteristics. Metric data consist of continuous time-series signals that capture system dynamics through smooth temporal variations, whereas log data consist of discrete event entries enriched with high-level semantic information, where keywords such as “success,” “request,” and “error” explicitly reflect underlying system states. Beyond differences in data format, these modalities exist in heterogeneous representational spaces with distinct structural dependencies and semantic abstractions. Existing research often aligns or fuses multimodal features directly using attention mechanisms [7], [8], assuming that weighted feature aggregation is sufficient to bridge cross-modal gaps. However, these strategies primarily operate at the feature level and fail to address structural inconsistencies and se-mantic misalignments across modalities. Such mismatches can distort cross-modal interactions and impede stable knowledge integration. Therefore, we construct an intermediate modality and explicitly impose structural and semantic consistency constraints to standardize representation alignment and achieve stable cross-modal fusion. 
+
+(3) In complex microservice scenarios, indiscriminate cross-modal knowledge transfer can easily result in nega-tive transfer. 
+
+Existing research on anomaly detection using transfer learn-ing focuses on transferring knowledge or models from a source modality to a target modality to achieve rapid deployment and improved performance [5]. The heterogeneity and reliability dif-ferences among modalities are often overlooked. Although the knowledge transfer process resembles cross-modal interaction, not all modal information is suitable for transfer at all times. In microservice systems, when unreliable or poorly aligned modal knowledge is indiscriminately propagated, it can distort feature representations, disrupt modality-specific discrimination capabilities, and ultimately lead to negative transfer. Therefore, effective cross-modal transfer should be selectively regulated JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 4Modal Confidence                  
+
+> Estimation
+> Failed to send one -way RPC.
+> MemoryStore cleared
+> Driver from master3:43463
+> disconnected during shutdown
+> ……
+> Nearest -neighbor
+> Imputation
+> Min -Max
+> Normalization
+> Drain Parsing
+> BERT Embedding
+> Metrics
+> Logs
+> Transformer_
+> encoder
+> 1D CNN Transformer_
+> encoder
+> MLP
+> Intra -and Cross -
+> modal regulation
+> Structural and semantic
+> consistency constraints
+> IM
+> Intra -and Cross -
+> modal regulation K-means
+> GCN
+> LSTM GCN
+> MLP
+> Metric preprocess
+> Log preprocess
+> Metric Encoder
+> Log Encoder
+> Metric Decoder
+> Log Decoder
+> Rec loss
+> Rec loss
+> Data Preprocess
+> Data Preprocess
+> Metric Learning
+> Log Learning
+> Confidence -Guided Cross
+> Modal Knowledge Transfer
+> SVD Reduction
+> Gate Weight
+> Computation Shared -space
+> Projection F(· )
+> Confidence -Guided
+> Weighted Fusion m
+> Z
+> Metric g
+> Z
+> Log mid
+> Zm
+> cg
+> cg
+> rm
+> r
+> Normal
+> Abnormal
+> Transitional
+> Euclid
+> Distance
+> Anomaly
+> Detection
+> Self -supervision
+> Self -supervision g
+> Xm
+> Xˆm
+> Xˆg
+> X
+
+Fig. 1: The architecture of CMT-AD. rather than indiscriminately enforced. To address this, we propose two regularization terms based on clustering results, targeting both intra-and cross-modal aspects to prevent negative transfer. IV. Methodology of CMT-AD 
+
+A. Overview 
+
+As shown in the Fig. 1. CMT-AD primarily consists of five modules: multimodal data preprocessing, metric learning, log learning, confidence-guided cross-modal knowledge transfer, and anomaly detection. In large-scale microservice systems, each microservice can independently generate metrics and logs. Formally, we define the multimodal data as < 𝑋 1: 𝑛 , 𝑌 1: 𝑛 >=
+
+{( 𝑋 1, 𝑌 1), (𝑋 2, 𝑌 2), ..., (𝑋 𝑛 , 𝑌 𝑛 )} , where 𝑛 represents the data volume. 𝑋 𝑖 contains metrics 𝑋 𝑚 𝑖 and logs 𝑋 𝑔 𝑖 , and 𝑌 𝑖 takes values 0 (normal) or 1 (abnormal). To reduce dependence on labeled data, we employ an unsupervised clustering algorithm to classify multimodal monitoring data into different clusters and determine normal and abnormal cluster centers by analyzing these clusters. For new multimodal monitoring data, CMT-AD assigns them to the appropriate cluster to infer the current system status. 
+
+B. Multimodal Data Preprocessing 
+
+For metric and log data from microservice systems, we first perform data alignment to ensure that data from different modalities can collaboratively characterize the current system state. Metric data are typically multivariate time series with fixed sampling intervals. Existing research [12], [14] usually segments metrics according to fixed-length time windows. Un-der the same sampling interval, dozens of log messages may be generated. To align logs with metric windows, these methods [5], [24] typically aggregate the log messages produced within each fixed time interval into a corresponding log sequence. Therefore, we define a sliding window of size 𝑇 for the metric data, with the metric sequence at time 𝑖 as 𝑋 𝑚 𝑖 = {𝑥 𝑚 𝑖 , 𝑥 𝑚 𝑖 −1, ..., 𝑥 𝑚 𝑖 −𝑇 −1 },where 𝑥 𝑚 𝑖 ∈ R𝑘 and 𝑘 are the number of variables. Then, we obtain the start and end times of the metric sequence in the current window, and use them to obtain all log messages during the same time period, resulting in the corresponding log sequence 𝑋 𝑔 𝑖 = {𝑥 𝑔 𝑖, 1, 𝑥 𝑔 𝑖, 2, ..., 𝑥 𝑔 𝑖,𝑛 1 }, where 𝑛 1 is the number of log messages in the current window. Subsequently, to enhance the model’s robustness and min-imize the impact of noisy data, we performed missing value imputation and data normalization on the metric data. For missing value imputation, we applied the nearest neighbor method, filling in missing metric values with valid observations from adjacent time points, thereby preserving the continuity of the metric time series. For data normalization, we used min-max scaling for each dimension of the metric variables to mitigate the effects of differing units on model training. Since log messages are semi-structured text, we use the Drain algorithm to parse them into structured log events, thereby eliminating redundant information from free text. Then, we input log events into the BERT model [40] to obtain semantic features. During the training of CMT-AD, BERT is used as a fixed feature extractor, and its parameters remain frozen during training rather than being fine-tuned end-to-end. However, given the high dimensionality of the semantic features produced by BERT, combining them with metric features during training can cause JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 5
+
+instability due to scale imbalance. To address this, we apply Singular Value Decomposition (SVD) to reduce the feature dimensionality. The reduced dimension is selected according to the cumulative explained variance criterion, where the retained components preserve at least 95% of the total variance, thereby retaining the main semantic information while reducing feature redundancy. 
+
+C. Metric Learning 
+
+We designed an metric learning module that is pre-trained using training data containing both normal and abnormal samples, based on a reconstruction approach. The goal of this step is to learn a smooth representation space rather than an anomaly discrimination mechanism, thereby providing a stable initialization for subsequent cross-modal analysis and clustering. During encoding, we jointly capture the temporal and spatial dependencies of metric data to comprehensively characterize metric-driven system anomalies. Considering that anomalies in microservice systems evolve gradually over time across each dimension of the metrics, we employ an LSTM to model metric sequences and capture both long- and short-term temporal dependencies: 
+
+ℎ𝑚 𝑡 = LSTM (𝑋 𝑚 𝑡 ) (1) where 𝑋 𝑚 𝑡 ∈ R𝑘 ×𝑇 represents the metric feature of sliding window at time 𝑡 , ℎ𝑚 𝑡 ∈ R𝑘 ×ℎ′
+
+represents the output metric temporal features. In microservice systems, anomalies often result in correlated changes across multiple metric variables. Therefore, CMT-AD models metric variables using a graph structure, where each variable is represented as a node, and its corresponding temporal features ℎ𝑚 𝑡 are encoded as node embeddings. The cosine similarity is used to construct an adjacency matrix 𝐴 ∈ R𝑘 ×𝑘 ,the calculation is shown in Eq. 2. 
+
+𝑒 𝑖 𝑗 = ℎ𝑚 𝑡 ,𝑖 · ℎ𝑚 𝑡 , 𝑗 
+
+|| ℎ𝑚 𝑡 ,𝑖 || × || ℎ𝑚 𝑡 , 𝑗 || (2) where 𝑒 𝑖 𝑗 represents the similarity value between the features of nodes 𝑖 and 𝑗 . When 𝑗 ∈ 𝑇 𝑜 𝑝𝐾 (𝑒 𝑖𝑘 ), 𝐴 𝑖 𝑗 = 1, otherwise 
+
+𝐴 𝑖 𝑗 = 0. 𝑇 𝑜 𝑝𝐾 (𝑒 𝑖𝑘 ) represents the 𝐾 nodes selected from all nodes that have the highest similarity to node 𝑖 . This method constructs a metric structure graph and uses the hyperparameter 
+
+𝐾 to control the graph’s sparsity, thereby adjusting the graph’s complexity across different systems. Subsequently, we employ a two-layer graph convolutional network (GCN) to aggregate local neighborhood information while preserving the graph’s structural information, effectively capturing higher-order depen-dencies among different variables. The calculation is as follows: 
+
+𝑍 𝑚 𝑡 = 𝜎 
+
+ ˜𝐴 𝑡 𝜎 ( ˜𝐴 𝑡 ℎ𝑚 𝑡 𝑊 1)𝑊 2
+
+(3) where 𝑍 𝑚 𝑡 ∈ R𝑘 ×𝑑 𝑚 contains both temporal and spatial features, 
+
+𝑑 𝑚 is the hidden layer dimension of the metric. 𝑊 1 and 𝑊 2 is learnable weight parameters, ˜𝐴 𝑡 is the result of adding a self-loop to the adjacency matrix, ˜ 𝐴 𝑡 = 𝐴 𝑡 + 𝐼 .During the decoding stage, the encoded representations 𝑍 𝑚 𝑡 
+
+are fed into a GCN together with the corresponding adjacency matrix 𝐴 𝑡 , which reinforces the learned structural dependencies and ensures consistency with the graph-based modeling strategy adopted in the encoding phase. Unlike the encoder, the decoder does not perform additional temporal modeling. Instead, it focuses on reconstructing metric representations while pre-serving structural consistency. Specifically, an MLP layer is applied after the GCN to perform a nonlinear transformation on the structure-enhanced features, producing the reconstructed metric representations. The corresponding formulation is given as follows: ˆ𝑋 𝑚 𝑡 = MLP  GCN (𝑍 𝑚 𝑡 , 𝐴 𝑡 ) (4) where ˆ𝑋 𝑚 𝑡 ∈ R𝑘 ×𝑇 represents reconstructed metric feature. During pre-training, we use the mean squared error loss function to calculate the reconstruction error. 
+
+𝑒𝑟𝑟 𝑚 =
+
+> 𝑛
+
+∑︁ 
+
+> 𝑡 =1
+
+(𝑋 𝑚 𝑡 − ˆ𝑋 𝑚 𝑡 )2 (5) 
+
+D. Log Learning 
+
+Similar to the metric learning module, the log learning mod-ule is pre-trained using a reconstruction approach. Specifically, anomalies may cause recurring adjacent log events within a short time interval, forming abnormal local patterns. To capture such patterns, CMT-AD incorporates a 1D-CNN model during the encoding stage. By applying convolutional operations to the log semantic sequence, it extracts local semantic features from adjacent log events. 
+
+ℎ𝑔 𝑡 = CNN (𝑋 𝑔 𝑡 ) (6) where 𝑋 𝑔 𝑡 ∈ R𝑠 ×𝑛 1 denotes the log semantic sequence formed by the semantic representations of log events within the sliding window at time 𝑡 , 𝑠 represents the log semantic dimension after SVD algorithm. ℎ𝑔 𝑡 ∈ R𝑑 𝑐 ×𝐿 𝑜𝑢𝑡 is log local features. We use a convolutional kernel of size 3 with 𝑑 𝑐 channels, and 𝐿 𝑜𝑢𝑡 
+
+represents the length of the sequence after convolution. Furthermore, anomalies in microservice systems are not always manifested as short-term events. Some anomalies arise from long-term accumulation processes, such as sustained resource consumption or gradually increasing workload. In such cases, related log events may be temporally distant but still exhibit semantic correlations. To capture these long-range dependencies, CMT-AD incorporates a Transformer encoder to model global contextual relationships: 
+
+𝑍 𝑔 𝑡 = TransEncoder (ℎ𝑔 𝑡 ) (7) where 𝑍 𝑔 𝑡 ∈ R𝐿 𝑜𝑢𝑡 ×𝑑 𝑐 denotes the log representation produced by the encoder and is used as the input to the decoder, capturing both local features and global contextual information of the log sequence. To facilitate subsequent cross-modal interaction, we set 𝑑 𝑐 = 𝑑 𝑚 , so that the hidden dimension of the log representations matches that of the metric representations. Subsequently, the same Transformer encoder structure, followed by an MLP layer, is used for reconstruction, as shown in Eq. 8. This design avoids potential representation shifts caused by inconsistent encoder-decoder architectures while maintaining reconstruction capability with reduced modeling complexity. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 6
+
+ˆ𝑋 𝑔 𝑡 = MLP (TransEncoder (𝑍 𝑔 𝑡 )) (8) where ˆ𝑋 𝑔 𝑡 ∈ R𝑠 ×𝑛 1 represents a reconstructed log feature. We also use the mean squared error loss function to calculate the log reconstruction error, as follows: 
+
+𝑒𝑟𝑟 𝑔 =
+
+> 𝑛
+
+∑︁ 
+
+> 𝑡 =1
+
+(𝑋 𝑔 𝑡 − ˆ𝑋 𝑔 𝑡 )2 (9) 
+
+E. Confidence-guided Cross-modal Knowledge Transfer 
+
+In this section, we design a confidence-guided cross-modal knowledge transfer module that quantifies modality reliability as confidence scores. Under dynamically varying modality con-fidence levels, the proposed mechanism facilitates knowledge transfer from high-confidence modalities to low-confidence ones, thereby producing more stable multimodal representations for anomaly detection. 
+
+1) Modality Confidence Estimation via Soft Clustering As-signment: Considering the high cost of acquiring labeled data, we use the soft assignment results from deep clustering to assess the reliability of different modalities. Specifically, given the metric and log representations under the 𝑡 -th window as 𝑍 𝑚 𝑡 and 𝑍 𝑔 𝑡 , respectively, we map them into a unified clustering feature space and obtain the soft clustering results 
+
+𝑞 𝑚 𝑡 𝑐 and 𝑞 𝑔 𝑡 𝑐 based on the cluster centers {𝜇 𝑐 }𝐶 𝑐 =1. The detailed calculation is introduced in the subsequent anomaly detection process, where 𝐶 denotes the number of cluster centers, 𝑞 𝑚 𝑡 𝑐 
+
+and 𝑞 𝑔 𝑡 𝑐 represent the probabilities that the metric and log representations under the 𝑡 -th window belong to the 𝑐 -th cluster, respectively. Subsequently, we utilize the entropy of cluster soft assignments as a measure of modality confidence. The intuition is that cluster uncertainty reflects how clearly a modality representation can be assigned to a specific cluster. When a modality provides sufficient information with clear structural patterns, its representation tends to be associated with a specific cluster, resulting in a peaked soft assignment distribution and lower entropy, which indicates higher confidence. Conversely, noisy or less informative modality representations lead to more ambiguous cluster assignments, producing a more uniform soft assignment distribution and higher entropy. Since both metric and log modalities are mapped into the same clustering space, their soft assignment entropy provides an estimation of relative modality reliability, enabling dynamic confidence estimation for cross-modal fusion: 
+
+𝑐 𝑤 𝑡 = 1 − 𝐻 (𝑞 𝑤 𝑡 )
+
+log 𝐶 (10) 
+
+𝐻 (𝑞 𝑤 𝑡 ) = −
+
+> 𝐶
+
+∑︁ 
+
+> 𝑐 =1
+
+𝑞 𝑤 𝑡 𝑐 log 𝑞 𝑤 𝑡 𝑐 (11) where 𝑤 ∈ {𝑚, 𝑔 } represents the metric or log modal. 𝑐 𝑤 𝑡 
+
+represents the confidence score of the 𝑡 -th sample in mode 𝑤 .
+
+𝐻 (𝑞 𝑤 𝑡 ) is the information entropy of the sample in mode 𝑤 . This confidence weighting approximates risk-aware alignment under uncertain representations, suppressing high-entropy samples that may induce negative transfer. 
+
+2) Confidence-guided Gated Intermediate Modality Con-struction: Although confidence scores can indicate the reliabil-ity of different modalities at various times, an inherent modal gap exists between metrics and logs. In particular, after introducing confidence scores, directly performing cross-modal knowledge transfer not only fails to effectively leverage the key informa-tion from high-confidence modalities but may also amplify unreliable knowledge from low-confidence modalities, thereby weakening the transfer effect. To address this issue, we propose an intermediate modality (IM) [41] that regulates cross-modal fusion based on modality-specific clustering confidence scores. Specifically, features from each modality are first projected into a shared representation space, and a confidence-guided gating mechanism adaptively weights their contributions. This mechanism enables high-confidence modalities to exert greater influence while suppressing noisy or unreliable signals, thus mitigating cross-modal heterogeneity. The calculation is shown in Eq. 12, 13. 
+
+𝑟 𝑚 𝑡 = 𝑐 𝑚 𝑡 
+
+𝑐 𝑚 𝑡 + 𝑐 𝑔 𝑡 
+
+, 𝑟 𝑔 𝑡 = 𝑐 𝑔 𝑡 
+
+𝑐 𝑔 𝑡 + 𝑐 𝑚 𝑡 
+
+(12) 
+
+𝑍 𝑚𝑖𝑑 𝑡 = 𝑟 𝑔 𝑡 · 𝐹 𝑔 (𝑍 𝑔 𝑡 ) + 𝑟 𝑚 𝑡 · 𝐹 𝑚 (𝑍 𝑚 𝑡 ) (13) where 𝐹 𝑔 (·) and 𝐹 𝑚 (·) are a mode-specific linear projection function. 𝑟 𝑔 𝑡 and 𝑟 𝑚 𝑡 represents the confidence score after the gating mechanism update. 𝑑 𝑚𝑖𝑑 represents the IM dimension. Furthermore, we introduce another MLP layer to enhance the expressive power of 𝑍 𝑚𝑖𝑑 𝑡 .
+
+3) Transfer Stability Rregularization: Prior to cross-modal knowledge transfer, CMT-AD performs transfer stability reg-ularization from both intra-and cross-modal perspectives. By enhancing the compactness of representations within the same modality clusters and suppressing uncontrolled proximity be-tween different modalities and distinct clusters, the model establishes stable and transferable feature representations for subsequent cross-modal transfer. 
+
+Intra-modal regularization term: To stabilize modality-specific representations, we introduce a regularization term guided by the soft cluster assignments. For the intra-modal representation 𝑍 𝑤 𝑡 , 𝑤 ∈ { 𝑚, 𝑔 } of the 𝑡 -th window sample and the soft-assignment weights 𝑞 𝑤 𝑖𝑐 = {𝑞 𝑚 𝑖𝑐 , 𝑞 𝑔 𝑖𝑐 } in the 𝑐 -th clusters, we first calculate the corresponding soft cluster centers 𝑒 𝑤 𝑐 :
+
+𝑒 𝑤 𝑐 =
+
+> 𝐵
+
+Í
+
+> 𝑡 =1
+
+𝑞 𝑤 𝑡 𝑐 𝑍 𝑤 𝑡 𝐵 Í
+
+> 𝑡 =1
+
+𝑞 𝑤 𝑡 𝑐 + 𝜀 
+
+(14) where 𝜀 = 10 −10 is a numerical stabilization term used to avoid division by zero. Subsequently, CMT-AD brings intra-modal sample features from the same cluster closer together and separates those from different clusters: 
+
+𝐿 𝑤 𝑝𝑢𝑙𝑙 = 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑡 =1
+> 𝐶
+
+∑︁ 
+
+> 𝑐 =1
+
+𝑞 𝑤 𝑡 𝑐 || 𝑍 𝑤 𝑡 − 𝑒 𝑤 𝑐 || 22 (15) 
+
+𝐿 𝑤 𝑝𝑢𝑠ℎ = 1
+
+𝐶 (𝐶 − 1)∑︁ 𝑐 ≠𝑐 ′
+
+exp (−|| 𝑒 𝑤 𝑐 − 𝑒 𝑤 𝑐 ′ || 22) (16) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 7m
+
+Zg
+
+Zm
+
+rg
+
+rmid 
+
+## Zmid 
+
+Pg
+
+Pm
+
+Pexp( )exp( )
+
+> mid mid
+
+SS( || )        
+
+> wPKT mid w
+> LKL P P
+> Confidence estimation Regularization mid
+> S,{,}w
+> Swm g Structural
+> Consistency loss
+
+Fig. 2: Structural consistency constraint. It can be observed that if 𝑞 𝑤 𝑡 𝑐 is larger in 𝐿 𝑤 𝑝𝑢𝑙𝑙 , meaning the sample is very close to the 𝑐 then after regularization, it will be pulled toward the cluster center 𝑒 𝑤 𝑐 . 𝐿 𝑤 𝑝𝑢𝑠ℎ makes different clusters distinguishable in the feature space. Consequently, the intra-modal regularization term is 𝐿 𝑡𝑟 𝑎 = 𝐿 𝑝𝑢𝑙𝑙 + 𝐿 𝑝𝑢𝑠ℎ .
+
+Cross-modal regularization term: In complex microservice systems, not all cross-modal interactions contribute positively to anomaly detection, especially when features from different modalities correspond to opposing system states. Direct cross-modal transfer may result in negative transfer. Therefore, CMT-AD mitigates this by penalizing misalignment, increasing the feature distance between samples from different clusters across modalities. 
+
+𝐿 𝑡𝑒𝑟 = 1
+
+𝐶 (𝐶 − 1)∑︁ 𝑐 ≠𝑐 ′
+
+max (0, 𝛿 𝑡𝑒𝑟 − || 𝑒 𝑚 𝑐 − 𝑒 𝑔 𝑐 ′ || 2) (17) where 𝛿 𝑡𝑒𝑟 is the minimum segmentation interval. Penalty is applied only when || 𝑒 𝑚 𝑐 − 𝑒 𝑔 𝑐 ′ || 2 < 𝛿 𝑡𝑒𝑟 , The overall regularization is implemented as a loss composed of two terms: 𝐿 𝑟 𝑒𝑔 = 𝐿 𝑡𝑟 𝑎 + 𝜆 𝑟 𝑒𝑔 𝐿 𝑡𝑒𝑟 , 𝜆 𝑟 𝑒𝑔 is used to mitigate the optimization-dominant problem caused by differences in the numerical scales of various regularization terms and to adjust the relative influence of the two types of constraints on model training. 
+
+4) Structural Consistency Constraint: We recognize that even when different modalities are projected into a unified representation space, effective anomaly patterns may still be weakened during cross-modal knowledge transfer. This is due to inherent differences in how metrics and logs characterize anomalies, including variations in manifestation patterns and discriminative granularity. Therefore, CMT-AD constrains the cross-modal knowledge transfer process by enforcing structural consistency through a dedicated consistency loss. Inspired by existing research on geometric regularization within and between channels [42], as shown in Fig. 2, we employ the probabilistic knowledge transfer algorithm PKT [43], [44] to align the similarity distributions of samples from different modalities, with the IM serving as a structural reference. Given a mini-batch of size 𝐵 , the IM representations are denoted as 𝑍 𝑚𝑖𝑑 = [𝑍 𝑚𝑖𝑑  
+
+> 1
+
+, 𝑍 𝑚𝑖𝑑  
+
+> 2
+
+, ..., 𝑍 𝑚𝑖𝑑 𝐵 ], and the unimodality denoted as 𝑍 𝑤 = [𝑍 𝑤  
+
+> 1
+
+, 𝑍 𝑤  
+
+> 2
+
+, ..., 𝑍 𝑤 𝐵 ], 𝑤 ∈ { 𝑚, 𝑔 }. First, normalization is performed to ensure that the similarities are comparable, resulting in ˜ 𝑍 𝑚𝑖𝑑 and ˜ 𝑍 𝑤 . Then, the similarity matrix and the relative similarity distribution within the batch are calculated: 
+
+𝑆 𝑚𝑖𝑑 𝑖 𝑗 = ˜𝑍 𝑚𝑖𝑑 𝑖 · ˜𝑍 𝑚𝑖𝑑 𝑗 , 𝑆 𝑤 𝑖 𝑗 = ˜𝑍 𝑤 𝑖 · ˜𝑍 𝑤 𝑗 (18) where 𝑆 𝑚𝑖𝑑 𝑖 𝑗 represents the similarity matrix of IM. 𝑆 𝑤 𝑖 𝑗 represents the similarity matrix of a single mode. By calculating the similarity matrix, we model the structure as relationships between samples. The key step in PKT involves computing the relationship between each sample and the other samples in the batch as a probability distribution, denoted as 𝑃 𝑚𝑖𝑑 𝑖 𝑗 and 𝑃 𝑤 𝑖 𝑗 ,representing the similarity distributions of the IM and the single modality, respectively. Here, 𝛾 is an adjustable temperature coefficient. Finally, we use the KL divergence as a constraint to align the similarity distribution of the signal modality samples with that of the IM samples, obtaining the structural consistency loss. 
+
+𝐿 𝑤 𝑃𝐾𝑇 = 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑖 =1
+
+KL (𝑃 𝑚𝑖𝑑 𝑖, : || 𝑃 𝑤 𝑖, :) (19) 
+
+𝐿 𝑠𝑡𝑟 = (1 − ˜𝑟 𝑚 )𝐿 𝑚 𝑃𝐾𝑇 + ( 1 − ˜𝑟 𝑔 )𝐿 𝑔 𝑃𝐾𝑇 (20) where ˜ 𝑟 𝑤 = 1
+
+> 𝐵 𝐵
+
+Í
+
+> 𝑡 =1
+
+𝑟 𝑤 𝑡 is the average gating weight of samples within the batch. In the structure consistency loss, the modality with higher confidence scores serves as a structural reference during cross-modal transfer. By minimizing divergence between similarity distributions, the method limits the geometric struc-ture deviation between samples, thereby reducing representation drift in the shared latent space. 
+
+5) Semantic Consistency Constraint: As shown in Fig. 3, semantic consistency is enforced by aligning cross-modal distributions within a shared semantic representation space. Specifically, we initialize a set of learnable shared semantic prototypes, denoted as Π = 𝜋 1, 𝜋 2, ..., 𝜋 𝑀 , from a standard nor-mal distribution, where 𝑀 represents the number of prototypes used to model multimodal semantic distributions across metrics, logs, and intermediate modalities. A smaller 𝑀 may limit the expressiveness of semantic variations, while a larger 𝑀 may introduce redundancy and increase optimization difficulty. We empirically search 𝑀 ∈ 4, 8, 16 , 32 , 64 and find that 𝑀 = 16 achieves a good trade-off between representation capacity and computational efficiency. The prototypes are then normalized JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 8
+
+to obtain ˜ Π, and cosine similarity is computed between IM and unimodal representations and the prototypes to derive modality-specific semantic distributions. 
+
+𝑠 𝑤 ′ 
+
+> 𝑖 𝑗
+
+= exp (𝑎 𝑤 ′ 
+
+> 𝑖 𝑗
+
+)
+
+> 𝑀
+
+Í
+
+> ℓ=1
+
+exp (𝑎 𝑤 ′ 
+
+> 𝑖ℓ
+
+)
+
+(21) where 𝑤 ′ = {𝑚, 𝑔, 𝑚𝑖𝑑 }, 𝑎 𝑤 ′ 
+
+> 𝑖 𝑗
+
+can be calculated from the simi-larity score between the 𝑖 -th sample and the 𝑗 -th prototype, and 
+
+𝑠 𝑤 ′ 
+
+> 𝑖 𝑗
+
+denotes the corresponding semantic similarity distribution. Therefore, for each sample in the current batch, we obtain a probability vector 𝑠 𝑤 ′ 
+
+> 𝑖
+
+= [𝑠 𝑤 ′ 
+
+> 𝑖 1
+
+, 𝑠 𝑤 ′ 
+
+> 𝑖 2
+
+, ..., 𝑠 𝑤 ′ 
+
+> 𝑖𝑀
+
+] of length 𝑀 . Finally, we apply the KL divergence constraint to align the semantic similarity distribution of the metrics and logs with that of the IM, obtaining the semantic consistency loss. 
+
+𝐿 𝑤 𝑠𝑒𝑚 = 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑖 =1
+
+KL (𝑠 𝑚𝑖𝑑 𝑖 || 𝑠 𝑤 𝑖 ) (22) 
+
+𝐿 𝑠𝑒𝑚 = (1 − ˜𝑟 𝑚 )𝐿 𝑚 𝑠𝑒𝑚 + ( 1 − ˜𝑟 𝑔 )𝐿 𝑔 𝑠𝑒𝑚 (23) Similar to structural consistency constraint, semantic consis-tency also uses the IM as a reference and reduces the dispersion of the semantic space by introducing a shared prototype mechanism, thereby stabilizing the cross-modal shared semantic cluster center. g
+
+Zm
+
+> Zmid
+> Zm
+
+amid 
+
+ag
+
+agsem Lmsem L
+
+Fig. 3: Semantic consistency constraint. 
+
+F. Anomaly Detection 
+
+We employ the simple yet effective K-means algorithm to cluster and differentiate various operating modes of the sys-tem [38]. Additionally, it optimizes the clustering and feature ex-traction processes simultaneously to achieve accurate clustering results [45]. Specifically, in the confidence-guided cross-modal knowledge transfer module, we obtain the IM representation 
+
+𝑍 𝑚𝑖𝑑 𝑡 which integrates metrics and log information, as input to the K-means algorithm. We then determine 𝐶 cluster centers 
+
+{𝜇 }𝐶 𝑐 =1 and apply a distance-based soft assignment strategy to calculate the probability that each sample belongs to a particular cluster: 
+
+𝑞 𝑡 𝑗 = (1 + || 𝑍 𝑚𝑖𝑑 𝑡 − 𝜇 𝑗 || 2)−1
+
+> 𝐶
+
+Í
+
+> 𝑐 =1
+
+(1 + || 𝑍 𝑚𝑖𝑑 𝑡 − 𝜇 𝑐 || 2)−1
+
+(24) where 𝑞 𝑡 𝑗 represents the probability that the 𝑡 -th window sample is assigned to 𝑗 -th cluster. Subsequently, to enhance clustering accuracy and reduce the influence of low-confidence assign-ments, we construct an auxiliary target distribution 𝑃 = {𝑝 𝑡 𝑗 }
+
+to emphasize high-confidence cluster assignments and optimize the clustering process, defined as follows: 
+
+𝑝 𝑡 𝑗 = 𝑞 2 
+
+> 𝑡 𝑗
+
+/ 𝑓 𝑗 𝐶 Í
+
+> 𝑐 =1
+
+𝑞 2
+
+> 𝑡 𝑐
+
+/ 𝑓 𝑐 
+
+, 𝑓 𝑗 =∑︁ 𝑡 𝑞 𝑡 𝑗 (25) where 𝑓 𝑗 represent the number of soft samples in the current batch for the 𝑗 -th cluster. Finally, by minimizing the KL divergence between the predicted distribution 𝑄 and the target distribution 𝑃 , a deep clustering loss 𝐿 𝑐𝑙𝑢 = KL (𝑃 || 𝑄 ) is formulated to encourage the model to create compact intra-cluster representations and well-separated inter-cluster repre-sentations, thereby improving the distinction between different system states. The overall model loss includes clustering loss, regulariza-tion, structural and semantic consistency constraints, calculated as follows: 
+
+𝐿 = 𝐿 𝑐𝑙𝑢 + 𝛼𝐿 𝑟 𝑒𝑔 + 𝛽𝐿 𝑠𝑡𝑟 + 𝜆𝐿 𝑠𝑒𝑚 (26) where 𝛼 , 𝛽 and 𝜆 are three balancing factors used to adjust different loss weights. It is worth noting that CMT-AD does not perform clustering directly in a randomly initialized representa-tion space. The metric and log encoders are first independently pre-trained for a maximum of 30 epochs using reconstruction objectives. After pretraining, the selected encoder parameters are used to initialize the cross-modal training stage, and K-means is applied to the pretrained representations to initialize the cluster centers {𝜇 }𝐶 𝑐 =1. During joint training, the cluster centers are treated as trainable parameters and updated together with the network parameters through backpropagation by minimizing the clustering loss. After model convergence, the samples are divided into 𝐶 = 3clusters, corresponding to the normal, abnormal, and transitional states. To obtain a reproducible state mapping, we characterize each cluster from three aspects: sample proportion 𝑅 𝑗 , repre-sentation dispersion 𝐷 𝑗 , and soft-assignment uncertainty 𝐻 𝑗 .For the 𝑗 -th cluster, these quantities are defined as follows: 
+
+𝑅 𝑗 = 𝑛 𝑗 
+
+𝑛 , 𝐷 𝑗 = 1
+
+𝑛 𝑗 ∑︁ 𝑡 ∈ C 𝑗 
+
+|| 𝑍 𝑚𝑖𝑑 𝑡 − 𝜇 𝑗 || 2,𝐻 𝑗 = − 1
+
+𝑛 𝑗 𝑛 𝑗 ∑︁ 
+
+> 𝑡 =1
+> 𝐶
+
+Í
+
+> 𝑐 =1
+
+𝑞 𝑡 𝑐 log 𝑞 𝑡 𝑐 
+
+log 𝐶 
+
+(27) where 𝑛 𝑗 denotes the number of samples in the 𝑗 -th cluster C𝑗 ,
+
+𝑛 is the total number of samples, 𝜇 𝑗 denotes the corresponding cluster center, and 𝑞 𝑡 𝑐 is the soft-assignment probability of sample 𝑡 to cluster 𝑐 . A larger 𝑅 𝑗 indicates that the cluster contains more samples, while larger 𝐷 𝑗 and 𝐻 𝑗 indicate greater representation dispersion and assignment uncertainty, respectively. Since normal states generally contain more samples with compact and stable representations, whereas transitional states JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 9
+
+tend to exhibit greater dispersion and uncertainty, we define the normal-state score and transitional-state score as: 
+
+𝑆 𝑛𝑜𝑟 𝑗 = ˜𝑅 𝑗 + ( 1 − ˜𝐷 𝑗 ) + ( 1 − 𝐻 𝑗 ), 𝑆 𝑡𝑟 𝑎 𝑗 = ˜𝐷 𝑗 + 𝐻 𝑗 (28) where ˜ 𝑅 𝑗 and ˜ 𝐷 𝑗 are obtained by min-max normalization across the 𝐶 clusters. The cluster with the highest 𝑆 𝑛𝑜𝑟 𝑗 is identified as the normal state. Among the remaining two clusters, the one with the higher 𝑆 𝑡𝑟 𝑎 𝑗 is identified as the transitional state, while the remaining cluster is regarded as the abnormal state. For each sample in the transitional cluster, we further calculate the Euclidean distances between its IM feature and the normal and abnormal cluster centers, denoted by 𝑑 𝑛𝑜𝑟 and 𝑑 𝑎𝑏𝑛𝑜𝑟 ,respectively. If 𝑑 𝑛𝑜𝑟 > 𝑑 𝑎𝑏𝑛𝑜𝑟 , the sample is classified as anomalous; otherwise, it is classified as normal. Finally, all samples are assigned their final labels to obtain the anomaly detection results. V. Experiments 
+
+A. Experimental Design and Implementation 1) Dataset: The GAIA dataset is an open-source bench-mark developed by Cloudwise for AIOps research. 0 It was collected from a microservice system environment comprising physical hosts and 10 microservices, each monitoring 83 metric variables. In total, the dataset includes over 700,000 metric data points and 87 million log data points. 
+
+The Spark dataset released by the Hades study, is designed to analyze the state of microservice systems using metric and log data. 1 Spark 3.0 was deployed in a distributed cluster comprising one master node and five worker nodes. A total of 19 workloads were executed to cover diverse service scenarios, monitoring 11 metric variables. The complete dataset contains over 60,000 metric records and approximately 1 million log entries. 
+
+The Stack dataset [46] originates from the complex dis-tributed system OpenStack and is used for AI-powered analyt-ics. 2 It is collected from five physical nodes within the technical facility, comprising over 400,000 metric data points and more than 160,000 logs, encompassing 25 metric variables. After log parsing, the dataset includes 216 log templates, with a normal to abnormal data ratio of approximately 80:1. 
+
+2) Baseline: We compare CMT-AD with several base-line methods, including metric-based methods: Anomaly-Transformer [13] and MUTANT [16], log-based methods: DeepLog [22], LightLog [27] and DeepSysLog [26], and multimodal anomaly detection methods: SCWarn [8], UAC-AD [39], and KANAD [37]. 
+
+3) Evaluation Measurements: We use three widely used evaluation metrics to measure the performance of CMT-AD and other methods: 𝑃𝑟𝑒𝑐𝑖𝑠𝑖𝑜𝑛 = 𝑇 𝑃 𝑇 𝑃 +𝐹 𝑃 , 𝑅𝑒𝑐𝑎𝑙𝑙 = 𝑇 𝑃 𝑇 𝑃 +𝐹 𝑁 
+
+and 𝐹 1 − 𝑠𝑐𝑜𝑟𝑒 = 2∗𝑃𝑟 𝑒𝑐𝑖𝑠𝑖𝑜𝑛 ∗𝑅𝑒𝑐𝑎𝑙𝑙 𝑃𝑟 𝑒𝑐𝑖𝑠𝑖𝑜𝑛 +𝑅𝑒𝑐𝑎𝑙𝑙 . Where 𝑇 𝑃 represents the number of abnormal samples correctly detected, 𝐹𝑃 rep-resents the number of normal samples incorrectly classified as abnormal, and 𝐹 𝑁 represents the number of abnormal samples incorrectly classified as normal. 
+
+> 0https://github.com/CloudWise-OpenSource/GAIA-DataSet
+> 1https://zenodo.org/records/7609780
+> 2https://zenodo.org/record/3549604
+
+4) Implementation: Our experiments are conducted on a server equipped with an NVIDIA GeForce RTX 3090 GPU with 24 GB of GPU memory, using Python 3.8, PyTorch 1.9.0, and CUDA 11.1. The dataset is divided into three parts: a training set (70%), a validation set (10%), and a test set (20%). For the sliding window, we set the window size 𝑇 to 20 and the step size to 1. Regarding metrics, considering the number and complexity of services in various microservice systems, we set 𝐾 = 25 in the GAIA dataset to construct feature graphs, 𝐾 = 5 in the Spark dataset, and 𝐾 = 11 in the Stack dataset. Regarding logs, we use the off-the-shelf service bert-as-service to obtain log semantics. During SVD dimensionality reduction, we calculate the number of dimensions required to retain over 95% of the semantic information across different datasets, resulting in approximately 110–130 dimensions. To unify the model input dimension, the dimensionality of the log semantic features is ultimately fixed at 128. We set the hidden layer dimensions 𝑑 𝑚 = 𝑑 𝑐 = 32, the regularization balance factor 𝛼 to 0.06, the structural consistency constraint balance factor 𝛽 to 0.2, the semantic consistency constraint balance factor 𝜆 to 0.05, the number of clusters 𝐶 = 3, the batch size to 𝐵 = 64, and Adam is used as the optimizer with an initial learning rate of 0.001. We set the maximum number of epochs to 100 and implemented an early stopping strategy to dynamically terminate training. Regarding the baselines, we determined the hyperparameters based on the publicly available implementations. All performance experiments were indepen-dently repeated five times using random seeds {0, 1, 2, 3, 4},and the results are reported as mean ± standard deviation. The source 3 are publicly available. 
+
+B. The Overall Performance of CMT-AD 
+
+The overall experimental results are presented in Table II. It can be observed that CMT-AD achieves the highest F1-score in the three datasets, 0.975, 0.911 and 0.967 respectively. This indicates that the CMT-AD demonstrates superior accuracy in identifying anomaly samples. When comparing the two metric-based methods, MUTANT’s F1-score is 12.5%, 2.4% and 19% higher than AnoTrans’s in the respective datasets. This improvement is attributed to MUTANT’s ability to analyze relationships between different variables through sequence modeling, effectively capturing the temporal-spatial features of the metrics. These findings further validate the advantage of CMT-AD in modeling spatial features. Among the three log-based methods, the Precision and Recall of DeepSysLog and LightLog are higher than DeepLog. This improvement is mainly because they convert logs into semantic sequences, which better reflect log anomalies and are more robust to noise compared to index-based methods. DeepSysLog further incorporates timestamps, IP addresses, and other metadata, capturing richer semantic embeddings. Therefore, CMT-AD employs BERT to extract semantic log features. Among multimodal anomaly detection methods, SCWarn performed the worst, even lagging behind some single-modal anomaly detection approaches on three datasets. This underper-formance can be attributed to two main factors: first, SCWarn  
+
+> 3https://github.com/wpp33669-hub/CMT-AD JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 10
+
+TABLE II: ANOMALY DETECTION PERFORMANCE                                                                                             
+
+> Methods GAIA Spark Stack Precision Recall F1-score Precision Recall F1-score Precision Recall F1-score AnoTrans 0.453 ±0.002 0.688 ±0.019 0.546 ±0.003 0.628 ±0.002 0.839 ±0.009 0.718 ±0.005 0.551 ±0.045 0.682 ±0.043 0.610 ±0.045 MUTANT 0.679 ±0.001 0.664 ±0.089 0.671 ±0.002 0.671 ±0.014 0.830 ±0.049 0.742 ±0.019 0.785 ±0.112 0.816 ±0.060 0.800 ±0.062 DeepLog 0.364 ±0.018 0.681 ±0.021 0.474 ±0.010 0.218 ±0.038 0.409 ±0.034 0.284 ±0.040 0.490 ±0.019 0.611 ±0.029 0.544 ±0.021 LightLog 0.778 ±0.001 0.837 ±0.007 0.806 ±0.003 0.340 ±0.007 0.699 ±0.011 0.457 ±0.004 0.857 ±0.008 0.829 ±0.015 0.843 ±0.012 DeepSysLog 0.785 ±0.012 0.850 ±0.025 0.816 ±0.011 0.486 ±0.027 0.773 ±0.035 0.597 ±0.031 0.845 ±0.021 0.889 ±0.019 0.866 ±0.002 SCWarn 0.482 ±0.018 0.651 ±0.011 0.553 ±0.012 0.289 ±0.002 0.382 ±0.006 0.329 ±0.005 0.446 ±0.032 0.350 ±0.030 0.397 ±0.022 UAC-AD 0.955 ±0.014 0.947 ±0.014 0.951 ±0.014 0.892 ±0.002 0.890 ±0.004 0.891 ±0.004 0.885 ±0.008 1.000 ±0.000 0.939 ±0.008 KANAD 0.920 ±0.006 0.935 ±0.002 0.927 ±0.001 0.886 ±0.005 0.929 ±0.024 0.907 ±0.005 0.936 ±0.003 0.980 ±0.020 0.958 ±0.003 CMT-AD 0.969 ±0.001 0.982 ±0.014 0.975 ±0.007 0.891 ±0.017 0.933 ±0.056 0.911 ±0.034 0.949 ±0.032 0.985 ±0.028 0.967 ±0.030
+
+relies solely on a temporal model to analyze both metrics and logs simultaneously, neglecting the spatial features of metrics and the semantic representations of logs; second, it does not account for the interactions between metrics and logs, instead depending exclusively on a parallel architecture for separate predictions. In contrast, UAC-AD achieved the best performance among all comparative methods on the GAIA dataset, with an F1-score of 0.951. Its advantage stems not only from employing an attention mechanism to facilitate cross-modal interaction but also from utilizing contrastive learning and adversarial training to enhance the model’s discriminative ability on hard samples within the dataset. Although KANAD’s F1-score is lower than UAC-AD’s on the GAIA dataset, its F1-scores on the Spark and Stack datasets are 1.6% and 1.9% higher, respectively. All three datasets show F1-scores exceeding 0.9. This approach not only uses KNN to model the metric graph but also constructs a log semantic graph using pointwise mutual information and employs contrastive learning to achieve cross-modal interaction and alignment. However, compared with CMT-AD, both KANAD and UAC-AD implic-itly assume fixed contributions from metrics and logs without dynamically adjusting their importance. In contrast, CMT-AD not only learns multi-perspective representations for each modality but also adaptively enhances low-confidence modality representations through confidence-guided cross-modal transfer learning, thereby achieving superior detection performance. 
+
+C. Hyperparameter Sensitivity and Stability Analysis 
+
+In this section, we analyze the impact of key hyperparameters on CMT-AD performance, including the sliding window size, number of clusters, hidden layer size, and balance factors for regularization and transfer constraints. We also evaluate the stability of the state-mapping strategy under different anomaly ratios. Fig. 4 shows the F1-score results on the three datasets. As shown in Fig. 4a, detection performance is lowest on the three datasets when the sliding window size is smaller than 5. This is because the analysis of the temporal features of the metrics and the global features of the logs is insufficient. As the sliding window size increase, overall detection performance improves, albeit with slight fluctuations. When the window size ranges between 15 and 30, the impact on the GAIA dataset is less pronounced than on the Spark and Stack datasets. This indicates that GAIA is relatively stable over time, resulting in lower sensitivity of the model to window size. Overall, detection performance was optimal when the window size is 20, as this window effectively covered the anomaly evolution cycle while avoiding the introduction of irrelevant information. As shown in Fig. 4b, when 𝐶 = 2, the F1-score decreases by at least 3% across the three datasets. This is because microservice anomalies usually involve transitional states caused by anomaly evolution and slight performance fluctuations, which cannot be effectively distinguished with only normal and abnormal clusters. When 𝐶 = 3, these intermediate states can be explicitly modeled, resulting in more stable anomaly decisions. Increasing the number of clusters beyond 3 does not bring significant perfor-mance improvements but introduces additional computational overhead. Nevertheless, the optimal number of clusters may vary depending on the complexity of system behaviors and anomaly patterns. In practice, systems with simpler operational behaviors and fewer anomaly patterns may adopt fewer clusters, whereas systems with more complex behaviors and diverse anomaly evolution patterns may require additional clusters to distinguish different intermediate states. As shown in Fig. 4c, the performance initially improves with increasing hidden layer dimensions and reaches the best results at 32. When the hidden layer dimension exceeds 128, a noticeable performance degradation is observed. This decline occurs because larger hidden dimensions increase the model capacity but may also introduce redundant representations and make the model more sensitive to subtle fluctuations or noise. Conversely, an excessively small hidden dimension limits the representation capability, resulting in insufficient modeling of complex multimodal information. Fig. 4d shows that anomaly detection performance deterio-rates when the regularization weight is too large. This occurs because excessive regularization over-compresses the feature distribution, forcing the model to focus on consistent repre-sentations across modalities while neglecting modality-specific discriminative information. Consequently, the model’s ability to distinguish hard samples is weakened. As the regularization weight decreases from a large value, the performance initially improves and reaches its optimum at 0.06. However, further reducing the weight leads to insufficient representation align-ment, reducing the stability of transferable modal knowledge and potentially causing negative transfer. Based on Fig. 4e and Fig. 4f, the structural and semantic consistency factors are set to 0.2 and 0.05, respectively. A relatively larger structural consistency factor promotes geo-metric alignment across modalities, while a smaller semantic JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 11 5 10 15 20 25 30 35 40 0.70 0.75 0.80 0.85 0.90 0.95 1.00 
+
+> GAIA Spark Stack
+
+(a) Sliding window size 2 3 4 50.70 0.75 0.80 0.85 0.90 0.95 1.00  
+
+> GAIA Spark Stack
+
+(b) Number of clusters 816 32 64 128 256 0.70 0.75 0.80 0.85 0.90 0.95 1.00  
+
+> GAIA Spark Stack
+
+(c) Hidden layer size 0.01 0.02 0.04 0.06 0.08 0.10 0.12 0.16 0.20 0.70 0.75 0.80 0.85 0.90 0.95 1.00 
+
+> GAIA Spark Stack
+
+(d) Weighting factor of regularization terms 𝛼 0.01 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.70 0.75 0.80 0.85 0.90 0.95 1.00  
+
+> GAIA Spark Stack
+
+(e) Weighting factor of structural constraint 0.01 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.70 0.75 0.80 0.85 0.90 0.95 1.00  
+
+> GAIA Spark Stack
+
+(f) Weighting factor of semantic constraint 
+
+Fig. 4: Anomaly detection results with different parameters. consistency factor avoids excessive semantic smoothing of anomalous representations. When the consistency factors are too large, the consistency losses may dominate the optimization and weaken the effect of the clustering objective; when they are too small, cross-modal interaction becomes insufficient, both leading to degraded detection performance. Then, we evaluate the stability of the state-mapping strategy under different anomaly ratios. Since this experiment focuses on isolating the effect of anomaly proportion on state mapping rather than comparing dataset-specific characteristics, GAIA is used as a representative dataset for this stability analysis. Specifically, the trained CMT-AD model is kept fixed, and 10,000 normal samples are retained. We then vary the number of anomalous samples to construct anomaly ratios of 10%, 20%, 30%, and 40%, respectively, and evaluate the resulting anomaly detection performance. As shown in Table III, CMT-AD maintains stable detection performance as the anomaly ratio increases from 10% to 40%. Precision remains nearly unchanged, while Recall improves from 0.957 to 0.980. This indicates that the proposed state-mapping strategy consistently distinguishes normal, abnormal, and transitional clusters across varying anomaly proportions. The slight improvement in Recall at higher anomaly ratios may be attributed to a more comprehensive representation of anomalous patterns, which facilitates easier differentiation of abnormal states within the clustering space. Additionally, these results suggest that the representations learned through cross-modal knowledge transfer remain highly discriminative across different anomaly ratios, providing a reliable feature basis for subsequent state mapping. 
+
+TABLE III: STABILITY UNDER DIFFERENT ANOMALY RATIOS ON GAIA 
+
+Anomaly Ratio Precision Recall F1-score 10% 0.968 0.957 0.962 20% 0.967 0.972 0.969 30% 0.969 0.980 0.974 40% 0.968 0.980 0.974 
+
+D. Ablation Experiment Analysis 
+
+We conduct guided ablation experiments to verify the effec-tiveness of each module in CMT-AD, including: 1) CMT-AD/m, removing metric data; 2) CMT-AD/g, removing log data; 3) CMT-AD/reg, removing the regularization module; 4) CMT-AD/Stru, removing the structural consistency constraint; 5) CMT-AD/Sem, removing the semantic consistency constraint; 6) CMT-AD/IM, replacing the confidence-guided gating mecha-nism with average fusion to construct the intermediate modality; 7) CMT-AD/Np, removing unimodal pretraining and directly performing joint training; and 8) CMT-AD/Dr, introducing a 10-epoch warm-up stage after unimodal pretraining, during which only the clustering loss is optimized before activating the regularization and consistency constraints. Additionally, to further validate the relationship between cross-modal knowledge transfer and unimodal representation quality, we introduce an enhanced variant, CMT-AD++. For metrics, based on an LSTM encoder for temporal feature extraction, we introduce the Fast Fourier Transform (FFT) and concatenate it with temporal features to enrich metric representations from the frequency domain perspective. For logs, we construct an execution relation graph within a sliding window, using normalized frequencies as node embeddings, JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 12 
+
+with adjacency matrix reconstruction as an additional pre-training objective. We then concatenate the graph features with the semantic features generated by the Transformer encoder to enhance log representations. The experimental results are shown in Table IV. When modal ablation is conducted on CMT-AD, i.e., when either metrics or logs are removed, the cross-modal knowledge transfer module is no longer applicable, reducing the regularization to intra-modal regularization. This results in a significant decrease in anomaly detection performance. This finding demonstrates that CMT-AD can identify more anomalies through cross-modal analysis and interaction between metrics and logs. Furthermore, compared to other variant models, CMT-AD/m and CMT-AD/g exhibit lower F1-scores, underscoring the importance of multimodal collaborative analysis for anomaly detection tasks. Further comparison with advanced single modal methods reveals that CMT-AD/g outperforms MUTANT. This is mainly attributed to the incorporation of intra-modal regularization on top of spatiotemporal feature modeling, which effectively enhances the stability and robustness of metric representations. Compared to DeepSysLog, CMT-AD/m achieves a slightly lower F1-score, mainly because DeepSysLog additionally mod-els metadata information within log variables, thereby obtaining richer semantic features. However, CMT-AD/m still signifi-cantly outperforms LightLog, demonstrating the effectiveness of jointly modeling local and global features. When the regularization module is removed, the F1-score of CMT-AD/reg decreases by 2.7%, 0.5%, and 1.2% on the three datasets, respectively. This decline occurs because the regularization mechanism suppresses overfitting and improves the stability of single-modality representations, ensuring the stability of transferable knowledge across modalities, and limits cross-modal representation shifts by penalizing misalignment. Removing this module can cause distribution shifts in the encoders of each modality, leading to unstable fusion and redun-dant information in the transferable knowledge. Consequently, the model struggles to effectively leverage complementary information across modalities. Removing either the structural or semantic consistency con-straint decreases the performance of CMT-AD/Stru and CMT-AD/Sem. Specifically, removing structural consistency disrupts the preservation of relational structures across modalities, making the relative distance relationships in the shared represen-tation space less stable and potentially causing some anomalies to be overlooked. Removing semantic consistency eliminates the guidance of shared semantic prototypes, weakening cross-modal semantic alignment and reducing the discriminative separation between normal and anomalous samples. Moreover, CMT-AD/Sem achieves F1-scores that are 1.5%, 0.4%, and 1.5% higher than those of CMT-AD/Stru on the three datasets, re-spectively, indicating that structural consistency has a relatively greater impact on detection performance.. When confidence-guided gating weighting was replaced with average fusion, the F1-score of CMT-AD/IM decreased across three datasets. This decline occurred because the intermediate modalities in CMT-AD can amplify more informative modalities while suppressing unreliable ones. In contrast, CMT-AD/IM assigns equal weights to different modalities, which may dilute informative representations and introduce redundant or noisy information into the shared representation space. As a result, it weakens cross-modal consistency and reuces the discriminative power between normal and anomalous samples. As shown in Table IV, the F1-scores of CMT-AD/Np decrease by 0.6%, 1.0%, and 0.5% on the three datasets, respectively, whereas CMT-AD/Dr shows no obvious performance degrada-tion. This indicates that, although delayed regularization can alleviate the impact of unstable cluster assignments during the early stage of joint training, unimodal pretraining pro-vides a more stable representation initialization for subsequent clustering and thereby helps maintain model performance. In contrast, after removing the pretraining stage, randomly initialized feature representations are more susceptible to early clustering fluctuations, which further reduces the stability of subsequent cross-modal knowledge transfer. Table IV shows that enhancing unimodal encoders does not consistently improve performance across all datasets. Although CMT-AD++ has a 0.2% higher F1-score than CMT-AD on GAIA, this may be attributed to the relatively stable structure of the dataset, where enhanced frequency-domain and struc-tural features provide additional discriminative information. However, the performance gain is not monotonic; on some microservice systems (e.g., Spark and Stack), slight degradation is observed. This phenomenon indicates that, in multimodal set-tings, simply increasing unimodal representation capacity does not directly translate into better anomaly detection performance. More appropriate fusion strategies may be required to preserve the stability of metric temporal–frequency–spatial features, log semantics, and graph structures. CMT-AD instead focuses on adaptively learning the contributions of different modalities to facilitate cross-modal interaction, rather than relying on stronger unimodal representations, demonstrating that its effectiveness mainly stems from the proposed cross-modal knowledge transfer mechanism. 
+
+E. Complexity and Efficiency Analysis 
+
+(1) Computational Complexity Analysis. During the pre-training stage, the metric encoder employs LSTM and GCN to extract temporal and spatial features, respectively. For input data containing 𝑘 metric variables with a window size of 𝑇 , the time complexity of LSTM is 𝑂 (𝑘𝑇 𝑑 𝑚 2) and 𝑑 𝑚 is the hidden layer dimension, while the graph propagation complexity of GCN is 𝑂 (| 𝐸 𝑚 |𝑑 𝑚 ), 𝐸 𝑚 is the number of edge. For the log encoder, 1D-CNN is adopted to capture local semantic features, with a complexity of 𝑂 (𝑛 1𝑘 𝑔 𝑑 𝑐 2), where 𝑛 1 is the sequence length, 𝑘 𝑔 is the size of the convolution kernel, 𝑑 𝑐 is the hidden layer dimension. Transformer is utilized to capture global dependencies, where the main computational cost comes from the self-attention mechanism with a complexity of 𝑂 (𝑛 12 𝑑 𝑐 ).During the cross-modal knowledge transfer stage, confidence estimation has a complexity of 𝑂 (𝐵𝐶𝑑 𝑐 ), 𝐵 is the batch size. The complexity of IM construction is 𝑂 (𝐵𝑑 𝑐 ). The intra-modal and cross-modal regularization analyze the distance between samples within a batch and the soft cluster center, with a complexity of 𝑂 (𝐵𝐶𝑑 𝑐 + 𝐶 2 𝑑 𝑐 ). The structural and semantic consistency constraints have complexities of 𝑂 (𝐵 2 𝑑 𝑐 ) and JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 13 
+
+TABLE IV: RESULTS OF ABLATION EXPERIMENTS                                                                                                      
+
+> Methods GAIA Spark Stack Precision Recall F1-score Precision Recall F1-score Precision Recall F1-score CMT-AD/m 0.776 ±0.006 0.861 ±0.021 0.816 ±0.006 0.525 ±0.020 0.608 ±0.039 0.563 ±0.025 0.836 ±0.019 0.891 ±0.031 0.863 ±0.025 CMT-AD/g 0.670 ±0.003 0.799 ±0.016 0.747 ±0.008 0.700 ±0.019 0.899 ±0.055 0.787 ±0.036 0.828 ±0.022 0.845 ±0.037 0.836 ±0.016 CMT-AD/IM 0.940 ±0.003 0.972 ±0.009 0.956 ±0.006 0.873 ±0.013 0.926 ±0.026 0.899 ±0.018 0.937 ±0.022 0.978 ±0.016 0.957 ±0.018 CMT-AD/reg 0.929 ±0.004 0.968 ±0.021 0.948 ±0.011 0.892 ±0.016 0.921 ±0.060 0.906 ±0.035 0.941 ±0.018 0.970 ±0.029 0.955 ±0.011 CMT-AD/Stru 0.931 ±0.009 0.933 ±0.026 0.932 ±0.017 0.861 ±0.027 0.941 ±0.053 0.899 ±0.033 0.942 ±0.033 0.938 ±0.039 0.940 ±0.036 CMT-AD/Sem 0.936 ±0.005 0.959 ±0.020 0.947 ±0.007 0.880 ±0.021 0.927 ±0.053 0.903 ±0.036 0.937 ±0.035 0.974 ±0.036 0.955 ±0.028 CMT-AD/Np 0.958 ±0.018 0.980 ±0.034 0.969 ±0.026 0.881 ±0.039 0.922 ±0.068 0.901 ±0.052 0.945 ±0.029 0.980 ±0.056 0.962 ±0.042 CMT-AD/Dr 0.966 ±0.001 0.982 ±0.008 0.974 ±0.004 0.884 ±0.020 0.933 ±0.049 0.908 ±0.034 0.947 ±0.026 0.982 ±0.022 0.964 ±0.015 CMT-AD++ 0.967 ±0.004 0.988 ±0.010 0.977 ±0.003 0.894 ±0.020 0.927 ±0.059 0.910 ±0.036 0.939 ±0.032 0.984 ±0.033 0.961 ±0.024 CMT-AD 0.969 ±0.001 0.982 ±0.014 0.975 ±0.007 0.891 ±0.017 0.933 ±0.056 0.911 ±0.034 0.949 ±0.032 0.985 ±0.028 0.967 ±0.030
+
+𝑂 (𝐵𝑀𝑑 𝑐 ), 𝑀 is the number of semantic prototypes. Therefore, the overall complexity of the cross-modal knowledge transfer stage is: 𝑂 (𝐵𝐶𝑑 𝑐 + 𝐵𝑑 𝑐 + 𝐶 2 𝑑 𝑐 + 𝐵 2 𝑑 𝑐 + 𝐵𝑀𝑑 𝑐 ).(2) Computational Cost Evaluation. As shown in Table V, we evaluated the parameter size, training time, and inference (testing) time of various methods. It can be observed that CMT-AD has a moderate parameter size of 2.7 MB. Although methods such as SCWarn and LightLog have fewer parameters and lower training costs, they rely on simpler feature representations and cannot fully exploit complementary information across modalities. Owing to the additional multimodal representation learning and consistency constraints, CMT-AD incurs higher training costs than single-modal anomaly detection methods, while achieving improved detection performance. Compared with the strong baselines UAC-AD and KANAD, CMT-AD achieves a better balance among model size, detection per-formance, and inference efficiency. Although both baselines have lower training costs, UAC-AD has a slightly larger model size than CMT-AD, while KANAD introduces a larger model size and higher inference overhead. These results demonstrate that CMT-AD maintains acceptable computational efficiency while incorporating cross-modal knowledge transfer, making it suitable for practical microservice anomaly detection scenarios. (3) Memory Consumption Analysis. As shown in Table VI, we report the peak CPU and GPU memory usage across three stages: metric learning, log learning, and anomaly detection using both encoders. It can be observed that the two unimodal learning stages exhibit similar resource consumption, while the overall memory overhead increases only slightly after introducing the cross-modal knowledge transfer module. This result demonstrates that CMT-AD achieves effective cross-modal feature fusion with limited additional memory over-head, improving its practicality for deployment in resource-constrained environments. 
+
+F. Case Study 
+
+To visually demonstrate the dynamic changes in modality confidence during anomaly evolution, we select a representative ”login failure” case from the GAIA dataset. This case is characterized by continuous authentication-related error events in the logs, while the system metrics do not exhibit significant deviations during the anomaly period. As shown in Fig. 5a, seven consecutive sliding windows before and after the anomaly 
+
+TABLE V: COMPUTATIONAL EFFICIENCY COMPARI-SON OF DIFFERENT METHODS                                         
+
+> Methods Params (MB) Training/inference time(s) GAIA Spark Stack AnoTrans 0.44 77.98/14.28 85.04/14.46 61.04/12.36 MUTANT 0.48 29.66/13.93 41.75/18.39 26.03/13.41 DeepLog 0.10 19.42/82.81 6.99/17.81 25.51/23.80 LightLog 0.13 12.30/0.63 12.77/0.42 10.52/0.70 DeepSysLog 1.41 31.37/6.85 40.18/5.56 32.94/6.71 SCWarn 0.05 1.94/12.27 3.89/17.72 2.17/13.82 UAC-AD 2.85 18.53/0.93 59.29/2.07 19.25/0.89 KANAD 4.75 13.57/1.82 42.31/9.66 9.26/2.05 CMT-AD 2.70 20.37/0.75 72.22/1.65 26.11/1.08
+
+TABLE VI: RESOURCE CONSUMPTION OF DIFFERENT STAGES                          
+
+> Stage Resource Datasets GAIA Spark Stack Metric Learning CPU Memory 6.21 GiB 6.37 GiB 7.57 GiB GPU Memory 2071 MiB 2069 MiB 2218 MiB Log Learning CPU Memory 6.23 GiB 6.38 GiB 7.57 GiB GPU Memory 2120 MiB 2115 MiB 2266 MiB CMT-AD CPU Memory 6.34 GiB 6.43 GiB 7.65 GiB GPU Memory 2161 MiB 2153 MiB 2297 MiB
+
+are selected to illustrate the corresponding metric and log observations. Fig. 5b further presents the dynamic variation of modality confidence scores updated by the confidence-guided gating mechanism. As shown in Fig. 5a, before the anomaly occurrence, both system metrics and logs remain stable, and the confidence scores of the two modalities are relatively balanced. This indicates that both modalities provide consistent and reliable representations of the normal system state. Starting from window 𝑊 𝑇 , authentication failure-related errors, such as ”uuid expired” and ”invalid phone request”, gradually appear in the log stream. However, metrics such as CPU, memory, and latency do not exhibit significant abnormal fluctuations. Therefore, the log modality provides stronger anomaly evidence during this period. As illustrated in Fig. 5b, the log confidence score ( 𝑐 𝑔 ) increases from approximately 0.49 at 𝑊 𝑇 −1 to 0.63 at 𝑊 𝑇 +1, while the metric confidence score ( 𝑐 𝑚 ) decreases from approximately 0.51 to 0.38. Based on the changes in reliability of different modalities, the confidence-guided gating mechanism assigns a larger contribution weight to the log modality ( 𝑟 𝑔 > 𝑟 𝑚 ), JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 14 
+
+enabling reliable log information to compensate for the insuffi-cient anomaly evidence from metrics. As the system gradually recovers, the number of error-level logs decreases, and the confidence scores of the metric and log modalities return to a balanced state. This case demonstrates that, unlike conventional multimodal fusion strategies with fixed contributions, CMT-AD can dynam-ically adjust modality contributions according to their reliability during anomaly evolution, thereby enhancing the accuracy and robustness of multimodal anomaly detection. Metric:         
+
+> Stable memory
+> /CPU/latency
+> Log:
+> Normaly
+> request logs
+> Metric:
+> Stable memory
+> /CPU/latency
+> Log:
+> Normaly
+> request logs
+> Metric:
+> No clear metric
+> change
+> Log:
+> ERR: uuid
+> expired
+> Metric:
+> Weak
+> deviation
+> Log:
+> ERR: invalid
+> phone request
+> Metric:
+> Weak
+> deviation
+> Log:
+> Dense
+> login ERR
+> Metric:
+> Stable memory
+> /CPU/latency
+> Log:
+> Normaly
+> request logs
+> Metric:
+> Stable memory
+> /CPU/latency
+> Log:
+> Few
+> warning logs
+> WTWT+1 WT+2 WT+3 WT+4 WT-2WT-1
+> Normal Anomaly propagation Normal Anomaly recovery Anomaly onset
+
+(a) Multimodal anomaly evolution in a login failure case. WT 2 WT 1 WT WT + 1 WT + 2 WT + 3 WT + 4 
+
+> Sliding windows 0.40 0.45 0.50 0.55 0.60 Score
+> Confidence guided gating mechanism
+> Metric confidence score Log confidence score
+
+(b) Dynamic confidence changes of metric and log modalities. 
+
+Fig. 5: Case study illustrating the confidence-guided gating mechanism during anomaly evolution. VI. Discussions 
+
+A. Lessons Learned 
+
+(1) Incorporating more modalities does not necessarily lead to improved anomaly detection. Although additional modalities may provide useful information, simple fusion is insufficient to effectively leverage such information, since modality reliability varies during anomaly evolution. Moreover, enhancing single-modal representations does not always synergize with cross-modal interactions. The comparison between CMT-AD++ and CMT-AD shows that additional frequency-domain or graph-structured features may provide supplementary information, but their benefits do not consistently translate into detection gains unless they are effectively integrated into the cross-modal interaction process. Future research should move beyond merely adding more modalities or enhancing single-modal representations, focusing instead on selecting and transferring effective knowledge based on modality reliability. (2) Cross-modal knowledge transfer is not an unconditional process. Existing studies typically focus on designing more effective alignment and interaction models, such as attention mechanisms and Transformer-based architectures, assuming that information from different modalities is equally suitable for interaction. However, in microservice systems, modality re-liability may vary during anomaly evolution, and unconditional transfer may introduce uncertain information. Confidence mea-sures provide a dynamic basis for cross-modal transfer,enabling the model to adaptively select more reliable modality informa-tion and avoid performance degradation caused by inappropriate knowledge transfer. Additionally, knowledge transfer based on clustering constraints may be affected by unstable cluster assignments during the early training stage. Single-modal pre-trained encoders and soft clustering strategies provide relatively stable initialization. Nevertheless, under conditions with greater clustering instability, delayed regularization or warm-up strate-gies become increasingly important for maintaining stable cross-modal knowledge transfer. 
+
+B. Threats to Validity 
+
+(1) One potential threat arises from the datasets and data distributions used. We evaluate CMT-AD on three publicly available microservice datasets, which may not fully cover the diverse scenarios in real-world production environments. However, GAIA, Spark, and Stack are collected from microser-vice systems with different scales and complexities, providing certain representativeness. Furthermore, although the sensitivity analysis selects 𝐶 = 3, this setting is motivated by the three typical states in microservice anomaly evolution: normal, transitional, and abnormal. Nevertheless, the clustering-based state identification strategy may still be affected by different anomaly distributions and system complexities. Therefore, the selection of the cluster number could benefit from a more general methodological framework. Future work can incorporate adaptive cluster selection strategies, such as the silhouette coefficient or elbow method, to determine an appropriate number of clusters. (2) Another potential threat arises from the dynamic evolution of microservice systems. Systems undergo version iterations, service expansions, and configuration changes, resulting in shifts in operating modes, log events, and metric distributions. Such changes may reduce the effectiveness of the learned representations, thereby degrading its performance. However, CMT-AD dynamically adjusts modality contributions according to confidence scores and helps maintain cross-modal representa-tion stability through consistency constraints. Future work could incorporate drift detection, online updates, and incremental learning mechanisms to dynamically adapt model parameters, further enhancing CMT-AD’s adaptability in continuously evolving microservice environments. VII. Conclusions and Future Work This paper primarily investigates the effective utilization of reliable cross-modal information from metrics and logs to achieve anomaly detection in microservice systems. To address the reliability challenges posed by dynamic changes in different modalities over time, we design a modal confidence estimation method that enables the model to supplement low-confidence JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 15 
+
+modalities with high-confidence modal knowledge during cross-modal interactions. Simultaneously, to mitigate the impact of cross-modal heterogeneity on knowledge transfer, we conduct an in-depth analysis of the differences in data structures and semantic representations between metrics and logs, and design structural and semantic consistency constraint. Furthermore, we implement intra-modal and cross-modal regularization terms based on clustering soft assignment, ensuring the stability of transferable knowledge and preventing negative transfer by bringing intra-cluster features closer together while pushing inter-cluster features further apart. Extensive experiments on three public datasets consistently demonstrate the superiority of our proposed method. Our future work will be unfolded along two directions. First, we intend to incorporate anomaly classification and root cause localization following anomaly detection to create a more comprehensive anomaly analysis pipeline. Second, we will investigate shared representations and transfer mechanisms among these three tasks and develop a unified collaborative modeling framework. Acknowledgments This work is supported in part by the National Natural Science Foundation of China under Grant No. 52231014, and by the Engineering and Physical Sciences Research Council (EPSRC) of UK Research and Innovation (UKRI) under Grant EP/Y028813/1. References 
+
+[1] P. Moens et al. , “Toward context-aware anomaly detection for aiops in microservices using dynamic knowledge graphs,” IEEE Trans. Netw. Serv. Manage. , vol. 23, pp. 1970–1988, 2026. [2] X. Tian et al. , “Dalad: Unsupervised detection of global and local anomalies in microservice systems,” IEEE Trans. Serv. Comput. , vol. 19, no. 1, pp. 240–252, 2026. [3] M. A. Yahya, A. R. Moya, and S. Ventura, “Deep learning for multivariate time series anomaly detection: An evaluation of reconstruction-based methods,” Artif. Intell. Rev. , vol. 58, no. 12, p. 400, 2025. [4] D. Khettaf et al. , “Deep learning for collective anomaly detection,” ACM Comput. Surv. , vol. 58, no. 8, 2026. [5] P. Wang et al. , “Loggt: cross-system log anomaly detection via heteroge-neous graph feature and transfer learning,” Expert Syst. Appl. , vol. 251, p. 124082, 2024. [6] X. Li et al. , “Swisslog: Robust anomaly detection and localization for interleaved unstructured logs,” IEEE Trans. Dependable Secure Comput. ,vol. 20, no. 4, pp. 2762–2780, 2023. [7] C. Lee et al. , “Heterogeneous anomaly detection for software systems via semi-supervised cross-modal attention,” in Proc. 45th Int. Conf. Softw. Eng. (ICSE 2023) . Melbourne, Australia: IEEE Press, 14-20 May 2023, pp. 1750–1762. [8] N. Zhao et al. , “Identifying bad software changes via multimodal anomaly detection for online service systems,” in Proc. 29th ACM Jt. Eur. Softw. Eng. Conf. Symp. Found. Softw. Eng.(ESEC/FSE 2021) . Athens, Greece: ACM press, 23-28, Aug 2021, p. 527–539. [9] S. Zhang et al. , “Failure diagnosis in microservice systems: A compre-hensive survey and analysis,” ACM Trans. Softw. Eng. Methodol. , vol. 35, no. 1, Dec. 2025. [10] C. Zhao et al. , “Robust multimodal failure detection for microservice systems,” in Proc. 29th ACM SIGKDD Int. Conf. Knowl. Discov. Data Min. (KDD 2023) . Long Beach, CA, USA: ACM press, 6-10, Aug 2023, p. 5639–5649. [Online]. Available: https://doi.org/10.1145/ 3580305.3599902 [11] J. Huang et al. , “Twin graph-based anomaly detection via attentive multi-modal learning for microservice system,” in Proc. 38th IEEE/ACM Int. Conf. Autom. Softw. Eng. (ASE 2023) , 11-15 Sept. 2023, pp. 66–78. [12] Y. Su et al. , “Robust anomaly detection for multivariate time series through stochastic recurrent neural network,” in Proc. 25th ACM SIGKDD Int. Conf. Knowl. Discov. Data Min. (KDD 2019) . Anchorage, USA: ACM press, 4-8 month 2019, p. 2828–2837. [13] J. Xu et al. , “Anomaly transformer: Time series anomaly detection with association discrepancy,” arXiv preprint arXiv:2110.02642 , 2021. [14] Y. Nam et al. , “Breaking the time-frequency granularity discrepancy in time-series anomaly detection,” in Proc. ACM Web Conf. (WWW 2024) .Singapore: ACM press, 13-17 May 2024, p. 4204–4215. [15] F. G. Febrinanto et al. , “Entropy causal graphs for multivariate time series anomaly & nbsp;detection,” ACM Trans. Intell. Syst. Technol. , vol. 16, no. 6, Oct. 2025. [16] Y. Shi et al. , “Robust anomaly detection for multivariate time series through temporal gcns and attention-based vae,” Knowledge-Based Syst. ,vol. 275, p. 110725, 2023. [17] Y. Luo et al. , “Dual graph learning for multivariate time series anomaly detection in iout,” IEEE Trans. Network Sci. Eng , vol. 13, 2025. [18] Y. Yao et al. , “Moon: A modality conversion-based efficient multivariate time series anomaly detection,” IEEE Trans. Knowl. Data Eng. , vol. 38, no. 1, pp. 457–474, 2025. [19] P. He et al. , “Drain: An online log parsing approach with fixed depth tree,” in Proc. IEEE Int. Conf. Web Serv. (ICWS 2017) . Honolulu, HI, USA: IEEE Press, 25-30 June 2017, pp. 33–40. [20] A. A. Makanju, A. N. Zincir-Heywood, and E. E. Milios, “Clustering event logs using iterative partitioning,” in Proc. 15th ACM SIGKDD Inter. Conf. Knowl. Discov. Data Min. (KDD 2009) , ser. KDD ’09. Paris, France: ACM press, 2009, p. 1255–1264. [21] J. Zhu et al. , “Tools and benchmarks for automated log parsing,” in 
+
+Proc.41st Int. Conf. Softw. Eng. (ICES 2019) . Montreal, QC, Canada: IEEE Press, 25-31, May 2019, pp. 121–130. [22] M. Du et al. , “Deeplog: Anomaly detection and diagnosis from system logs through deep learning,” in Proc. ACM SIGSAC Conf. Comput. Commun. Secur. (CCS 2017) . Dallas, Texas, USA: ACM press, 30 Oct.- 3 Nov. 2017, p. 1285–1298. [23] W. Meng et al. , “Loganomaly: Unsupervised detection of sequential and quantitative anomalies in unstructured logs.” in Proc. Int. Joint Conf. Artif. Intell. (IJCAI 2019) , vol. 19, no. 7, Macao, China, 10-16 Aug 2019, pp. 4739–4745. [24] X. Zhang et al. , “Robust log-based anomaly detection on unstable log data,” in Proc. 27th ACM Joint Meeting Eur. Softw. Eng. Conf. Symp. Found. Softw. Eng. (ESEC/FSE 2019) . Tallinn, Estonia: ACM press, 26 - 30 Aug. 2019, p. 807–817. [25] S. He et al. , “Unsupervised multi-target cross-service log anomaly detection,” IEEE Trans. Sustainable Comput. , vol. 10, pp. 1056–1069, 2025. [26] J. Zhou et al. , “Deepsyslog: Deep anomaly detection on syslog using sentence embedding and metadata,” IEEE Trans. Inf. Forensics Secur. ,vol. 17, pp. 3051–3061, 2022. [27] Z. Wang et al. , “Lightlog: A lightweight temporal convolutional network for log anomaly detection on the edge,” Comput. Networks , vol. 203, p. 108616, 2022. [28] X. Chai et al. , “Log sequence anomaly detection based on template and parameter parsing via bert,” IEEE Trans. Dependable Secure Comput. ,vol. 22, no. 2, pp. 1150–1167, 2024. [29] G. Chu et al. , “Anomaly detection on interleaved log data with semantic association mining on log-entity graph,” IEEE Trans. Softw. Eng. , vol. 51, no. 2, pp. 581–594, 2025. [30] R. Xu and Y. Li, “Interpretable spatial–temporal graph convolutional network for system log anomaly detection,” Adv. Eng. Inf. , vol. 62, p. 102803, 2024. [31] J. Qi et al. , “Spikelog: Log-based anomaly detection via potential-assisted spiking neuron network,” IEEE Trans. Knowl. Data Eng. , vol. 36, no. 12, pp. 9322–9335, 2024. [32] K. Cheng et al. , “Slnalog: A log anomaly detection scheme based on swift layer normalization attention mechanism for next-generation power communication networks,” IEEE Trans. Netw. Serv. Manage. , vol. 23, pp. 516–529, 2026. [33] J. Zhou et al. , “Logdlr: Unsupervised cross-system log anomaly detection through domain-invariant latent representation,” IEEE Trans. Dependable Secure Comput. , vol. 22, no. 4, pp. 4456–4471, 2025. [34] Y. Liu et al. , “R-log: Incentivizing log analysis capability in llms via reasoning-based reinforcement learning,” arXiv preprint arXiv:2509.25987 , 2025. [35] J. Yang et al. , “Hg-pad: Heterogeneous graph structure learning aided performance anomaly diagnosis in microservice systems,” IEEE Trans. Serv. Comput. , vol. 18, no. 5, pp. 2916–2931, 2025. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 16 
+
+[36] C. Duan et al. , “Famos: Fault diagnosis for microservice systems through effective multi-modal data fusion,” in Proc. 47th IEEE/ACM Int. Conf. Softw. Eng. (ICSE 2025) . Ottawa, ON, Canada: IEEE Press, 26 April -6 May 2025, pp. 610–610. [37] Y. Wu et al. , “Kanad: Topologically adaptive graph feature learning for multimodal anomaly detection in microservice systems,” J. Network Syst. Manage. , vol. 34, no. 1, p. 19, 2026. [38] P. Wang et al. , “Unsupervised microservice system anomaly detection via contrastive multi-modal representation clustering,” Inf. Process. Manage. ,vol. 62, no. 3, p. 104013, 2025. [39] H. Liu et al. , “Uac-ad: Unsupervised adversarial contrastive learning for anomaly detection on multi-modal data in microservice systems,” IEEE Trans. Serv. Comput. , vol. 17, no. 6, pp. 3887–3900, 2024. [40] J. Devlin et al. , “Bert: Pre-training of deep bidirectional transformers for language understanding,” in Proc. Conf. North Am. Ch. Assoc. Comput. Ling.: Hum. Lang. Technol.(NAACL 2019) . ACL Press, jun 2019, pp. 4171–4186. [41] K. You et al. , “Cross-modal feature fusion-based knowledge transfer for text-based person search,” IEEE Signal Process Lett. , vol. 31, pp. 2230– 2234, 2024. [42] Y. Chen et al. , “Semicmt: Contrastive cross-modal knowledge transfer for iot sensing with semi-paired multi-modal signals,” in Proc. ACM Interact. Mob. Wearable Ubiquitous Technol. (IMWUT 2024) , vol. 8, no. 4. ACM Press, nov 2024. [43] S. Hong, H. Kang, and H. Cho, “Cross-modal dynamic transfer learning for multimodal emotion recognition,” IEEE Access , vol. 12, pp. 14 324– 14 333, 2024. [44] J. Xie et al. , “Audio-visual cross-modality knowledge transfer for machine learning-based in-situ monitoring in laser additive manufacturing,” Addit. Manuf. , vol. 101, p. 104692, 2025. [45] W. Xia et al. , “Graph embedding contrastive multi-modal representation learning for clustering,” IEEE Trans. Image Process. , vol. 32, pp. 1170– 1183, 2023. [46] S. Nedelkoski et al. , “Multi-source distributed system data for ai-powered analytics,” in European conference on service-oriented and cloud computing Proc. Eur. Conf. Serv. Cloud Comput. (ESOCC 2020) .Springer Press, mar. 2020, p. 161–176.
