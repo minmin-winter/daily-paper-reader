@@ -6,68 +6,65 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-25
-- 运行时间：2026-09-25 22:42:34 UTC
+- 最新运行日期：2026-09-26
+- 运行时间：2026-09-26 22:14:51 UTC
 - 运行状态：成功
 - 本次总论文数：15
 - 精读区：1
 - 速读区：14
 
 ### 今日简报（AI）
-- 今日共生成 15 篇推荐（精读 1 篇，速读 14 篇）
-- 精读：《Uni-LaDiR: Latent Diffusion Unifies Multimodal Reasoning》（9.0/10）
-- 速读：《Cross-Modal Attention Acts as a Frequency Filter: Why Verbose Prompts Improve Robustness in Vision-Language Models》（7.0/10）, 《Virtual Encoders in Multimodal Transformers》（7.0/10）, 《AV-GRPO: Modality-Anchored Decoupling Diffusion Reinforcement Learning for Joint Audio-Video Generation》（7.0/10）
-- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
-- 详情：[/202609/25/README](/202609/25/README)
+今日精读1篇、速读14篇，OmniFysics-Nano-V2技术报告以8.0分领跑多模态物理世界理解方向。最值得看的是视觉语言模型“看得见却做不到”的能力短板（7.0分），以及场景感知融合提升相机-LiDAR 3D检测的路线。普通读者可优先关注多模态模型从感知走向行动、以及多传感器融合落地这两条线索。
+- 详情：[/202609/26/README](/202609/26/README)
 
 ### 精读区论文标签
-1. [Uni-LaDiR: Latent Diffusion Unifies Multimodal Reasoning](/202609/25/2609.19878v2-uni-ladir-latent-diffusion-unifies-multimodal-reasoning)  
-   标签：评分：9.0/10、query:mm-reasoning
-   evidence：统一潜空间融合多模态推理思维
+1. [OmniFysics-Nano-V2 Technical Report: Understanding the Physical World Across Modalities](/202609/26/2609.25738v1-omnifysics-nano-v2-technical-report-understanding-the-physical-world-across-modalities)  
+   标签：评分：8.0/10、query:native-multi
+   evidence：统一处理图像、视频、音频、语音与文本的全模态模型
 
 ### 速读区论文标签
-1. [Cross-Modal Attention Acts as a Frequency Filter: Why Verbose Prompts Improve Robustness in Vision-Language Models](/202609/25/2609.20139v1-cross-modal-attention-acts-as-a-frequency-filter-why-verbose-prompts-improve-robustness-in-vision-language-models)  
+1. [Seeing is not Enough: Vision-Language Models Perceive Evidence but Fail to Act](/202609/26/2609.22588v1-seeing-is-not-enough-vision-language-models-perceive-evidence-but-fail-to-act)  
    标签：评分：7.0/10、query:mm-reasoning
-   evidence：视觉与语言间的跨模态注意力交互
-2. [Virtual Encoders in Multimodal Transformers](/202609/25/2609.26513v2-virtual-encoders-in-multimodal-transformers)  
-   标签：评分：7.0/10、query:native-multi
-   evidence：无需专用感知编码器的整合式多模态架构
-3. [AV-GRPO: Modality-Anchored Decoupling Diffusion Reinforcement Learning for Joint Audio-Video Generation](/202609/25/2609.29816v1-av-grpo-modality-anchored-decoupling-diffusion-reinforcement-learning-for-joint-audio-video-generation)  
+   evidence：视觉语言模型能感知证据却无法用于推理决策
+2. [SARFusion: Scene-Aware Routing Fusion for Robust Camera-LiDAR 3D Object Detection](/202609/26/2609.29235v1-sarfusion-scene-aware-routing-fusion-for-robust-camera-lidar-3d-object-detection)  
    标签：评分：7.0/10、query:balanced-mml
-   evidence：模态锚定解耦缓解单模态保真度不平衡与跨模态同步问题
-4. [Mind What Matters for Reasoning: Aligning Cross-Modal Attention via Selective Probability Mass Concentration](/202609/25/2609.29940v1-mind-what-matters-for-reasoning-aligning-cross-modal-attention-via-selective-probability-mass-concentration)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：多模态大模型过度依赖语言先验，引导注意力关注视觉证据
-5. [Multimodal Thinking with Renderable Programs](/202609/25/2609.30130v1-multimodal-thinking-with-renderable-programs)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：将图像生成融入多模态推理链
-6. [The Alignment Illusion in Multimodal Large Language Models](/202609/25/2609.30210v1-the-alignment-illusion-in-multimodal-large-language-models)  
-   标签：评分：7.0/10、query:native-multi
-   evidence：多模态大模型视觉-文本对齐分析
-7. [Video-STLayout Pre-training](/202609/25/2609.24031v1-video-stlayout-pre-training)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：通过对比损失将视频特征与布局特征跨模态对齐
-8. [TimeLitmus: A Diagnostic Benchmark for Cross-Modal Understanding and Explanation Faithfulness in Event-Conditioned Time-Series Prediction](/202609/25/2609.24677v1-timelitmus-a-diagnostic-benchmark-for-cross-modal-understanding-and-explanation-faithfulness-in-event-conditioned-time-series-prediction)  
+   evidence：按模态可靠性进行场景感知的自适应融合路由
+3. [Exploring a Single Autoregressive LLM for Unified Target Speech Extraction across Synchronous and Asynchronous Cues](/202609/26/2609.29238v1-exploring-a-single-autoregressive-llm-for-unified-target-speech-extraction-across-synchronous-and-asynchronous-cues)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：单一自回归大模型统一处理同步与异步多模态线索
+4. [Beyond Exact Match: Task-Aware GRPO for Cross-Domain PCBA Visual Question Answering](/202609/26/2609.21276v1-beyond-exact-match-task-aware-grpo-for-cross-domain-pcba-visual-question-answering)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：时间序列与文本输入的跨模态整合
-9. [Qwen-Audio-3.1-Realtime: Towards Reliable Agentic Voice Interaction](/202609/25/2609.25176v2-qwen-audio-31-realtime-towards-reliable-agentic-voice-interaction)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：多模态模型中发展原生音频能力的实时语音交互
-10. [Metric-Bench: Exploring In-context Spatial Metric Reasoning in VLMs for Indoor Scenes](/202609/25/2609.25841v1-metric-bench-exploring-in-context-spatial-metric-reasoning-in-vlms-for-indoor-scenes)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：视觉语言模型结合图像与文本进行空间度量推理
-11. [Confidence-Guided Cross-Modal Knowledge Transfer for Multimodal Anomaly Detection in Microservice Systems](/202609/25/2609.25856v1-confidence-guided-cross-modal-knowledge-transfer-for-multimodal-anomaly-detection-in-microservice-systems)  
-   标签：评分：6.0/10、query:balanced-mml
-   evidence：置信度引导跨模态迁移，应对模态可靠性动态变化
-12. [Hierarchical Floorplan-Guided Vision-Language Exploration for Embodied Question Answering](/202609/25/2609.26360v1-hierarchical-floorplan-guided-vision-language-exploration-for-embodied-question-answering)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：具身环境中的视觉语言探索与问答
-13. [MMAP: Multimodal Missing-Aware Pretraining for Longitudinal Alzheimer's Prediction](/202609/25/2609.26617v1-mmap-multimodal-missing-aware-pretraining-for-longitudinal-alzheimers-prediction)  
+   evidence：联合视觉线索与文本知识进行视觉问答的多模态推理框架
+5. [OmniEcho: Spatial Audio Understanding for Embodied Agents](/202609/26/2609.23407v1-omniecho-spatial-audio-understanding-for-embodied-agents)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：多模态缺失感知对齐预训练
-14. [ROAM-ASD: Robust Open-World Active Speaker Detection with Flexible Multimodal Fusion](/202609/25/2609.26648v2-roam-asd-robust-open-world-active-speaker-detection-with-flexible-multimodal-fusion)  
+   evidence：融合音频、视觉与语言的统一基准，面向具身感知
+6. [MIGU: Multimodal Instruction Grounding under Uncertainty for Manipulation Planning](/202609/26/2609.24995v1-migu-multimodal-instruction-grounding-under-uncertainty-for-manipulation-planning)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：统一联合自注意力与模态丢弃实现灵活多模态融合
+   evidence：以贝叶斯式融合统一语言与手势模态
+7. [LiFR v2: Completion-Augmented Event Propagation for High-Rate Dense Prediction](/202609/26/2609.25803v2-lifr-v2-completion-augmented-event-propagation-for-high-rate-dense-prediction)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：RGB与事件相机的统一传播-补全-记忆融合
+8. [Cross-Modal Contrastive Learning from Histopathology and CT for Automated Renal Cell Carcinoma Grading](/202609/26/2609.26920v1-cross-modal-contrastive-learning-from-histopathology-and-ct-for-automated-renal-cell-carcinoma-grading)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：组织病理与CT表征之间的跨模态对比对齐
+9. [CinematicVQA: Benchmarking Film-Grammar Reasoning in Large Vision-Language Models](/202609/26/2609.28813v1-cinematicvqa-benchmarking-film-grammar-reasoning-in-large-vision-language-models)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：评测LVLM的视频理解与推理能力
+10. [M$^2$PFN: End-to-End Disentangled Alignment for Generalizable Multimodal In-Context Learning in Alzheimer's Disease](/202609/26/2609.28836v1-m2pfn-end-to-end-disentangled-alignment-for-generalizable-multimodal-in-context-learning-in-alzheimers-disease)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：面向多模态上下文学习的影像与表格模态端到端解耦对齐
+11. [Looks the Same, Answers Differently: Flip-Direction Steering for Robust Vision-Language Reasoning](/202609/26/2609.28851v1-looks-the-same-answers-differently-flip-direction-steering-for-robust-vision-language-reasoning)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：通过激活引导提升视觉语言推理鲁棒性
+12. [ICE: Task-Aligned Clifford Latent Fields for Multimodal Graph Foundation Models](/202609/26/2609.29398v1-ice-task-aligned-clifford-latent-fields-for-multimodal-graph-foundation-models)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：统一视觉与语言的多模态图基础模型
+13. [TEMA: Evidence-Grounded Temporal Question Answering in Multi-Turn Multi-Audio Dialogs](/202609/26/2609.30029v1-tema-evidence-grounded-temporal-question-answering-in-multi-turn-multi-audio-dialogs)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：融合音频与文本证据进行联合时序理解
+14. [SemMSA: Latent Semantic-Aided Robust Multimodal Sentiment Analysis with Incomplete Data](/202609/26/2609.30238v1-semmsa-latent-semantic-aided-robust-multimodal-sentiment-analysis-with-incomplete-data)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：面向多模态融合的跨模态语义精炼与谱对齐
 
 
 <div class="dpr-home-promo-card">
