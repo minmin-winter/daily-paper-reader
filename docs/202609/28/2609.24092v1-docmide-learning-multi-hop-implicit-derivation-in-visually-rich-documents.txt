@@ -1,0 +1,343 @@
+Title: DocMIDE: Learning Multi-Hop Implicit Derivation in Visually Rich Documents
+
+URL Source: https://arxiv.org/pdf/2609.24092v1
+
+Published Time: Tue, 22 Sep 2026 02:05:40 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+> 1
+
+# DocMIDE: Learning Multi-Hop Implicit Derivation in Visually Rich Documents 
+
+Jeremy Cerwin Wang, Wai Kit Wong, and Jeff Kai Tai Tang 
+
+Abstract —Real-world document processing systems rely on rigid, predefined schemas, yet critical target fields often lack direct visual counterparts on the page. Extracting these implicit values requires multi-hop derivation, such as aggregating sub-categories or reasoning over visual marks. While existing methods handle explicit text spans or simple implicit queries, they fail at multi-hop visual reasoning even after standard fine-tuning: models retrieve incorrect visual evidence, or retrieve it correctly and then skip the intermediate steps of the derivation. To address this, we introduce DocMIDE, a fine-tuning framework that trains compact vision-language models to retrieve visual evidence explic-itly before deriving an answer. DocMIDE constrains generation to a plan–retrieve–derive structure and optimizes it with Group Relative Policy Optimization under a four-component, rule-based reward that scores output format, the retrieved evidence block, every intermediate derivation step, and the final value against a verified reference trace. On a 4,151-pair implicit extraction benchmark, DocMIDE raises accuracy from 70.8% to 95.9% on Qwen3.5-4B from only a small set of annotated examples, and transfers to a second backbone architecture. Supervised demonstrations alone do not close this gap at any budget we tested; rewarding the intermediate steps is what does. 
+
+Index Terms —Chain-of-thought reasoning, Document informa-tion extraction, Group relative policy optimization, Reinforce-ment learning, Vision-language models. 
+
+I. I NTRODUCTION 
+
+# A growing class of AI-powered data platforms extracts structured data with predefined schemas from visu-ally rich documents (VRDs). However, many critical target fields lack direct visual counterparts on the page. Extracting these implicit values requires multi-hop implicit derivation —chaining evidence scattered across the page through selective category aggregation, multi-operand arithmetic, or interpre-tation of non-textual visual marks. Figure 1 illustrates this challenge in a scanned mortgage statement where the total principal paid is unprinted. Deriving the field requires sum-ming eleven distinct rows across one column while ignoring an adjacent printed total that serves as a plausible distractor. Other implicit fields rely entirely on non-textual indicators, such as verifying official stamps or circled form selections. Addressing this structural gap is critical due to the uncon-trolled nature of document ingestion in enterprise workflows. Platforms operating in domains like ESG compliance, multi-vendor procurement, or job applicant processing must enforce standardized reporting schemas across downstream databases. 
+
+J. C. Wang and W. K. Wong are with VX Real Limited (e-mail: yuan-peng.wang@vxreal.com; waikit.wong@vxreal.com). W. K. Wong is also with the Hang Seng University of Hong Kong (e-mail: wongwk@hsu.edu.hk). Jeff K. T. Tang is with The Hong Kong Polytechnic University (e-mail: kai-tai-jeff.tang@polyu.edu.hk). 
+
+However, incoming documents originate from thousands of independent third parties, each using proprietary templates and reporting styles. For instance, our deployment of an enterprise ESG platform enforcing emissions metrics frequently receives utility bills displaying raw monthly line items rather than annual aggregates, or equipment certificates where compliance is indicated solely by a handwritten checkmark or stamp. Because the platform cannot force external issuers to alter their layouts, extraction systems cannot rely on simple key-value matching; they must perform multi-hop implicit derivation over whatever visual layout the issuer provides. To process such heterogeneous layouts, document process-ing architectures are rapidly shifting from legacy cascades that pair optical character recognition (OCR) with a large language model (LLM) to end-to-end vision-language models (VLMs) [1], [2], [3]. While legacy cascaded pipelines 1 strip visual geometry and discard non-textual marks like arrows or circled values during transcription, native VLMs retain full visual context. However, off-the-shelf VLMs still fall short of industry extraction standards on multi-hop implicit tasks. Because they are optimized for general multimodal chat rather than schema-constrained derivation, untuned VLMs frequently hallucinate, retrieve misattributed visual evidence, or commit errors during multi-step field derivation. Worse, standard fine-tuning—even when trained on teacher-filtered reasoning traces from frontier VLMs—fails to bridge this gap. Supervised fine-tuning (SFT) aligns the shape of a reasoning trace without anchoring it to the page, so the tuned model still commits evidence misassociation and still fabricates intermediate values at inference time (Section IV). To bridge the gap, we introduce DocMIDE (Document Multi-hop Implicit Derivation & Extraction), a lightweight fine-tuning framework that trains VLMs to perform grounded multi-hop implicit derivation. Rather than predicting field values in a single ungrounded forward pass, DocMIDE en-forces a structured three-step generation pattern: (1) an initial reasoning phase that plans required evidence, (2) an explicit retrieval phase that enumerates raw visual evidence tokens and observations prior to calculation, and (3) a final reasoning phase that computes the value and emits the answer. To train models to reliably execute this pattern, DocMIDE leverages Group Relative Policy Optimization (GRPO) [4] guided by a novel four-component, rule-based reward function: (1) Format Coherence: enforces structural discipline; (2) 
+
+> 1
+
+See, e.g., elDoc, “How to Extract Data from Invoices Using GenAI (OCR + LLM + CV + RAG),” Nov. 2025, https://eldoc.online/blog/how-to-extract-data-from-invoices-using-genai/ (accessed Aug. 2026). arXiv:2609.24092v1 [cs.AI] 21 Sep 2026 2 
+
+> Fig. 1. Sample document where “annual principal” must be derived by summing eleven rows, as the only printed total belongs to an adjacent distractor column (Interest).
+
+Grounding Quality: rewards high recall and precision when identifying raw evidence spans from the document; (3) Step-wise Reasoning: verifies intermediate derivation steps against the model’s retrieved evidence; and (4) Answer Accuracy: 
+
+evaluates the correctness of the final output value. Extensive empirical evaluation shows that DocMIDE in-creases held-out extraction accuracy from 70.8% to 95.9% on Qwen3.5-4B [5] and from 13.5% to 82.6% on InternVL3.5-4B [6], outperforming state-of-the-art open-weight VLMs [7], [8], [9] and OCR-based methods [10], [11], [12], [13], [14], [15] (Section VI). II. R ELATED WORK 
+
+Implicit inference in general vision and NLP. Outside of document processing, implicit inference has been explored in text-based question answering [16], video relational rea-soning [17], and structured reasoning traces for implicit-knowledge visual question answering (VQA) [18] (StaR-KVQA). Vision-R1 [19] further applies long chain-of-thought (CoT) reasoning to vision-language models, representing the closest published system to our training setup. While Vision-R1 and StaR-KVQA share conceptual similarities with our ap-proach, these methods generally focus on open-ended question answering over general images or video rather than structured document environments. As a result, they rely on retrieving external commonsense knowledge or interpreting implicit mo-tives to output free-form text. In contrast, document-implicit fields require extracting unprinted quantities or marks deriv-able strictly by chaining visual evidence across a page to satisfy a rigid target schema. Existing extraction frameworks struggle with these multi-hop implicit derivations, frequently failing when forced to decompose complex multi-step compu-tations without explicit intermediate evidence grounding. 
+
+Extraction architectures. Standard document extraction typ-ically falls into two paradigms: traditional OCR pipelines and end-to-end VLMs. Traditional OCR pipelines employ an OCR engine (GLM-OCR [10], FireRed-OCR [11], DeepSeek-OCR 2 [12], PaddleOCR [13], Unlimited-OCR [14], BLOCKIE [15]) to convert document pages into flat text before passing the output to a downstream LLM for field extraction. However, converting visual layouts into linear text causes an irreversible loss of spatial relationships and structural semantics: non-textual indicators like circled choices or directional arrows are completely lost during transcription, depriving downstream LLMs of critical visual evidence. While OCR systems continue to advance, they share the same transcribe-then-parse ceiling—untranscribed marks cannot be recovered downstream. Conversely, end-to-end VLMs [1], [2], [3], [7] preserve raw visual inputs. However, state-of-the-art general-purpose VLMs (Qwen3.5-4B [5], InternVL3.5-4B [6]) focus on broad multimodal tasks, whereas specialized docu-ment VLMs (Eagle2.5-8B [8], Qianfan-OCR [9]) are tailored for direct visual extraction rather than schema-constrained, multi-hop implicit derivation. 
+
+Benchmarks. Existing document benchmarks predominantly focus on explicit, span-extractive fields. Datasets like DocILE [20] restrict annotations to explicit character spans, while form-key-value linking datasets (XFUND [21], SR-FUND [22], EPHOIE [23]) rely strictly on explicit visual key anchors. Region-level grounding benchmarks (OCRBench v2 [24], CC-OCR [25], MMDocBench [26]) and financial QA suites (TAT-DQA [27], FinQA [28], DocMath-Eval [29]) focus on single-step localization or free-form numerical QA. Simi-larly, general document parsing (OmniDocBench [30]), doc-ument question answering (DocVQA [31]), and infographic reasoning benchmarks (ChartQAPro [32]) assess broad lay-out transcription, open-ended visual QA, or chart analysis 3
+
+without fixed-schema constraints. Finally, while datasets like UNIKIE-Bench [33] capture diverse real-world administrative, commercial, advertising, and accommodation documents, they do not systematically isolate multi-step visual derivations from explicit extractions. Consequently, none of these exist-ing benchmarks are equipped to evaluate schema-constrained, multi-hop implicit derivation. 
+
+Policy optimization. To reinforce multi-step reasoning with-out the overhead of an explicit critic network, GRPO [4] has emerged as a widely adopted reinforcement learning framework. While GRPO was originally designed to enhance mathematical and logical reasoning in language models, recent efforts have effectively extended it to multimodal settings, such as visual reasoning [19], [34], [35]. Building on this common practice of using GRPO to cultivate structured reasoning ca-pabilities, we fine-tune our models via Low-Rank Adaptation (LoRA) [36] guided by a reward function tailored for grounded evidence retrieval and schema-constrained derivation. III. P ROBLEM FORMULATION : M ULTI -H OP IMPLICIT 
+
+DERIVATION 
+
+We define document field extraction as a function f :(I, S ) → V , where I is a document image, S = {s1, . . . , s n}
+
+is a predefined schema of target fields, and V = {v1, . . . , v n}
+
+is the set of extracted values. Let OCR (I) = {x1, x 2, . . . , x m}
+
+represent the set of discrete textual primitives transcribed from 
+
+I (alongside non-textual visual marks present on the page). A field si ∈ S is explicit if its value appears directly as a primitive span ( vi ∈ OCR (I)). Conversely, si is implicit if its value is not directly present in OCR (I) (vi /∈ OCR (I))and must instead be computed through a directed sequence of elementary operations. Let O denote a bounded set of atomic primitive oper-ators (e.g., binary arithmetic add (u, w ), relational category predicate matching match (u, c ), or unary visual evaluation is_checked (u)), where each operator ϕ ∈ O acts on at most two operands to yield an intermediate state: 
+
+z = ϕ(u, w ), where ϕ ∈ O .
+
+Because every operator ϕ ∈ O is strictly atomic, complex field extractions cannot be collapsed into a single operational mapping. We define a k-hop derivation chain for a target field si as a sequence of intermediate states (z1, z 2, . . . , z k) constructed as follows: 
+
+z1 = ϕ1(u1, w 1) where u1, w 1 ∈ OCR (I),z2 = ϕ2(u2, w 2) where u2, w 2 ∈ OCR (I) ∪ { z1},
+
+...
+
+zk = ϕk(uk, w k) where uk, w k ∈ OCR (I) ∪ { z1, . . . , z k−1}.
+
+The field extraction task is formally classified as multi-hop implicit derivation if and only if the minimal valid derivation chain yielding the final value vi = zk requires a depth of 
+
+k ≥ 2 operational steps. Under this formulation, the model is given only the image I
+
+and the schema field description si ∈ S at inference time. To populate vi, the model must implicitly discover the sequence of operators (ϕ1, . . . , ϕ k) and select the appropriate primitive operands (uj , w j ) without explicit step-by-step guidance. 
+
+Deployment constraints and efficiency target. In addition to the multi-hop requirement, we specifically target small vision-language models (e.g., ≤ 4B parameters). While mod-ern trillion-parameter API models can perform multi-step execution via brute-force scaling, real-world document pro-cessing pipelines require low-latency, privacy-preserving, and cost-effective deployments. Accordingly, our task formulation assumes that the extraction model must be fully trainable and runnable on a single commodity GPU (e.g., an RTX 4090), making reliable implicit derivation within compact architectures a primary research challenge. IV. D OES STANDARD FINE -T UNING SUFFICE ?A natural question is whether standard fine-tuning on high-quality reasoning traces can resolve multi-hop implicit derivation. To construct a strong fine-tuning baseline, we first generate step-by-step reasoning trajectories using frontier closed-source models (e.g., Claude, OpenAI models) and manually inspect both the intermediate reasoning steps and final answers. Filtering for strict correctness yields a curated pool of 200 high-quality exemplars used for initial SFT on open-source vision-language baselines, followed by policy optimization via GRPO. The baseline reported in our main results draws 50 of these exemplars, matching the supervision budget given to DocMIDE so that the comparison isolates the training scheme; Appendix A verifies that fine-tuning on the full pool of 200 does not change the outcome. Figure 2 shows one such exemplar in full. While this two-phase fine-tuning pipeline aligns models to output structured CoT traces, our evaluation shows that standard fine-tuning alone is insufficient to guarantee reliable multi-hop execution at inference time (detailed in Section VI). Instead, fine-tuned baselines suffer from two compounding failure modes:  
+
+> •
+
+Evidence Misassociation: In complex layouts, models frequently pull distractor elements (e.g., values from adjacent columns, wrong line items, or a nearby field holding the same kind of value) into their reasoning chain, leading to ungrounded intermediate steps. Figure 3 shows one such trace in full.  
+
+> •
+
+Superficial Mimicry and Step-Skipping: While SFT teaches models to mimic the superficial formatting of intermediate steps, it fails to enforce step-by-step rigor. Models frequently jump operational steps or hallucinate ungrounded intermediate values rather than systemati-cally executing the derivation chain. Figure 4 shows one such trace in full. These qualitative failure modes motivate the core design of DocMIDE, which moves beyond standard single-pass fine-tuning by explicitly enforcing grounded evidence verification and structured multi-stage execution. 4
+
+Document image 
+
+Target field Ground Truth: 1000.00     
+
+> Key: eleven_lines_grand_total |Description: The sum of the Total column across all eleven line items on this invoice.
+
+Target output                                                                                                                                                        
+
+> <think>This KWWL confirmation contract for House Majority PAC lists eleven separate line items across amix of syndicated talk and sitcom programs --Cheaters/Couples Court, Tamron Hall, two separate Jerry Springer lines, TMZ/Access Hollywood, two separate Seinfeld lines, two separate Mom lines, and Seinfeld II --each with its own spot count and rate, so no single pattern lets you skip reading every row. The eleven line Totals, read down the table in order, are 105.00, 105.00, 105.00, 105.00, 105.00, 135.00, 135.00, 40.00, 45.00, 70.00, and 50.00. Adding them one at atime: 105.00 +105.00 =210.00, then 210.00 +105.00 =315.00, then 315.00 +105.00 =420.00, then 420.00 + 105.00 =525.00, then 525.00 +135.00 =660.00, then 660.00 +135.00 =795.00, then 795.00 +40.00 =835.00, then 835.00 + 45.00 =880.00, then 880.00 +70.00 =950.00, then 950.00 +50.00 =1,000.00. Since the prompt asks for the number only, the final answer is 1000.00.</think> 1000.00
+
+Fig. 2. A training sample under standard fine-tuning. The target output is generated by a frontier VLM and manually verified. Reasoning steps are contained entirely within the <think> tag, with the final extracted field value appended afterward. 
+
+V. D OCUMENT MULTI -HOP IMPLICIT DERIVATION &EXTRACTION 
+
+A. Response Structure 
+
+To enforce grounded reasoning and make each derivation stage explicitly verifiable, DocMIDE restricts model outputs to a structured three-step generation pattern: 1) Initial Reasoning Phase: The model analyzes the schema field requirements and formulates a plan to locate the necessary visual evidence on the page. 2) Explicit Retrieval Phase: The model explicitly enumer-ates all raw visual evidence tokens and values retrieved from the document prior to performing any calculation. 3) Final Reasoning Phase: The model performs step-by-step reasoning over the extracted evidence block to compute intermediate states and emits the final schema answer. In our implementation, the explicit retrieval phase is visually and syntactically isolated using special system tags ( <raw> 
+
+and </raw> ). Forcing the model to declare raw visual ev-idence in a dedicated intermediate step serves two critical functional purposes: 1) Complete Contextual Assembly: It forces the model to articulate all requisite visual and textual evidence within the context window before execution, ensuring downstream reasoning is conditioned on a complete set of retrieved facts. 2) Explicit Verifiability and Optimization: Isolating re-trieved evidence into a discrete text block renders visual grounding independently verifiable. This allows us to construct a targeted reinforcement learning reward that specifically trains the model to maximize evidence re-trieval accuracy prior to derivation. 
+
+Training Data Construction and Labeling. To train the base model to emit this structured generation pattern, each target field si ∈ S in the dataset is formatted as a 4-tuple 
+
+(ˆ tplan , ˆE, ˆtexec , ˆv) consisting of: 1) Planning Trace ( ˆtplan ): The initial reasoning text artic-ulating the retrieval goal and target schema constraints for field si.2) Grounding Evidence Block ( ˆE): A structured block containing the extracted ground-truth evidence operands 
+
+ˆE = {u1, u 2, . . . , u | ˆE|} ⊆ OCR (I) from the document image. 3) Stepwise Execution Trace ( ˆtexec ): A sequence of ex-plicit intermediate derivations mapping directly to the 
+
+k-hop operational chain: 
+
+ˆzj = ϕj (uj , w j ) for j = 1 , . . . , k 
+
+4) Ground Truth ( ˆv): The final extracted value ˆv = ˆ zk.An example training completion is shown in Figure 5. 5
+
+Document image 
+
+Target field Ground Truth: 7000 
+
+Key: office_area_range_width | Description: The width of the permitted Office Building Area range stated in the Planning Indicators section, maximum minus minimum, in square metres. 
+
+Standard fine-tuning output Answered: 700 ✗
+
+<think> The Planning Indicators section states that the Office Building Area must be at least 9,000 m2
+
+and at most 9,700 m2. Subtracting the minimum from the maximum: 9,700 - 9,000 = 700, which is the final answer.</think> 700 
+
+Fig. 3. An example of evidence misassociation under standard fine-tuning. 
+
+The model extracts the wrong operands ( 9,700 and 9,000 ) instead of the correct values ( 70 ,000 and 63 ,000 ). 
+
+B. Training Overview 
+
+Training DocMIDE proceeds in two sequential stages: su-pervised fine-tuning followed by policy optimization. 
+
+Stage 1: Supervised Fine-Tuning. The primary objective of the SFT phase is to cold-start the base model and teach it to strictly adhere to the three-step response structure defined in Section V-A. 
+
+Stage 2: Custom GRPO. We employ a custom implemen-tation of GRPO [4] as the primary training phase to optimize the SFT checkpoint policy πθ . Given an input document prompt q, GRPO samples a group of G candidate outputs 
+
+{o1, o 2, . . . , o G} from the old policy πθold . Each generated completion oi is assigned a scalar reward Ri = R(q, o i) by a task-specific reward function R. The relative advantage ˆAi
+
+Document image 
+
+Target field Ground Truth: 191.95 
+
+Key: amount_total | Description: The sum of the Amount column across all ten line items on this receipt. 
+
+Standard fine-tuning output Answered: 192.95 ✗
+
+<think> This receipt from Harvest Moon Market in Tucson lists 10 distinct items, ranging from everyday groceries like Peanut Butter Smooth and Garlic Bulb to household goods like Sea Salt Grinder and Ice Scraper, and even some personal care items like Shaving Cream and Cough Syrup. Each item has its own price, and the final answer is the sum of all 10 amounts: 11.87 + 20.90 + 12.50 + 13.00 + 36.92 + 16.23 + 8.72 + 31.65 + 38.46 + 1.70 = 192.95, which is the final answer as a bare number.</think> 192.95 
+
+Fig. 4. An example of superficial mimicry and step-skipping under standard fine-tuning. The model asserts a single ten-term sum instead of computing step-by-step additions, resulting in an arithmetic error ( 192 .95 vs. 
+
+191 .95 ). 
+
+1. Planning Trace ( tplan ): 
+
+To answer this, I need to identify: line totals. 
+
+2. Grounding Evidence Block ( ˆE): 
+
+105.00, 105.00, 105.00, 105.00, 105.00, 135.00, 135.00, 40.00, 45.00, 70.00, 50.00 
+
+3. Stepwise Execution Trace ( texec ): 
+
+ϕ1(105 .00 , 105 .00) = 210 .00 , ϕ2(210 .00 , 105 .00) = 315 .00 , ..., 
+
+ϕ10 (950 .00 , 50 .00) = 1000 .00 , where ϕi(u, w ) = u + w is an addition operator for all i ∈ [1 , 10] .
+
+4. Ground Truth ( ˆv): 
+
+1000.00 
+
+Fig. 5. DocMIDE structured training sample for the document prompt in Fig. 2. The label explicitly partitions the target generation into four compo-nents: planning trace ( tplan ), explicit evidence grounding block ( ˆE), pairwise stepwise execution trace ( texec ) where each operator ϕi for i ∈ [1 , 10] is addition, and final ground-truth scalar answer ˆv.
+
+for completion oi is computed by standardizing the rewards within the sampled group: 
+
+ˆAi = Ri − mean ({R1, . . . , R G})
+
+std ({R1, . . . , R G}) + ϵ
+
+where ϵ is a small constant to ensure numerical stability. This 6
+
+relative advantage directly reinforces outputs that outperform group averages while suppressing inferior ones without requir-ing a separate critic network. Because optimization depends entirely on relative intra-group advantages ˆAi, the critical driver of performance is the design of the reward function R(q, o i). The formulation and components of our reward function are detailed in Section V-C. 
+
+C. Reward Design 
+
+We score each sampled completion using four deterministic, rule-based components— Format Coherence (Rf ), Ground-ing Quality (Rg ), Stepwise Reasoning (Rs), and Answer Accuracy (Ra)—designed to isolate and penalize distinct failure modes in multi-step visual reasoning without relying on a learned reward model. 
+
+Total Composite Reward. Let ˆy = (ˆ tplan , ˆE, ˆtexec , ˆv) denote the target ground-truth label corresponding to document query 
+
+q. The overall scalar reward R(q, o i) passed to the GRPO objective for a candidate output oi and document prompt q
+
+is a linearly weighted sum of four sub-rewards, where each sub-reward component outputs a bounded score in [0 , 1] :
+
+R(q, o i) = λf Rf (oi) + λg Rg (ˆ y, o i)+ λsRs(ˆ y, o i) + λaRa(ˆ y, o i)
+
+where λ = ( λf , λ g , λ s, λ a) are positive system hyperparame-ters. By default, we set λf = 0 .25 , λg = 1 .0, λs = 0 .75 , and 
+
+λa = 2 .5. Through internal hyperparameter tuning, we found that performance remains robust to minor weight variations. 
+
+1. Format Coherence (Rf ). Similar to standard GRPO formatting rewards, Rf (oi) serves as a structural regularizer. It encourages the model to adhere to the response structure defined in Section V-A. It assigns a fractional score based on the proportion of required structural components present in the output trace. When correctly formatted, the model output 
+
+oi can be uniquely parsed into the 4-tuple (tplan , E, t exec , v )
+
+corresponding to the target structure (ˆ tplan , ˆE, ˆtexec , ˆv). Specif-ically, texec is extracted by applying regular expression pattern matching over structural tags to identify operational steps matching the set of atomic primitive operators O.
+
+2. Grounding Quality ( Rg ). The grounding reward Rg (ˆ y, o i)
+
+penalizes evidence misassociation by evaluating the candidate evidence block E ∈ oi against the ground-truth evidence block 
+
+ˆE ∈ ˆy. We compute precision and recall over multisets of primitive tokens to ensure E contains the exact target evidence elements. Furthermore, to verify that the extracted evidence in 
+
+E is actively consumed during calculation, we evaluate trace utility within texec ∈ oi. Specifically, we collect all operands across the executed operations {ϕj } in texec and compute the fraction of elements in E that appear in this set, accounting for multiset element frequencies. The sub-scores are formally defined as: 
+
+precision = |F ( ˆE) ∩ F (E)||F (E)| ,
+
+recall = |F ( ˆE) ∩ F (E)||F ( ˆE)| ,
+
+utility = |F (texec ) ∩ F (E)||F ( ˆE)| ,
+
+where F (x) extracts the multiset of primitive visual and textual tokens from a block x. The overall grounding score is computed as: 
+
+Rg (ˆ y, o i) = 13 (precision + recall + utility) . (1) Missing or empty evidence blocks ( |F (E)| = 0) directly assign Rg (ˆ y, o i) = 0 .
+
+3. Stepwise Reasoning ( Rs). The stepwise reasoning reward 
+
+Rs(ˆ y, o i) evaluates execution fidelity by measuring ordered derivation accuracy in texec ∈ oi relative to target trace 
+
+ˆtexec ∈ ˆy. For target trace ˆtexec = (ˆ s1, . . . , ˆsk) of length k and generated trace texec = ( s1, . . . , s n), we compute the length of their longest common subsequence ℓseq = |LCS( texec , ˆtexec )|.This ensures that generated steps are credited if they match target step tuples while strictly preserving the correct oper-ational ordering. The normalized stepwise reward is defined as: 
+
+Rs(ˆ y, o i) = ℓseq 
+
+k . (2) However, strict sequence matching is overly rigid for multi-operand associative operations (e.g., summing N quantities), where multiple valid operational orderings exist. To accom-modate this flexibility, we employ a dynamic pattern-matching mechanism for arithmetic chains. Specifically, we track the set of consumed raw evidence inputs and verified intermediate outputs: the initial step must combine two raw ground-truth values, while each subsequent step j is valid if it operates on the verified result of step j − 1 and an unconsumed raw value. Each sequentially valid step matching this accumulator pattern increments the matched step count ℓseq , rewarding arbitrary yet logically sound summation orderings while penalizing disconnected or hallucinated calculations. 
+
+4. Answer Accuracy (Ra). The answer accuracy reward 
+
+Ra(ˆ y, o i) provides a strict binary outcome evaluation, assign-ing 1 if the extracted final value v ∈ oi exactly matches the ground truth ˆv ∈ ˆy, and 0 otherwise. VI. E XPERIMENTS 
+
+In this section, we empirically evaluate the effectiveness of DocMIDE. We first outline our experimental configuration, including benchmark datasets, evaluation protocols, and imple-mentation details. We then present our primary results com-paring DocMIDE against state-of-the-art VLMs, traditional OCR pipelines, and standard fine-tuning baselines. Finally, we provide ablation studies on training data efficiency and parameter scaling, followed by an out-of-domain evaluation to assess cross-task generalizability. All training and experiments are run on a single workstation with an Intel Core i9-13900KF 7
+
+CPU, 128 GB memory, and one RTX 4090 GPU. All source codes are available on GitHub 2.
+
+A. Experimental Settings 
+
+Datasets. To evaluate multi-hop implicit derivation in docu-ment processing, we construct a dedicated benchmark dataset 3
+
+comprising 4,151 document-field pairs. This split includes 1,151 pairs sourced from real-world document images (ex-tracted from UNIKIE-Bench [33]) and 3,000 synthetically generated document images paired with derivative tasks to ensure scale and structural diversity. For model optimization, we curate a training set of 100 annotated samples, utilizing a default subset of n = 50 for primary model training and reserving the remainder to analyze training sample efficiency. Furthermore, to evaluate whether DocMIDE preserves general document understanding without catastrophic forgetting, we evaluate out-of-domain performance on OmniDocBench [30] (scored on a 0–100 scale), ChartQAPro [32], and the DocVQA validation set [31]. 
+
+Baselines. We compare DocMIDE against four primary categories of baseline approaches:  
+
+> •
+
+Traditional OCR pipelines: Modular frameworks where an OCR engine first transcribes visual document text, which is subsequently processed by a downstream lan-guage model. Specifically, we evaluate GLM-OCR [10] and BLOCKIE [15], both paired with a Qwen3.5-4B LLM backend.  
+
+> •
+
+Base VLMs: Direct multi-modal backbones evaluated off-the-shelf to measure zero-shot capabilities, including Qwen3.5-4B [5] and InternVL3.5-4B [6].  
+
+> •
+
+Specialized VLMs: Vision-language models customized for enhanced document comprehension, though lacking specific optimization for multi-hop implicit derivation, including Eagle2.5-8B [8] and Qianfan-OCR [9].  
+
+> •
+
+Vision Reasoning Models: Multimodal reasoning mod-els optimized for open-ended, complex visual reasoning tasks (Vision-R1 [19] and StaR-KVQA [18]) evaluated to assess how general visual CoT capabilities transfer to schema-constrained implicit document extraction. 
+
+Implementation Details. We adopt Qwen3.5-4B [5] as our primary vision-language backbone due to its superior trade-off between deployment cost and baseline reasoning performance across vision-language tasks. To evaluate parameter scalability and architectural generalizability, we also conduct experiments using smaller Qwen3.5 variants (2B and 0.8B) as well as InternVL3.5-4B [6]. All models are trained under identical hyperparameter settings. 
+
+B. Main Results 
+
+As shown in Table I, DocMIDE achieves state-of-the-art performance across both synthetic and real-world im-age distributions. When applied to Qwen3.5-4B, our method reaches an overall accuracy of 95.9% , substantially outper-forming all competing baselines. Similarly, DocMIDE elevates                                                          
+
+> 2Implementation: https://github.com/VXRealLimited/DocMIDE; benchmark: https://github.com/VXRealLimited/DocMIDE-Benchmark.
+> 3https://huggingface.co/datasets/VXRealLimited/DocMIDE TABLE I PERFORMANCE ON MULTI -HOP IMPLICIT DERIVATION . B EST PERFORMANCE IS HIGHLIGHTED IN BOLD .
+> Model Synthetic Real Overall
+> Traditional OCR Pipelines
+> GLM-OCR [10] 32.9% 44.5% 36.1% BLOCKIE [15] 60.6% 68.6% 62.8%
+> Base VLMs
+> Qwen3.5-4B [5] 65.1% 85.5% 70.8% InternVL3.5-4B [6] 4.2% 37.6% 13.5%
+> Specialized VLMs
+> Eagle2.5-8B [8] 0.0% 21.5% 6.0% Qianfan-OCR [9] 34.4% 75.0% 45.7%
+> Vision Reasoning Models
+> Vision-R1 [19] 71.3% 76.6% 72.8% StaR-KVQA [18] 93.9% 30.3% 76.3%
+> Ours (DocMIDE)
+> Qwen3.5-4B 98.8% 88.2% 95.9%
+> InternVL3.5-4B 85.5% 74.9% 82.6%
+> TABLE II HELD -OUT OVERALL ACCURACY ACROSS QWEN 3.5 MODEL PARAMETER SCALES (0.8B TO 4B), COMPARING STANDARD FINE -TUNING (FT) WITH
+> DOC MIDE.
+> Model Size Untuned Base Standard FT Ours (DocMIDE) Qwen3.5-4B 70.8% 69.0% 95.9% Qwen3.5-2B 76.9% 54.0% 83.3% Qwen3.5-0.8B 63.6% 25.3% 72.3% InternVL3.5-4B 13.5% 54.2% 82.6%
+
+InternVL3.5-4B from 13.5% to 82.6% , demonstrating that our framework generalizes across underlying vision-language backbones to unlock multi-hop implicit derivation. Among non-adapted baselines, the Vision Reasoning Mod-els are strongest apart from our method: StaR-KVQA reaches 76.3% and Vision-R1 72.8% overall, ahead of the best Base VLM, Qwen3.5-4B, at 70.8%. In contrast, Specialized VLMs yield lower performance—such as Qianfan-OCR at 45.7% and Eagle2.5-8B at 6.0%—because they are tailored primarily for visual text extraction and layout recognition rather than multi-hop implicit derivation. Interestingly, some non-adapted baselines exhibit higher accuracy on real-world images than on synthetic ones (e.g., Qwen3.5-4B at 85.5% real vs. 65.1% synthetic). This stems from real-world documents having fixed, constrained layouts where the implicit derivation complexity are inherently lower. Conversely, DocMIDE experiences a slight drop on real-world images (98.8% synthetic to 88.2% real), primarily due to degraded source image quality that induces text recognition errors prior to derivation. Nevertheless, DocMIDE (Qwen3.5-4B) still achieves the highest accuracy on real-world images (88.2%). 
+
+C. Effectiveness of Proposed Training Scheme 
+
+In Table II, we evaluate the effectiveness of our training method against Standard FT across model parameter scales and architectures. As analyzed in Section IV, Standard FT is often ineffective and can even severely degrade baseline performance—most notably on Qwen3.5-0.8B, where overall accuracy drops precipitously from 63.6% down to 25.3%. 8                                         
+
+> TABLE III EVALUATION ON OUT -OF -DOMAIN BENCHMARKS : O MNI DOC BENCH [30] (0–100 SCALE ), C HART QAP RO [32], AND DOC VQA [31] VALIDATION SET . B EST PERFORMANCE IN EACH COLUMN IS HIGHLIGHTED IN BOLD .
+> Page Parsing Question Answering Model OmniDocBench ChartQAPro DocVQA
+> Traditional OCR Pipelines
+> GLM-OCR [10] 60.1 ––BLOCKIE [15] 44.3 42.0% 48.6%
+> Base VLMs
+> Qwen3.5-4B [5] 61.8 15.8% 81.9% InternVL3.5-4B [6] 76.2 30.2% 76.9%
+> Specialized VLMs
+> Eagle2.5-8B [8] 6.2 22.4% 28.2% Qianfan-OCR [9] 85.8 38.5% 80.6%
+> Vision Reasoning Models
+> Vision-R1 [19] 13.0 34.0% 91.7% StaR-KVQA [18] 77.2 38.9% 76.3%
+> Ours (DocMIDE)
+> Qwen3.5-4B 77.1 50.5% 92.7%
+> InternVL3.5-4B 70.2 26.6% 78.9%
+
+This degradation occurs because Standard FT provides target demonstrations without granular reward feedback on intermediate, partially correct reasoning steps. Qualitative in-spection reveals that while Standard FT models attempt CoT reasoning, they fail to break complex logic into atomic op-erations. For example, a Standard FT Qwen3.5-0.8B instance outputs: “Scanning the row totals, the Espresso ($2.50), Crois-sant ($3.25), Blueberry Muffin ($3.75), Iced Latte ($4.50), Oat Milk Carton ($1.25), and Chocolate Slice ($5.00) all add up to $20.00 directly.” Here, the model correctly identifies visual elements but attempts multi-item arithmetic in a single leap, resulting in calculation failure. In contrast, DocMIDE leverages explicit reward signals to guide the model through discrete, atomic derivation steps. By reinforcing each correct sub-step, DocMIDE prevents multi-step reasoning collapse and yields consistent performance improvements across all model scales, boosting Qwen3.5-0.8B to 72.3% and Qwen3.5-4B to 95.9%. 
+
+D. Trade-Off Analysis on Out-of-Domain Tasks 
+
+To verify whether specialized training incurs a trade-off on broader vision-language capabilities, we evaluate models on three unseen out-of-domain benchmarks (Table III). While out-of-domain optimization is not the primary focus of our work, this audit ensures that targeted derivation alignment does not induce severe catastrophic forgetting. For Qwen3.5-4B, DocMIDE not only avoids capability degradation but actually yields substantial positive transfer across general tasks, notably boosting performance on OmniDocBench (from 61.8 to 77.1), ChartQAPro (from 15.8% to 50.5%), and DocVQA (from 81.9% to 92.7%) — outperforming even the dedicated vision reasoning models on both question-answering benchmarks. When applied to InternVL3.5-4B, DocMIDE exhibits minimal trade-off: it retains strong performance on OmniDocBench (70.2 vs. 76.2 base) and ChartQAPro (26.6% vs. 30.2% base), while slightly improving on DocVQA (78.9% vs. 76.9% base).    
+
+> Fig. 6. Held-out overall accuracy across varying numbers of annotated training samples nusing DocMIDE on Qwen3.5-4B.
+
+E. Training Sample Efficiency 
+
+To determine minimum data requirements, we evaluate the sample efficiency of DocMIDE by scaling the number of annotated training samples n from 10 to 100 on Qwen3.5-4B (Figure 6). The results show that fine-tuning with as few as n = 10 samples raises overall accuracy from 70.8% to 81.0%, demonstrating immediate efficiency. Performance increases sharply up to n = 50 , where it achieves 95.9% accuracy, after which gains plateau ( 96 .4% at n = 100 ). These results confirm that the manual annotation effort re-quired by our framework is remarkably lightweight. Requiring only 50 labeled examples to reach peak performance makes our method easily adaptable to custom document domains without extensive data collection. VII. C ONCLUSION 
+
+In this paper, we presented DocMIDE, a lightweight fine-tuning framework that solves multi-hop implicit derivation in visually rich documents. By combining GRPO with a deter-ministic, four-component reward function, DocMIDE trains compact vision-language models ( ≤4B parameters) to explic-itly retrieve visual evidence before computing target values. Experiments show that DocMIDE significantly outperforms base VLMs, OCR pipelines, and standard fine-tuning methods while maintaining high sample efficiency. Overall, DocMIDE provides an effective foundation for verifiable visual rea-soning, laying the groundwork for extensions to multi-page documents and larger multimodal systems. 9
+
+REFERENCES [1] Z. Zhang, A. Zhang, M. Li, H. Zhao, G. Karypis, and A. Smola, “Multimodal chain-of-thought reasoning in language models,” Transactions on Machine Learning Research , 2024. [Online]. Available: https://openreview.net/forum?id=y1pPWFVfvR [2] P. Lu, H. Bansal, T. Xia, J. Liu, C. Li, H. Hajishirzi, H. Cheng, K.-W. Chang, M. Galley, and J. Gao, “MathVista: Evaluating mathematical reasoning of foundation models in visual contexts,” in International Conference on Learning Representations , vol. 2024, 2024, pp. 23 439– 23 554. [3] D. Rose, V. Himakunthala, A. Ouyang, R. He, A. Mei, Y. Lu, M. Saxon, C. Sonar, D. Mirza, and W. Y. Wang, “Visual chain of thought: bridging logical gaps with multimodal infillings,” arXiv preprint arXiv:2305.02317 , 2023. [4] Z. Shao, P. Wang, Q. Zhu, R. Xu, J. Song, X. Bi, H. Zhang, M. Zhang, Y. Li, Y. Wu et al. , “DeepSeekMath: Pushing the limits of mathematical reasoning in open language models,” arXiv preprint arXiv:2402.03300 ,2024. [5] Qwen Team, “Qwen3.5: Towards native multimodal agents,” https: //qwen.ai/blog?id=qwen3.5, 2026. [6] W. Wang, Z. Gao, L. Gu, H. Pu, L. Cui, X. Wei, Z. Liu, L. Jing, S. Ye, J. Shao et al. , “InternVL3.5: Advancing open-source multi-modal models in versatility, reasoning, and efficiency,” arXiv preprint arXiv:2508.18265 , 2025. [7] T. Yu, Z. Wang, C. Wang, F. Huang, W. Ma, Z. He, T. Cai, W. Chen, Y. Huang, R. Zhao et al. , “MiniCPM-V 4.5: Cooking efficient MLLMs via architecture, data, and training recipe,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2026, pp. 11 704–11 715. [8] G. Chen, Z. Li, S. Wang, J. Jiang, Y. Liu, L. Lu, D.-A. Huang, W. Byeon, M. Le, M. Ehrlich et al. , “Eagle 2.5: Boosting long-context post-training for frontier vision-language models,” Advances in Neural Information Processing Systems , vol. 38, pp. 91 077–91 100, 2026. [9] D. Dong, M. Zheng, D. Xu, C. Luo, B. Zhuang, Y. Li, R. He, H. Wang, W. Zhang, W. Wang et al. , “Qianfan-OCR: A unified end-to-end model for document intelligence,” arXiv preprint arXiv:2603.13398 , 2026. [10] S. Duan, Y. Xue, W. Wang, Z. Su, H. Liu, S. Yang, G. Gan, G. Wang, Z. Wang, S. Yan et al. , “GLM-OCR technical report,” arXiv preprint arXiv:2603.10910 , 2026. [11] H. Wu, H. Lou, X. Li, Z. Zhong, Z. Sun, P. Chen, X. Zhou, K. Zuo, Y. Chen, X. Tang et al. , “FireRED-OCR technical report,” arXiv preprint arXiv:2603.01840 , 2026. [12] H. Wei, Y. Sun, and Y. Li, “DeepSeek-OCR 2: Visual causal flow,” arXiv preprint arXiv:2601.20552 , 2026. [13] C. Cui, T. Sun, M. Lin, T. Gao, Y. Zhang, J. Liu, X. Wang, Z. Zhang, C. Zhou, H. Liu et al. , “PaddleOCR 3.0 technical report,” arXiv preprint arXiv:2507.05595 , 2025. [14] Y. Yin, H. Liu, Q. Xie, C. Liu, S. Yang, S. Wang, Z. Liu, H. Zou, J. Chen, S. Wei et al. , “Unlimited OCR works,” arXiv preprint arXiv:2606.23050 ,2026. [15] A. Bhattacharyya, A. Tripathi, U. Das, A. Karmakar, A. Pathak, and M. Gupta, “Information extraction from visually rich documents using LLM-based organization of documents into independent textual seg-ments,” in Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2025, pp. 17 241– 17 256. [16] Q. Liu, X. Geng, Y. Wang, E. Cambria, and D. Jiang, “Disentangled retrieval and reasoning for implicit question answering,” IEEE Trans-actions on Neural Networks and Learning Systems , vol. 35, no. 6, pp. 7804–7815, 2022. [17] S. Swetha, R. Gupta, P. P. Kulkarni, D. G. Shatwell, J. A Chan Santiago, N. Siddiqui, J. Fioresi, and M. Shah, “VRR-QA: Visual relational rea-soning in videos beyond explicit cues,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2026, pp. 32 840–32 849. [18] Z. Wen, W. Wei, Y. Fang, X. Yu, H. Zhang, W. Zhu, and X. Zhang, “StaR-KVQA: Structured reasoning traces for implicit-knowledge visual question answering,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2026, pp. 5114–5124. [19] W. Huang, B. Jia, S. Cao, Z. Ye, Z. Xu, Y. Hu, S. Lin et al. , “Vision-R1: Incentivizing reasoning capability in multimodal large language models,” in International Conference on Learning Representations , 2026, pp. 63 794–63 812. [20] Š. Šimsa, M. Šulc, M. Uˇ riˇ cáˇ r, Y. Patel, A. Hamdi, M. Kocián, M. Skalick` y, J. Matas, A. Doucet, M. Coustaty et al. , “DocILE benchmark for document information localization and extraction,” arXiv preprint arXiv:2302.05658 , 2023. [21] Y. Xu, T. Lv, L. Cui, G. Wang, Y. Lu, D. Florencio, C. Zhang, and F. Wei, “XFUND: A benchmark dataset for multilingual visually rich form understanding,” in Findings of the Association for Computational Linguistics: ACL 2022 , 2022, pp. 3214–3224. [22] J. Ma, Y. Wang, C. Liu, J. Du, Y. Hu, Z. Zhang, P. Hu, Q. Wang, and J. Zhang, “SRFUND: A multi-granularity hierarchical structure reconstruction benchmark in form understanding,” Advances in Neural Information Processing Systems , vol. 37, pp. 112 411–112 432, 2024. [23] J. Wang, C. Liu, L. Jin, G. Tang, J. Zhang, S. Zhang, Q. Wang, Y. Wu, and M. Cai, “Towards robust visual information extraction in real world: New dataset and novel solution,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 35, no. 4, 2021, pp. 2738–2745. [24] L. Fu, Z. Kuang, J. Song, M. Huang, B. Yang, Y. Li, L. Zhu, Q. Luo, X. Wang, H. Lu et al. , “OCRBench v2: An improved benchmark for evaluating large multimodal models on visual text localization and reasoning,” Advances in Neural Information Processing Systems , vol. 38, 2026. [25] Z. Yang, J. Tang, Z. Li, P. Wang, J. Wan, H. Zhong, X. Liu, M. Yang, P. Wang, S. Bai et al. , “CC-OCR: A comprehensive and challenging OCR benchmark for evaluating large multimodal models in literacy,” in 
+
+2025 IEEE/CVF International Conference on Computer Vision (ICCV) .IEEE, 2025, pp. 21 744–21 754. [26] F. Zhu, Z. Liu, N. X. Yao, H. Wu, W. Wang, F. Feng, C. Wang, H. Luan, and T.-S. Chua, “MMDocBench: Benchmarking large vision-language models for fine-grained visual document understanding and grounding,” in International Conference on Multimedia Modeling . Springer, 2026, pp. 74–88. [27] F. Zhu, W. Lei, F. Feng, C. Wang, H. Zhang, and T.-S. Chua, “Towards complex document understanding by discrete reasoning,” in Proceedings of the 30th ACM International Conference on Multimedia , 2022, pp. 4857–4866. [28] Z. Chen, W. Chen, C. Smiley, S. Shah, I. Borova, D. Langdon, R. Moussa, M. Beane, T.-H. Huang, B. R. Routledge et al. , “FinQA: A dataset of numerical reasoning over financial data,” in Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing , 2021, pp. 3697–3711. [29] Y. Zhao, Y. Long, H. Liu, R. Kamoi, L. Nan, L. Chen, Y. Liu, X. Tang, R. Zhang, and A. Cohan, “DocMath-Eval: Evaluating math reasoning capabilities of LLMs in understanding long and specialized documents,” in Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2024, pp. 16 103– 16 120. [30] L. Ouyang, Y. Qu, H. Zhou, J. Zhu, R. Zhang, Q. Lin, B. Wang, Z. Zhao, M. Jiang, X. Zhao et al. , “OmniDocBench: Benchmarking diverse PDF document parsing with comprehensive annotations,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2025, pp. 24 838–24 848. [31] M. Mathew, D. Karatzas, and C. Jawahar, “DocVQA: A dataset for VQA on document images,” in 2021 IEEE Winter Conference on Applications of Computer Vision (WACV) . IEEE, 2021, pp. 2199–2208. [32] A. Masry, M. S. Islam, M. Ahmed, A. Bajaj, F. Kabir, A. Kartha, M. T. R. Laskar, M. Rahman, S. Rahman, M. Shahmohammadi et al. ,“ChartQAPro: A more diverse and challenging benchmark for chart question answering,” in Findings of the Association for Computational Linguistics: ACL 2025 , 2025, pp. 19 123–19 151. [33] Y. Ji, Z. Xu, Z. Liu, Z. Chen, Q. Zhang, Z. Yang, J. Lin, Y. Gu, G. Yu, and M. Sun, “UniKIE-Bench: Benchmarking large multimodal models for key information extraction in visual documents,” in Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2026, pp. 6331–6352. [34] M. Cao, H. Zhao, C. Zhang, X. Chang, I. Reid, and X. Liang, “Ground-R1: Incentivizing grounded visual reasoning via reinforcement learning,” 
+
+arXiv preprint arXiv:2505.20272 , 2025. [35] A. Masry, A. Puri, M. Hashemi, J. A. Rodriguez, M. Thakkar, K. Ma-hajan, V. Yadav, S. T. Madhusudhan, A. Piché, D. Bahdanau et al. ,“BigCharts-R1: Enhanced chart reasoning with visual reinforcement finetuning,” arXiv preprint arXiv:2508.09804 , 2025. [36] E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, and W. Chen, “LoRA: Low-rank adaptation of large language models,” 
+
+arXiv preprint arXiv:2106.09685 , 2021. 10 
+
+APPENDIX AIS THE STANDARD FINE -T UNING BASELINE 
+
+UNDERTRAINED ?The standard fine-tuning baseline reported in Table II is trained on the same 50 exemplars as DocMIDE, so that the two differ only in training scheme and not in supervision budget. This raises an obvious objection: the baseline may simply be undertrained, and its failure on multi-hop derivation may reflect a shortage of demonstrations rather than a limitation of demonstration-only supervision. To test this, we fine-tune Qwen3.5-4B on the full pool of 200 verified exemplars under an otherwise identical recipe and evaluate on the same 4,151-pair benchmark.              
+
+> TABLE IV STANDARD FINE -TUNING OF QWEN 3.5-4B AT TWO SUPERVISION BUDGETS ,EVALUATED ON THE SAME 4,151-PAIR BENCHMARK .QUADRUPLING THE NUMBER OF VERIFIED EXEMPLARS DOES NOT RECOVER MULTI -HOP DERIVATION .
+> Training exemplars Synthetic Real Overall 50 (used in Table II) 63.6% 83.2% 69.0% 200 (full pool) 62.9% 83.8% 68.7%
+
+Table IV shows that quadrupling the supervision changes almost nothing. Overall accuracy moves from 69.0% to 68.7%. The two splits behave the same way: synthetic accuracy is flat (63.6% to 62.9%) and real accuracy shifts by half a point (83.2% to 83.8%). Every one of these gaps is smaller than the run-to-run spread visible in the sample-efficiency sweep of Figure 6, so we read the curve as flat rather than as evidence of a small gain or loss. The failure is also unchanged in kind, not merely in magni-tude. Under the 200 -exemplar budget the model still collapses specifically on the derivations that require the longest operator chains: accuracy on the long-summation subset of the synthetic split is 26 .3% , against 92 .5% on the category-aggregation subset, whose chains are short. This is the step-skipping mode of Section IV reproduced at four times the data: the model reads the operands correctly and then asserts a long total in a single leap. Additional demonstrations of the correct trace format do not teach the model to execute the chain, because nothing in the supervised objective distinguishes a trace that carries out every intermediate step from one that skips to a plausible endpoint. Rewarding the intermediate steps directly, as in Section V-C, is what closes the gap.
