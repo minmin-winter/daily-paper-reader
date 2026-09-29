@@ -1,0 +1,416 @@
+Title: Signal or Noise? Modality Contribution and Cooperation in Multimodal GraphRAG
+
+URL Source: https://arxiv.org/pdf/2609.35304v1
+
+Published Time: Tue, 29 Sep 2026 04:33:32 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Signal or Noise? Modality Contribution and Cooperation in Multimodal GraphRAG 
+
+## Antonios Georgakopoulos a,∗, Paul Groth a and Lise Stork a
+
+> a
+
+University of Amsterdam, Amsterdam, The Netherlands 
+
+A R T I C L E I N F O 
+
+Keywords :Multimodal Knowledge Graphs Document Visual Question Answering Modality Contribution Analysis Shapley Values Modality-Aware Reasoning 
+
+A B S T R A C T 
+
+Multimodal knowledge graphs (KGs) integrate information from text, figures, tables, and other modalities into a unified structured representation, with the promise that richer evidence enables better inference. In GraphRAG systems built over such graphs, it is commonly assumed that retrieving evidence from more modalities at inference time improves downstream performance. Yet, redundant or overlapping multimodal evidence may distract language models in question answering (QA), and whether each modality contributes equally across questions, models, and tasks remains poorly understood. In this work, we study how modality-aware retrieval affects downstream inference in a multimodal GraphRAG pipeline, using document visual question answering (DocVQA) as a testbed. We extend an existing KG-based QA framework to be modality-aware, leveraging the graph structure to track which modality supports which facts and to selectively filter evidence at the edge level. This enables us to investigate whether providing all available multimodal evidence at inference time benefits QA, and to evaluate the contribution and cooperation of modalities across question, task, and model characteristics. Through a controlled analysis within a state-of-the-art multimodal GraphRAG pipeline, five multimodal LLMs and two DocVQA benchmarks, we find that tables and text provide the strongest contributions, and that combining modalities frequently produces redundancy rather than synergy, particularly for pairs involving textual information. Positive cooperation appears mainly between non-text modalities and depends on question intent and task type. Our findings argue for selective, modality-aware retrieval in the design of more effective GraphRAG systems, where modalities are filtered according to the downstream task rather than retrieved uniformly. 
+
+## 1. Introduction 
+
+GraphRAG systems increasingly leverage multimodal knowledge graphs (KGs) that integrate information from text and other modalities into a unified representation for retrieval and inference [4]. A common assumption in these systems is that incorporating additional modalities improves downstream performance [29, 27, 40, 31]. However, the individual contributions of different modalities on the down-stream task, as well as whether they provide complementary or redundant evidence during inference, remain underex-plored. Prior work in multimodal learning has investigated modality dominance, robustness, and modality collapse [10, 21, 17]. In multimodal RAG, recent benchmarks such as mm-RAG [37] enable modality-specific evaluation, and several studies report that combining heterogeneous evidence im-proves QA performance [29, 27, 40, 31]. Nevertheless, most existing analyses rely on modality ablation experiments, which provide limited insight into how modalities interact during inference across different models, domains, question intents, and reasoning tasks. Understanding modality inter-actions is important because each modality may contribute distinct forms of evidence during question answering. For example, medical images may capture visual indicators of disease [35, 36], while tables may better encode structured quantitative information in financial QA [41]. Similarly, 
+
+> ∗
+
+Corresponding author  
+
+> a.georgakopoulos@uva.nl
+
+( Antonios Georgakopoulos);  
+
+> p.t.groth@uva.nl
+
+( Paul Groth); l.stork@uva.nl ( Lise Stork) 
+
+> ORCID
+
+(s): 0000-0003-0183-6910 ( Paul Groth); 0000-0002-2146-4803 (Lise Stork) 
+
+the usefulness of a modality may depend on the question type: verification questions may rely primarily on textual evidence, whereas calculation or counting questions may benefit more from tabular or visual information. Multimodal GraphRAG systems provide a useful setting for studying these interactions because they represent evidence from different modalities as interconnected graph entities and relations. This graph structure makes it possible to trace which modalities support individual facts and to analyse how modality specific evidence contributes to downstream retrieval and question answering. Such an analysis has direct implications for GraphRAG: it can show when evidence from multiple modalities is beneficial, and when additional modalities provide little or even negative value. Therefore, our contributions are as follows: 1. We propose an extention to a state-of-the-art multi-modal GraphRAG system that allows for the tracing of each KG triple back to the specific modality (and part of the document) that it was extracted from. 2. We propose a modality contribution evaluation frame-work that tests modality configurations, using Shapley Value-based metrics that describe: (1) how much each modality contributes to the overall performance, and (2) if the modalities provide a synergistic or redundant effect. 3. We perform an analysis using two DocVQA bench-marks and five multimodal LLMs to understand how different modalities and modality combinations im-pact question-answering performance across question intents, task types, and inference models. 
+
+A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 1 of 15 arXiv:2609.35304v1 [cs.IR] 28 Sep 2026 Signal or Noise?  
+
+> Figure 1: Overview of our modality-aware multimodal QA framework.
+
+## 2. Related Work 
+
+RAG systems augment LLMs [16] with information re-trieved from external knowledge sources, while multimodal RAG extends this paradigm to multimodal data [6]. 
+
+2.1. Modality contributions in multimodal RAG. 
+
+Prior work has shown that combining modalities often improves retrieval and QA performance. Riedler et al. [29], Peng et al. [27], and VisDoM [31] report that multimodal retrieval generally outperforms unimodal settings. CM-RAG [7] shows that the advantages of multimodal retrieval depend on how the modalities are combined. The authors find that naively combining textual and visual information performs worse then using a single modality. VisRAG [39] introduces a RAG pipeline that utilises a VLM to read document pages directly and perform retrieval and answer generation. This VLM-based RAG approach outperforms text-based RAG pipelines on answer generation. Recent multimodal GraphRAG approaches further suggest syn-ergistic effects between modalities. For example, Bu et al. [4] show that combining visual evidence and tabular relationship mining yields larger gains than using either indi-vidually. Similarly, Yuan et al. [40] introduce a multimodal GraphRAG approach that aligns text and image content in the same graph and outperforms text-only and vision-only variants of the same pipeline. 
+
+2.2. Modality robustness in multimodal learning. 
+
+Several works study modality reliability and dominance in multimodal models. Mai et al. [21] show that reweighting modalities based on reliability improves robustness, while Liang et al. [17] demonstrate that modality separation in embedding spaces affects downstream performance. Gapp et al. [10] further show that some multimodal architectures rely predominantly on a single modality. Another study, by Wang et al. [33], shows that in logical reasoning tasks using a second modality helps only when the modality can provide useful information about the answer, otherwise performance often degrades. Peng et al. [28] demonstrate that the domi-nance that a modality can have in a multimodal setting may arise during training. Specifically, the modality that learns faster can absorb the shared gradient and leave the other modality under-trained. Wei et al. [34] show that dominance of a modality varies across samples in the dataset, and so methods that correct imbalance on the dataset-level can fail when the dominant modality differs from sample to sample. 
+
+2.3. Metrics for modality contribution analysis. 
+
+Prior work has proposed methods for quantifying modal-ity importance and interactions. MMSHAP [25] uses Shap-ley values to measure modality contribution and multimodal collapse. Amit et al. [1] argue that standard ablations conflate importance and interaction effects, and propose a partial information decomposition (PID) framework to separate unique, redundant, and synergistic contributions. Yang et al. [38] also introduce a PID method that studies the inter-actions on the sample level, showing that how modalities interact varies across samples. Gat et al. [11] introduce the perceptual score that measures how much a model re-lies on each modality by permuting that modality during test time and observing how much the performance drops. The authors in [34] use a Shapley value-based metric to evaluate the contribution of each modality for each sample of the dataset. SHAPE [14] metric uses Shapley values to quantify both marginal modality contribution and cross-modal cooperation. We adopt SHAPE in this work because it captures both individual modality importance and modality interactions. Despite growing interest in multimodal RAG, most prior work evaluates modality effects through retrieval compar-isons or ablations, in which a modality is removed and the resulting change in performance is reported. These ablations measure the gain in performance from a modality in the presence of the other modalities, giving us a single num-ber. This number combines the usefulness of the modality with its interaction with the remaining modalities. SHAPE however evaluates each modality under all combinations of   
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 2 of 15 Signal or Noise?
+
+the available modalities and provides two separate quantities from them. The first is a contribution score that averages the gain provided by the modality with and without the other modalities present. The second is a cooperation score which captures if the joint use of the modalities yields more than the sum of their individual contributions. Therefore, ablation-based studies provide limited insights into whether modal-ities contribute complementary or redundant evidence. A large performance drop when a modality is removed may indicate either that the modality carried unique information or that it was only useful in combination with another modality. Our work addresses this gap by analyzing modality contributions and cooperation in multimodal GraphRAG systems using SHAPE [14]. 
+
+## 3. Task Definition 
+
+Let  be a collection of documents. Each document 
+
+𝑑 ∈  contains content from multiple modalities. We denote the set of modalities by  = { text , table , image , layout }.Each document is represented as a multimodal knowledge graph 
+
+𝐺 𝑑 = ( 𝑉 𝑑 , 𝐸 𝑑 )
+
+where 𝑉 𝑑 is the set of nodes, corresponding to elements in the document content, and associated with a modality label 
+
+𝑚 ∈  corresponding to the type of content, and 𝐸 𝑑 refers to the set of edges. We define the task of modality-aware question answer-ing , where inference is conditioned on a subset of modalities in multimodal knowledge graph 𝐺 𝑑 . Given a question 𝑞 
+
+about a document 𝑑 , the goal is to produce an answer 𝑎 
+
+by retrieval and inference over 𝑑 scoped by a subset of the graph 𝐺 𝑑 . In a modality-aware setting, retrieval for question answering is constrained to a subset of modalities 𝑀 ⊆ .To enable modality-specific retrieval, we associate each fact in the graph, i.e. each edge (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) ∈ 𝐸 𝑑 , with the set of modalities of the document content from which it was extracted. 
+
+## 4. Modality-Aware Framework 
+
+We build on an existing state-of-the-art KG-based ques-tion answering framework and extend it to support modality-aware retrieval and analysis, see Figure 1. Our approach introduces modality-aware provenance tracking and uses it to constrain retrieval during question answering. 
+
+Modality Tracking: We add a mechanism to track which modality supports each fact represented in the graph. More specifically, for each edge (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) on the graph we define an evidence set 𝑑 (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) ⊆ 𝑋 𝑑 as the chunks from which the edge was extracted, where 𝑋 𝑑 = { 𝑥 1, … , 𝑥 𝑁 } denotes the set of all chunks in document 𝑑 . Since each chunk 𝑥 𝑖 
+
+is associated with a modality label 𝑚 (𝑥 𝑖 ), we define the modality set for this edge as: 
+
+𝑀 𝑑 (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) = { 𝑚 (𝑥 𝑖 ) ∣ 𝑥 𝑖 ∈ 𝑑 (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) } 
+
+This gives each edge a modality provenance record, allowing us to filter graph edges based on the modalities of their supporting evidence. 
+
+Modality-Aware Retrieval: To analyse modality-aware question answering, we answer each question 𝑞 by query-ing 𝐺 𝑑 under different modality subsets 𝑀 ⊆ . For a given modality subset 𝑀 ⊆ , we restrict the graph to edges (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) ∈ 𝐸 𝑑 whose supporting modalities satisfy 
+
+𝑀 𝑑 (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) ∩ 𝑀 ≠ ∅. For each retained edge we collect the subset of its evidence set 𝑑 (𝑒 𝑠 , 𝑟, 𝑒 𝑡 ) drawn from those modalities, so a fact supported by several modalities is kept, but only its chunks from 𝑀 are used. The context c 𝑞,𝑀 
+
+is formed from the retained edges, specifically the entities and relations whose supporting evidence falls within the supporting evidence, together with their supporting chunks. A large language model (LLM) is then prompted with this context to answer question 𝑞 .
+
+## 5. Experimental Setup 
+
+We now discuss our experimental setup beginning with the GraphRAG QA system and the associated LLMs used. We then describe the benchmarks employed and how we categorise questions. Lastly, evaluation metrics and the anal-yses we perform are then detailed. 
+
+5.1. GraphRAG QA System 
+
+In this work, we employ the RAG-Anything pipeline [12] as our graph-based multimodal RAG framework, as it achieves state-of-the-art performance on multimodal document ques-tion answering benchmarks. However, our framework is model-agnostic and can be applied to other GraphRAG QA systems. RAG-Anything constructs the graph in two stages: (1) decomposing the document into modality-specific con-tent units, each carrying a modality label, and (2) extracting entities and relations from these units to build a unified knowledge graph. We modify the graph construction stage of the pipeline so that modality-aware provenance is recorded on the edges of the graph. This enables our modality-specific retrieval, as follows. Given a modality subset 𝑀 , we restrict 
+
+𝐺 𝑑 to the edges whose supporting modalities intersect 𝑀 
+
+and collect their supporting chunks of those modalities. These chunks are then ranked by the embedding similarity of their content to the question 𝑞 , and the top-k form the context c 𝑞,𝑀 . An MLLM is then used to construct an answer 
+
+𝑎 , given the context. 
+
+5.2. LLMs for Answer Generation 
+
+For answer generation, we evaluate five multimodal LLMs with different model families and numbers of pa-rameters. Specifically, we employ GPT-4o-mini [22], two Qwen3-VL [3] models with 8B and 30B parameters, and two Gemma 3 [32] models with 4B and 27B parameters. This selection allows us to compare modality contribution and cooperation patterns across both proprietary and open-weight models, as well as across smaller and larger model variants within the same family. These five models are used as the answer-generation models in our QA pipeline.   
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 3 of 15
+
+Signal or Noise? 
+
+Table 1 
+
+Number of retained two-modality questions per benchmark and modality pair.                         
+
+> Modality Pair LongDocURL MMLongBench-Doc Total Image + Layout 34 47 81 Image + Table 164 16 180 Image + Text 152 92 244 Layout + Table 150 9159 Layout + Text 280 16 296 Table + Text 55 36 91 Total 835 216 1,051
+
+For the retrieval component, we use text-embedding-3-large to compute embeddings for both document chunks and questions, which are then used for similarity search over the vector database. 
+
+5.3. DocVQA Benchmarks 
+
+Experiments are conducted using two DocVQA bench-marks: (1) the MMLongBench-Doc [20] and (2) Long-DocURL [9]. Both benchmarks are long-context multimodal document understanding benchmarks that contain multi-page documents from diverse domains, with information distributed across text, figures, and tables. We select these benchmarks as they provide gold-standard annotations of the modalities required to answer each question. This is essential for our analysis, as we evaluate how the answer of a question changes when restricting the retrieved evidence to subsets of the modalities required for the question. The two benchmarks together contain 327 documents spanning multiple domains, such as research reports, financial reports, brochures, etc. Documents vary substantially in length and structure, and many questions require cross-page reasoning. The evidence sources in MMLongBench-Doc include 
+
+Pure-text, Generalized-text (Layout), Chart, Figure , and Ta-ble , whereas for LongDocURL the evidence sources include 
+
+Text, Layout, Figure , and Table . Since both benchmarks use closely related modality definitions, we map them into a shared modality space consisting of Text, Layout, Image , and 
+
+Table . For MMLongBench-Doc, we thus merge Chart and 
+
+Figure into the Image modality, since both correspond to vi-sual evidence. For LongDocURL, we treat Figure as Image ,allowing us to maintain a consistent modality convention across benchmarks. For each question, the gold modality set 
+
+𝑀 gold (𝑞 ) is constructed using this mapping. For our experiments, we focus on questions whose gold modality set contains exactly two modalities, resulting in 1,051 questions. This decision enables controlled evaluation by comparing performance across all non-empty modality subsets 𝑀 ⊆ 𝑀 gold (𝑞 ). Questions whose evidence is found only on a single modality are excluded, as they do not permit measuring how modalities interact. In both benchmarks only a small number of questions, 41 in total, have three supporting modalities, but these are too sparse to analyse reliably as the largest three-modality subgroup contains only 26 questions. We therefore restrict the analysis to the two-modality case. Each question is evaluated under all three non-empty subsets of its gold modality set and across all five MLLMs, resulting in a total of 1, 051 × 3 × 5 =15 , 765 question-answering runs. Table 1 shows the number of retained questions and their corresponding modalities for each benchmark. 
+
+5.4. Question Intent Taxonomy 
+
+To classify benchmark questions according to intent (wording + what a question intends to ask), we adopt a web search question intent taxonomy [5] as a proxy for our setting. This taxonomy was designed for natural-language questions, and constructed based on real user questions. Although DocVQA and web search are different tasks, both tasks involve questions that seek information and must be grounded in external evidence. Rose and Levinson [30], for example, argue that searching is a means of satisfying an underlying user goal and organize search goals around what the user is trying to accomplish. Table 2 lists the intent categories that we used for our analysis as offered by the taxonomy. We map every benchmark question to each category from the Intent Taxonomy. To do this we follow a zero-shot intent classification prompting approach [26], which has been shown to perform competitively on this task, and use the GPT-5 model [23] for classifying all questions. To judge the quality of these annotations, we use two frontier LLM models, GPT-5.5 [24] and Claude Opus 4.7 [2], to act as judges and validate the annotations. They either agree with the given label, or propose an alternative one from the taxonomy. We change the label of a question only when both judges agree on the proposed label. The prompts of both the intent classification and the judging step can be found in our GitHub repository 12 . To quantify agreement between the two LLM judges, we compute Cohen’s kappa coefficient which measures the inter-annotator agreement for categorical labels [8]. Alignment between the judges was high, with Cohen’s 𝑘𝑎𝑝𝑝𝑎 = 0.87 , and a raw agreement of 90 .1% . GPT-5.5 flagged 97 out of 1,051 questions, and Opus 4.7 146 questions, with both models identifying the same 73 questions. Of those questions, the models agreed on the replacement intent of 66 questions, and these consensus revisions were applied. We report main agreement statistics in Table 3 and provide the full confusion matrix between the two LLM judges in Figure 2. 
+
+5.5. Evaluation Metrics 
+
+5.5.1. Answer Accuracy 
+
+We first evaluate generated answers using the accuracy metric as defined in the benchmarks. This produces a per-question score 𝑣 .
+
+> 1https://github.com/Antonis-Georgakopoulos/ mmkg-modality-analysis/blob/main/question_intent_analysis/question_ intent_classification/prompt.txt
+> 2https://github.com/Antonis-Georgakopoulos/ mmkg-modality-analysis/blob/main/question_intent_analysis/question_ intent_classification/judge_prompt.txt
+
+A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 4 of 15 Signal or Noise? 
+
+Table 2 
+
+Intent categories from the question intent taxonomy [5]. 
+
+Type Description Type Description 
+
+Description This category covers mostly “what is X” or “what is X of Y” questions, where the user aims to obtain a definition or description of an object or one of its attributes. Quantity These questions expect a numeric value as answer (e.g., price, frequency, duration, speed, age, length, weight) Process These are typically “how to do X” questions that seek instructions, guidelines, or procedures which will facilitate an action to be performed by the user in real life. Entity The expected answer to a question in this category is a named entity, excluding numeric entities. Advice This category includes questions where the user aims to obtain personal advice on a particular topic. The Advice category differs from Process in that the former expects a somewhat subjective recommendation, whereas the latter expects an objective, step-by-step process description. Language These questions usually provide a name or description, and the expected answer is another name or object (e.g., “how is X called”, “what is X in the Y language”). Questions seeking a named entity as answer are excluded. Opinion These are questions seeking to get a subjective opinion about a topic of interest (e.g., “what do you think about X” or “is X good/bad”). This class excludes Advice questions, where the subject is the user issuing the question. Temporal These are typically the “when is X” questions, which expect to obtain a date or time of an event as answer. Verification These are fact-checking questions that seek an affirmative yes/no answer which cannot be disputed. List The expected answer is an itemized list whose items can have any type (e.g., entity, quantity, or a mix). For example, “which countries won the world cup” is a List question. Attribute “what is Y of X” questions that seek a particular property of a given named entity are in this category. We exclude questions whose answers are named entities to avoid a possible overlap with the Quantity and Entity categories. Calculation These are questions aiming to use the search engine as a calculator for arithmetic operations or unit conversion. Similar to the Quantity category, the expected answer is a numeric value, but the Calculation category contains one or more numeric values as input in the question. Reason The expected answer to these questions include an expla-nation of causes underlying a certain action or event. Most questions of type “why is/do X Y” are in this category. Weather These are questions about weather forecast. Location These are typically “where is X” questions that seek the position, address, or location of a given object or entity. The answers are not limited to geo-locations. For example, “where is X in human body” falls in this category. Resource Non-informational questions where the goal is to obtain an online or offline resource are in this category, excluding questions with Calculation and Weather intent 
+
+Table 3 
+
+Agreement between two LLM judges during question intent-label validation. 
+
+Measure / outcome Value 
+
+Total questions 1,051 Final-label agreement 947 / 1,051 (90.1%) Cohen’s 𝜅 0.8719 
+
+Decision on initial annotation 
+
+Both judges accepted the initial annotation 881 Only GPT-5.5 suggested a change 24 Only Claude Opus 4.7 suggested a change 73 Both judges suggested a change 73 
+
+Agreement when both judges suggested a change 
+
+Same replacement intent 66 / 73 (90.4%) Different replacement intent 7 / 73 (9.6%) 
+
+5.5.2. SHAPE Metric 
+
+To quantify modality contributions, we adopt the SHAPE metric [14], a Shapley value-based evaluation metric. Let 
+
+𝑉 (𝑀 ) denote the aggregated performance over a set of questions when the system is restricted to using modalities in 𝑀 ⊆ . SHAPE computes the marginal contribution of each modality to the performance function 𝑉 , and the degree of cross-modal cooperation between modalities. 
+
+Modality contribution 𝑆 . Following the SHAPE metric, the contribution 𝑆 of modality 𝑚 1 is defined as: 
+
+𝑆 𝑚 1 = 12 ⋅ 𝑉 ({ 𝑚 1, 𝑚 2}) − 𝑉 ({ 𝑚 2}) + 𝑉 ({ 𝑚 1}) − 𝑉 (∅) 
+
+𝑍 𝑓 
+
+where 𝑍 𝑓 = 𝑉 (𝑚 1, 𝑚 2) is the normalization factor. 
+
+Figure 2: Confusion matrix comparing the final intent labels assigned by GPT-5.5 and Claude Opus 4.7 during the judging stage. Rows correspond to GPT-5.5 labels and columns corre-spond to Claude Opus 4.7 labels. 
+
+Cross-modal cooperation 𝐶 . The cooperation between modalities 𝑚 1 and 𝑚 2 is defined as: 
+
+𝐶 {𝑚 1,𝑚 2} = 𝑉 ({ 𝑚 1, 𝑚 2}) − 𝑉 ({ 𝑚 1}) − 𝑉 ({ 𝑚 2}) + 𝑉 (∅) .
+
+A positive cooperation score indicates complementary behaviour, where the joint use of the modalities yields higher performance than the sum of their individual contributions. 
+
+A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 5 of 15 Signal or Noise? 
+
+A score close to zero suggests additive behaviour with lim-ited interaction. A negative cooperation score indicates re-dundancy or interference, where the combined performance is lower than the sum of the individual contributions. 
+
+Baseline value 𝑉 (∅) . Both formulas require a baseline value 𝑉 (∅) , which is the performance that we get when no modality evidence is available. SHAPE metric uses a majority-class predictor as this baseline compared to null inputs, so we adopt the same approach for generative QA. For each modality group we take the most frequent gold answer among the group’s questions, predict it for every question in the group, and score according to the evaluation of each benchmark. 
+
+Contribution score difference 𝐷 . We report the pairwise contribution difference as: 
+
+𝐷 𝑆 𝑚 2 ,𝑆 𝑚 1
+
+= 𝑆 𝑚 2 − 𝑆 𝑚 1 ,
+
+where 𝑆 𝑚 1 and 𝑆 𝑚 2 are the SHAPE contribution scores of the two modalities in a pair. This value allows us to ask whether, for a given pair, one modality consistently contributes more to the task performance than the other. Positive values of 𝐷 
+
+indicate that 𝑚 2 contributes more than 𝑚 1, while negative values indicate the opposite. 
+
+5.5.3. Bootstrap Sampling Schemes 
+
+We use bootstrapping to quantify uncertainty and assess variability across different data samples, and employ the following main and additional bootstrapping schemes: 1. Stratified bootstrapping resampling (main): , strat-ified resampling which preserves modality group dis-tribution within each benchmark; 2. Modality pair-only stratified bootstrapping: strati-fied resampling within each modality group, pooling questions across benchmarks; 3. Unstratified bootstrapping: resampling from the fully pooled set of questions, ignoring both benchmark and modality-group structure. In all analyses, we use bootstrap resampling with re-placement and report percentile-based 95% confidence inter-vals. We draw 100,000 bootstrap samples, shared across all models to ensure fair comparisons. We additionally report the mean pairwise Spearman correlation ̄ 𝜌𝑠 across boot-strap samples and the cross-model mean 𝜇 . All bootstrap results in Section 6.1 report the main sampling scheme, since additional bootstrap schemes produced largely consistent confidence intervals, indicating robustness to the sampling strategy. 
+
+5.6. Experimental Analyses 
+
+To understand modality-aware behavior, we perform the following analyses: 1. Overall Performance We report performance scores across all questions, benchmarks and models. These performance scores provide a reference for the SHAPE                                                                               
+
+> Table 4
+> Total accuracy (%) and accuracy by modality group across benchmarks.The value 𝑛 denotes the number of evaluated questions in each modality group. We use the following model abbreviations: G3-27B = Gemma3-27B, G3-4B = Gemma3-4B, GPT = GPT-4o-mini, Q3-30B = Qwen3-VL-30B, and Q3-8B = Qwen3-VL-8B.
+> LongDocURL Modality Group 𝑛 G3-27B G3-4B GPT Q3-30B Q3-8B Image + Layout 34 23.34 26.74 45.36 54.90 50.21 Image + Text 152 41.13 28.10 52.77 59.14 58.10 Image + Table 164 13.97 6.86 33.41 37.95 39.05 Layout + Text 280 34.86 22.25 47.28 43.64 49.81 Layout + Table 150 17.69 12.71 32.29 35.57 37.10 Text + Table 55 50.10 28.23 64.51 78.40 74.39
+> Overall 835 29.35 19.15 43.92 46.64 48.56
+> MMLongBench-Doc Modality Group 𝑛 G3-27B G3-4B GPT Q3-30B Q3-8B Image + Layout 47 14.54 8.51 14.18 14.47 8.51 Image + Text 92 18.48 13.94 23.45 26.18 21.26 Image + Table 16 25.00 3.61 18.75 12.50 3.47 Layout + Text 16 25.00 6.25 31.25 43.75 31.25 Layout + Table 911.11 19.66 11.11 33.33 11.11 Text + Table 36 36.11 22.22 50.23 33.33 29.34
+> Overall 216 21.22 13.04 25.61 25.41 18.83
+
+analysis, as the SHAPE scores should be considered in context of overall model performance. 2. Model Comparison We compare contribution 𝑆 and cooperation 𝐶 scores across different LLMs to as-sess how model choice affects the utilization of in-formation from different modalities. For robustness, all aggregate comparisons use bootstrap confidence intervals as described in Section 5.5; 3. Question-Type Analysis We compare contribution 𝑆 
+
+and cooperation 𝐶 scores across different question types to understand how modality contributions vary with question intent (see Section 5.4 for a description of our question classification method and taxonomy) and the processes it requires to answer it ( process type ). 
+
+## 6. Results 
+
+We first produce per-question scores 𝑣 , as a basis for our SHAPE (contribution and cooperation) analyses. The per-benchmark and per-model accuracy scores can be found in Table 4. Results regarding the absolute accuracy differ between the benchmarks, however analysing the observed differences in accuracy is beyond the scope of this work. 
+
+6.1. Analysis by LLM Model 
+
+6.1.1. Descriptive Overview 
+
+To compare modality contribution ( 𝑆 ) and coopera-tion ( 𝐶 ) across models, we macro-average results over the two benchmarks. Contribution scores average 𝑆 across all       
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 6 of 15 Signal or Noise?
+> Figure 3: SHAPE cooperation scores 𝐶 {𝑚 1,𝑚 2}for each modality pair, and contribution scores ( 𝑆 𝑚 1) macro-averaged across the two benchmarks for every model. For cooperation scores, values indicate complementary benefits when the two modalities are used together, values close to zero indicate limited interaction, and negative values indicate that their joint performance is lower than the sum of their individual contributions. For contribution scores, higher values indicate a larger marginal contribution to QA task performance.
+
+modality pairs containing a modality, while cooperation scores are reported at the modality-pair level (Figure 3). The contribution scores show that Table and Text provide the strongest marginal contributions, with Table contributing the most overall. In contrast, Layout contributes little as it is represented and retrieved in this pipeline, suggesting limited usefulness for QA. Image contributions vary more across models, with smaller models showing weaker Image contri-butions, indicating that extracting useful evidence from im-ages may depend more strongly on model capacity. Coopera-tion effects vary more strongly across models than contribu-tion scores. Image-Text and Text-Table consistently exhibit negative cooperation, suggesting redundancy or modality dominance during answer generation. In contrast, modality pairs involving Table, particularly Image-Table and Layout-Table, show the strongest positive cooperation, although the magnitude varies across models. 
+
+6.1.2. Bootstrap Analysis 
+
+While the macro-averaged results described above offer a descriptive overview of the contribution and cooperation patterns across the different models, we complement them with a bootstrap-based analysis, details shown in Section 5.5, to quantify uncertainty and assess variability across different samples of questions. 
+
+Modality contributions results Figure 4 shows the boot-strap results for the contribution differences 𝐷 . We can observe that Layout modality has a consistently lower con-tribution relative to the other modalities (see 𝐷 𝑆 𝑙 ,𝑆 𝑖 , 𝐷 𝑆 𝑡 ,𝑆 𝑙 ,and 𝐷 𝑆 𝑡𝑎 ,𝑆 𝑙 in Figure 4), and this trend is broadly consistent across models, as reflected in positive average Spearman correlations. Table versus Text shows a larger contribution gap in favour of the Table modality, with stronger cross-model agreement as reflected by the comparatively higher ̄𝜌 𝑠 value. Text, however, contributes more than the Image modality in the Image+Text pair, but the gap is smaller, similarly to the gap between the Image and Table modality, where Tables consistently contribute more than Images. 
+
+Modality cooperation results. Figure 4 shows the coop-eration effects between modality pairs. Several pairs involv-ing Text exhibit consistent redundancy. In particular, Image-Text and Text-Table show negative effects across models, with moderate cross-model agreement ( ̄𝜌 𝑠 = 0 .372 ). A sim-ilar but weaker trend appears for Layout-Text. This suggests that textual information often overlaps with content available in other modalities, reducing the benefit of combining them. In contrast, Image-Layout and Layout-Table show effects close to zero, with confidence intervals overlapping zero, in-dicating little to no interaction between modalities. Evidence of complementary interactions is limited. The only pair showing slight cooperation is Image-Table, mainly driven by GPT-4o-mini, suggesting that this model may integrate image and table information more effectively. 
+
+6.2. Analysis by Question Type 
+
+In this section, we examine how modality contributions and cooperation vary across different question types, consid-ering both question intent and question task requirements. 
+
+6.2.1. Question Intent 
+
+Using the query-intent labels described in Section 5.4, we pool questions from both benchmarks according to their intent and recompute the SHAPE contribution and coop-eration scores within each intent group and modality pair. Similarly to Section 6.1, we perform bootstrap resampling                                                                                                    
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 7 of 15 Signal or Noise?
+> Figure 4: Overall cross-model contribution analysis (left) and cooperation analysis (right). Modality-pair scores are pooled across LongDocURL and MMLongBench-Doc using a benchmark-stratified bootstrap with 100,000 samples. Colored markers and horizontal intervals show model-specific bootstrap means with 95% confidence intervals, while the black diamond denotes the cross-model mean, with a mean pairwise Spearman correlation ̄𝜌 𝑠 with standard deviation std( ̄𝜌 𝑠 ). The value 𝑛 denotes the total number of questions available for sampling in each modality pair across both benchmarks.
+> Table 5
+> Number of questions per intent and modality group. Modality groups are abbreviated as: T = Text, Ta = Table, I = Image, L = Layout.
+> Intent L+T I+T T+Ta I+Ta L+Ta I+L Entity 159 21 12 118 714 List 41 43 14 39 131 17 Quantity 39 94 37 13 11 37 Verification 26 36 9234Attribute 13 19 5124Calculation 411 12 534Description 661001Location 130120Opinion 120100Temporal 340000Process 130000Reason 120000Advice 100000Resource 001000
+
+to estimate the uncertainty of these scores and to assess whether observed patterns are stable across different ques-tion samples (see Section 5.5 for specifics regarding our bootstrap sampling scheme). The number of questions for each intent group is reported in Table 5. No questions were assigned to the Language and Weather categories. For this analysis, we group questions by both their intent and modality pair. This allows us to understand how the contribution and cooperation patterns change across dif-ferent types of intent. Since the SHAPE scores calculated by groups with very small number of questions might be influenced by a few individual questions, we only include the groups that contain 10 or more questions. 
+
+Contributions per intent. Figure 7 shows that modality contributions vary across intents. Text consistently con-tributes more than Layout across all intents large enough to analyse, suggesting that layout information alone rarely provides primary evidence. For Quantity questions, the Text-Image and Table-Text pairs show contributions close to zero, indicating that neither modality consistently dominates. This may reflect cases where the answer is available in both modalities (Figure 5). For List questions, Text contributes more than Image in the Text-Image pair, whereas Image contributes more in the Table-Image pair. We observe examples where models answer correctly using only visual information while failing with only table information (Figure 6). Contributions in the Layout-Image and Table-Text pairs vary substantially across models, making stable conclusions difficult. Entity questions exhibit more consistent patterns across models and bootstrap samples. Text and Table generally provide the strongest contributions, while the Table-Text pair shows little difference between modalities, likely reflecting redundancy because the relevant evidence is often available in both. 
+
+Cooperation per intent. Figure 8 shows that cooperation varies across intents and modality pairs. For Quantity ques-tions, Image-Layout, Image-Table, and Layout-Table pairs show positive cooperation, while pairs involving Text show negative or near-zero cooperation. Combined with the con-tribution analysis in Figure 7 and Figure 5, this suggests that Quantity questions often contain redundant evidence across Text and other modalities. In contrast, modalities such as Image, Table, and Layout may each capture complementary aspects of the evidence, such as object counts, table struc-ture, or spatial organization, leading to stronger cooperation. For List questions, modality pairs involving Text tend to show negative cooperation, suggesting limited benefit     
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 8 of 15 Signal or Noise?
+> Figure 5: Example where the relevant information appears in both text (left) and in an image (right). For the question “How many global patents did Cummins receive in 2020?", one out of five models answer accurately by using the Text modality, while three models answered correctly by using the Image modality.
+> Figure 6: Example where the relevant information appears in both the document image (top) and the table (bottom). For the question “Give the distribution percentage of places of birth for animals used for the first time in 2018 (other than non-human primates)”, three out of five models answer accurately by using the image modality, while no model was able to answer correctly by using the table.
+
+from combining modalities. In the Image-Text pair, Text often already provides sufficient information, while images mainly act as a filtering condition. A similar pattern appears for Entity questions, where pairs involving Text also show negative or negligible cooperation despite Text having the highest contribution. This suggests that Text alone is often sufficient to identify the correct entity without additional visual grounding.                         
+
+> Table 6
+> Number of questions per task type and modality group.
+> Modality group Locating Reasoning Understanding
+> Image+Layout 011 23 Image+Text 036 116 Image+Table 144 614 Layout+Text 137 22 121 Layout+Table 126 420 Text+Table 010 45
+> Total 407 89 339
+
+6.2.2. Question Task Requirement 
+
+In this section, we analyse how modality effects vary across different QA processes using the LongDocURL la-bels: Understanding, Reasoning, and Locating. Understand-ing questions require direct information extraction, Reason-ing questions involve operations such as counting or com-parison, and Locating questions require identifying relevant document elements through relational cues. This analysis uses the LongDocURL task-type labels and so it is restricted to the questions of that benchmark (n=835). As we did in Section 6.2, we only analyse groups containing 10 or more questions. The number of questions for each question type group is reported in Table 6. 
+
+Contributions per question task requirement. Figure 10 shows that modality contributions vary by task type. For Un-derstanding questions, Text contributes more in Text-Image and Text-Layout pairs, while Table dominates in Table-Text pairs, suggesting that text supports direct extraction whereas tables are more useful for dense structured information. Figure 9 shows an example case where all models failed to extract the relevant information from the image. For Lo-cating questions, Text and Table contribute most, reducing the usefulness of Layout. For Reasoning questions, Text generally contributes more in Table-Text and Text-Layout pairs, suggesting that models reason more effectively over textual descriptions than tables. 
+
+Cooperation per question task requirement. Figure 11 shows that Understanding questions exhibit lower coopera-tion for the Image-Layout, Image-Text, and Text-Table pairs compared to Reasoning questions. This suggests that direct        
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 9 of 15 Signal or Noise?
+> Figure 7: Contribution difference by question intent and modality pair. Each panel shows the mean contribution difference 𝐷 𝑆 𝑚 2,𝑆 𝑚 1
+> across models for a specific modality pair. The darker shaded band indicates the 95% bootstrap CI for the cross-model mean, and the lighter shaded band indicates variation across models.
+> Figure 8: Modality cooperation by question intent and modality pair. Each panel shows the mean cooperation score 𝐶 {𝑚 1,𝑚 2}
+> across models for a specific modality pair. The darker shaded band indicates the 95% bootstrap CI for the cross-model mean, and the lighter shaded band indicates variation across models.
+
+extraction tasks often require only one modality, making additional modalities redundant or even harmful. In contrast, Locating questions show positive cooperation for the Image-Table pair. Although Table usually contributes more, the two modalities appear complementary: the table provides the relevant information, while the image helps identify its location on the page. 
+
+## 7. Discussion 
+
+The findings in our work are important for multimodal retrieval in GraphRAG systems, as well as for deciding which modalities to integrate and use for a given application. In this section we first discuss about the findings of our analysis and common patterns identified through the experi-ments. Then, based on these observations, we provide design recommendations for multimodal GraphRAG systems. 
+
+7.1. Observations 
+
+Contributions are not equal, with Tables and Text showing the strongest effects. Across both benchmarks and all tested models, Text and Table modalities provide the strongest marginal contribution in terms of question answering performance (Figure 4). The Layout modality consistently shows the least contribution effect across every model, modality pair, question intent group and task type, in the large majority of model–pair combinations. Layout is also negative is several modality pairs in both benchmarks. Contribution effect of the Image modality varies and de-pends heavily on the evaluated model with smaller models generally extracting less visual information from images. While on LongDocURL Text shows a higher contribution compared to Image, on MMLongBench-Doc the effect is the oppostive for all models. This can be seen in Figure 12. 
+
+Cooperation effects are weak and mostly non-text. 
+
+When averaging the findings over all questions (see Fig-ure 4), cooperation is negative for pairs involving Text, and    
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 10 of 15 Signal or Noise?
+> Figure 9: Example part of document where information appears in both textual and visual content. Given the question “What should be the minimum distance (in cm) to the grill from the wall?”, all models fail to answer correctly based solely on the visual information.
+
+limited in non-text pairs. Only Image-Layout and Layout-Table show effects close to zero, and only the Image-Table pair shows positive cooperation mainly driven by a single model (GPT-4o-mini). At the level of cross-model means, this asymmetry is systematic as every negative effect we see in the figure involves the Text modality, while pairs without Text show neutral or positive cooperation. This non-synergistic effect can be attributed to the fact that the modalities supply overlapping rather than complementary evidence (Figure 5). This finding is consistent with prior work that shows that adding redundant context, even when factually correct, can distract the language model and de-creases accuracy on questions the model could otherwise answer correctly [13, 19]. For instance, authors in [19] propose pruning redundant knowledge already mastered by the model from the retrieval corpus, to improve retrieval efficiency and downstream performance. Our results further suggest that this redundancy varies systematically across modality pairs, question intents, and task types. 
+
+Modality cooperation interactions depend on ques-tion intent and task type. While the macro-averaged results showed mostly negative cooperation effects, grouping the questions by intent and task type shows that these effects are not uniform across all intents and task types. Looking at Figure 8 and the Quantity questions, Image-Layout, Image-Table and Layout-Table all show positive cooperation ef-fects, whereas in the pooled analysis (Figure 4) the same pairs show effects close to zero, with only Image+Table showing a slight positive effect driven mainly by GPT-4o-mini. For the same question intent group, we see that for the modality groups that contain Text the cooperation remains at zero or below it. Therefore, cooperation for modality pairs that involve Text stays at or below zero in both the pooled analysis and this intent group. A similar pattern can be seen when looking at specific task types. For example, for Locating questions the Image-Table pair shows a positive cooperation, while for the same modality pair, looking at Figure 4 we can see a mostly negative or neutral effect once the GPT-4o-mini model is excluded. These results show that cooperation can be conditional and it appears for specific question intents and task types, and it is not based on a modality pair. 
+
+The value of visual evidence depends on the inference model. Our findings indicate that across question types, the Image modality does not usually provide the dominant evi-dence. While Text and Table show the highest contribution scores, the contribution of images varies and as seen in Figure 3, the contribution of the Image is lower for smaller models. This suggests that models with fewer parameters cannot utilise the visual information provided by the image as effectively as the models with more parameters. This indicates that the value of visual evidence in multimodal GraphRAG is a reflection of how capable a model is rather than a guarantee provided by the modality itself. 
+
+7.2. Design Recommendations 
+
+The observations above show that the usefulness of a modality, in terms of its contribution and cooperation effects, is not an intrinsic property. Rather, it depends on the other modalities that are retrieved alongside it, the question being asked, and the model used for inference. These observations have direct implications for how multimodal GraphRAG systems should determine which modalities to retrieve for DocVQA tasks. In the following paragraphs we provide a set of design recommendations based on our findings. 
+
+Contribution and cooperation for adaptive modality selection in multimodal GraphRAG. Retrieval systems must decide which modality or combination of modalities to retrieve for a given question. Existing approaches typically learn this decision by estimating which retrieval strategy yields the highest task performance [42]. Although this identifies the best-performing strategy, it does not explain why it performs best. Good performance may come from one modality containing information that other modalities lack, or from multiple modalities containing largely overlapping information. Each case has different implications for re-trieval. In the first case, retrieving additional modalities can provide complementary evidence when the primary modal-ity is insufficient for question answering. In the second case, retrieving multiple modalities can provide largely redundant information and increase retrieval cost without adding evi-dence. Our analysis distinguishes between these two cases   
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 11 of 15
+
+Signal or Noise? 
+
+Figure 10: Contribution difference by task type and modality pair. Each panel shows the cross-model mean contribution difference 
+
+𝐷 𝑆 𝑚 2 ,𝑆 𝑚 1
+
+for a given modality pair, grouped by task type. The darker shaded band indicates the 95% bootstrap CI for the cross-model mean, and the lighter shaded band indicates variation across models. 
+
+Figure 11: Modality cooperation by task type and modality pair. Each panel shows the cross-model mean cooperation score 𝐶 {𝑚 1,𝑚 2}
+
+for a given modality pair, grouped by task type. The darker shaded band indicates the 95% bootstrap CI for the cross-model mean, and the lighter shaded band indicated variation across models. 
+
+Figure 12: Modality-pair SHAPE contribution differences (𝐷 ) estimated separately for LongDocURL (left) and MMLongBench-Doc (right) using 100,000 bootstrap samples. 
+
+by measuring both the contribution of individual modali-ties and their cooperation, revealing when multiple modali-ties provide complementary information and when they are largely redundant. We further identify factors that give rise to this redundancy, providing insights into when multimodal retrieval is likely to be beneficial. These findings have im-plications for adaptive retrieval systems such as multimodal GraphRAG. Rather than selecting modalities solely on the basis of expected task performance, multimodal GraphRAG systems could also exploit contribution and cooperation to determine whether an additional modality is likely to provide complementary evidence or merely redundant information, thereby improving downstream efficiency and performance. 
+
+Multimodal GraphRAG should link entities and re-lations to their source modalities, enabling modality-aware retrieval. Our results show that the contribution and cooperation effects of a modality are not fixed and largely depend on the question intent, the task type, and the inference model. Systems that do not selectively retrieve evidence from specific modalities cannot accommodate this variation. Multimodal GraphRAG is a natural fit for this, because evidence from different modalities is transformed 
+
+A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 12 of 15 Signal or Noise? 
+
+into entities and relations [12, 4]. By recording the modality of each piece of evidence on the graph, every retrieved fact can be associated with the modality that supports it. We therefore argue that multimodal GraphRAG systems should link entities and relations to their source modalities during the graph construction phase and offer the option for selective retrieval based on a set of modalities. This enables retrieval policies that suppress or prioritise evidence based on its modality. Our extension of RAG-Anything demonstrates that this linking can be integrated into the existing pipeline without requiring modifications to other components, while introducing only modest overhead. 
+
+Retrieval recommendations on DocVQA. Our analysis shows that the usefulness of modality pairs depends on the intent of a question, and the type of reasoning required to answer it. However, some patterns are stable across bench-marks, models, question intent, and task groups. First, priori-tising the retrieval of Text and Table is a safe practical default as they usually offer the strongest marginal contributions across almost all settings. Second, the Layout modality is the weakest contributor and thus it should be deprioritised as a source of evidence. Third, Text should not be expected to exhibit strong synergistic effects when combined with another modality. Across the pooled analysis, as well as nearly all task types and question intents, Text consistently shows negative or near zero cooperation. Consequently, retrieving an additional modality is only worthwhile when Text alone does not provide sufficient information. Lastly, positive cooperation is primarily observed between non-text modalities. Image-Table exhibits the most consistent positive cooperation, particularly for Quantity and Locating questions. These findings suggest that adaptive retrieval systems should selectively retrieve non-text modalities when they are expected to provide complementary evidence, rather than treating multimodal retrieval as the default. 
+
+## 8. Scope and Generalisability 
+
+Choice of GraphRAG pipeline. We conducted our analysis using the multimodal GraphRAG framework, RAG-Anything [12], a state-of-the-art framework that explicitly models both textual and non-textual content through a unified graph representation while preserving modality-specific information during graph construction. Different GraphRAG frameworks differ in graph construction, index-ing, and retrieval, and prior work [15, 18] has shown that multimodal retrieval performance is sensitive to these vari-ations. Thus, we mitigate sensitivity to framework-specific retrieval behaviour (see description below). Moreover, our analyses focus on relative modality contributions and coop-eration effects rather than absolute retrieval performance. Investigating the extent to which the observed patterns generalise across frameworks is beyond the scope of this work. 
+
+Sensitivity to retrieval design. To reduce the depen-dence of the results on the retrieval mechanism, we adapt the retrieval strategy of RAG-Anything to first filter on modality-specific chunks before ranking them by embedding cosine similarity. The same ranking procedure is applied across all modality configurations, ensuring the observed differences arise from the modalities available for retrieval rather than from changes in the retrieval process itself. We further retrieve the top-20 most relevant chunks, favouring recall over precision so that relevant evidence is captured even when ranking is imperfect. For LongDocURL we also use the largest context window supported by each model to minimise truncation of retrieved evidence. Together, these choices aim to reduce the influence of framework-specific re-trieval behaviour, allowing our analyses to focus on modality contribution and cooperation effects. 
+
+LLM-based intent annotation. The question intents were assigned by using an LLM-based approach, and val-idated by two LLM judges rather than by human annotators. At least one judge suggested a different label for 170 out of 1,051 questions (16.2%). Out of those 170 questions, 66 were revised to a label that both judges agree on, while for 97 of those questions (9.2%) only one judge disagreed with the original label. Only 7 questions (0.7%) received a original label that both judges disagreed on without agreeing on a replacement label. The mislabeled questions are most likely to affect the smaller question intent groups in which questions that are wrongly assigned a label can shift the SHAPE scores. The larger question intent groups (Entity, List, Quantity) are more robust to a small number of mis-labeled questions. 
+
+## 9. Conclusion 
+
+In this paper we presented a modality-aware KG-based question answering framework for analysing contribution and interaction of text, table, image and layout modalities in DocVQA. Through experiments across five multimodal LLMs, two long-context DocVQA benchmarks, and using a state-of-the-art multimodal GraphRAG pipeline, we showed that tables and text often provide the strongest evidence, while additional modalities do not consistently improve per-formance and can introduce redundancy. Our findings fur-ther demonstrate that modality interactions depend strongly on the question intent and task type, with complementary effects appearing when modalities provide distinct forms of evidence. Our findings argue for selective, modality-aware retrieval in the design of more effective GraphRAG systems, where modalities are filtered according to the downstream task rather than retrieved uniformly. 
+
+## CRediT authorship contribution statement 
+
+Antonios Georgakopoulos: Writing - Original Draft, Conceptualization, Methodology, Software, Validation, For-mal analysis, Investigation, Data Curation, Visualization. 
+
+Paul Groth: Writing - Review & Editing, Conceptualiza-tion, Methodology, Supervision. Lise Stork: Writing - Re-view & Editing, Conceptualization, Methodology, Supervi-sion, Funding acquisition.   
+
+> A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 13 of 15
+
+Signal or Noise? 
+
+## Declaration of generative AI and AI-assisted technologies in the manuscript preparation process. 
+
+During the preparation of this work the authors used Claude in order to paraphrase and reword. After using this tool/service, the authors reviewed and edited the content as needed and take full responsibility for the content of the published article. 
+
+## Declaration of competing interest. 
+
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper. 
+
+## Data availability 
+
+The implementation code for the framework and the analysis is publicly available at: https://github.com/Antonis-Georgakopoulos/mmkg-modality-analysis 
+
+## References 
+
+[1] Amit, P., Kashyap, O.M., Rayasam, N., Shekhar, N., Narayan, S., 2026. Quantifying modality contributions via disentangling multi-modal representations. The International FLAIRS Conference Pro-ceedings 39. URL: https://journals.flvc.org/FLAIRS/article/view/ 141869 , doi: 10.32473/flairs.39.1.141869 .[2] Anthropic, 2026. Introducing claude opus 4.7. https://www. anthropic.com/news/claude-opus-4-7 . Accessed: 2026-05-08. [3] Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., et al., 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 . [4] Bu, C., Chang, G., Chen, Z., Dang, C., Wu, Z., He, Y., Wu, X., 2025. Query-driven multimodal graphrag: Dynamic local knowledge graph construction for online reasoning, in: Findings of the Association for Computational Linguistics: ACL 2025, pp. 21360–21380. [5] Cambazoglu, B.B., Tavakoli, L., Scholer, F., Sanderson, M., Croft, B., 2021. An intent taxonomy for questions asked in web search, in: Pro-ceedings of the 2021 Conference on Human Information Interaction and Retrieval, pp. 85–94. [6] Chen, W., Hu, H., Chen, X., Verga, P., Cohen, W., 2022. MuRAG: Multimodal retrieval-augmented generator for open question answer-ing over images and text, in: Goldberg, Y., Kozareva, Z., Zhang, Y. (Eds.), Proceedings of the 2022 Conference on Empirical Meth-ods in Natural Language Processing, Association for Computational Linguistics, Abu Dhabi, United Arab Emirates. pp. 5558–5570. URL: https://aclanthology.org/2022.emnlp-main.375/ , doi: 10.18653/ v1/2022.emnlp-main.375 .[7] Chen, W., Yu, W., Qi, G., Li, W., Li, Y., Sha, L., Xia, D., Huang, J., 2026. Cmrag: Co-modality-based visual document retrieval and question answering. URL: https://arxiv.org/abs/2509.02123 ,
+
+> arXiv:2509.02123
+
+.[8] Cohen, J., 1960. A coefficient of agreement for nominal scales. Educational and psychological measurement 20, 37–46. [9] Deng, C., Yuan, J., Bu, P., Wang, P., Li, Z.Z., Xu, J., Li, X.H., Gao, Y., Song, J., Zheng, B., et al., 2025. Longdocurl: a comprehensive multimodal long document benchmark integrating understanding, reasoning, and locating, in: Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pp. 1135–1159. [10] Gapp, C., Tappeiner, E., Welk, M., Fritscher, K., Gizewski, E.R., Schubert, R., 2025. What are you looking at? modality contribution in multimodal medical deep learning. International Journal of Computer Assisted Radiology and Surgery , 1–11. [11] Gat, I., Schwartz, I., Schwing, A., 2021. Perceptual score: What data modalities does your model perceive? Advances in Neural Information Processing Systems 34, 21630–21643. [12] Guo, Z., Ren, X., Xu, L., Zhang, J., Huang, C., 2025. Rag-anything: All-in-one rag framework. arXiv preprint arXiv:2510.12323 . [13] Hsia, J., Shaikh, A., Wang, Z.Z., Neubig, G., 2025. Ragged: Towards informed design of scalable and stable rag systems, in: International Conference on Machine Learning, PMLR. pp. 24139–24155. [14] Hu, P., Li, X., Zhou, Y., 2022. Shape: An unified approach to evaluate the contribution and cooperation of individual modalities, in: Raedt, L.D. (Ed.), Proceedings of the Thirty-First International Joint Conference on Artificial Intelligence, IJCAI-22, International Joint Conferences on Artificial Intelligence Organization. pp. 3064–3070. URL: https://doi.org/10.24963/ijcai.2022/425 , doi: 10.24963/ijcai. 2022/425 . main Track. [15] Ju, Y.J., Kim, H.J., Lee, S.W., 2025. MIRe: Enhancing multi-modal queries representation via fusion-free modality interaction for multimodal retrieval, in: Che, W., Nabende, J., Shutova, E., Pile-hvar, M.T. (Eds.), Findings of the Association for Computational Linguistics: ACL 2025, Association for Computational Linguistics, Vienna, Austria. pp. 5350–5363. URL: https://aclanthology.org/ 2025.findings-acl.279/ , doi: 10.18653/v1/2025.findings-acl.279 .[16] Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., Küttler, H., Lewis, M., Yih, W.t., Rocktäschel, T., et al., 2020. Retrieval-augmented generation for knowledge-intensive nlp tasks. Advances in neural information processing systems 33, 9459–9474. [17] Liang, V.W., Zhang, Y., Kwon, Y., Yeung, S., Zou, J.Y., 2022. Mind the gap: Understanding the modality gap in multi-modal contrastive representation learning. Advances in Neural Information Processing Systems 35, 17612–17625. [18] Lin, W., Chen, J., Mei, J., Coca, A., Byrne, B., 2023. Fine-grained late-interaction multi-modal retrieval for retrieval augmented visual question answering, in: Proceedings of the 37th International Confer-ence on Neural Information Processing Systems, Curran Associates Inc., Red Hook, NY, USA. [19] Luo, Q., Li, X., Dai, J., Cheng, S., Qiu, X., 2025. Zero-rag: Towards retrieval-augmented generation with zero redundant knowl-edge. arXiv preprint arXiv:2511.00505 . [20] Ma, Y., Zang, Y., Chen, L., Chen, M., Jiao, Y., Li, X., Lu, X., Liu, Z., Ma, Y., Dong, X., et al., 2024. Mmlongbench-doc: Benchmarking long-context document understanding with visualizations. Advances in Neural Information Processing Systems 37, 95963–96010. [21] Mai, S., Sun, Y., Xiong, A., Zeng, Y., Hu, H., 2023. Multimodal boosting: Addressing noisy modalities and identifying modality con-tribution. IEEE Transactions on Multimedia 26, 3018–3033. [22] Menick, J., Lu, K., Zhao, S., Wallace, E., Ren, H., Hu, H., Stathas, N., Such, F.P., 2024. Gpt-4o mini: advancing cost-efficient intelligence. Open AI: San Francisco, CA, USA . [23] OpenAI, 2025. Introducing gpt-5. https://openai.com/index/ introducing-gpt-5/ . Accessed: 2026-05-08. [24] OpenAI, 2026. Introducing gpt-5.5. https://openai.com/index/ introducing-gpt-5-5/ . Accessed: 2026-05-08. [25] Parcalabescu, L., Frank, A., 2023. Mm-shap: A performance-agnostic metric for measuring multimodal contributions in vision and language models & tasks, in: Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pp. 4032–4059. [26] Parikh, S., Tiwari, M., Tumbade, P., Vohra, Q., 2023. Exploring zero and few-shot techniques for intent classification, in: Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 5: Industry Track), pp. 744–751. [27] Peng, X., Qin, C., Chen, Z., Xu, R., Xiong, C., Wu, C.S., 2025. Unidoc-bench: A unified benchmark for document-centric multi-modal rag. arXiv preprint arXiv:2510.03663 . [28] Peng, X., Wei, Y., Deng, A., Wang, D., Hu, D., 2022. Balanced multimodal learning via on-the-fly gradient modulation, in: 2022 
+
+A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 14 of 15 Signal or Noise? 
+
+IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), IEEE. pp. 8228–8237. [29] Riedler, M., Langer, S., 2024. Beyond text: Optimizing rag with multimodal inputs for industrial applications. arXiv preprint arXiv:2410.21943 . [30] Rose, D.E., Levinson, D., 2004. Understanding user goals in web search, in: Proceedings of the 13th international conference on World Wide Web, pp. 13–19. [31] Suri, M., Mathur, P., Dernoncourt, F., Goswami, K., Rossi, R.A., Manocha, D., 2025. Visdom: Multi-document qa with visually rich elements using multimodal retrieval-augmented generation, in: Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers), pp. 6088–6109. [32] Team, G., Kamath, A., Ferret, J., Pathak, S., Vieillard, N., Merhej, R., Perrin, S., Matejovicova, T., Ramé, A., Rivière, M., et al., 2025. Gemma 3 technical report. arXiv preprint arXiv:2503.19786 . [33] Wang, Y., Hou, Y., Javadov, A., Akhtar, M., Sachan, M., 2026. Com-pose and fuse: Revisiting the foundational bottlenecks in multimodal reasoning, in: International Conference on Learning Representations, pp. 11272–11301. [34] Wei, Y., Feng, R., Wang, Z., Hu, D., 2024. Enhancing multimodal cooperation via sample-level modality valuation, in: 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), IEEE. pp. 27328–27337. [35] Wu, Y., Lu, Y., Zhou, Y., Ding, Y., Liu, J., Ruan, T., 2025. Mkgf: A multi-modal knowledge graph based rag framework to enhance lvlms for medical visual question answering. Neurocomputing 635, 129999. [36] Xia, P., Zhu, K., Li, H., Zhu, H., Li, Y., Li, G., Zhang, L., Yao, H., 2024. Rule: Reliable multimodal rag for factuality in medical vision language models, in: Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing, pp. 1081–1093. [37] Xu, C., Chen, Q., Feng, Y., Cheng, G., 2025. mmrag: A modu-lar benchmark for retrieval-augmented generation over text, tables, and knowledge graphs, in: International Semantic Web Conference, Springer. pp. 3–21. [38] Yang, Z., Wang, H., Hu, D., 2025. Efficient quantification of multimodal interaction at sample level, in: Proceedings of the 42nd International Conference on Machine Learning, JMLR.org. [39] Yu, S., Tang, C., Xu, B., Cui, J., Ran, J., Yan, Y., Liu, Z., Wang, S., Han, X., Liu, Z., Sun, M., 2025. Visrag: Vision-based retrieval-augmented generation on multi-modality documents, in: Yue, Y., Garg, A., Peng, N., Sha, F., Yu, R. (Eds.), In-ternational Conference on Learning Representations, pp. 21074– 21098. URL: https://proceedings.iclr.cc/paper_files/paper/2025/ file/3640a1997a4c9571cea9db2c82e1fc35-Paper-Conference.pdf .[40] Yuan, X., Ning, L., Ye, Q., Fan, W., Li, Q., 2026. mkg-rag: Leveraging multimodal knowledge graphs in retrieval-augmented generation for knowledge-intensive vqa, in: Proceedings of the 49th International ACM SIGIR Conference on Research and Development in Informa-tion Retrieval, Association for Computing Machinery, New York, NY, USA. p. 2274–2285. URL: https://doi.org/10.1145/3805712. 3809680 , doi: 10.1145/3805712.3809680 .[41] Zhao, S., Jin, Z., Li, S., Gao, J., 2025. Finragbench-v: A benchmark for multimodal rag with visual citation in the financial domain, in: Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing, pp. 4215–4249. [42] Zhao, S., Shen, T., Ahuja, N., Tickoo, O., Narayanan, V., 2026. Windsock is dancing: Adaptive multimodal retrieval-augmented gen-eration, in: Fumero, M., Domine, C., L"ahner, Z., Cannistraci, I., Zhao, B., Williams, A. (Eds.), Proceedings of UniReps: the Third Edition of the Workshop on Unifying Representations in Neural Models, PMLR. pp. 168–182. URL: https://proceedings.mlr.press/ v322/zhao26a.html .
+
+A. Georgakopoulos et al.: Preprint submitted to Elsevier Page 15 of 15

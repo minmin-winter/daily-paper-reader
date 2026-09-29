@@ -6,56 +6,71 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-28
-- 运行时间：2026-09-29 00:05:58 UTC
+- 最新运行日期：2026-09-29
+- 运行时间：2026-09-29 22:54:23 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：1
-- 速读区：11
+- 本次总论文数：17
+- 精读区：3
+- 速读区：14
 
 ### 今日简报（AI）
-今天共处理12篇，精读1篇、速读11篇，主线聚焦多模态翻译、RGB-T融合与视觉语言推理。最值得看的是8分精读《Improving Visual Sensitivity of LLMs on Multimodal Machine Translation with Metric-based Loss Weighting》，速读中MVVBench和“语言推理向量增强多模态推理”也值得留意。普通读者可先读精读，再按兴趣选看4D推理基准、RGB-T对齐融合或推理增强方向。
-- 详情：[/202609/28/README](/202609/28/README)
+2026-09-29 日报完成：17 篇论文中精读 3 篇、速读 14 篇，多模态融合与迁移是今日主线。最值得看的是 9.0 分的《Binding Multiple Modalities via Multimodal Wasserstein Barycenter》和 8.0 分的表格知识迁移图像模型。普通读者可先抓精读两篇，再扫速读中跨模态协同与模态干扰的相关工作。
+- 详情：[/202609/29/README](/202609/29/README)
 
 ### 精读区论文标签
-1. [Improving Visual Sensitivity of LLMs on Multimodal Machine Translation with Metric-based Loss Weighting](/202609/28/2609.31169v1-improving-visual-sensitivity-of-llms-on-multimodal-machine-translation-with-metric-based-loss-weighting)  
+1. [Binding Multiple Modalities via Multimodal Wasserstein Barycenter](/202609/29/2609.33800v1-binding-multiple-modalities-via-multimodal-wasserstein-barycenter)  
+   标签：评分：9.0/10、query:balanced-mml
+   evidence：利用Wasserstein重心建立多模态平衡表示空间
+2. [Learning Through Game: Skewed Transfer of Tabular Knowledge to Strengthen Image Model](/202609/29/2609.32272v1-learning-through-game-skewed-transfer-of-tabular-knowledge-to-strengthen-image-model)  
    标签：评分：8.0/10、query:balanced-mml
-   evidence：通过损失加权提升视觉模态贡献
+   evidence：通过自适应整合模态梯度解决图像与表格的模态不平衡
+3. [Federated Multi-Modal Human Activity Recognition using Multi-Agent Reinforcement Learning](/202609/29/2609.33492v1-federated-multi-modal-human-activity-recognition-using-multi-agent-reinforcement-learning)  
+   标签：评分：8.0/10、query:balanced-mml
+   evidence：用多智能体强化学习实现自适应且成本感知的多模态融合，替代固定等权
 
 ### 速读区论文标签
-1. [SAGE: Source-Anchored Guidance via Frequency Equalization for Hierarchical RGB-T Alignment and Fusion](/202609/28/2609.30703v1-sage-source-anchored-guidance-via-frequency-equalization-for-hierarchical-rgb-t-alignment-and-fusion)  
+1. [SynCo: Learning Cross-Modal Synergy by Contrasting Interaction Residuals](/202609/29/2609.32846v1-synco-learning-cross-modal-synergy-by-contrasting-interaction-residuals)  
    标签：评分：7.0/10、query:balanced-mml
-   evidence：以频率均衡处理内容失衡的RGB-T对齐与融合
-2. [MVVBench: Benchmarking 4D Reasoning in Vision-Language Models](/202609/28/2609.30952v1-mvvbench-benchmarking-4d-reasoning-in-vision-language-models)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：多视角视频时空联合推理基准
-3. [Can Linguistic Reasoning Vectors Enhance Multimodal Reasoning Ability?](/202609/28/2609.31140v1-can-linguistic-reasoning-vectors-enhance-multimodal-reasoning-ability)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：迁移语言推理向量以增强多模态推理能力
-4. [BAT-CLIP: Trimodal Alignment of Brain, Audio and Text](/202609/28/2609.31180v1-bat-clip-trimodal-alignment-of-brain-audio-and-text)  
+   evidence：通过对比学习平衡模态间冗余与协同
+2. [OPERA: A Unified Omnimodal Progressive Spatio-Temporal Reasoning Agent for Referring Video Segmentation](/202609/29/2609.33338v1-opera-a-unified-omnimodal-progressive-spatio-temporal-reasoning-agent-for-referring-video-segmentation)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：统一全模态文本音频图像推理智能体
+3. [MoGround: Measuring and Mitigating Modality Distraction in Vision-Language Models](/202609/29/2609.33431v1-moground-measuring-and-mitigating-modality-distraction-in-vision-language-models)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：度量并缓解视觉语言模型中的模态干扰与弱模态偏置
+4. [SyncRA: Learning Temporal Correspondence in Omni-Modal Models](/202609/29/2609.34363v1-syncra-learning-temporal-correspondence-in-omni-modal-models)  
    标签：评分：7.0/10、query:native-multi
-   evidence：脑-音频-文本的CLIP式三模态对齐
-5. [Representation-guided in-context learning for medical image interpretation with multimodal large language models](/202609/28/2609.24057v1-representation-guided-in-context-learning-for-medical-image-interpretation-with-multimodal-large-language-models)  
+   evidence：对比中间音视频表征以对齐匹配时刻
+5. [Joint and Cross-Modal Video-Audio Generation and Editing: A Unified Formulation and Design Taxonomy](/202609/29/2609.34381v1-joint-and-cross-modal-video-audio-generation-and-editing-a-unified-formulation-and-design-taxonomy)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：联合音视频生成与编辑的统一形式化与分类体系
+6. [From Perception to Integration: Revisiting the Internal Dynamics of Reasoning in Vision-Language Models](/202609/29/2609.34809v1-from-perception-to-integration-revisiting-the-internal-dynamics-of-reasoning-in-vision-language-models)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：视觉语言模型内部多模态推理动态分析
+7. [Signal or Noise? Modality Contribution and Cooperation in Multimodal GraphRAG](/202609/29/2609.35304v1-signal-or-noise-modality-contribution-and-cooperation-in-multimodal-graphrag)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：研究多模态GraphRAG中各模态是否贡献均衡
+8. [ProCAP: Probabilistic Cross-Attentive Prompt Learning for Vision-Language Models](/202609/29/2609.30434v1-procap-probabilistic-cross-attentive-prompt-learning-for-vision-language-models)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：跨注意力提示学习增强视觉-语言跨模态交互
+9. [Agentic Video Understanding: A Survey](/202609/29/2609.31713v1-agentic-video-understanding-a-survey)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：免微调的多模态大模型医学视觉问答
-6. [DocMIDE: Learning Multi-Hop Implicit Derivation in Visually Rich Documents](/202609/28/2609.24092v1-docmide-learning-multi-hop-implicit-derivation-in-visually-rich-documents)  
+   evidence：面向多模态上下文的智能体式视频理解综述
+10. [OmniFysics-Captioner Technical Report: Grounding Omni-Modal Understanding in the Physical World for Better Captioning](/202609/29/2609.31714v1-omnifysics-captioner-technical-report-grounding-omni-modal-understanding-in-the-physical-world-for-better-captioning)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：统一的全模态视听理解框架
+11. [MM-VeriRec: Failure-Guided Fusion for Verifiable Agentic Multimodal Recommendation](/202609/29/2609.31718v1-mm-verirec-failure-guided-fusion-for-verifiable-agentic-multimodal-recommendation)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：结合图像与文本的文档多跳视觉推理
-7. [Bridge3D: Enabling Vision-Language-Action Models to See and Act in 3D](/202609/28/2609.24525v1-bridge3d-enabling-vision-language-action-models-to-see-and-act-in-3d)  
+   evidence：基于文本与图像证据推理并结合失败引导融合
+12. [Representation Editing for Multimodal Test-Time Adaptation](/202609/29/2609.32263v1-representation-editing-for-multimodal-test-time-adaptation)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：对齐多模态中间表示
+13. [RLHarness: Co-evolving Procedural Skills with Reinforcement Learning for Long-horizon Multimodal Reasoning](/202609/29/2609.32326v1-rlharness-co-evolving-procedural-skills-with-reinforcement-learning-for-long-horizon-multimodal-reasoning)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：向VLA模型融合三维几何特征
-8. [Multimodal Routing and Region Refinement for Language-Guided Medical Image Segmentation](/202609/28/2609.28860v1-multimodal-routing-and-region-refinement-for-language-guided-medical-image-segmentation)  
+   evidence：长程多模态推理
+14. [When Helpful Text Hurts: Option-Redirecting Bias in Vision-Language Models](/202609/29/2609.32489v1-when-helpful-text-hurts-option-redirecting-bias-in-vision-language-models)  
    标签：评分：6.0/10、query:balanced-mml
-   evidence：联合路由器按图文对自适应路由视觉与文本特征适配
-9. [Reliability-aware Cross-sample Enhancement for Robust Multimodal Sentiment Analysis](/202609/28/2609.30470v1-reliability-aware-cross-sample-enhancement-for-robust-multimodal-sentiment-analysis)  
-   标签：评分：6.0/10、query:balanced-mml
-   evidence：自适应变分信息瓶颈按模态可靠性动态加权融合
-10. [Skip the Talk, Re-Focus on Vision: Latent Reasoning for Reasoning Segmentation in Multimodal Large Language Models](/202609/28/2609.30783v1-skip-the-talk-re-focus-on-vision-latent-reasoning-for-reasoning-segmentation-in-multimodal-large-language-models)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：多模态大模型推理分割的潜在推理
-11. [DepthEvidence: Unifying Metric Depth Prediction and Geometric Reasoning in Multimodal Language Models](/202609/28/2609.31103v1-depthevidence-unifying-metric-depth-prediction-and-geometric-reasoning-in-multimodal-language-models)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：多模态语言模型中统一深度预测与几何推理
+   evidence：视觉问答中不可靠辅助文本导致的模态冲突与偏置
 
 
 <div class="dpr-home-promo-card">

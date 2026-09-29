@@ -1,0 +1,689 @@
+Title: OmniFysics-Captioner Technical Report: Grounding Omni-Modal Understanding in the Physical World for Better Captioning
+
+URL Source: https://arxiv.org/pdf/2609.31714v1
+
+Published Time: Tue, 29 Sep 2026 00:03:56 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# OmniFysics-Captioner Technical Report: Grounding Omni-Modal Understanding in the Physical World for Better Captioning 
+
+Kaixiang Qiu ∗, Minghao Han ∗, Keliang Liu , Yizhou Liu , Jinghang Han , Yue Jiang ,
+
+Xuecheng Wu , Shunli Wang §, Lihua Zhang §, Dingkang Yang §,†
+
+Physical Superintelligence Lab, Fysics AI College of Intelligent Robotics and Advanced Manufacturing, Fudan University 
+
+> ∗
+
+Equal contribution , †Project lead , §Corresponding Author 
+
+Abstract 
+
+Building omni-modal models with physical intelligence requires fine-grained supervision that captures physical evidence such as contact, support, deformation, and state transitions. However, existing omni-modal captioners primarily model general audiovisual semantics and often overlook transient or spatially localized physical evidence. We present a unified framework for physics-aware audiovisual captioning spanning data construction, training, and evaluation. Firstly, we build a data construction pipeline that identifies physics-rich clips and leverages OmniFysics-Agent to coordinate audio, visual, and physical-perception tools for collecting spatiotemporally aligned and traceable cross-modal evidence; within the Agent, a physical perception model (PPM) fine-tuned on approximately 2M image-level samples serves as a dedicated tool for extracting object-interaction and state-change cues. Secondly, we build the Daily-Physics 50K dataset and introduce the evidence-driven OmniPhysCap (OPC) benchmark to evaluate the recovery of physical and cross-modal evidence from generated captions. Finally, we train OmniFysics-Captioner from the resulting data. Our Captioner matches Gemini 3.1 Pro on audiovisual captioning, achieves state-of-the-art results on multiple video-captioning benchmarks, and substantially outperforms other open-source models. Ablations show that PPM evidence improves physical coverage and produces finer-grained, more reliable cross-modal descriptions.  
+
+> Date:
+
+August 14, 2026  
+
+> Email:
+
+kxqiu26@m.fudan.edu.cn , dicken@fyscis.ai , lihuazhang@fudan.edu.cn  
+
+> Project Page:
+
+https://github.com/Fysics-AI/OmniFysics-Captioner  
+
+> Model:
+
+https://huggingface.co/Fysics-AI/OmniFysics-Captioner  
+
+> Dataset & Benchmark:
+
+https://huggingface.co/datasets/Fysics-AI/OmniPhysics-Caption_benchmark 
+
+1 Introduction 
+
+Physical intelligence requires models to move beyond object and scene recognition toward reasoning about object properties, interactions, and state transitions [1–5]. This capability underpins embodied decision-making and dynamic world modeling [6–8]. Yet PhysBench [9] shows that current vision-language models remain weak in physical perception and object-centric reasoning. Although open video datasets contain abundant real-world physical processes, scalable pipelines for discovering and annotating them remain lacking, especially for fine-grained descriptions of properties, interactions, state changes, and outcomes. Daily-Physics 50K is a physics-aware audiovisual corpus for detailed video-caption training. It covers six top-level 1arXiv:2609.31714v1 [cs.CV] 21 Sep 2026 Sports        
+
+> ··· Running Aquatic ···Another physical interaction occurs as a racket strikes the ball. This collision was elastic. Due to the low mass of the ball, it bounced back very quickly. ··· The scene ··· This impact marks aclear transfer of kinetic energy, causing the domino to tip immediately and initiating a new chain reaction. ···
+
+Motion & Trajectory  
+
+> ··· Contact Jumping
+
+Impact & Materials  
+
+> ··· Collision Fracture
+
+Everyday Fluid Dynamics                  
+
+> ··· Splash Flow
+> ···This resistance creates fluid dynamics, characterized by swirling and the formation of cloud-like diffusion patterns as the white liquid penetrates the darker coffee. ···
+
+Household Physics          
+
+> ··· Optics Combustion ···This directly references the physical phenomenon occurring within the glass, specifically the total internal reflection of the laser beam. ···
+
+Friction & Contact                    
+
+> ··· Sliding Braking ···The car’s movement is a result of the balance between its inertia and the low-friction surface, which prevents the tires from gripping firmly. ··· ···The energy is transferred through the middle spheres···the visual evidence primarily shows the high-momentum swinging pattern of a Newton’s cradle. ···
+> Daily-Physics 50K
+> Friction & Contact 9% Household Physics 20% Everyday Fluid Dynamics 8% Impact & Materials 25% Motion & Trajectory 21% Sports 17%
+
+Figure 1 Overview of Daily-Physics 50K, representative captions, and data distribution. The dataset spans six categories of everyday physical phenomena; the examples demonstrate our model’s physical-perception capabilities, while the charts summarize its physical-event categories and video durations. 
+
+physical-event categories and 23 observable event subcategories, ranging from brief local interactions to extended multi-stage processes. We construct the corpus from heterogeneous video sources through event-query retrieval, clip construction, media-integrity checks, content-quality screening, and deduplication. As shown in Figure 1, the dataset is dominated by clips shorter than one minute while retaining a smaller set of one- to ten-minute processes that capture long-range causal chains, slow state changes, and multi-step interactions. Video captioning has evolved from retrieval-oriented summaries into a language interface for audiovisual training and reasoning. Omni-modal captioners integrate visual content, speech, music, and environmental sounds, using temporal alignment or agentic data generation to improve cross-modal descriptions [10–15]. Despite strong general-semantic and audiovisual performance, existing methods remain limited along four axes: perceptual granularity for localized cues, spatiotemporal grounding of interactions, physical fidelity in property and causal inference, and cross-modal evidence completeness and traceability. Consequently, they struggle to determine which object is supported by what , how a material responds after contact , and what the action changes . Physics-aware captions must instead bind physical events to specific objects and times while preserving recoverable evidence for downstream reasoning. Caption construction amplifies limitations: collisions, contact, and deformation are transient, whereas state changes and outcomes span longer intervals and require cross-modal verification. One-pass MLLM annotation can omit local events or hallucinate unobservable properties and causal relations, while tool-augmented methods, including Omni-Detective [15] and OmniAgent [16], broaden observation but lack event localization, active evidence acquisition, and traceable aggregation. The evidence-grounding problem requires scalable event selection, targeted cross-modal acquisition, and physically faithful generation. We develop a data construction and model training framework for omni-modal physical perception. Guided by six physical-event categories, Category-Aware Temporal Anchor Aggregation (CATA) discovers and segments physics-rich clips from heterogeneous video pools. OmniFysics-Agent uses an active loop to orchestrate multimodal perception tools over localized intervals, yielding cross-modal physical evidence that is spatiotemporally aligned and traceable. We obtain a Physical perception model (PPM) by supervised fine-tuning on approximately 2M image-level physical-perception samples, adding frame-level event and object cues with targeted physical analysis. We introduce Daily-Physics 50K, 2comprising approximately 50K physics-rich video–caption pairs, and train an end-to-end OmniFysics-Captioner for tool-free captioning. Figure 1 illustrates the six-category coverage of Daily-Physics 50K and captions capturing object interactions, material responses, and state changes. Benchmarks such as VDC [12] and Omni-Cloze [15] make detailed-caption evaluation objective through QA decompo-sition or constrained cloze questions, but were not designed for physical perception. They cannot systematically assess whether captions preserve object properties, spatiotemporal interactions, state changes, and physical outcomes. We address this gap with OmniPhysCap (OPC) benchmark, a physics-aware and omission-aware diagnostic benchmark containing 1,000 audiovisual clips and 8,000 questions covering physical interactions and outcomes as well as visual, audio, and audiovisual information. Machine-assisted construction, blind full-video verification, and an explicit Not Mentioned option enable OPC benchmark to distinguish omitted evidence from conflicting evidence in free-form captions. Our contributions are: 
+
+• We design a pipeline integrating physics-rich clip selection, active OmniFysics-Agent evidence acquisition, and caption generation. Daily-Physics 50K comprises approximately 50K video-caption pairs and will be released. 
+
+• We introduce OmniPhysCap (OPC) benchmark to standardize the evaluation of physical and cross-modal information retained by generated captions. The benchmark has been publicly released. 
+
+• Using Daily-Physics 50K, we train OmniFysics-Captioner, which achieves state-of-the-art performance on VDC Detailed, Omni-Cloze, and caption-to-QA cascade evaluations across multiple omni-modal benchmarks. Our model has also been publicly released. 
+
+• Through experiments and ablations, we demonstrate that explicit physical perception strengthens fine-grained omni-modal understanding by improving the coverage of object properties, physical interactions, and state changes. 
+
+2 Related Work 
+
+Omni-modal Video Reasoning. Video MLLMs have progressed from visual temporal modeling toward omni-modal understanding that jointly processes visual content, speech, and environmental sounds. Models such as VideoLLaMA 2 [17], Qwen2.5-Omni [18], and Qwen3-Omni [19] continue to improve joint audiovisual modeling. For fine-grained captioning, Tarsier2 [20], AuroraCap [12], video-SALMONN 2 [13], UGC-VideoCaptioner [21], and AVoCaDO [14] advance video captioning through data construction, preference optimization, and temporal fusion; Omni-Captioner [15] uses multi-round tool calls to generate detailed supervision, while the recent AVSCap [22] and TCA-Captioner [23] further emphasize audiovisual event binding and temporal alignment. Correspondingly, evaluation has shifted from surface-form similarity toward QA decomposition in VDC [12], temporal reasoning in Daily-Omni [24], and information recovery in Omni-Cloze [15]. However, existing methods primarily emphasize general details and modality coverage, often reducing collisions, deformation, and state changes to action labels without explaining the object interactions underlying auditory and visual changes. Physical perception is therefore essential for moving omni-modal models beyond information aggregation toward understanding real-world dynamic processes. 
+
+Physical Perception and Evaluation. Physical understanding requires models to recognize object properties, interaction relations, and continuous state changes. Physion++ [6] and ContPhy [7] study the inference of latent physical properties from dynamic interactions, while Physically Grounded VLM [8] and PACS [25] extend physical concepts to embodied manipulation and audiovisual commonsense. PhysBench [9] systematically evaluates object properties, relations, and dynamics; MVP [26] reduces reasoning shortcuts through minimal video pairs; and MASS [27] emphasizes spatiotemporal grounding in physical reasoning. More recent PhysGame [28] and PhysicsMind [29] further extend evaluation to physical anomaly recognition and mechanics reasoning in real-world and simulated scenes. However, these benchmarks largely rely on predefined question answering or outcome prediction, whereas existing captioning benchmarks focus on general details. A dedicated evaluation of physical-evidence recoverability in open-ended omni-modal descriptions is still lacking. This work aims to fill this gap. 
+
+3 Methodology 
+
+As shown in Figure 2, we first select approximately 50K video clips covering diverse physical events. OmniFysics-Agent then aggregates audio, visual, and PPM evidence through multi-round tool calls and generates detailed captions; together, 3Stage2 OmniFysics-Agent 
+
+## ··· 
+
+> Physics category Impact & Materials:
+> (1)Collision (2)Fracture
+> ··· Motion & Trajectory:
+> (5)Chain reaction (6)Rotation
+> ···
+> Aggregate Clip Reteieve
+> Embedding
+> Aesthetics Screen Deduplicate and Check
+
+Execute Video Data Collect       
+
+> Parallel Calls Status: [“tool ”,“caption ”]
+> Observer: [VLM,ALM,PHYS]
+> Time Window: [01:02—01:15]
+> Questions: 1.What are the people saying in the video?
+> ···
+
+caption tool 
+
+Plan & Reflect   
+
+> Proxy Video
+> (low quality)
+> Planner
+> Gemini3.1
+> Crop Dispatch
+> Finalizer Final Caption
+
+Observe 
+
+> Calling Tools Tool Usage Evaluate
+
+Stage1 Physical Video Dataset 
+
+> 1. FineVideo 2. VideoMind 3. LLaVA-Video 4. EPIC-Kitchens
+
+······ 
+
+Fine Clips 
+
+> ···  ···
+
+Evidence Memory        
+
+> Observation Evidence
+> Time Source Finding Answer ··· Timeline and Key Scene
+> First Turn:
+> Other Turn:
+> Initial ：··· Medium ：··· Final ：··· Initial ：··· Medium ：··· Final ：··· new1 ：··· new2 ：··· new3:···
+> Evidence Review
+> Gap Detection (find new gap)
+
+Toolbox 
+
+> Audio Observe
+> · Speech Parsing · Sound Detection · Audio Timing
+> Video Observe
+> · Action Recognition · Text Reading · State Tracking
+> Physical Observe
+> · Interaction Analysis · State Reasoning · Material Estimation
+
+Figure 2 Pipeline of our caption work. Stage 1 selects and filters physics-rich clips from heterogeneous video collections. Stage 2 uses OmniFysics-Agent to coordinate multimodal tools, aggregate traceable evidence, and generate detailed captions. 
+
+these clips and captions form Daily-Physics 50K. We further fine-tune Qwen3-Omni on Daily-Physics 50K to obtain an end-to-end omni-modal Captioner that directly processes raw audiovisual input. In addition, we curate a clip-level held-out set of 1K videos, removing exact and perceptual near-duplicates of the training clips, to construct OmniPhysCap (OPC) benchmark, which evaluates how well captions retain physical and cross-modal information. 
+
+3.1 Physical Video Dataset 
+
+Event Definitions and Candidate Discovery. To build a video pool for physical perception and understanding, we select nine datasets: AVQA [30], Bilibili-Videos, EPIC-Kitchens [31], LLaVA-Video [32], LU-AVS [33], VideoMind [34], WISA [35], FineVideo [36], and unAV-100 [37]. Together, these sources provide broad coverage across content domains, viewpoints, and temporal scales, including audiovisual correspondence, human–object interaction, physical phenomena, and multi-event processes in both short and long videos. Following an organization based on physical phenomena observable in everyday life, we define six top-level categories and 23 event subcategories spanning sports biomechanics, motion and trajectories, impact and material response, everyday fluid dynamics, household thermodynamics and optics, and surface friction and contact. Their event definitions are used as candidate-retrieval queries; the complete taxonomy is provided in the Appendix. 
+
+Physical-Clip Retrieval and Segmentation. Invoking a generative VLM on every video to identify events and predict boundaries would be costly. We instead propose Category-Aware Temporal Anchor Aggregation (CATA). First, Qwen3-VL-Embedding-8B [38] encodes event queries and reusable visual features from frames sampled at 1 fps. Frame–query similarities then produce high-scoring temporal anchors with event labels. Finally, CATA merges adjacent anchors from the same category and starts a new segment when the category changes or the inter-anchor gap exceeds a threshold. Candidate clips are 3–60 seconds long, while a subset of 1–10-minute long-process videos is selected. After stratified sampling, deduplication, media-integrity checking, content-quality inspection, and visual-aesthetic evaluation, approximately 50K clips are used for Agent annotation and training. A human evaluation of randomly sampled clips shows that 98.2% are temporally complete and 96.9% contain physical events consistent with their assigned categories. A separately curated, clip-level held-out set of 1K clips constitutes the OPC benchmark test set. The Appendix reports the parameters and data distribution. 43.2 OmniFysics-Agent 
+
+To generate physics-rich supervision from fine-grained audiovisual evidence, we introduce the active-perception agent shown in Figure 2. Unlike a preset tool chain or indiscriminate full-media invocation [15, 16, 39], OmniFysics-Agent first forms a global event timeline from a low-cost audiovisual proxy, locates local intervals that require further inspection, and dynamically orchestrates modality-specific tools. Each observation batch is written to Evidence Memory and drives the next Plan–Execute–Observe–Reflect round, progressively refining modality choice, temporal scope, and question focus. 
+
+Modality-Specific Observer Toolbox. The toolbox exposes three complementary interfaces. An audio large-language model (ALM) tool parses speech, music, and environmental sounds in local clips and extracts their temporal order; a vision large-language model (VLM) tool verifies local visual events, OCR content, and state changes before and after each event; and PPM focuses on objects and physical phenomena in representative frames, perceiving physical cues such as material, contact, and deformation, and analyzing object interactions, state changes, and their potential outcomes. Together, the three tools help the Agent supplement and cross-validate critical evidence, enabling more accurate and detailed video descriptions consistent with physical laws. We represent each tool call as 𝑎 = (𝑚, 𝜏, q), where 𝑚 ∈ T = {ALM , VLM , 𝑃𝑃𝑀 } selects an Observer, 𝜏 is a short interval localized in the original video, and q is a list of modality-directed questions about that interval. This tuple is the basic unit used by the Planner to form batches and by the Executor to route local media. All outputs are stored as source-attributed candidate evidence. To enhance the Agent’s ability to perceive, recognize, and describe physical information in visual scenes, we perform supervised fine-tuning on approximately 2M image-level physical-instruction examples to obtain PPM. The model can identify the physical properties and states of objects, understand spatial relationships and interaction cues among objects, and convert observable motion trends, state changes, and their potential outcomes into fine-grained textual descriptions. It thereby provides a foundation for the Caption Agent to generate descriptions with richer physical information and stronger factual support. Data construction and training details are provided in the Appendix. 
+
+Evidence-Guided Batch Planning. Given a video 𝑉 , the system constructs a low-cost audiovisual proxy e𝑉 for global navigation. Let 𝑀 𝑟 be Evidence Memory and 𝑏 𝑟 the residual call budget at the beginning of round 𝑟 . The Planner proposes only the candidate batch for the current round: 
+
+b𝑄 𝑟 = 𝜋 𝜓 (e𝑉, 𝑀 𝑟 , 𝑏 𝑟 ). (1) Here 𝜋 𝜓 is the structured Planner and b𝑄 𝑟 contains multiple calls 𝑎 . The first round builds a cross-modal event skeleton from the proxy and selects short intervals with high expected information value. Later rounds condition on accumulated evidence to refine modality, interval scale, and question focus, or to stop. Before execution, deterministic Admit validates requests and forms the executable batch 𝑄 𝑟 under Observer availability and the residual budget. 
+
+Batched Execution and Evidence Update. For each admitted call, the Executor crops the corresponding short interval from the original audiovisual stream and routes the local media and directed questions to the selected Observer. Calls in the same round execute in parallel. This hierarchy uses the proxy for global navigation and original local media for fine-grained verification, concentrating observation compute on information-dense moments while adapting the tool mix and temporal granularity across rounds: 
+
+𝑂 𝑟 = Execute (𝑄 𝑟 ; 𝑉 ). (2) 
+
+𝑂 𝑟 is the observation batch corresponding to 𝑄 𝑟 . Once the full batch returns, Evidence Memory advances as 
+
+𝑀 𝑟 +1 = Update (𝑀 𝑟 , 𝑄 𝑟 , 𝑂 𝑟 ).
+
+Reflection, Backfill, and Evidence Synthesis. The updated 𝑀 𝑟 +1 becomes the next Planner input, allowing the same model to reassess modality complementarity, temporal localization, and question focus before issuing follow-up calls or proposing termination. This closes the active-perception loop. After the active loop exits, Coverage no longer invokes the Planner. It executes deterministic default observations according to video duration, modality availability, and prior calls within the residual budget. The Finalizer then accesses no media and issues no tool calls; it organizes the final Evidence Memory and configuration-selected non-media planning context P★ into a temporally coherent and nonredundant caption. Algorithm 1 summarizes the complete control flow. 5Algorithm 1 OmniFysics-Agent Inference Process                                                                                   
+
+> Require: video 𝑉 ; Observers T; call/round budgets 𝐵, 𝑅 max
+> Ensure: caption 𝐶 𝐴 , final Evidence Memory 𝑀 ★
+> 1: e𝑉 ←Proxy (𝑉 );𝑀 ←∅;𝑏 ←𝐵
+> 2: for 𝑟 =1, . . . , 𝑅 max do
+> 3: if 𝑏 =0then
+> 4: break
+> 5: end if
+> 6: b𝑄 𝑟 ←𝜋 𝜓 (e𝑉, 𝑀, 𝑏 )⊲initial plan or evidence reflection
+> 7: 𝑄 𝑟 ←Admit (b𝑄 𝑟 ;𝑀, T, 𝑏 )
+> 8: if 𝑄 𝑟 =∅then
+> 9: break
+> 10: end if
+> 11: 𝑂 𝑟 ←Execute (𝑄 𝑟 ;𝑉 )⊲parallel within the batch
+> 12: 𝑀 ←Update (𝑀, 𝑄 𝑟 , 𝑂 𝑟 )
+> 13: 𝑏 ←𝑏 − | 𝑄 𝑟 |
+> 14: end for
+> 15: 𝑀 ★←Coverage (𝑉, 𝑀, 𝑏 ;T ) ⊲deterministic; no Planner
+> 16: 𝐶 𝐴 ←Finalize (𝑀 ★,P★)⊲no media or tools
+> 17: return (𝐶 𝐴 , 𝑀 ★)
+
+3.3 OmniFysics-Captioner 
+
+The active acquisition and synthesis pipeline yields 50K evidence-rich, physics-dense video–caption pairs. To amortize the agent’s observation and evidence-organization capability into a single forward pass, we fully fine-tune Qwen3-Omni-30B-A3B-Instruct on raw audiovisual input with agent captions as supervision [19]. Let Dcap = {( 𝑉 𝑖 , 𝐶 𝐴,𝑖 )} 𝑁 𝑖 =1 denote this dataset, where 𝑁 = 50K. The model jointly reads visual stream 𝑋 𝑣 and audio stream 𝑋 𝑎 from the video container and minimizes the conditional negative log-likelihood: 
+
+Lcap (𝜃 ) = − 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+log 𝑝 𝜃 
+
+ 𝐶 𝐴,𝑖 | 𝑋 𝑣 𝑖 , 𝑋 𝑎 𝑖 
+
+ . (3) Equation (3) uses teacher forcing, with loss computed only on assistant-caption tokens. Supervision contains only the final caption, not temporal windows, tool requests, Observer returns, or reflection trajectories. The Captioner amortizes evidence organization and description from the Agent’s final output, rather than learning an explicit planning or tool-use policy. At deployment, it generates a caption from raw audio and video in one forward pass without external tools. 
+
+3.4 OmniPhysCap (OPC) Benchmark 
+
+Benchmark Overview. Existing detailed-caption benchmarks provide strong visual-reference, event-level, or cloze-based evaluation, but still lack systematic evaluation of omni-modal information, especially physical interactions and outcomes. As summarized in Table 1, OPC benchmark complements these benchmarks with typed diagnostics for physics and audiovisual omission. It contains 1,000 audiovisual clips of 6–60 seconds and 8,000 multiple-choice probes, with 5–10 probes assigned per video to provide more precise and appropriate coverage than a fixed question count. Together, these probes cover eight information types, including general semantics, temporal relations, audio, audiovisual alignment, and physical interactions and outcomes. 
+
+Evidence-Grounded Question Construction. To improve questions, answers, and distractors reliability, we use Gemini 3.1 Pro to perform multi-round consistency checks and replace invalid items using the complete audiovisual input. Candidates that are ambiguous, insufficiently supported, or internally inconsistent are filtered based on answer consistency, option mutual exclusivity, and support from video evidence, reducing hallucinations introduced by automatic question generation. Verified questions are then semantically deduplicated, constrained for content coverage, and cross-validated by human annotators to form the final question set. Unlike cloze benchmarks using lexical blanks, OPC benchmark retains semantically distinct, event-grounded questions, prioritizing diagnostic coverage over volume. 6Table 1 Comparison with detailed video-caption evaluation benchmarks. “Units” denotes semantic items used to inspect a generated caption, and “Omission” denotes an explicit absent-information option. V and A denote visual and audio input; MCQ denotes multiple-choice question. 
+
+Benchmark Videos Units Input Physics Audio/AV Omission Evaluation design 
+
+VDC Detailed [12] 1,027 19,811 V ✗ ✗ ✗ Open QA over five structured reference views DREAM-1K [40] 1,000 6,298 V ✗ ✗ ✗ Bidirectional entailment over atomic events Omni-Cloze [15] 2,320 69,600 V+A ✗ ✓ ✓ Fixed-count caption-to-cloze; 30 blanks/video 
+
+OPC benchmark 1,000 8,000 V+A ✓ ✓ ✓ Adaptive typed MCQ; video-macro score 
+
+Caption-to-QA Evaluation Protocol. To ensure consistent cross-system comparison, each system generates one detailed caption for every test video under the same media input. Reported scores use video-level macro-averaging across test clips. Formal evaluation uses GPT-5.6 as the fixed caption-only Judge. To explicitly characterize information missing from captions and reduce guessing bias introduced by closed-set selection, we add a Not Mentioned option to each question alongside mutually exclusive content options: selecting the reference answer is counted as correct; selecting Not Mentioned indicates that the caption does not provide sufficient information to answer the question; and selecting an incorrect content option is counted as a hallucination. This constrained-choice protocol distinguishes correct recovery, missing evidence, and factual conflict at the question level, reducing subjective uncertainty in open-ended LLM scoring while improving stability and interpretability. 
+
+4 Experiments 
+
+4.1 Caption Evaluation 
+
+To evaluate video selection, agentic data construction, and the resulting end-to-end Captioner, we use two complementary settings: (1) direct evaluation on established caption benchmarks, which measures detail coverage and factuality; and (2) cascade evaluation, in which a frozen caption supports downstream question answering, thereby measuring information completeness and task utility.                                                                                                                   
+
+> Table 2 Detailed-captioning results on established benchmarks. Bold indicates the best open-source result per column. Published results are quoted; all others are reproduced using official protocols.
+> Model VDC Detailed DREAM-1K Omni-Cloze Acc. % Score ↑F1 score ↑Visual % Audio % AV % Total % Score ↑
+> Proprietary Models
+> GPT-4o [41] 46.3 2.5 38.3 39.9 19.2 38.9 32.8 28.8 Gemini 3.5 Flash [42] 50.6 2.4 42.0 49.7 25.1 51.2 41.6 36.1 Gemini 3.1 Pro [43] 51.0 2.5 40.9 51.9 25.7 51.1 43.0 37.2
+> Open-Source Omni Models
+> VideoLLaMA 2 [17] 38.1 1.9 26.6 5.7 2.6 7.3 4.8 3.9 Qwen2.5-Omni [18] 39.7 2.2 31.6 10.4 12.9 18.9 12.9 11.0 Qwen3-Omni [19] 52.5 2.5 35.9 47.4 40.4 49.7 45.3 33.4 MiniCPM-o-4.5 [44] 50.8 2.5 32.4 43.3 31.0 46.2 39.5 34.6
+> Open-Source Omni Caption Models
+> OmniCaptioner-IF-3B [15] 46.9 2.3 29.7 32.8 35.9 39.6 34.8 24.7 OmniCaptioner-IF-7B [15] 47.9 2.4 31.7 31.2 29.6 40.8 32.0 28.3 AVoCaDO [14] 53.2 2.6 35.9 42.1 46.4 46.6 44.2 40.9 video-SALMONN-2 [13] 52.0 2.6 34.4 31.2 32.3 42.0 33.6 28.7 UGC-VideoCaptioner [21] 51.3 2.5 31.2 36.0 26.2 40.6 33.3 29.0 OmniFysics-Captioner (Ours) 57.9 2.9 36.2 48.0 49.2 53.4 49.2 42.8
+
+Direct Evaluation. We evaluate caption quality on VDC Detailed [12], DREAM-1K [40], and Omni-Cloze [15]. VDC Detailed and DREAM-1K are visual-only captioning benchmarks: the former reports Accuracy and VDCscore 7through fine-grained visual question answering, while the latter reports the harmonic-mean F1 score to jointly measure descriptive accuracy and content completeness. Omni-Cloze evaluates the recoverability of visual, audio, and audiovisual information through constrained cloze questions, reporting Visual, Audio, AV, and Total Accuracy. Its Score rewards correct answers while penalizing incorrect non-Not Given answers, thereby jointly reflecting correct recovery and hallucination errors. As shown in Table 2, proprietary baselines include GPT-4o, Gemini 3.1 Pro, and Gemini 3.5 Flash. We further divide open-source models by intended use: open-source Omni models include VideoLLaMA 2, MiniCPM-o-4.5, Qwen2.5-Omni, and Qwen3-Omni; open-source Omni Caption models include video-SALMONN 2, OmniCaptioner, UGC-VideoCaptioner, AVoCaDO, and OmniFysics-Captioner. OmniFysics-Captioner obtains 57.9% Accuracy and a 2.9 VDCscore on VDC Detailed, outperforming all proprietary, open-source Omni, and open-source Omni Caption baselines. It further achieves an F1 score of 36.2 on DREAM-1K and leads all open-source models on Omni-Cloze, demonstrating the strongest open-source performance across all three benchmarks.                                                                                       
+
+> Table 3 Caption-to-QA cascade evaluation. The best result among open-source models in each column is shown in bold.
+> Model Daily-Omni WorldSense Video-MME
+> Proprietary Models
+> GPT-4o 50.3 38.2 60.7 Gemini 3.5 Flash 62.2 43.9 69.0 Gemini 3.1 Pro 64.1 49.2 76.4
+> Open-Source Omni Models
+> VideoLLaMA 2 57.6 41.5 62.8 Qwen2.5-Omni 52.7 34.3 57.4 Qwen3-Omni 58.5 38.8 63.6 MiniCPM-o-4.5 56.7 38.9 62.2
+> Open-Source Omni Caption Models
+> OmniCaptioner-IF-3B 54.7 37.0 58.9 OmniCaptioner-IF-7B 53.5 39.1 60.7 AVoCaDO 60.5 41.8 61.9 video-SALMONN-2 61.1 43.0 62.8 UGC-VideoCaptioner 54.6 37.8 60.8 OmniFysics-Captioner 64.6 45.7 64.8 Table 4 Results on OPC benchmark. The best result among open-source models in each column is shown in bold.
+> Model Phys. Non-Phys. Total
+> Proprietary Models
+> GPT-4o 36.3 20.4 26.1 Gemini 3.5 Flash 37.3 21.3 27.0 Gemini 3.1 Pro 47.8 39.1 42.3
+> Open-Source Omni Models
+> VideoLLaMA 2 7.4 3.9 5.2 Qwen2.5-Omni 17.3 10.9 13.2 Qwen3-Omni 35.3 25.3 28.9 MiniCPM-o-4.5 34.7 26.7 29.5
+> Open-Source Omni Caption Models
+> OmniCaptioner-IF-3B 25.0 18.2 20.5 OmniCaptioner-IF-7B 26.3 18.6 21.2 AVoCaDO 38.1 40.9 39.4 video-SALMONN-2 31.6 25.4 27.3 UGC-VideoCaptioner 24.8 17.0 19.9 OmniFysics-Captioner 57.7 46.1 50.3
+
+Cascade Evaluation. We evaluate caption-to-QA performance on three omni-modal benchmarks: Daily-Omni [24], WorldSense [45], and Video-MME [46]. This setting measures the fine-grained information retained by model- and system-generated captions. Using GPT-5.6 as a unified caption-only question-answering model, Table 3 reports Accuracy on the original questions. OmniFysics-Captioner scores 64.6 on Daily-Omni, 0.5 percentage points above the strongest baseline, Gemini 3.1 Pro, and obtains 45.7 on WorldSense and 64.8 on Video-MME. Although proprietary models such as Gemini 3.1 Pro remain ahead on the latter two benchmarks, OmniFysics-Captioner ranks first among all compared open-source methods. 
+
+4.2 Results and Analysis of OPC benchmark 
+
+Model Performance. Table 4 reports Caption-QA Accuracy on OPC benchmark for all questions (Total), the physics-question subset (Phys.), and the non-physics subset (Non-Phys.). OmniFysics-Captioner achieves 50.3%, 57.7%, and 46.1% on the three metrics, respectively, outperforming all proprietary and open-source baselines. On Total and Phys., OmniFysics-Captioner improves over the strongest baseline, Gemini 3.1 Pro, by 8.0 and 9.9 percentage points, respectively; on Non-Phys., it surpasses the strongest baseline, AVoCaDO, by 5.3 percentage points. The more pronounced gain on the physics subset indicates that PPM-enriched Agent supervision enables the Captioner to retain more physical evidence about object properties, interaction relations, and state changes. Meanwhile, the concurrent improvement on Non-Phys. shows that this enhancement in physical perception does not come at the expense of general 8Question 1: How does the snowboarder's upper body rotate relative to the board’s rotation during the twist? A. The upper body remains perfectly still while the board spins. B. The upper body rotates in the same direction as the board. C. The upper body leans forward while the board spins backward. D. The upper body is twisted in the opposite direction to the board's rotation. E. Not Mentioned Question 2: How does the snowboard edge interact with the snow surface during the twist? A. The snowboard edge digs deeply and stops the board instantly. B. The snowboard ba se slides flat without touching the snow. C. The snowboard edge carves slightly into the snow surface. D. The snowboard edge lifts completely off the snow surface. E. Not Mentioned 
+
+问题： 在旋转动作中，滑雪 A. 上半⾝保持完全静 B. 上半⾝与滑雪板的 C. 上半⾝向前倾斜， D. 上半⾝与滑雪板的  
+
+> Gemini 3.1 Pro ：
+> The video opens with the snowboarder riding down the slope ... Next, he rotates his lower body; the voiceover explains this follows the upper body turn ... The clip ends as the snowboarder completes one final 180 turn on the slope. [missing] Captioner w/o PPM supervision ：
+> The video opens on a sunny day on a groomed ski slope ... He pivots his upper body, turning his back to the camera, and then begins to twist his legs and the snowboard ... The video concludes with the snowboarder riding away from the camera down the slope. [missing] OmniFysics-Captioner(Ours): ... The snowboarder responds to this instruction by shifting their weight and rotating their torso to the right, preparing for the maneuver ... The snowboarder executes this phase by shifting their weight to the back foot and rotating their legs and the board in a counter-clockwise direction.... The snowboarder completes the rotation, with the board now facing the opposite direction. The snowboarder maintains their balance throughout the turn, with the board’s edge carving into the snow surface.
+
+Figure 3 Case study. Gemini 3.1 Pro and the Captioner without PPM supervision omit key physical details, while physical perception enables OmniFysics-Captioner to achieve stronger omni-modal understanding. 
+
+Table 5 Three-level analysis of OmniFysics-Agent through one-pass baselines, an online PPM ablation, and transfer of PPM-enriched supervision to a tool-free Captioner. 
+
+Method Daily-Omni OPC Total OPC Phys. 
+
+One-Pass Captioning 
+
+Qwen3-Omni 58.5 28.9 35.3 Gemini 3.1 Flash-Lite 60.6 29.9 41.5 
+
+Online Agent Inference 
+
+Full toolbox 72.6 53.0 63.6 w/o PPM 70.2 51.0 55.8 
+
+Tool-Free Captioner 
+
+PPM-enriched sup. 64.6 50.3 57.7 no-PPM sup. 62.7 45.7 53.1 
+
+audiovisual information; instead, cross-tool evidence aggregation improves the overall information completeness and cross-modal recoverability of the caption. 
+
+4.3 Multi-Level Analysis of OmniFysics-Agent 
+
+This section examines OmniFysics-Agent at three complementary levels: the system-level effectiveness of active evidence acquisition, the component-level contribution of PPM during caption construction, and the deployment-level transfer of PPM-enriched supervision to a Captioner. We evaluate on two representative benchmarks using the setup described under Caption Evaluation throughout. Figure 3 complements the quantitative analysis with a representative comparison of physical details retained by different captions. 
+
+Effectiveness of Active Evidence Acquisition. Physical interactions and state changes are often localized in short temporal intervals and may be missed by one-pass observation. We first examine whether the active acquisition process described under OmniFysics-Agent improves the amount of information retained in the final caption. Qwen3-Omni and Gemini 3.1 Flash-Lite serve as the system’s primary tool and Planner, respectively. We compare their standalone captioning performance with that of the complete OmniFysics-Agent system built upon these components. As shown in Table 5, OmniFysics-Agent obtains 72.6 on Daily-Omni, 53.0 on OPC benchmark Total, and 63.6 on OPC benchmark Phys. It exceeds Qwen3-Omni by 14.1, 24.1, and 28.3 points, respectively, and Gemini 3.1 Flash-Lite by 12.0, 23.1, and 22.1 points. These gains show that the complete active evidence-acquisition workflow produces captions with more recoverable information than either component used alone for one-pass captioning. Across fine-grained captioning and cascade evaluations, the workflow integrates temporally distributed and modality-specific evidence through iterative 9localized observation and cross-tool aggregation, thereby yielding captions with substantially broader recoverable coverage of audiovisual and physical details. 
+
+Contribution of PPM. The preceding comparison validates the complete Agent but does not determine whether the dedicated physical Observer contributes beyond the general audio and visual tools. We therefore construct a matched ablation in which only PPM is removed, while the Planner, Finalizer, ALM/VLM access, call budget, caption instruction, and decoding settings remain unchanged. Removing PPM decreases Daily-Omni from 72.6 to 70.2 and OPC benchmark Total from 53.0 to 51.0. More notably, OPC benchmark Phys. decreases from 63.6 to 55.8, a 7.8-point drop. The substantially larger degradation on the physics-specific subset indicates that PPM contributes targeted evidence about object properties, contact relations, material responses, and state transitions, rather than producing an undifferentiated increase in caption detail. 
+
+Transfer of PPM-Enriched Supervision. The practical purpose of Agent-generated supervision is to transfer evidence-rich captioning behavior to an end-to-end model that does not require online tools. To test this transfer, we train two Captioners on paired captions generated from the same video manifest. The models use the same initialization and training configuration; the only difference in constructing the two training datasets is whether PPM is used as an Observer when generating the supervision captions. As reported in Table 5, PPM-enriched supervision improves Daily-Omni from 62.7 to 64.6, OPC benchmark Total from 45.7 to 50.3, and OPC benchmark Phys. from 53.1 to 57.7. These results further demonstrate that physical evidence acquired by OmniFysics-Agent can be partially transferred to single-pass, tool-free caption generation. They also highlight the value of physical-perception tools in omni-modal captioning, particularly for physical perception, and further show that physical perception can strengthen omni-modal understanding. 
+
+5 Conclusion 
+
+This work presents a unified framework for physics-aware omni-modal captioning. We construct Daily-Physics 50K from physics-rich videos, use OmniFysics-Agent to acquire temporally localized audiovisual and physical evidence, and train OmniFysics-Captioner for tool-free inference. We also introduce OPC benchmark to evaluate the recovery of physical and cross-modal information from generated captions. Experiments show state-of-the-art open-source performance on detailed audiovisual captioning benchmarks. Multi-level analyses demonstrate that active evidence acquisition improves information coverage, that the PPM Observer provides targeted cues about object properties, interactions, material responses, and state transitions, and that PPM-enriched supervision transfers these gains to the end-to-end Captioner. For embodied intelligence, robotic manipulation, and world models, physical perception bridges multimodal observation and reliable understanding of dynamic environments. By providing scalable physics-rich supervision and evaluation, our framework offers a foundation for building such systems. We will release Daily-Physics 50K, OmniFysics-Captioner, and OPC benchmark to support research on physical perception and omni-modal captioning. 10 References 
+
+[1] Dingkang Yang, Jinjie Wei, Mingcheng Li, Jiyao Liu, Lihao Liu, Ming Hu, Junjun He, Yakun Ju, Wei Zhou, Yang Liu, et al. Medaide: Information fusion and anatomy of medical intents via LLM-based agent collaboration. Information Fusion , page 103743, 2025. [2] Dingkang Yang, Jinjie Wei, Ming Hu, Jiyao Liu, Lihao Liu, Zhaoyu Chen, Mingcheng Li, Junjun He, Wei Zhou, Yang Liu, et al. Toward empathetic care: an LLM-based multi-intention recognition framework for mental health and complex medical queries. 
+
+IEEE Transactions on Affective Computing , 2026. [3] Ziyun Qian, Zizhi Chen, Yizhou Liu, Mingyang Sun, Dingkang Yang, and Lihua Zhang. SpatialGuard: Harness-guided verifiable spatial reasoning for text-to-image generation. arXiv preprint arXiv:2609.01582 , 2026. [4] Dingkang Yang, Dongling Xiao, Jinjie Wei, Mingcheng Li, Zhaoyu Chen, Ke Li, and Lihua Zhang. Improving factuality in large language models via decoding-time hallucinatory and truthful comparators. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 25606–25614, 2025. [5] Minghao Han, Dingkang Yang, Yue Jiang, Yizhou Liu, and Lihua Zhang. OmniFysics: Towards physical intelligence evolution via omni-modal signal processing and network optimization. arXiv preprint arXiv:2602.07064 , 2026. [6] Hsiao-Yu Tung, Mingyu Ding, Zhenfang Chen, Daniel Bear, Chuang Gan, Joshua B. Tenenbaum, Daniel L. K. Yamins, Judith E. Fan, and Kevin A. Smith. Physion++: Evaluating physical scene understanding that requires online inference of different physical properties. In Advances in Neural Information Processing Systems , volume 36, pages 67048–67068. Curran Associates, Inc., 2023. Datasets and Benchmarks Track. [7] Zhicheng Zheng, Xin Yan, Zhenfang Chen, Jingzhou Wang, Qin Zhi Eddie Lim, Joshua B. Tenenbaum, and Chuang Gan. ContPhy: Continuum physical concept learning and reasoning from videos. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pages 61526–61558. PMLR, 2024. [8] Jensen Gao, Bidipta Sarkar, Fei Xia, Ted Xiao, Jiajun Wu, Brian Ichter, Anirudha Majumdar, and Dorsa Sadigh. Physically grounded vision-language models for robotic manipulation. In 2024 IEEE International Conference on Robotics and Automation ,pages 12462–12469. IEEE, 2024. [9] Wei Chow, Jiageng Mao, Boyi Li, Daniel Seita, Vitor Campagnolo Guizilini, and Yue Wang. PhysBench: Benchmarking and enhancing Vision-Language Models for physical world understanding. In The Thirteenth International Conference on Learning Representations . OpenReview.net, 2025. [10] Ranjay Krishna, Kenji Hata, Frederic Ren, Li Fei-Fei, and Juan Carlos Niebles. Dense-captioning events in videos. In 
+
+Proceedings of the IEEE International Conference on Computer Vision , pages 706–715, 2017. [11] Lin Chen, Xilin Wei, Jinsong Li, Xiaoyi Dong, Pan Zhang, Yuhang Zang, Zehui Chen, Haodong Duan, Bin Lin, Zhenyu Tang, Li Yuan, Yu Qiao, Dahua Lin, Feng Zhao, and Jiaqi Wang. ShareGPT4Video: Improving video understanding and generation with better captions. arXiv preprint arXiv:2406.04325, 2024. [12] Wenhao Chai, Enxin Song, Yilun Du, Chenlin Meng, Vashisht Madhavan, Omer Bar-Tal, Jenq-Neng Hwang, Saining Xie, and Christopher D. Manning. AuroraCap: Efficient, performant video detailed captioning and a new benchmark. In The Thirteenth International Conference on Learning Representations , 2025. [13] Changli Tang, Yixuan Li, Yudong Yang, Jimin Zhuang, Guangzhi Sun, Wei Li, Zejun Ma, and Chao Zhang. video-SALMONN 2: Caption-enhanced audio-visual large language models. arXiv preprint arXiv:2506.15220, 2025. [14] Xinlong Chen, Yue Ding, Weihong Lin, Jingyun Hua, Linli Yao, Yang Shi, Bozhou Li, Yuanxing Zhang, Qiang Liu, Pengfei Wan, Liang Wang, and Tieniu Tan. AVoCaDO: An audiovisual video captioner driven by temporal orchestration. arXiv preprint arXiv:2510.10395, 2025. [15] Ziyang Ma, Ruiyang Xu, Zhenghao Xing, Yunfei Chu, Yuxuan Wang, Jinzheng He, Jin Xu, Pheng-Ann Heng, Kai Yu, Junyang Lin, Eng Siong Chng, and Xie Chen. Omni-Captioner: Data pipeline, models, and benchmark for omni detailed perception. In 
+
+International Conference on Learning Representations , 2026. [16] Keda Tao, Wenjie Du, Bohan Yu, Weiqiang Wang, Jian Liu, and Huan Wang. Active perception agent for omnimodal audio-video understanding. arXiv preprint arXiv:2512.23646, 2025. [17] Zesen Cheng, Sicong Leng, Hang Zhang, Yifei Xin, Xin Li, Guanzheng Chen, Yongxin Zhu, Wenqi Zhang, Ziyang Luo, Deli Zhao, and Lidong Bing. VideoLLaMA 2: Advancing spatial-temporal modeling and audio understanding in video-LLMs. arXiv preprint arXiv:2406.07476, 2024. [18] Jin Xu, Zhifang Guo, Jinzheng He, Hangrui Hu, Ting He, Shuai Bai, Keqin Chen, Jialin Wang, Yang Fan, Kai Dang, Bin Zhang, Xiong Wang, Yunfei Chu, and Junyang Lin. Qwen2.5-Omni technical report. arXiv preprint arXiv:2503.20215, 2025. [19] Jin Xu, Zhifang Guo, Hangrui Hu, Yunfei Chu, Xiong Wang, Jinzheng He, Yuxuan Wang, Xian Shi, Ting He, Xinfa Zhu, Yuanjun Lv, Yongqi Wang, Dake Guo, He Wang, Linhan Ma, Pei Zhang, Xinyu Zhang, Hongkun Hao, Zishan Guo, Baosong Yang, Bin Zhang, Ziyang Ma, Xipin Wei, Shuai Bai, Keqin Chen, Xuejing Liu, Peng Wang, Mingkun Yang, Dayiheng Liu, 
+
+11 Xingzhang Ren, Bo Zheng, Rui Men, Fan Zhou, Bowen Yu, Jianxin Yang, Le Yu, Jingren Zhou, and Junyang Lin. Qwen3-Omni technical report. arXiv preprint arXiv:2509.17765, 2025. [20] Liping Yuan, Jiawei Wang, Haomiao Sun, Yuchen Zhang, and Yuan Lin. Tarsier2: Advancing large vision-language models from detailed video description to comprehensive video understanding. arXiv preprint arXiv:2501.07888, 2025. [21] Peiran Wu, Yunze Liu, Zhengdong Zhu, Enmin Zhou, and Junxiao Shen. UGC-VideoCaptioner: An omni ugc video detail caption model and new benchmarks. arXiv preprint arXiv:2507.11336, 2025. [22] Yanghai Wang, Jiahao Wang, Jiafu Tang, Yuanxing Zhang, Zhe Cao, Hanyan Bian, Zijie Zhang, Weiliang Luo, Zhiyu Pan, Zixuan Dong, Jiaheng Liu, and Zhaoxiang Zhang. AVSCap: Orchestrating audio-visual synergy for omni-modal video captioning. arXiv preprint arXiv:2607.12820, 2026. [23] Chen Zhao, Jiajun Ma, Qilong Huang, Tiehan Fan, Hongyu Li, Zhuoliang Kang, Xiaoming Wei, Jian Yang, and Ying Tai. Temporal and cross-modal alignment for enhanced audiovisual video captioning. In European Conference on Computer Vision ,2026. To appear. [24] Ziwei Zhou, Rui Wang, Zuxuan Wu, and Yu-Gang Jiang. Daily-Omni: Towards audio-visual reasoning with temporal alignment across modalities. arXiv preprint arXiv:2505.17862, 2025. [25] Samuel Yu, Peter Wu, Paul Pu Liang, Ruslan Salakhutdinov, and Louis-Philippe Morency. PACS: A dataset for physical audiovisual commonsense reasoning. In Computer Vision – ECCV 2022 , volume 13697 of Lecture Notes in Computer Science ,pages 292–309. Springer, 2022. [26] Benno Krojer, Mojtaba Komeili, Candace Ross, Quentin Garrido, Koustuv Sinha, Nicolas Ballas, and Mahmoud Assran. A shortcut-aware video-QA benchmark for physical understanding via minimal video pairs. arXiv preprint arXiv:2506.09987, 2025. [27] Xiyang Wu, Zongxia Li, Jihui Jin, Guangyao Shi, Gouthaman KV, Vishnu Raj, Nilotpal Sinha, Jingxi Chen, Fan Du, and Dinesh Manocha. MASS: Motion-aware spatial-temporal grounding for physics reasoning and comprehension in vision-language models. arXiv preprint arXiv:2511.18373, 2025. [28] Meng Cao, Haoran Tang, Haoze Zhao, Hangyu Guo, Jiaheng Liu, Ge Zhang, Ruyang Liu, Qiang Sun, Ian Reid, and Xiaodan Liang. PhysGame: Uncovering physical commonsense violations in gameplay videos. arXiv preprint arXiv:2412.01800, 2024. [29] Chak-Wing Mak, Guanyu Zhu, Boyi Zhang, Hongji Li, Xiaowei Chi, Kevin Zhang, Yichen Wu, Yangfan He, Chun-Kai Fan, Wentao Lu, Kuangzhi Ge, Xinyu Fang, Hongyang He, Kuan Lu, Tianxiang Xu, Li Zhang, Yongxin Ni, Youhua Li, and Shanghang Zhang. PhysicsMind: Sim and real mechanics benchmarking for physical reasoning and prediction in foundational VLMs and world models. arXiv preprint arXiv:2601.16007, 2026. [30] Guangyao Li, Yake Wei, Yapeng Tian, Chenliang Xu, Ji-Rong Wen, and Di Hu. Learning to answer questions in dynamic audio-visual scenarios. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 19086–19096, 2022. [31] Dima Damen, Hazel Doughty, Giovanni Maria Farinella, Antonino Furnari, Evangelos Kazakos, Jian Ma, Davide Moltisanti, Jonathan Munro, Toby Perrett, Will Price, and Michael Wray. Rescaling egocentric vision: Collection, pipeline and challenges for EPIC-KITCHENS-100. International Journal of Computer Vision , 130(1):33–55, 2022. [32] Yuanhan Zhang, Jinming Wu, Wei Li, Bo Li, Zejun Ma, Ziwei Liu, and Chunyuan Li. LLaVA-Video: Video instruction tuning with synthetic data. Transactions on Machine Learning Research , 2025. [33] Chen Liu, Peike Patrick Li, Qingtao Yu, Hongwei Sheng, Dadong Wang, Lincheng Li, and Xin Yu. Benchmarking audio visual segmentation for long-untrimmed videos. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 22712–22722, 2024. [34] Baoyao Yang, Wanyun Li, Dixin Chen, Junxiang Chen, Wenbin Yao, and Haifeng Lin. VideoMind: An omni-modal video dataset with intent grounding for deep-cognitive video understanding. arXiv preprint arXiv:2507.18552, 2025. [35] Jing Wang, Ao Ma, Ke Cao, Jun Zheng, Zhanjie Zhang, Jiasong Feng, Shanyuan Liu, Yuhang Ma, Bo Cheng, Dawei Leng, Yuhui Yin, and Xiaodan Liang. WISA: World simulator assistant for physics-aware text-to-video generation. arXiv preprint arXiv:2503.08153, 2025. [36] Hugging Face. FineVideo. Hugging Face dataset card, 2024. [37] Tiantian Geng, Teng Wang, Jinming Duan, Runmin Cong, and Feng Zheng. Dense-localizing audio-visual events in untrimmed videos: A large-scale benchmark and baseline. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 22942–22951, 2023. [38] Mingxin Li, Yanzhao Zhang, Dingkun Long, Keqin Chen, Sibo Song, Shuai Bai, Zhibo Yang, Pengjun Xie, An Yang, Dayiheng Liu, Jingren Zhou, and Junyang Lin. Qwen3-VL-Embedding and Qwen3-VL-Reranker: A unified framework for state-of-the-art multimodal retrieval and ranking. arXiv preprint arXiv:2601.04720, 2026. [39] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R. Narasimhan, and Yuan Cao. ReAct: Synergizing reasoning and acting in language models. In The Eleventh International Conference on Learning Representations . OpenReview.net, 2023. 
+
+12 [40] Jiawei Wang, Liping Yuan, Yuchen Zhang, and Haomiao Sun. Tarsier: Recipes for training and evaluating large video description models. arXiv preprint arXiv:2407.00634, 2024. [41] OpenAI. GPT-4o system card. arXiv preprint arXiv:2410.21276, 2024. [42] Google. Gemini 3.5 Flash. Google AI for Developers model documentation, 2026. [43] Google. Gemini 3.1 Pro preview. Google AI for Developers model documentation, 2026. [44] Junbo Cui et al. MiniCPM-o 4.5: Towards real-time full-duplex omni-modal interaction. arXiv preprint arXiv:2604.27393, 2026. [45] Jack Hong, Shilin Yan, Jiayin Cai, Xiaolong Jiang, Yao Hu, and Weidi Xie. WorldSense: Evaluating real-world omnimodal understanding for multimodal LLMs. In International Conference on Learning Representations , 2026. [46] Chaoyou Fu, Yuhan Dai, Yongdong Luo, Lei Li, Shuhuai Ren, Renrui Zhang, Zihan Wang, Chenyu Zhou, Yunhang Shen, Mengdan Zhang, Peixian Chen, Yanwei Li, Shaohui Lin, Sirui Zhao, Ke Li, Tong Xu, Xiawu Zheng, Enhong Chen, Caifeng Shan, Ran He, and Xing Sun. Video-MME: The first-ever comprehensive evaluation benchmark of multi-modal LLMs in video analysis. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 24108–24118, 2025. [47] Tsai-Shien Chen, Aliaksandr Siarohin, Willi Menapace, Ekaterina Deyneka, Hsiang-Wei Chao, Byung Eun Jeon, Yuwei Fang, Hsin-Ying Lee, Jian Ren, Ming-Hsuan Yang, and Sergey Tulyakov. Panda-70M: Captioning 70m videos with multiple cross-modality teachers. arXiv preprint arXiv:2402.19479, 2024. 
+
+13 Appendix Contents 
+
+A Video Dataset Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 A.1 Source Dataset Descriptions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 A.2 Event Queries and Clip Construction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 
+
+B Agent-Based Caption Generation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16 B.1 Multimodal Evidence Acquisition . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 B.2 Coverage Completion and Caption Synthesis . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 
+
+C Implementation Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 C.1 Physical Perception Model (PPM) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 C.2 Training Configuration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 
+
+D OmniPhysCap (OPC) Benchmark Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 D.1 Independent Evaluation-Video Curation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 D.2 Evidence-Grounded Construction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 D.3 Caption-to-QA Evaluation Protocol . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 D.4 Human Validation of OPC . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 D.5 Qualitative Case Studies . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 
+
+E Evaluation Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 E.1 Benchmark Overview . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 E.2 Standard Benchmark Evaluation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 E.3 Controlled Comparisons and Ablations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 
+
+F Limitations and Future Work . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 
+
+G The Prompt Design of Agent . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 14 A Video Dataset Details 
+
+A.1 Source Dataset Descriptions 
+
+The videos used to construct our training dataset come from multiple sources to ensure diverse audiovisual content. Below, we summarize the scale, content, and annotation tasks of each source dataset according to its original paper or official dataset page. 
+
+AVQA. MUSIC-AVQA [30] studies questions about visual objects, sounds, and their associations in dynamic audio-visual scenes. It contains 9,288 musical-performance videos totaling more than 150 hours and 45,867 question–answer pairs generated from 33 templates. The questions span three modal scenarios and nine question types, requiring multisensory perception and spatiotemporal reasoning. 
+
+Bilibili-Videos. Bilibili-Videos consists of user-generated videos from the Bilibili platform rather than an academic benchmark with a fixed task and official split. Its content includes everyday demonstrations, sports, entertainment, and uploads containing multiple consecutive events, with diverse scenes, editing styles, and activity types. Use and redistribution remain subject to the original licenses and platform terms. 
+
+EPIC-Kitchens. EPIC-KITCHENS-100 [31] provides 100 hours of unscripted egocentric audio-visual recordings captured with head-mounted cameras in 45 kitchens across four cities, with approximately 90K action segments. Its close-range manipulation sequences include contact, tool use, pouring, cutting, heating, and before–after state changes, together with verb and noun annotations for action recognition, action detection, and action anticipation. 
+
+LLaVA-Video. LLaVA-Video-178K [32] was constructed for video instruction tuning and contains 178,510 caption entries, 960,792 open-ended question–answer items, and 196,198 multiple-choice question–answer items. It covers academic and YouTube videos across multiple duration ranges and organizes synthetic annotations into detailed captioning, open-ended question answering, and multiple-choice question answering tasks. 
+
+LU-AVS. LU-AVS [33] benchmarks audio-visual segmentation in long untrimmed videos, with precise sounding intervals and dense spatial annotations. The original release reports 10M masks across 6.6K videos and 11M bounding boxes across 7K videos, with substantially longer videos and more silence than trimmed audio-visual segmentation datasets. It supports evaluation of intermittent sound, sounding-object localization, and long-range audio-visual changes. 
+
+VideoMind. VideoMind [34] contains 103K audio-equipped videos with hierarchical factual, abstract, and intent descriptions; 3K manually validated samples are reserved by its authors for evaluation. The factual layer describes subjects, places, times, events, and actions, the abstract layer summarizes semantics across segments, and the intent layer captures deeper purposes in the context of the complete video. 
+
+WISA. WISA-32K [35] was collected for physics-aware text-to-video generation and organizes 32K videos around 17 physical laws in dynamics, thermodynamics, and optics. Its observable processes include motion and collision, fluid behavior, heat transfer and phase change, and optical phenomena such as reflection and refraction, accompanied by text descriptions grounded in physical laws. 
+
+FineVideo. FineVideo [36] is a Hugging Face collection of 43,751 Creative Commons YouTube videos with provenance metadata and rich time-aware annotations, including scenes, activities, audio-visual correlation, narrative progression, and editing details. It primarily contains long-form, open-domain videos in which an individual video may include multiple scenes and consecutive events. Licensing, attribution, and removal requirements are specified on the dataset page. 
+
+unAV-100. unAV-100 [37] targets dense localization of audio-visual events in untrimmed video. It contains 10K videos and more than 30K events across 100 categories, with 2.8 audio-visual events per video on average and possible temporal overlap. The benchmark evaluates event classification and temporal-boundary localization in complex scenes. 
+
+A.2 Event Queries and Clip Construction 
+
+Using the nine sources above, we define 23 observable physical-dynamic event subcategories, organized into the following six top-level physical-event categories: 
+
+Sports biomechanics: 1. Contact and collision in sports; 2. Fluid dynamics in water sports; and 3. Running, jumping, and aerial motion. 
+
+15 Motion and trajectories: 4. Projectile–air interaction; 5. Chain reactions and transmission; and 6. Rotation and balance. 
+
+Impact and material response: 7. Collision and impact; 8. Momentum transfer; 9. Swinging and oscillation; and 10. Fracture and deformation. 
+
+Everyday fluid dynamics: 11. Splashes and droplets; 12. Flow, mixing, and diffusion; and 13. Surface tension, cleaning, and special fluids. 
+
+Household thermodynamics and optics: 14. Flames and sparks; 15. Melting, freezing, evaporation, and condensation; 16. Refraction and reflection; 17. Everyday mechanical actions; 18. Fluid mixing and dissolution; 19. Household airflow, suction, and pressure; and 20. Kitchen heat and phase changes. 
+
+Surface friction and contact: 21. Friction and sliding; 22. Adhesion, peeling, and contact separation; and 23. Braking, frictional stopping, and grinding. 
+
+Each event-subcategory query contains an event name, a phenomenon definition, representative scenes, and Chinese and English keywords. The retrieval and screening procedure is implemented as follows. 
+
+Frame retrieval and CATA segmentation. We first sample every video at 1 fps and use Qwen3-VL-Embedding-8B to encode the 23 event queries and sampled frames. Query vectors are computed once per retrieval run, while each frame vector is reused for all queries. Cosine similarity between normalized frame and query vectors assigns a candidate event category to each retrieved frame. CATA averages the frame-level similarities in a 1-second sliding window and then merges candidate frames in temporal order. A segment continues only when the event category remains unchanged and the next candidate is no more than 1 second away; a category change or a gap longer than 1 second starts a new segment. Segments shorter than 3 seconds are removed. Short-process clips are capped at 60 seconds and longer continuous responses are split over time. A separate long-process branch keeps 60–600-second videos for multi-step operations, long causal chains, and slowly changing states. 
+
+Human quality audit. We draw a category-stratified random sample of 500 clips from the final training manifest, covering all six top-level physical-event categories, and ask human annotators to watch the complete audiovisual input and answer two binary questions for the same set of clips. The temporal-completeness question asks whether the beginning, interaction, and visible outcome of the main action all fall inside the clip, without truncation by the clip boundary or disruptive editing. The category-consistency question asks whether the assigned physical event is directly observable and agrees with the assigned category, without relying on titles, narration, or an unobserved cause. The two pass rates are aggregated independently from the collected binary judgments. The audit finds that 98.2% of clips are temporally complete and 96.9% contain physical events consistent with their assigned categories. These results show that the retrieval, segmentation, and screening pipeline preserves a complete process and the intended category for the large majority of clips, while leaving a small residual set with incomplete boundaries or ambiguous multi-event semantics. The high pass rates compare favorably with the quality and computational profiles of existing video-data construction pipelines. WISA-32K manually collects physics videos, applies shot detection and aesthetic filtering, generates captions with Qwen2-VL, and performs five rounds of qualitative and three rounds of quantitative physical annotation with GPT-4o mini [35]. At a larger scale, Panda-70M generates eight candidate captions with cross-modal teacher models and applies a ninth learned retrieval model for annotation selection [47]. ShareGPT4Video first filters videos through generated semantic descriptions, extracts nonredundant keyframes, invokes GPT-4V over successive keyframe pairs, aggregates the differential descriptions with GPT-4, and finally conducts manual quality inspection [11]. CATA removes these generative and manual operations from the candidate-discovery stage. The 23 event-query embeddings are cached, every sampled-frame embedding is reused across all queries, and clip boundaries are formed by a single linear scan over frame responses. Generative annotation and human inspection can therefore focus on the retrieved physical-event clips instead of the complete heterogeneous video pool. The resulting 98.2% temporal completeness and 96.9% category consistency demonstrate that this retrieval-first design substantially reduces the number of expensive model calls and manual screening decisions required before caption generation, while preserving highly reliable physical-event content and temporal boundaries. 
+
+B Agent-Based Caption Generation 
+
+16 B.1 Multimodal Evidence Acquisition 
+
+Our OmniFysics-Agent pipeline coordinates multiple multimodal models to collect complementary evidence for detailed caption generation. Gemini 3.1 Flash-Lite serves as the Planner: it uses a lightweight audiovisual proxy to establish a global event timeline, locates intervals that require closer inspection, and selects the appropriate Observer. The Observer toolbox follows the modality-specific roles defined in the main paper. Qwen3-Omni acts as the ALM for speech, music, and environmental sounds; Qwen3.6-35B-A3B acts as the VLM for local visual events, text, and visible state transitions; and the Physical Perception Model (PPM) examines representative frames for material, contact, support, deformation, motion, and likely physical outcomes. Evidence acquisition proceeds from coarse temporal navigation to focused verification. In the first round, the Planner reads the audiovisual proxy to build a cross-modal event skeleton that summarizes the initial state, key events and transitions, and visible outcomes. It then identifies information-dense intervals and issues a batch of modality-directed questions. For each admitted request, the Executor crops the corresponding interval from the original audiovisual stream and routes the local media to the selected Observer. Requests in the same round are executed in parallel, and their source-attributed outputs are written to Evidence Memory. In later rounds, the Planner reviews this accumulated evidence, identifies missing or uncertain details, and narrows the modality, temporal window, and question focus for follow-up observations. The active loop ends when the evidence is sufficient or no useful follow-up remains. 
+
+B.2 Coverage Completion and Caption Synthesis 
+
+After the active loop exits, Coverage performs a final deterministic pass without invoking the Planner. Based on the video duration, available modalities, and observations already stored in Evidence Memory, it adds only the baseline evidence that remains under-covered: global audio context when needed, visual checks distributed across the timeline, and representative-frame analysis for salient physical interactions that have not been adequately verified. These requests follow the same Execute–Observe–Update path and are appended to the shared memory. Coverage therefore closes residual modality and temporal gaps while preserving the active loop as the primary mechanism for targeted investigation. Gemini 3.1 Pro serves as the Finalizer. It makes no further media or tool calls, but organizes the final Evidence Memory and the retained non-media planning context into a temporally coherent, nonredundant caption, preserving uncertainty when observations cannot be reconciled. These captions are frozen as supervision for the end-to-end Captioner and are evaluated using the caption and caption-to-QA protocols described in the main paper. 
+
+C Implementation Details 
+
+C.1 Physical Perception Model (PPM) 
+
+The Physical Perception Model (PPM) serves as a dedicated Observer in OmniFysics-Agent, extracting object-level physical evidence from representative video frames, including material properties, contact and support relations, deformation, motion, and likely state changes. To train this capability, we use GPT-5.4 to construct approximately 2M Chinese and English question–answer examples based on Open Images V7. We obtain PPM by full-parameter supervised fine-tuning of Qwen3.6-35B-A3B on these examples. PPM identifies salient objects and uses approximate normalized bounding boxes as spatial anchors for associating physical properties with specific objects. It maintains object references across single- and multi-turn queries, compares physical properties between objects, and performs qualitative reasoning about sliding, stability, deformation, interaction outcomes, and changes caused by different materials or external conditions. The bounding boxes establish object–evidence correspondence rather than serving as an independent localization objective. Within the Agent pipeline, PPM converts representative frames into concise object-centric physical evidence that complements audio and visual observations with properties, interaction relations, and state-change cues. 
+
+C.2 Training Configuration 
+
+Table 6 lists the key training hyperparameters for the PPM Observer and OmniFysics-Captioner. 17 Table 6 Training hyperparameters for the PPM Observer and OmniFysics-Captioner.                       
+
+> Configuration PPM Observer OmniFysics-Captioner
+> Training data 2M Daily-Physics 50K GPU usage 32 ×NVIDIA H100 16 ×NVIDIA H100 GBS 64 16 Epochs 12Peak LR 5×10 −65×10 −6
+> LR schedule Cosine Cosine
+
+The PPM Observer takes a single image as input and is trained for one epoch with full-parameter supervised fine-tuning (SFT). OmniFysics-Captioner is trained for two epochs on the frozen Daily-Physics 50K video–caption pairs generated by the Agent pipeline. During training and evaluation, videos are sampled at 2 fps with audio enabled, and up to 256 frames are retained. We use the checkpoint from the end of the second epoch for all reported evaluations. 
+
+D OmniPhysCap (OPC) Benchmark Details 
+
+D.1 Independent Evaluation-Video Curation 
+
+OPC benchmark is constructed from an independently collected evaluation pool that is completely separate from Daily-Physics 50K. No benchmark clip, source video, or temporally overlapping segment appears in the Captioner training corpus. We further remove exact and perceptual near-duplicates across the two sets using source identity, file hashes, and multi-frame visual similarity. This strict separation provides a consistent held-out evaluation setting for OmniFysics-Captioner and all other evaluated models, supporting a fair comparison across systems. Candidate clips first undergo media-level validation to remove unreadable, incomplete, or otherwise unusable audiovisual files. Gemini 3.1 Pro then reviews each complete clip along three dimensions: (i) media quality , covering visual clarity and usable audio; (ii) event quality , covering temporal coherence, physical-process observability, and event completeness; and (iii) annotation quality , covering ambiguity and whether the available evidence supports reliable annotation. This screening removes nearly static footage, repetitive actions without observable outcomes, routine interface or gameplay content, decorative animation, text- or narration-dominant videos, and clips whose key action or result falls outside the temporal boundary. Accordingly, aesthetic quality is operationalized through visibility, temporal coherence, and annotatability rather than production polish or novelty. The remaining videos are deduplicated and grouped by visual scene and event semantics to reduce repeated templates and highly similar recordings. We then select 1,000 clips with balanced coverage of physical events, durations, source domains, and audiovisual content. The selected videos remain isolated from Daily-Physics 50K throughout benchmark construction. 
+
+D.2 Evidence-Grounded Construction 
+
+For each candidate video, the final OmniFysics-Agent caption and successful audio, visual, and physical observations are organized into an evidence dossier. A reasoning model uses this dossier to propose typed questions, reference answers, and mutually exclusive distractors, but the Agent evidence does not determine the final gold answer. Gemini 3.1 Pro independently reads the complete audiovisual video and performs consistency checks on answer support, distractor exclusivity, temporal scope, and wording. Candidates that are ambiguous, unsupported, or internally inconsistent are discarded or revised. Verified candidates are semantically deduplicated and selected to increase coverage of question types, event categories, and modality-specific information. Each video retains 5–10 questions, and human annotators cross-validate every retained item against the complete audiovisual input, removing questions with uncertain evidence, overlapping options, or inappropriate temporal scope. The final benchmark contains 8,000 questions over 1,000 videos. General questions assess global scene, object, and action understanding; Physics Interaction questions examine contact, support, collision, deformation, and motion relations; and Physics Outcome questions target observable state changes and consequences. Audio, AV Alignment, and Speech/OCR questions respectively evaluate acoustic evidence, temporal correspondence between sound and vision, and spoken or written information. Temporal questions test event ordering and duration, while 18 Table 7 Question-type distribution in OPC benchmark. The two physics types contain 2,938 questions in total. 
+
+Question type Questions Percentage (%) 
+
+General 1,704 21.3 Physics Interaction 1,573 19.7 Physics Outcome 1,365 17.1 Audio 835 10.4 Ending/Secondary 686 8.6 Speech/OCR 660 8.3 AV Alignment 625 7.8 Temporal 552 6.9 
+
+Ending/Secondary questions probe final states and less salient events outside the dominant action. This decomposition enables OPC benchmark to diagnose physical-process coverage, cross-modal grounding, temporal understanding, and information omissions that can be obscured by a single aggregate caption score. 
+
+D.3 Caption-to-QA Evaluation Protocol 
+
+Each evaluated system generates one caption for every benchmark video. GPT-5.6 is used as a fixed caption-only Judge and receives only the generated caption, a question, and five answer options: four mutually exclusive content options and Not Mentioned . It does not access the video, construction evidence, question category, or gold answer. Selecting the reference option is counted as Correct, while selecting Not Mentioned indicates that the caption omits the required evidence. The primary Coverage metric is computed per video and macro-averaged; Correct and Not Mentioned are additionally aggregated over all questions. Category Coverage is computed over videos containing the corresponding question family. Table 8 reports question-level results computed from the same frozen captions and GPT-5.6 Judge outputs used for the OPC results in the main paper. Correct measures whether the caption supports the reference answer, while Not Mentioned captures missing evidence. Both columns are question-level micro averages over all 8K questions, whereas the Total score in the main paper is video-level macro-averaged Coverage. 
+
+Table 8 Question-level Correct and Not Mentioned rates on OPC benchmark (%) over all 8K questions, computed from the same evaluation outputs as the main-paper OPC results. Correct is question-level micro accuracy; the main-paper Total is video-level macro-averaged Coverage.                             
+
+> Model Correct Not Ment.
+> Proprietary Models
+> GPT-4o 26.2 71.3 Gemini 3.5 Flash 27.1 70.9 Gemini 3.1 Pro 42.6 53.9
+> Open-Source Omni Models
+> VideoLLaMA 2 5.2 93.6 Qwen2.5-Omni 13.4 85.2 Qwen3-Omni 29.0 68.6 MiniCPM-o-4.5 29.6 67.7
+> Open-Source Omni Caption Models
+> OmniCaptioner-IF-3B 20.5 76.2 OmniCaptioner-IF-7B 21.4 75.2 AVoCaDO 39.2 56.8 video-SALMONN-2 27.5 69.4 UGC-VideoCaptioner 19.9 77.9 OmniFysics-Captioner 50.9 44.4
+
+19 D.4 Human Validation of OPC 
+
+To quantify question quality beyond model-based verification, we audit questions drawn from 200 benchmark videos. Human reviewers inspect the complete audiovisual input and check whether each question is answerable from observable evidence, whether the reference answer is supported, whether the content options are mutually exclusive, and whether the wording and temporal scope are unambiguous. An audited question is counted as reliable only when these requirements are jointly satisfied. The resulting question-reliability rate is 95.1%, indicating that the large majority of audited questions provide a clear and uniquely supported evaluation target. We separately assess the reliability of the fixed GPT-5.6 Judge under the same caption-only decision setting used for benchmark scoring. Human reviewers receive the frozen caption, question, and five answer options, without access to the original audiovisual input, construction evidence, or protected gold answer. Agreement is measured by whether the GPT Judge and human reviewer assign the same scoring decision to an audited case. Across cases drawn from the same 200-video subset, the raw GPT–human agreement reaches 97.4%. Together with the 95.1% question-reliability rate, this result supports the use of the fixed Judge for scalable OPC evaluation while retaining human review as an independent check on benchmark-item quality and automated scoring. 
+
+D.5 Qualitative Case Studies 
+
+Figures 4 and 5 illustrate how OPC benchmark connects temporally localized audiovisual evidence to its complete set of diagnostic questions. Each case lists every question, all answer options, and the Gold answer on the left, while the right panel presents the frozen OmniFysics-Captioner caption in full. Green excerpts mark the original caption spans from which the fixed caption-only Reader recovers the reference answer, while Missing badges identify evidence omissions. The two examples cover sequential deformation and rupture, audio–visual event alignment, granular impact, broadcast speech, and on-screen results. 
+
+E Evaluation Details 
+
+E.1 Benchmark Overview 
+
+VDC Detailed. VDC Detailed [12] contains 1,027 open-domain videos paired with manually inspected, structured reference descriptions averaging approximately 501 words. The references cover objective facts, background context, camera behavior, and detailed event timelines. Its VDCscore decomposes each reference into standardized short question–answer probes and tests whether the predicted caption preserves the corresponding information, making it suitable for evaluating long, information-dense descriptions. As reported in the main paper, OmniFysics-Captioner achieves 57.9% accuracy and a VDCscore of 2.9, the strongest result among the evaluated models. 
+
+DREAM-1K. DREAM-1K [40] comprises 1,000 clips balanced across live-action films, animated films, stock footage, YouTube videos, and short-form videos. Each clip contains dynamic events that cannot be reliably inferred from a single frame. Its AutoDQ protocol extracts atomic events from reference and generated descriptions, then applies bidirectional entailment to compute precision, recall, and their harmonic-mean F1 score. This formulation jointly measures event coverage and unsupported content; OmniFysics-Captioner obtains an F1 score of 36.2, ranking first among the compared open-source models. 
+
+Omni-Cloze. Omni-Cloze [15] evaluates detailed perception in visual-only, audio-only, and audio–visual settings. It contains 2,320 clips and 69,600 human-validated cloze blanks across 9 domains and 47 subcategories, with a fixed set of 30 blanks per clip. Each blank includes a Not Given option, allowing the protocol to separate omitted information from an incorrect asserted detail. OmniFysics-Captioner achieves 49.2% overall accuracy and a score of 42.8, with its strongest modality split on audio–visual questions at 53.4%, and leads all compared open-source models across the reported metrics. 
+
+Daily-Omni. Daily-Omni [24] targets temporally aligned audio–visual reasoning in real-life scenarios. Its 684 videos and 1,197 multiple-choice questions cover six task families: AV event alignment, event sequence, reasoning, inference, comparison, and context understanding. The benchmark therefore tests whether a caption preserves not only modality-specific events but also their temporal correspondence and cross-modal dependencies. OmniFysics-Captioner reaches 64.6% caption-to-QA accuracy, the highest result in the comparison and 0.5 percentage points above Gemini 3.1 Pro. 20 WorldSense. WorldSense [45] assesses real-world omni-modal recognition, understanding, and reasoning. It contains 1,662 synchronized audio–visual clips spanning 8 domains and 67 subcategories, together with 3,173 multiple-choice questions organized into 26 tasks. Its questions emphasize coupled audio–visual evidence across speech, environmental sounds, and music, rather than independent single-modality recognition. OmniFysics-Captioner obtains 45.7% accuracy, leading all compared open-source models and approaching Gemini 3.1 Pro at 49.2%. 
+
+Video-MME. Video-MME [46] provides broad video-understanding coverage over 900 videos and 2,700 multiple-choice questions from 6 domains and 30 fine-grained categories. Videos are divided into short ( < 2 minutes), medium (4–15 minutes), and long (30–60 minutes) groups, and the benchmark includes audio and available subtitles in addition to visual content. This design evaluates perception, reasoning, information synthesis, and robustness across substantially different temporal contexts. Under the unified caption-to-QA protocol, OmniFysics-Captioner achieves 64.8% accuracy and ranks first among the evaluated open-source models. 
+
+E.2 Standard Benchmark Evaluation 
+
+VDC Detailed is evaluated with its public caption-to-short-answer pipeline and reports both answer accuracy and VDCscore. DREAM-1K follows the released AutoDQ pipeline, using event extraction and bidirectional entailment to report precision, recall, and F1. Omni-Cloze uses the released cloze questions, answer options, and Reader protocol to measure visual, audio, audiovisual, and overall completion accuracy. For Daily-Omni, WorldSense, and Video-MME, a fixed GPT-5.6 caption-only Reader receives the frozen caption together with the original benchmark question and options, without access to the video or audio. Generation or parsing failures are counted as incorrect, and comparisons on shared videos use paired, video-level bootstrap estimates. 
+
+E.3 Controlled Comparisons and Ablations 
+
+Data-construction comparisons change one stage at a time while holding the remaining training and evaluation conditions fixed. Video-filtering comparisons match the number, source, event category, and duration distribution of selected clips. Agent-supervision comparisons use the same videos and Captioner configuration, changing only the supervision captions. The Agent cascade comparison likewise evaluates direct captioning and OmniFysics-Agent captions through the same frozen Reader, thereby measuring the system-level contribution of active evidence acquisition under their respective inference settings. The PPM ablation follows a paired design. Full-PPM and no-PPM captions are regenerated from the same video manifest with identical Planner, Finalizer, ALM/VLM access, decoding configuration, and output constraint; only the availability of the physical Observer changes. The resulting Captioners share initialization, optimization, preprocessing, and evaluation settings. Training and evaluation videos are separated by exact and perceptual duplicate checks before scoring. 
+
+F Limitations and Future Work 
+
+Daily-Physics 50K and OPC benchmark focus on physical processes that are directly supported by audiovisual evidence. This scope enables traceable, scalable supervision over heterogeneous real-world videos without requiring force sensors, calibrated geometry, or simulator states, while emphasizing observable interactions, material responses, state changes, and physical outcomes. Future work can associate these evidence-rich captions with persistent object tracks, depth and 3D geometry, contact graphs, material estimates, and paired simulation or robot-interaction trajectories to obtain more structured physical world representations. OmniFysics-Agent uses modular evidence acquisition as an offline supervision engine and transfers the resulting knowledge to the tool-free OmniFysics-Captioner, balancing detailed physical analysis with efficient deployment. Promising extensions include adaptive multi-frame observation, uncertainty-aware verification, reusable audiovisual representations, and evaluation of longer, egocentric, multi-object, action-conditioned, and counterfactual processes. These directions can strengthen world models and embodied agents by supporting interaction prediction, physically relevant experience retrieval, planning, failure diagnosis, and safety assessment in dynamic environments. 21 G The Prompt Design of Agent 
+
+The prompt settings of OmniFysics-Agent are provided below. We present the complete configuration used when only the audio and visual Observers are available; the physical-perception Observer and its tool-specific instructions are intentionally excluded. Runtime limits are supplied through metadata and are not instantiated below. 
+
+Agent System Prompt 
+
+Plan Observer calls over the original media to collect audio, visual, textual, and temporal evidence for a detailed caption. Use the proxy clip only for navigation and ground the final caption in textual Observer evidence. Do not answer hidden questions or write the caption during planning. 
+
+Tools. 
+
+• ALM : audio only, covering speech, lyrics, music, sound effects, silence, applause, noise, speaker or audio transitions, and timing. 
+
+• VLM : visual only, covering people, objects, actions, states, colors, counts, positions, OCR, subtitles, interfaces, logos, transitions, camera changes, and the ending. 
+
+Ask rules. 
+
+• Obey the available-tool list and runtime values for max ask rounds , max calls , min calls , and max questions -per tool call . Every call must specify a valid tool, start time, end time, and a nonempty list of neutral questions. 
+
+• Use event-centered windows and request timestamps for speech or lyrics, music changes, silence, and sound effects rather than only a transcript. 
+
+• Cover the opening, major action phases, transitions, later developments, and ending; use narrow follow-ups for exact actions, quoted phrases, cuts, and immediate aftermaths. 
+
+• Track the primary person or object, location, trajectory, tool use, and state change before secondary details. Group related neutral questions and avoid duplicate calls. 
+
+Evidence priorities. 
+
+1. Opening and ending states; exact event order; first, next, before, after, and immediately-after relations. 2. Audio–visual alignment around speech, lyrics, sounds, music changes, actions, text appearances, and cuts. 3. OCR, subtitles, interfaces, logos, names, numbers, charts, and scores, including when each appears, changes, persists, or disappears. 4. Object count, color, position, contact, support, motion, transformation, outcome, and final location. 5. High-risk evidence: commentary and scores, animation text and sound labels, narration after an introduction, and instructions aligned with hand or tool movement and its result. 
+
+QA-trap checklist. 
+
+• Preserve specific and broader sound labels when both are supported. 
+
+• Treat backdrop graphics, lyric words, stylized letters, captions, and LED text as readable text. 
+
+• For “during” and “immediately after,” verify the overlapping visual and next state rather than a nearby event. 
+
+• Retain multiple plausible labels with calibrated uncertainty. 
+
+Cross-modal rule. Match key ALM evidence with concurrent VLM evidence and key VLM events with corresponding audio. Cover the complete timeline without becoming audio-only or visual-only. 
+
+Inputs. Proxy clip, {case context }, available-tool metadata, runtime limits including max ask rounds , max calls , min -calls , and max questions per tool call , prior planning messages when present, and accumulated {evidence memory }.
+
+Output. Return only a JSON object containing tool calls . Each call specifies tool name , start time , end time , and a list of questions . Return an empty list only when no further evidence is needed. 
+
+JSON example. 
+
+{
+
+"tool calls": [{
+
+"tool name": "ALM", "start time": "00:00.000", "end time": "00:10.000", "questions": ["1. ..."] 
+
+}]
+
+}
+
+22 First-Round Brain Prompt 
+
+Round 1: build the evidence map. 
+
+Watch the proxy video for navigation, then ask the Observers for original-quality evidence. Do not treat the proxy as the evidence source for the final caption. 
+
+Planning requirements. 
+
+1. Request a timestamped global audio map covering speech or lyrics by phrase, named entities, speaker changes, music, exact sound-effect labels, applause, silence, noise, and audio transitions. Add short ALM checks around salient moments instead of relying on the global map alone. 2. Divide the visual timeline into the opening, major action phases, transitions, middle state, late events, and ending. Each VLM call should focus on a coherent event, shot group, text-card sequence, or action phase; exact actions and immediate-after states require localized evidence. 3. Check OCR, subtitles, names, numbers, scores, labels, logos, interfaces, charts, products, and text changes. If a lyric, spoken phrase, or chant is prominent, verify whether matching or related words also appear on screen. 4. Ask for the main people and objects, their initial positions, movement paths, entry or exit, interactions, visible outcomes, and states immediately before and after each major event. 5. When an introduction precedes narration, identify when speech begins and what is visible at that moment. Distinguish live action from replay, demonstration, animation, and persistent overlays when relevant. 6. For sports content, verify commentary, score or status, teams, clothing colors, the main action, and replay-versus-live order. For demonstrations or object manipulation, verify object identity, purpose, hand or tool movement, and the resulting state change. 7. Align every salient sound or phrase with the concurrent visual state and the next visible change, and align every major visual action, text change, or cut with its accompanying audio. 
+
+Inputs. Agent system prompt, proxy clip, {case context }, remaining-call metadata, available-tool metadata, and first-round planning metadata. No completed Observer evidence is available in this round. 
+
+Output. Return only the tool-call JSON defined by the system prompt. Do not stop after a coarse overview while meaningful intervals remain unchecked. 
+
+JSON example. 
+
+{
+
+"tool calls": [{
+
+"tool name": "VLM", "start time": "00:10.000", "end time": "00:18.000", "questions": ["1. What changes in this interval?", "2. What is visible immediately afterward?" ]
+
+}]
+
+}
+
+Follow-Up Brain Prompt 
+
+Next evidence round. 
+
+Inspect the accumulated Observer records and request only evidence that is missing, weakly localized, incomplete, or contradictory. 
+
+Repair and completion rules. 
+
+• Fill any uncovered opening, middle, late, or ending interval before finalization. 
+
+• If ALM reports an important phrase, sound, music change, applause, or silence, verify the overlapping visual and immediate aftermath. If VLM reports an important action, cut, text element, score change, or object-state change, inspect the corresponding audio. 
+
+• Refine generic audio descriptions into an exact type and order where possible. If evidence contains only a specific label, also check whether a broader answer-friendly category is supported; retain both when appropriate. 
+
+• Recheck titles, subtitles, lyric text, labels, interfaces, logos, charts, scores, numbers, products, and stylized backdrop text; determine whether each element newly appears, changes, disappears, or merely persists as an overlay. 
+
+• Repair transcript or commentary results that lack timestamps. Replace broad multi-event observations with the narrowest useful window around the relevant phrase, action, cut, or immediate-after state. 
+
+• Verify sequence-sensitive relations such as first, next, last, before, during, after, and immediately after rather than 
+
+23 substituting a nearby event. 
+
+• Preserve the main foreground trajectory before secondary gestures or background overlays. Verify the purpose and visible result of tool use, object construction, medical or instructional actions, and other hand–object interactions. 
+
+• When Observers disagree about identity, team or player, score, purpose, object name, sound label, event order, or live-versus-replay status, request the narrowest targeted follow-up rather than carrying both claims forward without verification. 
+
+Inputs. Agent system prompt, proxy clip, {case context }, remaining-call metadata, {completed calls }, previous planning messages, and accumulated {evidence memory } containing the intervals, questions, Observer answers, and status metadata from earlier rounds. 
+
+Output. Return only the tool-call JSON. Return an empty tool calls list only when the timeline, cross-modal alignment, exact text, major object trajectories and states, contradictions, and ending are adequately supported. 
+
+Continue example. 
+
+{
+
+"tool calls": [{
+
+"tool name": "ALM", "start time": "00:18.000", "end time": "00:24.000", "questions": ["1. What exact sound or speech occurs here, and in what order?" ]
+
+}]
+
+}
+
+Stop example. 
+
+{
+
+"tool calls": [] 
+
+}
+
+Audio Observer Prompt 
+
+System message. You are a precise audio Observer. Answer only from the provided audio segment. 
+
+Rules. 
+
+• Keep the same numbering as the questions. 
+
+• Be factual and conservative; explicitly correct unsupported assumptions in a question. 
+
+• Do not infer people, objects, actions, text, or any other visual content. 
+
+• Provide approximate timing and order inside the stated original-video interval. 
+
+• Report exact speech or lyrics when clear, named entities, speaker changes, music, exact sound-effect labels, applause, silence, noise, audio artifacts, and audio transitions. 
+
+• If a sound supports both a specific description and a broader category, preserve both without overstating certainty. 
+
+User message. Original video time range for this audio segment: {time range }. Answer from this audio only. Include approximate timing and order inside this range. Questions: 
+
+{numbered questions }
+
+Inputs. The cropped original-video audio segment, its original-video {time range }, the audio-only system message, and numbered {questions }.
+
+Output. Return only final numbered answers using the same numbering as the questions. Do not return JSON, a caption, visual claims, planning text, or additional commentary. 
+
+Example. 1. At approximately 00:03, ... 2. Immediately afterward, ... 
+
+24 Visual Observer Prompt 
+
+System message. You are a precise visual Observer. Answer only from the provided visual segment or sampled frames. 
+
+Rules. 
+
+• Keep the same numbering as the questions. 
+
+• Be factual and conservative; explicitly correct unsupported assumptions in a question. 
+
+• Do not infer speech, lyrics, music, sound effects, silence, or any other audio content. 
+
+• Provide approximate timing and order inside the stated original-video interval. 
+
+• Report people, objects, actions, states, counts, colors, positions, contact, entry or exit, movement trajectories, transforma-tions, transitions, camera changes, and the ending state. 
+
+• Transcribe OCR, subtitles, labels, names, numbers, logos, scores, charts, and interface elements exactly when possible, and state whether text appears, changes, persists, or disappears. 
+
+• Separate the primary foreground event from secondary gestures, watermarks, and persistent background overlays. 
+
+• If temporal continuity or identity is unclear from the supplied segment or frames, state the uncertainty and prefer a weaker supported fact over a strong guess. 
+
+User message. Original video time range for this visual segment: {time range }. Answer from this visual input only. Include approximate timing and order inside this range. Questions: 
+
+{numbered questions }
+
+Inputs. The cropped original-video visual segment or sampled original-video frames, their original-video {time range }, the visual-only system message, frame timestamps when frames are used, and numbered {questions }.
+
+Output. Return only final numbered answers using the same numbering as the questions. Do not return JSON, a caption, audio claims, planning text, or additional commentary. 
+
+Example. 1. Near the start of the interval, ... 2. The visible text reads ‘‘...’’ and then disappears. 
+
+Finalizer Prompt 
+
+You are the Finalizer. Given {case context } and the accumulated Observer records, write one evidence-rich caption and nothing else. Use the textual evidence; do not access the media or call tools at this stage. 
+
+Requirements. 
+
+1. Organize the caption chronologically from the initial scene and audio through meaningful events and transitions to the final state, using timestamps when supported. 2. Convert useful, nonduplicate records into concrete prose, preserving actions, trajectories, object states and relations, counts, colors, positions, readable text, speech or lyrics, music, sounds, camera changes, and outcomes. 3. For important phrases, sounds, text, actions, and cuts, describe the supported before, during, and after relations. Claim simultaneity only for overlapping timestamps; otherwise use “before,” “after,” or “nearby.” 4. Make the primary body, location, and object-state trajectory the backbone; add gestures, expressions, watermarks, and background overlays only after the main event is clear. 5. Preserve exact OCR, text-like graphics, sound labels, and timing. Include both specific and broader sound categories when supported, and state how text appears, changes, persists, or disappears. 6. Merge duplicates and order evidence by time. Prefer narrow, time-localized evidence over conflicting broad summaries, and do not restore discarded details from an isolated record. 7. Resolve remaining conflicts with the safest supported wording and calibrated uncertainty. Express physical attributes qualitatively unless an exact value is printed or measured; never invent facts. 8. End with a compact sentence covering the final visible state, continuing or stopped sound, and last action. 9. Do not mention tools, prompts, Observer records, Evidence Memory, JSON, hidden questions, evaluation, or the proxy clip; do not repeat conclusions or pad the caption. 
+
+Inputs. {case context }, accumulated audio and visual Observer records with their time ranges, questions, numbered answers, and status metadata, plus the available non-media planning context. Records marked unsuccessful or contradictory are not factual evidence unless confirmed elsewhere. 
+
+Output. Return only the final caption as chronological prose. Do not return JSON, headings, notes, explanations, or a list of tool records. 
+
+25 Q01 · General · Recovered What is the first object the car tire rolls over on the asphalt? A. A long cylindrical candy tube. B. A clear plastic grenade container. C. Three plastic modeling compound cups. D. A small, bright orange miniature basketball. E. Not Mentioned Q02 · Physics Interaction · Conflict How does the miniature basketball deform under the tire's contact pressure? A. It flattens and deforms downward but rebounds to its original spherical shape. B. It extrudes soft material laterally outward. C. It flattens permanently against the pavement. D. It ruptures and shatters into pieces. E. Not Mentioned Q03 · Physics Outcome · Recovered What is the final state of the Smarties candy tube after the tire passes over it? A. It rebounds elastically to its original cylindrical shape. B. It bursts open and explodes violently. C. It lies completely flattened and crushed on the dark road surface. D. It shatters into clear plastic fragments. E. Not Mentioned Q05 · Physics Interaction · Missing How does the modeling compound inside the Play-Doh cups react to the tire's compression? A. It is squeezed laterally outward and extrudes as thin, irregular layers. B. It absorbs the pressure and remains perfectly contained. C. It hardens and cracks into sharp shards. D. It vaporizes instantly upon contact. E. Not Mentioned Q06 · Temporal · Missing At what approximate timestamp does the tire begin rolling over the third object, the grenade container? A. Around 00:00:08.500. B. Around 00:00:05.500. C. Around 00:00:01.000. D. Around 00:00:02.500. E. Not Mentioned Q07 · Audio · Recovered What type of audio events are exclusively present in the video's soundtrack? A. Discrete physical impact sounds like squishing, crushing, popping, and scattering. B. Speech narration and ambient city noise. C. Background music and engine hum. D. Continuous tire rolling noise and wind. E. Not Mentioned Q08 · Speech/OCR · Missing What brand name and text style is visible on the light blue cylindrical tube? A. “Play-Doh” printed in small black block letters. B. “Smarties” printed in large, prominent white bubbly letters outlined in bold red. C. “500” printed in large yellow font. D. “BBs” printed in green italic letters. E. Not Mentioned Q09 · AV Alignment · Recovered How do the audio cues align with the visual interaction of the Play-Doh cups? A. Distinct crushing and squishing sounds occur precisely as the tire sequentially flattens each cup. B. Engine noise increases as the lids detach from the containers. C. Background music swells as the cups are approached. D. Silence is maintained throughout the entire crushing sequence. E. Not Mentioned Q10 · Physics Outcome · Recovered What happens to the yellow airsoft BBs when the grenade container ruptures? A. They melt into a single viscous pool. B. They scatter only in a single linear direction. C. They are forcefully ejected outward and spray radially across the pavement. D. They remain neatly contained within the shattered shell. E. Not Mentioned OmniFysics-Captioner(Ours): [Q01]The video begins with a stationary car tire resting on a dark, textured asphalt surface. The scene is quiet, with the tire positioned to the right of a small, orange basketball toy. As the clip progresses, the tire begins to roll forward, moving from right to left across the frame. At approximately 00:00:01, the tire makes direct contact with the basketball. The physical interaction is immediate and forceful; the tire’s high mass and rigidity exert significant compressive force on the basketball, which is relatively light and flexible. As the tire rolls over the toy, the basketball undergoes visible plastic deformation, flattening significantly at the point of contact before the tire passes over it. The tire itself shows only minor, localized elastic deformation under the load, maintaining its structural integrity throughout the interaction. Following the crushing of the basketball, the tire continues its forward motion across the asphalt. [Q03] At 00:00:03, the tire encounters a tube of Smarties candy. As the tire rolls over the tube, the packaging is subjected to intense compressive stress. The tube, being a relatively thin and flexible material, is crushed flat against the ground. The tire’s high friction coefficient helps maintain its grip on the asphalt, ensuring that the force is directed downward into the candy tube, causing it to buckle and deform permanently. The tire continues to roll, and by 00:00:05, it reaches a grenade-shaped container filled with yellow balls. [Q10] The tire’s weight causes the container to burst open, scattering the yellow balls across the asphalt surface. The tire’s high stiffness and yield stress allow it to remain stable while the container fails under the pressure. As the tire moves past the burst container, it approaches three small Play-Doh containers arranged in a row on the asphalt. These containers, which feature green, blue, and orange lids, are positioned directly in the path of the tire. At 00:00:08, the tire begins to roll over the Play-Doh containers. The physical interaction here is characterized by the tire’s high friction and the containers' low stiffness. As the tire makes contact, the containers are compressed and displaced. The tire’s weight causes the containers to flatten and slide slightly across the asphalt, with the tire’s tread pattern pressing into the soft material of the containers. The containers do not shatter but instead undergo significant plastic deformation, losing their original cylindrical shape as they are squashed against the ground. The tire continues its forward trajectory, maintaining a steady, rolling motion throughout the sequence. [Q07,Q09] The audio throughout the clip is dominated by the mechanical sounds of the tire rolling over the various objects, including the crunching of the basketball, the sharp snap of the candy tube, the popping sound of the grenade container, and the squelching, muffled sounds of the Play-Doh containers being crushed. There is no speech or music present in the clip. The tire remains the primary moving object, and its consistent, heavy tread pattern is visible as it traverses the different surfaces and objects. By the end of the clip at 00:00:11, the tire has fully passed over the Play-Doh containers. The final state of the scene shows the three Play-Doh containers lying on the asphalt, now visibly flattened and deformed from the pressure of the tire. The tire itself is still in motion, continuing to roll forward and out of the immediate frame. The asphalt surface remains unchanged, though it is now littered with the remnants of the crushed objects: the flattened basketball, the crushed Smarties tube, the scattered yellow balls from the grenade container, and the squashed Play-Doh containers. The clip concludes with the tire still rolling, leaving the crushed objects behind in its wake. There is no further action or change in the environment, and the sound of the tire rolling remains the only audible element as the video ends. The final state is one of complete destruction for the objects, with the tire having successfully traversed the entire path, leaving the debris scattered across the asphalt. Figure 4 Full OPC benchmark case study for tire crushing. The left panel contains all nine questions and Gold answers; the right panel shows the complete frozen caption with the original evidence excerpts supporting the five recovered answers. The case jointly probes object order, deformation, rupture, temporal localization, audio, OCR, and audio–visual alignment. 
+
+26 Q01 · General · Recovered Who is the first athlete shown walking on the track at the beginning of the video? A. Yago Lamela B. Christian Taylor C. Luis Alberto Rivera Morales D. Louis Tsatoumas E. Not Mentioned Q02 · Physics Outcome · Recovered How does the sand physically react to the athlete's landing impact? A. Creates a small crater and displaces particles outward. B. Melts into a liquid slurry. C. Bounces the athlete upward significantly. D. Remains completely flat and undisturbed. E. Not Mentioned Q03 · Speech/OCR · Recovered What text is displayed at the top of the graphic overlay for Louis Tsatoumas? A. Christian Taylor and 8.04 B. GRE and 7.93 C. MSC and Doha D. Doha 2014 and Long Jump Men E. Not Mentioned Q04 · Audio · Recovered What specific score and athlete name does the commentator mention early in the broadcast? A. Louis Tsatoumas won with eight meters six. B. The wind speed was recorded at five meters per second. C. Christian Taylor led early on with seven ninety five. D. Luis Rivera Morales fouled three times. E. Not Mentioned Q05 · General · Missing What text is printed on the back of Louis Tsatoumas's white competition bib? A. MSC, RIVERA MORALES, and Mexico B. Doha 2014, GRE, and 7.93 C. MSC, TSATOUMAS, and Doha D. Long Jump Men, 2, and Christian Taylor E. Not Mentioned Q06 · General · Conflict What clothing does Louis Tsatoumas wear during his jump? A. Yellow tank top with white/grey pattern and Adidas logo. B. Blue sleeveless shirt with Nike swoosh. C. White singlet with red stripes. D. Bright neon yellow tank top with no pattern. E. Not Mentioned Q07 · Speech/OCR · Recovered What scores and marks are displayed in the graphic overlay for the first athlete? A. 8.12, no Xs, and 7.95 B. 8.04, one red X, and 7.93 C. 7.93, two red Xs, and 8.04 D. 7.85, three red Xs, and 8.10 E. Not Mentioned OmniFysics-Captioner(Ours): The video opens on a professional track and field stadium, specifically the long jump pit area, during the Doha 2014 competition. The scene is set with a red running track and a sand pit, with officials and other athletes visible in the background. [Q03] A scoreboard overlay at the bottom of the screen provides context for the event, displaying “Doha 2014” and “Long Jump Men.” [Q04] The audio begins with a commentator providing a play-by-play analysis, noting that Britain had a “no mark” and referencing Christian Taylor, the Olympic triple jump champion, who had led early with a jump of 7.95 meters. The commentator explains that only three men would eventually jump above eight meters, setting the stage for the upcoming performance. [Q01] At the start of the clip, the focus is on Luis Alberto Rivera Morales, representing Mexico (MEX). He is seen standing on the track, wearing a bright yellow sleeveless top and dark blue shorts. His bib, clearly visible on his back, displays “MSC,” “RIVERA MORALES,” and “Doha.” [Q07] The scoreboard overlay confirms his identity and status, showing his previous results as 7.93 and two “X”s, with his current best marked as 8.04. He stands with his hands on his hips, looking toward the sand pit, appearing to prepare for his attempt. The atmosphere is focused, with the ambient sound of the stadium providing a backdrop to the commentator’s steady, analytical narration. As the clip progresses, the focus shifts to Louis Tsatoumas of Greece (GRE). He is also dressed in a yellow sleeveless top and black shorts. The scoreboard overlay updates to show his name, “Louis TSATOU MAS,” and his country code, “GRE.” The commentator identifies him as the athlete who achieved an eight-meter-six jump in the second round, noting that while this was a significant distance, it was uncertain if it would be enough to win. Tsatoumas begins his approach, running down the track with rhythmic, powerful strides. The camera captures his transition from the run-up to the takeoff board, where he plants his foot with precision. The physical interaction between his shoe and the board is brief but critical, providing the necessary friction to launch him into the air. Upon leaving the board, Tsatoumas enters the flight phase, his body extending horizontally before he tucks his knees to prepare for the landing. The camera follows his trajectory as he descends toward the sand pit. The landing is a dynamic physical event; as he makes contact with the sand, the granular material undergoes rapid deformation. The sand, characterized by low cohesion and moderate friction, flows outward and upward, absorbing the kinetic energy of his fall. The athlete’s body, with its moderate stiffness, compresses slightly upon impact, while the sand’s low yield stress allows it to yield under the force of his weight. [Q02] The resulting crater is irregular, with displaced sand forming a small mound around the point of impact, effectively dissipating the energy of the jump. Immediately following the landing, the video transitions into a series of replays. The first replay, shown from 00:00:16 to 00:00:23, provides a high-angle view of the jump, clearly showing the athlete’s form in the air and his impact in the sand. The scoreboard overlay remains visible, confirming the event details. A second replay follows, offering a side-on perspective of the run-up and the takeoff, which highlights the athlete's speed and the mechanics of his jump. Throughout these replays, the commentator continues to provide context, mentioning the “warm conditions” and a “slight breeze in the face,” which adds a layer of technical analysis to the visual display. The final segment of the clip, from 00:00:23 to 00:00:29, shows the athlete walking away from the sand pit, his posture suggesting a mix of relief and focus. The camera captures him moving back toward the track area, while the background remains populated with officials and other competitors. The commentator concludes his remarks by reiterating that it was the Greek athlete who came out on top, confirming Tsatoumas's victory. The audio remains consistent, with the commentator’s voice providing a clear narrative thread that ties the visual action to the broader context of the competition. The clip ends with the athlete moving out of the immediate frame, leaving the viewer with the final image of the sand pit, which remains disturbed from the impact, and the scoreboard still displaying the event information. There is no further action or change in the scene, and the audio fades out as the commentator finishes his summary, leaving the final state of the athlete and the competition as a resolved victory for the Greek jumper. Figure 5 Full OPC benchmark case study for long jump. The seven questions test athlete identity, granular landing impact, commentary, clothing, and on-screen competition information. Green caption excerpts provide the exact textual evidence used to recover five reference answers. 
+
+27

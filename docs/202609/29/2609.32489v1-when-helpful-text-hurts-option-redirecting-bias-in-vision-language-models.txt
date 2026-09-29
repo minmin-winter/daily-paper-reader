@@ -1,0 +1,930 @@
+Title: When Helpful Text Hurts: Option-Redirecting Bias in Vision-Language Models
+
+URL Source: https://arxiv.org/pdf/2609.32489v1
+
+Published Time: Tue, 29 Sep 2026 00:56:34 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models 
+
+# Tam Le Thi Thanh 
+
+23521386@gm.uit.edu.vn University of Information Technology, VNU-HCM Ho Chi Minh City, Vietnam Vietnam National University Ho Chi Minh City, Vietnam 
+
+# Hoang Tran Van 
+
+23520542@gm.uit.edu.vn University of Information Technology, VNU-HCM Ho Chi Minh City, Vietnam Vietnam National University Ho Chi Minh City, Vietnam 
+
+# Hong-Hanh Nguyen-Le 
+
+hong-hanh.nguyen-le@ucdconnect.ie University College Dublin Dublin, Ireland 
+
+# Thanh Duc Ngo ∗
+
+thanhnd@uit.edu.vn University of Information Technology, VNU-HCM Ho Chi Minh City, Vietnam Vietnam National University Ho Chi Minh City, Vietnam 
+
+## Abstract 
+
+In tri-modal visual question answering (VQA), auxiliary text is commonly used to complement visual and textual inputs, yet its reliability is often uncontrolled. While prior work studies modal-ity conflicts in general, it remains unclear how different types of unreliable auxiliary text affect answer selection under fixed im-age–question–option contexts. In this work, we show that the most harmful auxiliary text is not necessarily the most factually incorrect, but the one that aligns with the question while contradicting the image and favoring a specific distractor, leading to systematic redi-rection of model predictions. To isolate this effect, we introduce the Textual Reliability Ladder, a controlled diagnostic protocol that de-composes auxiliary text along three axes: image consistency, ques-tion relevance, and option support. Across multiple datasets (Sci-enceQA, VCR, A-OKVQA, Causal-VidQA) and recent VLMs, we find that such distractor-supporting text induces the largest accuracy drops (up to 53.1%) and concentrates errors on specific incorrect options. To mitigate this failure mode, we propose a training-free inference-time intervention that explicitly counteracts this redi-rection effect via noise-stability steering and dynamic grounding, reducing redirected errors while largely preserving performance un-der faithful text. Our results highlight that auxiliary-text reliability must be understood at the decision level, rather than solely through factual correctness, and provide a practical pathway toward more robust tri-modal reasoning. 
+
+## CCS Concepts 
+
+• Information systems → Question answering .
+
+> ∗Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil.
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3836232
+
+## Keywords 
+
+Vision-Language Models, Visual Question Answering, Text Bias, Latent-space Steering 
+
+ACM Reference Format: 
+
+Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo. 2026. When Helpful Text Hurts: Option-Redirecting Bias in Vi-sion–Language Models. In Proceedings of the 34th ACM International Confer-ence on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+ACM, New York, NY, USA, 25 pages. https://doi.org/10.1145/3767308.3836232 
+
+## 1 Introduction 
+
+Recent visual question answering (VQA) systems increasingly op-erate in a tri-modal setting, where auxiliary text—such as captions, OCR outputs, or retrieved descriptions—is incorporated alongside images and questions to enhance reasoning. While such auxiliary signals can provide complementary context, their reliability is often uncontrolled in practice, particularly when generated or retrieved automatically. This raises a fundamental question: how does un-reliable auxiliary text influence answer selection when the image, question, and candidate options are fixed, and can certain forms of such text systematically bias models toward specific incorrect answers? Crucially, not all unreliable auxiliary text is equally harmful. While prior work [8] treats textual noise or contradiction as a uni-form source of error, we observe that the most damaging cases arise when auxiliary text is aligned with the question but inconsistent with the image, while supporting a specific incorrect option. In such cases, the model is not merely confused, but systematically redirected toward a particular distractor. This reveals a decision-level failure mode: auxiliary text can reshape the relative preference over candidate answers, concentrating errors on specific options rather than inducing diffuse uncertainty. As a result, evaluating auxiliary-text reliability solely in terms of factual correctness or modality agreement is insufficient to explain its impact on model behavior. This behavior is closely tied to how auxiliary text is integrated into VLMs. Textual inputs encode high-level objects, attributes, arXiv:2609.32489v1 [cs.AI] 26 Sep 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+Figure 1: Decision-level auxiliary-text bias in tri-modal multiple-choice VQA. We fix the image, question, and answer options, and vary only the auxiliary text to isolate its effect on answer selection. While faithful text supports correct reasoning and irrelevant text induces mild uncertainty, cer-tain misleading text can systematically redirect predictions toward a specific incorrect option. We categorize auxiliary text into five regimes—Faithful, Off-Question, Contradictory, Option-Redirecting, and Irrelevant—along with a No-Aux baseline. Among these, Option-Redirecting text is particu-larly harmful: although aligned with the question, it is in-consistent with the image and implicitly favors a distractor, leading to concentrated errors rather than diffuse confusion. 
+
+and relations that are naturally aligned with the semantics of VQA tasks. When accurate, such signals act as informative priors that facilitate reasoning. However, when auxiliary text is incorrect but remains question-aligned, it can inject misleading evidence through the same fusion pathways, steering attention and scoring toward linguistically plausible yet visually unsupported answers. Conse-quently, the most harmful auxiliary text is not the most obviously incorrect, but the one that is semantically aligned in the wrong direction. To systematically analyze this phenomenon, we introduce the 
+
+Textual Reliability Ladder , a controlled diagnostic framework for studying auxiliary-text effects in tri-modal VQA. The framework varies only the auxiliary text while holding the image, question, and answer options fixed, enabling direct attribution of changes in model predictions to textual properties. Specifically, the lad-der decomposes auxiliary text along three key dimensions—image consistency, question relevance, and option support—allowing the construction of distinct reliability conditions under a shared con-text. This design provides a structured way to isolate and compare the effects of different types of auxiliary text on answer selection. Using this framework, we identify Option-Redirecting auxiliary text as a particularly harmful and under-explored failure mode across multiple VQA benchmarks and frozen VLMs. Such text in-duces the largest performance degradation and systematically con-centrates errors on a specific incorrect option, even under style control and lexical filtering. In contrast, other unreliable condi-tions—such as off-question or weakly grounded descriptions—tend to produce smaller and less consistent effects. Motivated by these insights, we further explore a lightweight inference-time intervention designed to mitigate Option-Redirecting bias while preserving model behavior under reliable auxiliary text. The proposed approach operates via post-hoc latent-space steering and requires only access to intermediate activations, without gradi-ents or parameter updates. We emphasize that this intervention is not intended as a universal solution, but as a targeted mitigation aligned with the specific failure mode revealed by our analysis. Our contributions are threefold: 
+
+• We introduce the Textual Reliability Ladder, a controlled diagnostic framework that isolates decision-level auxiliary-text bias in tri-modal multiple-choice VQA. 
+
+• We identify Option-Redirecting auxiliary text as a partic-ularly damaging regime that induces systematic, option-targeted errors rather than diffuse uncertainty. 
+
+• We propose a lightweight inference-time method that miti-gates such failures under well-defined access assumptions, while largely preserving performance under reliable auxil-iary text conditions. 
+
+## 2 Related Work 2.1 Bias from Auxiliary Text 
+
+Surveys on VLMs hallucination typically define them as misalign-ment between visual content and model-generated text, summa-rizing causes, benchmarks, and mitigation strategies [4, 20]. In practical VQA pipelines, however, models often consume auxiliary text provided as input by upstream components or retrieval/augmen-tation components (e.g., captions, OCR/ASR, metadata) [6, 15, 16]. Such text can omit key attributes or introduce plausible but spu-rious details, especially in text-rich visual understanding where OCR/layout cues strongly affect reasoning [9, 39]. We therefore study text bias , defined as decision-level over-reliance on auxiliary text in tri-modal VQA (image, question, auxiliary text), where un-reliable textual inputs can distort discrete answer selection. Unlike prior work on hallucination, which evaluates the faithfulness of generated text, our focus is on how imperfect auxiliary inputs affect downstream decisions. Recent work studies modality conflict —cases where image evi-dence and auxiliary text provide incompatible signals—to analyze modality preference and conflict resolution in VLMs [8, 13, 22, 25, 42]. Conflict-focused benchmarks (e.g., CrossCheck) show that VLMs often struggle to detect and resolve contradictions, leading to text-dominant failures under misleading captions [8, 27, 34, 42]. However, these approaches primarily evaluate whether models can recognize contradiction , rather than how auxiliary text influences 
+
+which incorrect answer is selected . As a result, they do not explic-itly capture decision-level effects where errors are concentrated on specific distractors. Similarly, prior work on language priors and shortcut behaviors in multiple-choice VQA shows that superficial textual cues can bias When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+models toward particular answers, motivating debiasing methods that reduce unimodal reliance [1, 5, 12, 35, 41]. Mechanistic anal-yses further suggest that visual evidence may remain internally accessible, yet the model may fail to exploit it at the decision stage, amplifying reliance on textual cues [10]. Additional studies show that injected textual signals, such as captions or OCR, can further steer multimodal decisions [28, 33]. Importantly, these approaches primarily focus on modality-level conflicts or dataset-level biases, and do not explicitly model instance-level effects induced by exter-nally provided auxiliary text. Despite these advances, prior diagnostics largely focus on contra-diction detection or aggregate robustness under broad text-corruption settings [8, 27, 34, 42]. They do not isolate which properties of input-level auxiliary text drive decision-level bias in tri-modal multiple-choice VQA, nor do they distinguish between diffuse noise and 
+
+option-targeted redirection toward a specific distractor. To address this gap, we introduce controlled auxiliary-text vari-ants that factorize (i) image grounding, (ii) question alignment, and (iii) option-targeted support, enabling analysis of how auxiliary text shapes discrete answer selection under a fixed context. 
+
+## 2.2 Latent-Space Steering and Test-Time Intervention 
+
+Latent-space steering modifies internal representations at inference time to control model behaviors without retraining [14]. In VLMs, it has mainly been used to reduce hallucinations or strengthen visual grounding by nudging hidden states toward visually con-sistent regions [21, 37]. Related works explore steering for hallu-cination detection [26], transferring steering vectors to improve multimodal understanding [11], and activation-level control as a general inference-time mechanism [32]. Complementary test-time methods adapt prompts online [30, 31, 38] or adjust decoding/cal-ibration to strengthen visual grounding [17, 43], while post-hoc debiasing of language priors has been studied in related scoring setups [19]. Unlike prior methods that aim to improve general grounding or reduce hallucination, our intervention specifically targets decision-level bias induced by auxiliary text. Many existing interventions target hallucination-centric objec-tives or improve accuracy/calibration under trusted prompting [21, 31, 37]. In contrast, we focus on decision-level text bias in tri-modal multiple-choice VQA, where auxiliary text can be question-relevant yet image-inconsistent and selectively support a partic-ular answer option. Accordingly, we analyze how auxiliary text 
+
+shifts discrete predictions and increases the likelihood of select-ing text-supported (potentially incorrect) options under controlled conditions. As fine-tuning confounds ladder attribution by entan-gling text-reliability effects with parameter updates (as explained in Appendix B), we restrict our study to frozen VLMs and design a test-time intervention. 
+
+## 3 Textual Reliability Ladder 
+
+To systematically investigate how VLMs balance visual evidence with auxiliary text, we introduce the Textual Reliability Ladder ,a controlled diagnostic protocol that varies the reliability of aux-iliary text while keeping the image, question, and answer options 
+
+Textual type Image Question Wrong ans. Correct ans. Faithful ✓ ✓ × ✓
+
+Off-Question ✓ × × ×
+
+Contradictory × ✓ × ×
+
+Option-Redirecting × ✓ ✓ ×
+
+Irrelevant × × × ×
+
+Table 1: Textual Reliability Ladder conditions and their di-agnostic cues. Each condition is defined by three factors: whether the auxiliary text is grounded in the image , relevant to the question , and whether it implicitly supports a specific 
+
+correct or incorrect answer option. The ladder spans from reliable (Faithful), to non-informative (Off-Question, Irrele-vant), to decision-level misleading (Option-Redirecting). 
+
+fixed. This controlled setup enables direct attribution of prediction changes to the auxiliary text alone. We focus on multiple-choice VQA, where discrete options enable decision-level analysis: auxiliary text is considered helpful when it increases the likelihood of the correct option, and harmful if it redi-rects probability mass toward a distractor. For each image–question pair, we construct auxiliary texts with controlled relationships to the image, the question, and the candidate answers, enabling fair comparisons where behavioral changes are attributable to textual properties rather than visual or question variation. As shown in Table 1, the ladder spans from fully reliable to mis-leading auxiliary text by organizing three diagnostic cues: visual grounding, question relevance, and option-targeted support. The ladder is not intended as an exhaustive 2 3 enumeration of all binary cue combinations. Rather, it retains only semantically coherent and diagnostically useful regimes for multiple-choice VQA. These regimes are selected to isolate qualitatively distinct and practically relevant failure modes observed in VLM behavior, rather than to ex-haust all combinatorial possibilities. No-Aux is reported separately as a text-free baseline. We exclude the case where auxiliary text is both image-grounded and question-aligned yet supports neither the correct nor any in-correct option, because such text typically carries at least some answer-relevant evidence; forcing a fully support-neutral version would be weakly specified and often collapse into a borderline 
+
+Faithful or Off-Question instance. We also exclude all cases in which text supports an answer option without being aligned to the cur-rent question, whether or not it is image-grounded. Option-level support is defined with respect to the question; without question alignment, apparent support reduces to a superficial option cue or leakage signal rather than a meaningful auxiliary-text regime. Thus, the ladder should be read as a controlled diagnostic subset of coherent regimes, rather than a full combinatorial product. 
+
+• Faithful : grounded in the image and aligned with the ques-tion; provides evidence that supports the correct option and serves as a reliable reference condition for assessing the effect of auxiliary text. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+• Off-Question : grounded in the image but irrelevant to the question; provides visually plausible yet task-irrelevant in-formation and is not expected to systematically favor any answer option, primarily introducing distraction rather than targeted bias. 
+
+• Contradictory : aligned with the question but inconsistent with the image; induces cross-modal conflict without pro-viding option-targeted support , and is intended to produce non-targeted confusion rather than redirection toward any specific option. 
+
+• Option-Redirecting : aligned with the question but incon-sistent with the image, and constructed to provide implicit, descriptive evidence consistent with a specific incorrect answer option , without directly revealing or matching the option text, thereby inducing redirection of probability mass toward a single distractor. 
+
+• Irrelevant : unrelated to both the image and the question; serves as a pure noise baseline that provides no meaningful evidence for any answer option and is not expected to induce systematic decision bias. 
+
+• No-Aux : no auxiliary text is provided; serves as a text-free baseline where predictions rely solely on the image and the question. To implement the ladder while minimizing confounds, we use a two-step hybrid pipeline: (i) constrained generation, and (ii) human verification in Appendix A.6. These controls are designed to iso-late the effect of semantic properties of auxiliary text, rather than superficial artifacts. Specifically, we target three common failure modes in multiple-choice VQA: style or length artifacts , shallow option-string cues , and answer leakage .
+
+Faithful texts are sourced from dataset-provided annotations (see Appendix A.1). Rather than regenerating text when reliable textual reasoning is already available, we reuse these annotations and apply strict per-instance screening to verify that the retained Faithful texts satisfy our ladder constraints. This avoids an unnec-essary generation stage, reduces additional cost and variance, and keeps the Faithful condition close to naturally occurring auxiliary supervision. If a Faithful annotation triggers the option-cue or leak-age filters (e.g., it contains an answer string or strongly matches an option), we remove the entire image–question instance from the ladder, rather than editing the text, to preserve strict comparability across all auxiliary-text variants and avoid introducing asymmetric preprocessing. 
+
+Unreliable texts ( Off-Question / Contradictory / Option-Redirecting ) are generated using Gemini-2.5-Flash [7] with fixed prompt templates (see Appendix A.2, A.3, A.4). Option-Redirecting is token-length matched to the corresponding Faithful text on a per-instance basis to reduce the influence of superficial length effects in the key comparison. Other conditions are generated under fixed prompts, human verification, and lexical/style controls, with only coarse length bounds rather than exact matching. For Option-Redirecting , we randomly select a target distractor 
+
+𝑜 redir from the incorrect options and instruct the generator to pro-duce descriptive statements that are semantically consistent with 𝑜 redir while contradicting the image. To avoid trivial string matching or explicit answer leakage, we require that redirected texts do not mention the target option verbatim and instead provide implicit, descriptive support (e.g., attributes or relations consistent with 𝑜 redir ) that may increase its likelihood at the decision stage without explicitly encoding the answer. 
+
+Irrelevant texts are sampled from WikiText passages [24] and filtered to avoid accidental overlap with the question or options (lexical-similarity, option-cue, and leakage filters) in Appendix A.5. We also match the instance-wise style window used in other ladder conditions. This yields auxiliary text that is effectively uninforma-tive for both the question and the decision while controlling for style confounds. 
+
+Human verification. All constructed texts undergo mandatory human verification using a checklist explicitly aligned with the ladder definition: (i) image consistency versus contradiction as re-quired, (ii) question alignment versus off-question behavior, (iii) absence of option-targeted support when not intended, (iv) pres-ence of option-targeted support for Option-Redirecting with-out verbatim option leakage, and (v) absence of answer leakage and invalid cues. Texts that are ambiguous or non-compliant with these criteria are removed and regenerated. We ensure consistency through multi-annotator agreement and iterative validation (see Appendix A.6). In contrast to common practice that groups diverse textual cor-ruptions into a single undifferentiated category, the Textual Reliabil-ity Ladder explicitly separates distinct failure mechanisms—including off-question distraction, non-targeted contradiction, and option-targeted misdirection—under a controlled, multiple-choice setting (an illustrative example is shown in Appendix A.7). This factorized design enables decision-level diagnosis of how auxiliary text in-fluences discrete predictions, rather than conflating qualitatively different behaviors into aggregate robustness scores. Finally, we evaluate frozen VLMs to avoid training-time confounds: behavioral changes observed under the ladder are primarily attributable to the influence of auxiliary text, rather than altered supervision exposure or parameter updates. 
+
+## 4 Inference-Time Intervention 
+
+Auxiliary text can bias VLM decisions in two distinct ways: (i) 
+
+global text dominance , where the model becomes overly sensitive to textual input across instances, and (ii) instance-specific grounding conflicts , where question-relevant visual evidence is overridden by misleading auxiliary text. Under reliable auxiliary text, the model is expected to assign high probability to the correct option. However, under Option-Redirecting text, probability mass is often shifted toward the corresponding distractor option instead. Our goal is to mitigate such text-induced option bias without modifying model parameters or retraining the model. To address both global and instance-level effects in frozen VLMs, we propose a two-stage coarse-to-fine inference-time intervention, illustrated in Figure 2. We deliberately address misleading auxiliary text via steering 
+
+rather than regeneration or rewriting. If misleading text were first repaired upstream, the problem would shift from evaluating model robustness under diverse auxiliary-text regimes to a text-repair pipeline, making it harder to isolate the decision-level failure mode revealed by the ladder. By keeping the auxiliary text fixed and When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Input: Small set of Demo Samples   
+
+> Cross-modal Grounding → Residual Debiasing Module→ Re-weighting
+> Dual Forward Passes (Contrast)
+> Aggregation Residuals
+> Residual Computation
+> Output: Steering Vectors
+> Auxiliary Text
+> What form of the tennis is this? A: women doubles B: mixed doubles C: men's singles
+> Layer x
+> The image region relevant to answering the question.
+> Cross-modal Grounding
+> Attention map
+> Input: Query Sample
+> Steering vector DG:
+> S = {Top-K indicates}
+> Residual Debiasing Module
+> Last aux-text
+> token (c) Top-K visual
+> token
+> Visual Residual
+> (masked - clean)
+> Incorrect Answer (Redirected)
+> Vision Steering Vector
+> vs
+> Vision Contrast
+> PCA
+> (Principal component analysis)
+> Text Steering Vector
+> Text Contrast
+
+Stage 2: Dynamic Grounding - Online phase 
+
+> vs
+> Correct Answer
+> Forward pass through VLM
+
+Stage 1: Noise-Stability Steering - Offline phase   
+
+> Contrast → Residual Computation → Aggregation Residuals →PCA → Steering Vectors → Apply to Model
+> Text Residual
+> (correct - incorrect)
+
+VLM  
+
+> Re-weighting
+> A B C A B C
+> Final Prediction
+> The final answer is B
+
+Figure 2: Overview of our two-stage inference-time intervention. Stage 1 estimates global steering directions from contrastive residuals, while Stage 2 performs instance-level, question-aware grounding by aligning textual representations with question-relevant visual evidence. Together, the two stages reduce option-redirecting auxiliary-text bias while maintaining performance under non-harmful auxiliary text. 
+
+intervening only at inference time, we are able to examine whether a frozen VLM can resist misleading textual evidence, rather than benefiting from a sanitized replacement. 
+
+• Stage 1 (Noise-Stability Steering, offline): a global, static representation shift estimated from paired correct and incor-rect demonstrations, applied uniformly across instances. 
+
+• Stage 2 (Dynamic Grounding, online): an instance-level, question-aware intervention that adaptively realigns text representations with visual evidence. 
+
+## 4.1 Stage 1: Noise-Stability Steering (NSS) with Offline Pre-computation and Pre-test Incorporation 
+
+NSS leverages representation differences induced by correct ver-sus incorrect answer continuations under a fixed (image, question, options) context. The underlying assumption is that correctness-related variation constitutes a consistent and dominant factor across demonstrations, allowing these differences to capture a shared di-rection associated with reliable versus misleading textual influence. Modality-specific steering vectors are estimated offline from a small dataset-specific demonstration pool and applied to the frozen VLM via static forward hooks, without parameter updates. For each benchmark, we sample 𝑁 demo demonstrations from the same dataset (e.g., a training split or held-out pool), ensuring that they are disjoint from evaluation instances. The value of 𝑁 demo is selected to provide a stable estimate of representation differences while maintaining reasonable computational cost. Each demonstration is a tri-modal instance paired with two an-swer continuations: 𝑑 𝑖 = (𝐼 𝑖 , 𝑄 𝑖 , O𝑖 ,𝑇 𝑖 , 𝐴 + 
+
+> 𝑖
+
+, 𝐴 − 
+
+> 𝑖
+
+), where 𝐼 𝑖 are the input image(s), 𝑄 𝑖 is the question, O𝑖 = {𝑜 (1) 
+
+> 𝑖
+
+, . . . , 𝑜 (𝑀 ) 
+
+> 𝑖
+
+} is the set of multiple-choice options, and 𝑇 𝑖 is the Option-Redirecting text targeting a distractor index 𝑚 − ≠ 𝑚 +. Both 𝐴 + 
+
+> 𝑖
+
+and 𝐴 − 
+
+> 𝑖
+
+are ver-balized with the same fixed template, “The correct option is (m): 
+
+<option-text> ”: 𝐴 + 
+
+> 𝑖
+
+uses the ground-truth index 𝑚 + and option text 𝑜 (𝑚 + ) 
+
+> 𝑖
+
+, while 𝐴 − 
+
+> 𝑖
+
+uses the redirected distractor index 𝑚 − and option text 𝑜 (𝑚 − ) 
+
+> 𝑖
+
+from the same instance. An illustrative example is provided in Appendix C.1. For each demonstration 𝑑 𝑖 , we estimate modality-specific steer-ing directions via paired forward passes that hold the full context fixed and change only one factor at a time. 
+
+Vision (noise-effect residual ). We run two passes with iden-tical textual context (question, options, and auxiliary text), but different image tokens: a clean-image pass (+) and a randomly masked-image-token pass (−) (see Appendix C.2 for full details). The masking operation perturbs visual evidence while preserving the textual context, allowing us to isolate representation changes associated with degraded visual grounding. For multi-image inputs 𝐼 𝑖 = {𝐼 𝑖,𝑘 }𝐾 𝑖 
+
+> 𝑘 =1
+
+, let Himg ,+ 
+
+> 𝑖,𝑘,ℓ
+
+and Himg ,− 
+
+> 𝑖,𝑘,ℓ
+
+be the post-MLP hidden states at layer ℓ restricted to the image tokens of image 𝑘 . We define the visual residual 
+
+Rimg  
+
+> 𝑖,𝑘,ℓ
+
+= Himg ,− 
+
+> 𝑖,𝑘,ℓ
+
+− Himg ,+ 
+
+> 𝑖,𝑘,ℓ
+
+, (1) and aggregate to a single 𝑑 -dimensional vector per instance/layer by mean-pooling over token positions and averaging across images: 
+
+rimg  
+
+> 𝑖,ℓ
+
+= 1
+
+𝐾 𝑖 𝐾 𝑖 ∑︁ 
+
+> 𝑘 =1
+
+MeanPool 
+
+
+
+Rimg 
+
+> 𝑖,𝑘,ℓ
+
+
+
+∈ R𝑑 (2) MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+Text (correctness residual). We run two passes that share the same image and prompt context, and differ only in the answer con-tinuation: a correct continuation 𝐴 + 
+
+> 𝑖
+
+versus a redirected incorrect continuation 𝐴 − 
+
+> 𝑖
+
+. Let Htxt ,+ 
+
+> 𝑖,ℓ
+
+and Htxt ,− 
+
+> 𝑖,ℓ
+
+denote the post-MLP hidden states at layer ℓ restricted to the aux-text token stream in the text decoder. The textual residual is 
+
+Rtxt  
+
+> 𝑖,ℓ
+
+= Htxt ,+ 
+
+> 𝑖,ℓ
+
+− Htxt ,− 
+
+> 𝑖,ℓ
+
+∈ R𝑛 txt ×𝑑 (3) We extract a single (rank-1) direction per layer and modality using PCA. For vision , we apply PCA to the instance-level pooled residuals {rimg  
+
+> 𝑖,ℓ
+
+}𝑁 demo  
+
+> 𝑖 =1
+
+and take the first principal component: 
+
+vimg  
+
+> ℓ
+
+= PC 1
+
+
+
+{rimg  
+
+> 𝑖,ℓ
+
+}𝑁 demo 
+
+> 𝑖 =1
+
+
+
+∈ R𝑑 (4) For text , we compute PCA directly on token-level correctness resid-uals aggregated across demonstrations: 
+
+Stxt  
+
+> ℓ
+
+=
+
+> 𝑁 demo
+
+Ø
+
+> 𝑖 =1
+
+{Rtxt  
+
+> 𝑖,ℓ
+
+[ 𝑗, :]} 𝑛 txt 
+
+> 𝑗 =1
+
+, vtxt  
+
+> ℓ
+
+= PC 1
+
+ Stxt 
+
+> ℓ
+
+ ∈ R𝑑 (5) We incorporate NSS into the frozen VLM via forward hooks once 
+
+prior to the test phase. At all layers, we (i) improve noise-stability in the vision encoder by subtracting the visual direction and (ii) encourage representations in the text decoder that are associated with correct continuations by adding the textual direction: 
+
+h(ℓ )′  
+
+> post
+
+= h(ℓ ) 
+
+> post
+
++
+
+(−𝛼 img vimg  
+
+> ℓ
+
+, vision encoder 
+
+𝛼 txt vtxt  
+
+> ℓ
+
+, text decoder (6) Once enabled, NSS requires no additional demonstrations or extra forward passes at test time: cached directions are applied uniformly to each test sample. All NSS hyperparameters (e.g., PCA rank, normalization, scaling/clipping, and strengths 𝛼 img , 𝛼 txt ) are reported in Appendix C.2. We compute and cache {vimg  
+
+> ℓ
+
+} and {vtxt  
+
+> ℓ
+
+}
+
+offline once. 
+
+## 4.2 Stage 2: Dynamic Grounding (DG) with Online Test-Time 
+
+NSS provides a global, static correction, but it cannot address 
+
+instance-specific grounding conflicts where the auxiliary text is question-relevant yet visually inconsistent. We therefore introduce DG, a lightweight online intervention applied per test instance to suppress unreliable auxiliary-text influence. At decoder layer ℓ, let Hq 
+
+> ℓ
+
+∈ R𝑇 𝑞 ×𝑑 , Himg  
+
+> ℓ
+
+∈ R𝑇 img ×𝑑 , and Haux  
+
+> ℓ
+
+∈
+
+R𝑇 aux ×𝑑 denote post-MLP hidden states for question, image, and auxiliary-text tokens, respectively. We also denote the hidden states of the text stream (question + auxiliary text) by Htxt  
+
+> ℓ
+
+∈ R𝑇 txt ×𝑑 ,formed by concatenation Htxt  
+
+> ℓ
+
+= [Hq 
+
+> ℓ
+
+; Haux  
+
+> ℓ
+
+] with 𝑇 txt = 𝑇 𝑞 + 𝑇 aux .We summarize the question by mean pooling, 
+
+qℓ = MeanPool  Hq
+
+> ℓ
+
+ , (7) and score each image token by cosine similarity to the question summary, 
+
+𝑠 𝑡 =
+
+*
+
+qℓ
+
+∥qℓ ∥2
+
+, Himg  
+
+> ℓ
+
+[𝑡 ]∥Himg  
+
+> ℓ
+
+[𝑡 ] ∥ 2
+
++
+
+. (8) To isolate relevant visual context, we select the top-𝐾 image tokens ( 𝑆 ) with the highest similarity to the question. This focus ensures that the grounding correction is driven only by the most pertinent visual evidence. We represent auxiliary text using the final decoder token ( Haux 
+
+> ℓ, last
+
+)rather than mean pooling. This choice is empirically superior, as the last token captures the full contextual summary and is positioned closest to the decision layer where option-redirecting bias occurs. Using this representation, we compute the auxiliary–visual cor-rection direction as 
+
+Δvℓ = 1
+
+𝐾 ∑︁ 𝑖 ∈ S 
+
+
+
+Himg  
+
+> ℓ
+
+[𝑖 ] − Haux 
+
+> ℓ, last
+
+
+
+(9) The correction is uniformly applied to all text tokens, where 
+
+𝑗 ∈ { 1, . . . ,𝑇 txt } indexes the text tokens: 
+
+Htxt ′ 
+
+> ℓ
+
+[ 𝑗 ] = Htxt  
+
+> ℓ
+
+[ 𝑗 ] + 𝛽 ℓ Δvℓ (10) The parameter 𝛽 ℓ is set to a small positive value to ensure that the update remains a residual adjustment and does not override the original representation. DG operates as a self-adaptive mechanism that modulates the correction intensity based on the alignment between auxiliary text and visual evidence. By defining the correction vector Δ𝑣 ℓ as the discrepancy between these modalities, DG selectively intervenes: it triggers a robust correction when the auxiliary text is visually inconsistent (e.g., Option-Redirecting bias), but remains negligible (Δ𝑣 ℓ ≈ 0) when the text is faithful. This targeted design ensures that DG suppresses misleading signals while preserving the beneficial contributions of reliable auxiliary information. 
+
+## 5 Experiments 5.1 Experimental Setup 
+
+We evaluate frozen VLMs on multiple-choice VQA benchmarks un-der controlled variations of auxiliary text (Section 3). Experiments are conducted on A-OKVQA [29], ScienceQA [23], VCR [40], and Causal-VidQA (video-based) [18], which span diverse multimodal reasoning scenarios and include human-annotated rationales. For each dataset, we sample 1,000 valid evaluation instances and construct five ladder variants plus No-Aux. We use a fixed prompt, shared per-instance option permutation, and greedy decod-ing across all conditions. Complete sampling and inference details are provided in Appendix D.1. We evaluate representative open-source VLMs without fine-tuning to isolate decision-level biases in pretrained models: Qwen2.5VL (3B, 7B) [3], Qwen3VL (4B, 8B) [2], and InternVL3.5 (4B, 8B) [36]. These models span multiple families and parameter scales, enabling us to examine whether auxiliary-text bias patterns are consistent across architectures and model capacities. We use a fixed prompting template across datasets and auxiliary-text conditions to ensure consistent evaluation (see Appendix D.1 for details). Each input contains the image, question, auxiliary text, and shuffled multiple-choice options. We instruct the model to output only the option letter (e.g., A/B/C/D ) and perform greedy decoding (temperature = 0) with a maximum generation length sufficient for a single option token. To prevent position-based short-cuts, we randomize the option order per instance using a fixed seed and reuse the same permutation across all auxiliary-text variants of that instance. Unless otherwise stated, we use a single fixed set When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+Figure 3: Accuracy of frozen VLMs under the Textual Reliability Ladder. Option-Redirecting text causes the largest and most consistent degradation across datasets and models 
+
+Figure 4: Accuracy change after NSS+DG relative to the frozen baseline. Improvements concentrate under Option-Redirecting text, with small changes in other conditions. 
+
+of intervention hyperparameters per model–dataset pair, shared across all auxiliary-text conditions. 
+
+## 5.2 Textual Reliability Ladder Results 
+
+Figure 3 reports accuracy across datasets and model sizes under all auxiliary-text conditions, enabling direct comparison of model behavior across different levels of textual reliability. 
+
+Faithful auxiliary text consistently improves accuracy over No-Aux across benchmarks. This result indicates that frozen VLMs can effectively incorporate auxiliary text when it is jointly aligned with both the image and the question, validating the use of auxiliary text as a beneficial signal under reliable conditions. Among the unreliable conditions, Option-Redirecting text pro-duces the largest and most consistent accuracy drops across all models and datasets. By construction, this text remains question-relevant but conflicts with the image while implicitly supporting a specific distractor option, creating an option-targeted bias that can override visual grounding. To ensure that this effect is semantic rather than superficial, we control for potential artifacts during ladder construction: texts are style-matched, human-verified, and Option-Redirecting is token-length matched to Faithful. This regime uniquely combines question relevance, image inconsistency, and option-targeted support, directly corresponding to the failure mode isolated by the Textual Reliability Ladder. In contrast, Irrelevant , Off-Question , and Contradictory text typically lead to smaller changes relative to No-Aux . This suggests MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+that models rely more heavily on image–question cues when aux-iliary text is weakly related, distracting, or inconsistent. Overall, these results demonstrate that auxiliary-text unreliability is not uniform in its impact. The most severe failures arise when auxiliary text introduces strong, option-targeted bias ( Option-Redirecting ), rather than when it is merely distracting or inconsistent (see Ap-pendix D.2 for the full ladder results). Scaling improves base performance—larger models achieve higher accuracy under Faithful and No-Aux conditions—but it does not monotonically improve robustness to misleading text. Under Option-Redirecting , performance drops remain substantial and can even increase with scale in some settings (e.g., Qwen2.5VL on ScienceQA and VCR). This suggests that larger models may more readily incor-porate plausible, option-supporting textual evidence, even when it contradicts the visual input. Taken together, these findings show that improved model capacity does not necessarily translate to ro-bustness under misleading auxiliary text, motivating inference-time interventions that mitigate option-targeted, text-driven decision bias. 
+
+## 5.3 Two-stage Inference-Time Intervention 
+
+We evaluate the proposed two-stage inference-time intervention under all auxiliary-text conditions. Figure 4 reports accuracy differ-ences relative to the corresponding frozen base models, enabling direct assessment of how the intervention affects model behavior across different auxiliary-text regimes. The most pronounced improvements occur under Option - Redi-recting auxiliary text: the two-stage intervention improves accu-racy and reduces the frequency of selecting the redirected distrac-tor 𝑜 redir (see Appendix D.3.4 for a detailed analysis of redirected-distractor selection). In contrast, performance under Faithful , Off-Question , Contradictory , and Irrelevant conditions remains largely unchanged in Figure 4. This behavior is consistent with the design of the method, which primarily activates under strongly misleading auxiliary text while preserving useful or weak textual signals. We observe a minor degradation under Faithful auxiliary text: a few model–dataset pairs show mild negative deltas. This behavior reflects a trade-off inherent to robustness-oriented steering. Mech-anisms that suppress misleading auxiliary text can also attenuate beneficial text cues when the auxiliary text is already highly reliable. These regressions remain limited in magnitude and do not affect the overall conclusions, as the method remains largely conservative under Faithful text while delivering its largest gains in the harmful 
+
+Option-Redirecting regime. Stage 1 NSS improves robustness to superficial textual perturba-tions and yields modest, consistent gains across conditions (see Ap-pendix D.3.1 for the Stage 1-only ablation). Stage 2 DG is question-aware and is designed to counteract option-targeted misdirection, producing the largest improvements under Option-Redirecting 
+
+(see Appendix D.3.2 for the Stage 2-only ablation). The two stages play complementary roles. NSS provides a global bias correction that reduces overall sensitivity to textual perturbations, whereas DG operates at the instance level to resolve grounding conflicts when auxiliary text is question-relevant but visually inconsistent. 
+
+Table 2: Macro-averaged accuracy changes ( Δ, in percentage points) relative to frozen base models, aggregated across all model–dataset pairs. NSS introduces minimal shifts across conditions, while DG yields substantial improvements under Option-Redirecting text at the cost of slight degradation un-der Faithful text. The combined method (NSS+DG) achieves the best overall trade-off. Full regime-wise results are pro-vided in Appendix D.3. Non-OR includes No-Aux, Irrelevant, Off-Question, and Contradictory.                   
+
+> Metric NSS only DG only NSS + DG Avg. ΔAcc. (Faithful) +0.11 -1.50 -1.30 Avg. ΔAcc. (Option-Redirecting) +0.24 +6.72 +6.99
+> Avg. ΔAcc. (Non-OR) +0.06 +0.07 +0.16
+
+This complementarity explains why improvements are concen-trated under Option-Redirecting text (see Appendix D.3.5 for the combined-vs-single-stage comparison), while behavior under non-harmful conditions remains largely unchanged. The intervention yields limited gains under Irrelevant and Off-Question condi-tions, consistent with the absence of strong text-induced bias in these regimes. 
+
+## 5.4 Ablation Study 
+
+We ablate the contribution of each stage and the auxiliary-text representation used in DG. The results support the proposed coarse-to-fine design: NSS provides a conservative global stabilization, DG provides the primary correction under Option-Redirecting text, and the full two-stage method achieves the best overall trade-off between robustness and performance. 
+
+Stage-wise ablation. Table 2 confirms the intended division of labor: NSS is conservative but provides limited recovery under Option-Redirecting text, whereas DG delivers most of the targeted gain with a modest Faithful-text cost. Their combination achieves the strongest recovery while remaining stable across non-OR con-ditions. 
+
+DG text representation. We compare mean pooling with the last auxiliary-text token as the DG representation. The latter per-forms consistently better, especially under Option-Redirecting 
+
+text, and is therefore used in all experiments 
+
+## 6 Conclusion 
+
+We study decision-level text bias in tri-modal multiple-choice VQA and show that the impact of unreliable auxiliary text is not uni-form. The most severe failures arise when auxiliary text is question-aligned yet image-inconsistent and implicitly favors a specific in-correct option, leading to option-targeted errors. To analyze this behavior, we introduce the Textual Reliability Ladder, which iden-tifies Option-Redirecting text as a dominant failure mode. We further propose a lightweight inference-time intervention that mit-igates this bias while preserving performance under reliable aux-iliary text. These results highlight the importance of fine-grained, decision-level analysis for improving robustness in tri-modal VQA. When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+## Acknowledgments 
+
+This research was supported by The VNUHCM-University of Infor-mation Technology’s Scientific Research Support Fund. 
+
+## References 
+
+[1] Aishwarya Agrawal, Dhruv Batra, Devi Parikh, and Aniruddha Kembhavi. 2018. Don’t just assume; look and answer: Overcoming priors for visual question answering. In Proceedings of the IEEE conference on computer vision and pattern recognition . 4971–4980. [2] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, Wenbin Ge, Zhifang Guo, Qidong Huang, Jie Huang, Fei Huang, Binyuan Hui, Shutong Jiang, Zhaohai Li, Mingsheng Li, Mei Li, Kaixin Li, Zicheng Lin, Junyang Lin, Xuejing Liu, Jiawei Liu, Chenglong Liu, Yang Liu, Dayiheng Liu, Shixuan Liu, Dunjie Lu, Ruilin Luo, Chenxu Lv, Rui Men, Lingchen Meng, Xuancheng Ren, Xingzhang Ren, Sibo Song, Yuchong Sun, Jun Tang, Jianhong Tu, Jianqiang Wan, Peng Wang, Pengfei Wang, Qiuyue Wang, Yuxuan Wang, Tianbao Xie, Yiheng Xu, Haiyang Xu, Jin Xu, Zhibo Yang, Mingkun Yang, Jianxin Yang, An Yang, Bowen Yu, Fei Zhang, Hang Zhang, Xi Zhang, Bo Zheng, Humen Zhong, Jingren Zhou, Fan Zhou, Jing Zhou, Yuanzhi Zhu, and Ke Zhu. 2025. Qwen3-VL Technical Report. arXiv:2511.21631 [cs.CV] https://arxiv.org/abs/2511.21631 [3] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, et al. 2025. Qwen2. 5-vl technical report. arXiv preprint arXiv:2502.13923 (2025). [4] Zechen Bai, Pichao Wang, Tianjun Xiao, Tong He, Zongbo Han, Zheng Zhang, and Mike Zheng Shou. 2024. Hallucination of multimodal large language models: A survey. arXiv preprint arXiv:2404.18930 (2024). [5] Remi Cadene, Corentin Dancette, Matthieu Cord, Devi Parikh, et al. 2019. Rubi: Reducing unimodal biases for visual question answering. Advances in neural information processing systems 32 (2019). [6] Joya Chen, Ziyun Zeng, Yiqi Lin, Wei Li, Zejun Ma, and Mike Zheng Shou. 2025. Livecc: Learning video llm with streaming speech transcription at scale. In 
+
+Proceedings of the Computer Vision and Pattern Recognition Conference . 29083– 29095. [7] Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Marcel Blistein, Ori Ram, Dan Zhang, Evan Rosen, et al. 2025. Gemini 2.5: Pushing the frontier with advanced reasoning, multi-modality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 (2025). [8] Ailin Deng, Tri Cao, Zhirui Chen, and Bryan Hooi. 2025. Words or vision: Do vision-language models have blind faith in text?, 2025. URL https://arxiv. org/abs/2503.02199 (2025). [9] Ling Fu, Zhebin Kuang, Jiajun Song, Mingxin Huang, Biao Yang, Yuzhe Li, Linghao Zhu, Qidi Luo, Xinyu Wang, Hao Lu, et al. 2024. Ocrbench v2: An improved benchmark for evaluating large multimodal models on visual text localization and reasoning. arXiv preprint arXiv:2501.00321 (2024). [10] Stephanie Fu, Tyler Bonnen, Devin Guillory, and Trevor Darrell. 2025. Hid-den in plain sight: VLMs overlook their visual representations. arXiv preprint arXiv:2506.08008 (2025). [11] Woody Haosheng Gan, Deqing Fu, Julian Asilis, Ollie Liu, Dani Yogatama, Vatsal Sharan, Robin Jia, and Willie Neiswanger. 2025. Textual Steering Vectors Can Improve Visual Understanding in Multimodal Large Language Models. arXiv preprint arXiv:2505.14071 (2025). [12] Yangyang Guo, Liqiang Nie, Zhiyong Cheng, Qi Tian, and Min Zhang. 2021. Loss re-scaling VQA: Revisiting the language prior problem from a class-imbalance view. IEEE Transactions on Image Processing 31 (2021), 227–238. [13] Tianze Hua, Tian Yun, and Ellie Pavlick. 2025. How Do Vision-Language Models Process Conflicting Information Across Modalities? arXiv preprint arXiv:2507.01790 (2025). [14] Qidong Huang, Xiaoyi Dong, Pan Zhang, Bin Wang, Conghui He, Jiaqi Wang, Dahua Lin, Weiming Zhang, and Nenghai Yu. 2024. Opera: Alleviating hal-lucination in multi-modal large language models via over-trust penalty and retrospection-allocation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 13418–13427. [15] Pu Jian, Donglei Yu, and Jiajun Zhang. 2024. Large language models know what is key visual entity: An LLM-assisted multimodal retrieval for VQA. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing .10939–10956. [16] Hongda Jiang, Xinyuan Zhang, Siddhant Garg, Rishab Arora, Shiun-Zu Kuo, Jiayang Xu, Aaron Colak, and Xin Luna Dong. 2025. Memory-QA: Answering Recall Questions Based on Multimodal Memories. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing . 24255–24277. [17] Sicong Leng, Hang Zhang, Guanzheng Chen, Xin Li, Shijian Lu, Chunyan Miao, and Lidong Bing. 2024. Mitigating object hallucinations in large vision-language models through visual contrastive decoding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 13872–13882. [18] Jiangtong Li, Li Niu, and Liqing Zhang. 2022. From representation to reason-ing: Towards both evidence and commonsense reasoning for video question-answering. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 21273–21282. [19] Zhiqiu Lin, Xinyue Chen, Deepak Pathak, Pengchuan Zhang, and Deva Ramanan. 2023. Revisiting the role of language priors in vision-language models. arXiv preprint arXiv:2306.01879 (2023). [20] Hanchao Liu, Wenyuan Xue, Yifei Chen, Dapeng Chen, Xiutian Zhao, Ke Wang, Liping Hou, Rongjun Li, and Wei Peng. 2024. A survey on hallucination in large vision-language models. arXiv preprint arXiv:2402.00253 (2024). [21] Sheng Liu, Haotian Ye, and James Zou. 2025. Reducing hallucinations in large vision-language models via latent space steering. In The Thirteenth International Conference on Learning Representations .[22] Xiaoyuan Liu, Wenxuan Wang, Youliang Yuan, Jen-tse Huang, Qiuzhi Liu, Pinjia He, and Zhaopeng Tu. 2024. Insight Over Sight: Exploring the Vision-Knowledge Conflicts in Multimodal LLMs. arXiv preprint arXiv:2410.08145 (2024). [23] Pan Lu, Swaroop Mishra, Tanglin Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. 2022. Learn to explain: Multi-modal reasoning via thought chains for science question answering. Advances in Neural Information Processing Systems 35 (2022), 2507–2521. [24] Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. 2016. Pointer sentinel mixture models. arXiv preprint arXiv:1609.07843 (2016). [25] Trang Nguyen, Jackson Michaels, Madalina Fiterau, and David Jensen. 2025. Challenges in Understanding Modality Conflict in Vision-Language Models. 
+
+arXiv preprint arXiv:2509.02805 (2025). [26] Seongheon Park, Xuefeng Du, Min-Hsuan Yeh, Haobo Wang, and Yixuan Li. 2025. Steer LLM Latents for Hallucination Detection. arXiv preprint arXiv:2503.01917 
+
+(2025). [27] Teodora Popordanoska, Jiameng Li, and Matthew B Blaschko. 2025. CrossCheck: A Vision-Language Conflict Detection Benchmark. (2025). [28] Maan Qraitem, Piotr Teterwak, Kate Saenko, and Bryan A Plummer. 2025. Web Artifact Attacks Disrupt Vision Language Models. arXiv preprint arXiv:2503.13652 
+
+(2025). [29] Dustin Schwenk, Apoorv Khandelwal, Christopher Clark, Kenneth Marino, and Roozbeh Mottaghi. 2022. A-okvqa: A benchmark for visual question answering using world knowledge. In European conference on computer vision . Springer, 146–162. [30] Ashshak Sharifdeen, Muhammad Akhtar Munir, Sanoojan Baliah, Salman Khan, and Muhammad Haris Khan. 2025. O-TPT: Orthogonality Constraints for Cali-brating Test-time Prompt Tuning in Vision-Language Models. In Proceedings of the Computer Vision and Pattern Recognition Conference . 19942–19951. [31] Manli Shu, Weili Nie, De-An Huang, Zhiding Yu, Tom Goldstein, Anima Anand-kumar, and Chaowei Xiao. 2022. Test-time prompt tuning for zero-shot gener-alization in vision-language models. Advances in Neural Information Processing Systems 35 (2022), 14274–14289. [32] Anushka Sivakumar, Andrew Zhang, Zaber Hakim, and Chris Thomas. 2025. SteerVLM: Robust Model Control through Lightweight Activation Steering for Vi-sion Language Models. In Findings of the Association for Computational Linguistics: EMNLP 2025 . 23640–23665. [33] Xijia Tao, Shuai Zhong, Lei Li, Qi Liu, and Lingpeng Kong. 2025. Imgtrojan: Jailbreaking vision-language models with one image. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Com-putational Linguistics: Human Language Technologies (Volume 1: Long Papers) .7048–7063. [34] Baoliang Tian, Yuxuan Si, Jilong Wang, Lingyao Li, Zhongyuan Bao, Zineng Zhou, Tao Wang, Sixu Li, Ziyao Xu, Mingze Wang, et al. 2025. Crosscheck-bench: Diagnosing compositional failures in multimodal conflict resolution. arXiv preprint arXiv:2511.21717 (2025). [35] Maya Varma, Jean-Benoit Delbrouck, Zhihong Chen, Akshay Chaudhari, and Curtis Langlotz. 2024. Ravl: Discovering and mitigating spurious correlations in fine-tuned vision-language models. Advances in Neural Information Processing Systems 37 (2024), 82235–82264. [36] Weiyun Wang, Zhangwei Gao, Lixin Gu, Hengjun Pu, Long Cui, Xingguang Wei, Zhaoyang Liu, Linglin Jing, Shenglong Ye, Jie Shao, et al. 2025. Internvl3. 5: Ad-vancing open-source multimodal models in versatility, reasoning, and efficiency. 
+
+arXiv preprint arXiv:2508.18265 (2025). [37] Le Yang, Ziwei Zheng, Boxu Chen, Zhengyu Zhao, Chenhao Lin, and Chao Shen. 2025. Nullu: Mitigating object hallucinations in large vision-language models via halluspace projection. In Proceedings of the Computer Vision and Pattern Recognition Conference . 14635–14645. [38] Hee Suk Yoon, Eunseop Yoon, Joshua Tian Jin Tee, Mark Hasegawa-Johnson, Yingzhen Li, and Chang D Yoo. 2024. C-tpt: Calibrated test-time prompt tun-ing for vision-language models via text feature dispersion. arXiv preprint arXiv:2403.14119 (2024). [39] Xinmiao Yu, Xiaocheng Feng, Yun Li, Minghui Liao, Ya-Qi Yu, Xiachong Feng, Weihong Zhong, Ruihan Chen, Mengkang Hu, Jihao Wu, et al. 2025. Cross-lingual text-rich visual comprehension: An information theory perspective. In MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 9680–9688. [40] Rowan Zellers, Yonatan Bisk, Ali Farhadi, and Yejin Choi. 2019. From recognition to cognition: Visual commonsense reasoning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 6720–6731. [41] Hao Zhang, Chen Li, and Basura Fernando. 2025. Mitigating Easy Option Bias in Multiple-Choice Question Answering. arXiv preprint arXiv:2508.13428 (2025). [42] Zongmeng Zhang, Wengang Zhou, Jie Zhao, and Houqiang Li. 2025. Robust multimodal large language models against modality conflict. arXiv preprint arXiv:2507.07151 (2025). [43] Lanyun Zhu, Deyi Ji, Tianrun Chen, Peng Xu, Jieping Ye, and Jun Liu. 2025. Ibd: Alleviating hallucinations in large vision-language models via image-biased decoding. In Proceedings of the Computer Vision and Pattern Recognition Conference .1624–1633. When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+This supplementary material provides implementation and eval-uation details that complement the main paper: 
+
+• Appendix A describes the construction of the Textual Relia-bility Ladder : prompt templates for generating each auxiliary-text condition, instance-wise style matching and token-length matching for Option-Redirecting vs Faithful. Token-length stats are reported and mandatory two-annotator human screening and verification. Additionally, we also report dataset-level auxiliary-text statistics and a worked example of all ladder variants. 
+
+• Appendix B explains why we evaluate frozen VLMs and why fine-tuning is not a fair test for attributing decision-level text bias under ladder-controlled interventions. 
+
+• Appendix C provides full implementation details of the pro-posed two-stage inference-time intervention (NSS and DG), including steering-direction estimation, hyperparameter set-tings across model–dataset pairs, and design choices such as layer/token selection and auxiliary-text representation. 
+
+• Appendix D reports extended experimental results and anal-yses, including complete ladder tables for frozen baselines, stage-wise ablations (Only NSS / Only DG / NSS+DG), and redirect analysis that quantifies option-targeted collapse un-der Option-Redirecting text. 
+
+## A Construction of the Textual Reliability Ladder 
+
+This appendix describes how we construct the auxiliary-text vari-ants for the Textual Reliability Ladder , including the prompt templates, augmentation pipeline, and filtering/verification rules. Across all conditions, we hold the image, question, and answer options fixed, and vary only the auxiliary text to enable controlled counterfactual comparisons. We follow a two-step pipeline of constrained generation and 
+
+verification . Unreliable variants are generated with Gemini-2.5-Flash [7] using fixed prompt templates; we repeatedly sample candidates until they satisfy the ladder definition described in this appendix (e.g., style matching, token-length matching for Option-Redirecting vs Faithful and leakage/option-cue filters), followed by mandatory human verification. Faithful texts are taken from dataset-provided annotations when available; if a Faithful anno-tation violates any constraint, we discard the entire instance to preserve strict comparability across ladder conditions. 
+
+Ladder Conditions. The following auxiliary-text regimes are con-structed: 
+
+• Faithful (dataset-provided) 
+
+• Off-Question 
+
+• Contradictory 
+
+• Option-Redirecting 
+
+• Irrelevant 
+
+• No-Aux (no auxiliary text) 
+
+## A.1 Faithful 
+
+Faithful texts are taken directly from dataset-provided. These texts are grounded in the image and relevant to the question, and typically support the correct answer option. 
+
+Prompt Templates for generating Off-Question text 
+
+You are an assistant that generates short texts for the provided images. Your text MUST be consistent with what is visually present in the images, but it MUST NOT contain any information that answers or helps answer the user’s question and text MUST IGNORE and DONT MENTION to any answer options provided. If a visual detail might be relevant to answering the question, you should avoid mentioning it. Focus instead on secondary or generic visual aspects (such as general atmosphere, style, background elements) that are unrelated to the question. Never refer to the question in your text. Al-ways respond with exactly one concise text and nothing else. Question: {question}. Caption MUST IGNORE and DON’T MENTION to any answer options: {list_answers_str}. The visual inputs are either a single image or consec-utive keyframes sampled from the same video scene. Write ONE concise text that correctly describes some visible aspects of the images, but does NOT include any information that answers or helps answer the question above. The text must: 
+
+• Be based only on what is visible in the images. 
+
+• Avoid any detail that could be used to answer the question. 
+
+• Not mention or refer to the question. Output only the text, with no extra explanations. 
+
+Table 3: Prompt templates used to generate Off-Question text. 
+
+## A.2 Off-Question 
+
+These texts are visually grounded but irrelevant to the question, and thus should not systematically support any option. We generate them by conditioning on the image using the Off-Question prompt template in Table 3. 
+
+## A.3 Contradictory 
+
+These texts are generated solely from the question text and are not grounded in the image at all. They are logically consistent with the question but fabricated with respect to visual content. We generate them using the Contradictory prompt template in Table 4. 
+
+## A.4 Option-Redirecting 
+
+Option-Redirecting texts are question-relevant, image-inconsistent, and intentionally crafted to implicitly support a specific incorrect answer option. We generate them using the Option-Redirecting prompt template in Table 5. The redirected option is sampled uniformly from incorrect an-swer choices. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+Prompt Templates for generating Contradictory text 
+
+You are an assistant that generates short captions ONLY from the text of the user’s question. You NEVER see any images, you MUST NOT try to describe or guess the actual image content and caption MUST IGNORE and DONT MENTION to any answer options provided. Your caption should be logically consistent with the question. Always answer with a single concise caption, without any explanation. Question: {question}. Caption MUST IGNORE and DON’T MENTION to any answer options: {list_answers_str}. Write ONE concise text that is on-topic with the ques-tion but deliberately introduces a plausible yet incorrect scenario that would contradict the true visual content. The caption must be non-targeted: avoid implying a spe-cific answer choice, avoid providing a strong cue toward any single option, and do not include names/phrases that could match the answer options. Use only general wording derived from the question theme (no external facts). Do NOT mention images, photos, or pictures. Output only the caption. 
+
+Table 4: Prompt templates used to generate Contradictory text. Prompt Templates for generating Option-Redirecting text 
+
+You are an assistant that generates caption hallucina-tions redirected to a specific answer for a question. Question: {question}. Follow structure of this answer: Answer redirected: {answer_correct} Caption generated: {text_faithful} Generate a caption for answer redirected: {an-swer_redirected}. Only output the caption without any other explanations and caption must be concise and follow the format. 
+
+Table 5: Prompt templates used to generate Option-Redirecting text. 
+
+## A.5 Irrelevant Auxiliary Text 
+
+Irrelevant auxiliary texts are sampled from WikiText [24] passages and filtered to avoid accidental overlap with the question or an-swer options (lexical-similarity, option-cue, and leakage filters). We do not enforce strict instance-wise length matching for Irrelevant; instead, we apply only a coarse token-budget bound to avoid de-generate verbosity/shortness and report token-length statistics in Appendix A.8. 
+
+## A.6 Human Verification 
+
+All constructed auxiliary texts undergo mandatory two-annotator human verification using a checklist aligned with the ladder defini-tion: (i) image-consistent vs. contradictory as required, (ii) question-aligned vs. off-question behavior, (iii) no option-targeted support when not intended, (iv) for Option-Redirecting , the presence of option-targeted support without verbatim option leakage, and (v) no answer leakage or invalid cues. Ambiguous or non-compliant texts are removed or regenerated. To control for length-based confounds in our key comparison, we enforce instance-wise length matching for Option-Redirecting in 
+
+token space under the target model tokenizer: |𝐿 OR − 𝐿 Faithful | ≤ Δ𝐿 
+
+(equivalently, (1 − 𝜌 )𝐿 Faithful ≤ 𝐿 OR ≤ ( 1 + 𝜌 )𝐿 Faithful ). For other conditions, we do not enforce strict matching; instead, we apply only a coarse length bound to avoid degenerate verbosity/shortness and report token-length statistics in Appendix A.8. 
+
+Faithful sample retention and target size. Since Faithful auxiliary text is sourced from the dataset, we do not rewrite it to satisfy our filtering or verification constraints, as doing so would introduce asymmetric editing across ladder conditions. Instead, if the Faithful text for an instance violates the checklist (e.g., contains invalid cues or triggers answer leakage), we drop the entire instance and continue sampling additional instances from the same evaluation split until we obtain exactly 1,000 valid instances per dataset (fixed random seed), ensuring that all reported results are computed on the same target set size. 
+
+Independent annotation and adjudication. Verification is performed by two annotators working independently with the same checklist. An instance is accepted only if both annotators mark it as com-pliant. Disagreements (including “ambiguous” cases) are resolved via adjudication: we discard the text and regenerate or remove the corresponding auxiliary variants until both annotators agree it satisfies the intended ladder condition. This procedure is applied uniformly across all ladder conditions to maintain comparability and minimize subjective leakage or option-targeted artifacts. 
+
+## A.7 Example: Textual Reliability Ladder 
+
+We illustrate the Textual Reliability Ladder with a concrete instance (Table 8). The image, question, and answer options are held fixed, while only the auxiliary text is varied to instantiate each ladder condition. 
+
+## A.8 Auxiliary Text Statistics 
+
+Table 9 reports dataset-level statistics of auxiliary texts used in our ladder evaluation. For each dataset, we evaluate exactly 1,000 instances and summarize auxiliary-text token lengths computed under the corresponding model tokenizer used at inference. Cells report the per-instance token count (mean ±std); values in paren-theses denote the token-length difference relative to Faithful ,
+
+Δ = 𝐿 cond − 𝐿 Faithful (in tokens). We note that Causal-VidQA is a When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+Model Dataset Noise-Stability Steering Dynamic Grounding 
+
+𝛼 image 𝛼 text Layer range N_demos 𝛽 DG top 𝑘 Layer range Qwen2.5VL-3B Causal-VidQA 0.5 0.3 All 30 0.4 20 19–33 ScienceQA 0.5 0.4 All 50 0.5 7 19–33 A-OKVQA 0.4 0.4 All 50 0.4 7 19–33 VCR 0.5 0.5 All 50 0.4 7 19–33 Qwen2.5VL-7B Causal-VidQA 0.4 0.5 All 30 0.4 20 13–28 ScienceQA 0.4 0.4 All 50 0.6 7 13–28 A-OKVQA 0.3 0.3 All 50 0.6 7 13–28 VCR 0.5 0.3 All 50 0.5 7 13–28 Qwen3VL-4B Causal-VidQA 0.5 0.3 All 30 0.2 20 9–34 ScienceQA 0.5 0.3 All 50 0.4 7 9–34 A-OKVQA 0.3 0.3 All 50 0.4 7 9–34 VCR 0.5 0.3 All 50 0.2 7 9–34 Qwen3VL-8B Causal-VidQA 0.3 0.4 All 30 0.2 20 9–34 ScienceQA 0.3 0.5 All 50 0.6 7 9–34 A-OKVQA 0.4 0.4 All 50 0.6 7 9–34 VCR 0.4 0.5 All 50 0.4 7 9–34 InternVL3.5-4B Causal-VidQA 0.3 0.1 All 15 0.4 20 9–34 ScienceQA 0.5 0.1 All 20 0.5 7 9–34 A-OKVQA 0.4 0.1 All 20 0.3 7 9–34 VCR 0.3 0.1 All 20 0.3 7 9–34 InternVL3.5-8B Causal-VidQA 0.4 0.1 All 15 0.3 20 9–34 ScienceQA 0.4 0.1 All 20 0.5 7 9–34 A-OKVQA 0.4 0.1 All 20 0.5 7 9–34 VCR 0.4 0.1 All 20 0.4 7 9–34 
+
+Table 6: Best-performing hyperparameter configurations for our method (NSS + DG), used to produce the results in Figure 4 (percentage accuracy gain over the base model) across models and datasets. The reported settings are selected via brute-force search over predefined ranges, aiming to identify configurations that consistently provide strong performance gains while maintaining stability across different models and datasets. 
+
+Model Causal-VidQA ScienceQA A-OKVQA VCR 
+
+Unsteered 
+
+(Frozen) 
+
+Two-stage 
+
+(Ours) Δ(%)
+
+Unsteered 
+
+(Frozen) 
+
+Two-stage 
+
+(Ours) Δ(%)
+
+Unsteered 
+
+(Frozen) 
+
+Two-stage 
+
+(Ours) Δ(%)
+
+Unsteered 
+
+(Frozen) 
+
+Two-stage 
+
+(Ours) Δ(%)
+
+Qwen2.5VL-3B 15.9 10.7 5.2 45.3 40.7 4.6 23.5 14.2 9.3 31.6 23.2 8.4 Qwen2.5VL-7B 15.8 12.6 3.2 59.0 43.8 15.2 26.1 17.0 9.1 38.5 29.2 9.3 Qwen3VL-4B 14.3 12.5 1.8 41.0 30.1 10.9 16.8 11.7 5.1 25.8 22.2 3.6 Qwen3VL-8B 16.4 13.8 2.6 39.3 29.5 9.8 18.2 12.1 6.1 30.8 20.8 10.0 InternVL3.5-4B 30.0 20.6 9.4 63.8 48.6 15.2 46.8 37.9 8.9 47.4 39.6 7.8 InternVL3.5-8B 30.5 25.0 5.5 63.0 52.1 10.9 37.2 27.8 9.4 47.7 39.6 8.1 
+
+Table 7: Redirect analysis across datasets. Redirect reports the percentage of samples (out of 1,000) whose predictions match the redirected option under option-targeted biased text (lower is better). Δ(%) denotes the absolute reduction in Redirect (in percentage points) relative to the no-intervention baseline, computed as Δ = Redirect Unsteer (Frozen) −Redirect Two-stages (Our) (higher is better). Lower Redirect indicates stronger robustness to option-redirecting textual bias. 
+
+video QA benchmark where each instance is represented by multi-ple sampled frames as visual inputs. Accordingly, the Image row reports the total number of frame inputs aggregated over the 1,000 evaluated instances (3,716), whereas A-OKVQA , ScienceQA , and 
+
+VCR are image-based datasets with a single image per instance. Importantly, Option-Redirecting texts are closely length-matched to Faithful across datasets (small |Δ|), which helps isolate option-targeted bias from superficial length effects. In contrast, other con-ditions may exhibit larger length differences due to their definitions MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+Example of the Textual Reliability Ladder 
+
+Image: Figure 5 
+
+Question. What are the boys doing in the sand near the shore-line? Options: (A) building castles (B) tunneling (C) fighting (D) eating 
+
+Auxiliary-text variants: 
+
+• Faithful: The boys are building a sand structure near the waterline. 
+
+• Off-Question: A cloudy day at a rocky beach, with seabirds overhead and an umbrella on a distant out-crop. 
+
+• Contradictory: The boys are flying a kite on the beach while standing on the wet sand. 
+
+• Option-Redirecting: Two boys are wrestling and shoving each other in the sand. 
+
+• Irrelevant: The WikiText corpus contains articles across many topics. 
+
+Table 8: Worked example of the Textual Reliability Ladder. We keep the image, question, and answer options fixed, and vary only the auxiliary text to instantiate the five ladder conditions (Faithful, Off-Question, Contradictory, Option-Redirecting, Irrelevant). 
+
+Figure 5: Image example 
+
+(e.g., Contradictory often forms short counter-statements, while 
+
+Irrelevant may be longer and descriptive). In this example, the Faithful text accurately describes the relevant visual evidence (the boys building a sand structure), providing helpful context without introducing spurious details or favoring any incorrect option, consistent with the correct choice (option A: “building castles”). The Option-Redirecting text is question-aligned but subtly biases the model toward a specific incorrect option (“fighting”) without using any option markers or verbatim option strings, whereas Contradictory introduces an incompatible activity that is not intentionally option-targeted. Off-Question 
+
+remains descriptive but uninformative for answering the question, and Irrelevant is unrelated background text. To isolate option-targeted bias from superficial length effects, Option-Redirecting is token-length matched to the corresponding Faithful text (within a fixed window), while other conditions are style-controlled but may vary in length (see Appendix A.8). 
+
+Quality control and removal criteria. To ensure that ladder ef-fects arise from textual reliability rather than superficial artifacts, we apply strict post-generation filtering to every auxiliary-text variant and remove or regenerate any candidate that violates our constraints. Concretely, we discard a text if it (i) contains any ex-plicit multiple-choice markers or answer-revealing phrases (e.g., “A/B/C/D”, “(A)–(D)”, “option ’C’, “the correct answer is”), (ii) copies or near-copies any answer-option string after normalization (includ-ing minor paraphrases that preserve distinctive option keywords), or (iii) exhibits answer leakage by being disproportionately simi-lar to a particular option compared with the others. We further remove candidates that fail to satisfy the intended ladder semantics (e.g., an Off-Question description that mentions the boys’ actions, or an Option-Redirecting text that becomes image-faithful), as well as low-quality generations such as repetitive phrasing, meta-instructions, or dataset-referential content. Finally, we enforce per-instance token-length matching for Option-Redirecting vs. Faith-ful ; for other conditions, we apply only a coarse token-budget bound to avoid degenerate verbosity/shortness. 
+
+Examples of discarded auxiliary text. Below are representative failure cases removed during filtering: 
+
+• Option-marker leakage: “The correct answer is option (A).” 
+
+(explicit answer marker) 
+
+• Verbatim option copying: “They are building castles in the sand near the shoreline.” (contains an option string) 
+
+• Near-copy / keyword leakage: “The boys are making sand-castles by the water.” (near-duplicate of option (A) via minor paraphrase) 
+
+• Semantic violation of condition: Off-Question candidate: “Two boys dig a long tunnel in the sand.” (becomes question-relevant) 
+
+• Meta / non-auxiliary text: “Select the best choice from the options based on the image.” (instructional) 
+
+• Dataset-referential content: “This is a multiple-choice VQA sample with four options.” (non-visual) 
+
+• Degenerate repetition: “Boys on the beach, boys on the beach, boys on the beach.” (low-quality) Observation. Auxiliary-text length varies substantially across datasets (e.g., ScienceQA provides much longer Faithful rationales on average), reflecting differences in annotation style and task format. Reporting these statistics contextualizes the robustness trends observed across ladder conditions. When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil.                             
+
+> Text Type A-OKVQA ScienceQA VCR Causal-VidQA Image 1000 1000 1000 3716
+> Faithful 12 .72 ±7.07 56 .00 ±51 .79 20 .20 ±10 .22 14 .42 ±6.35
+> Off-Question 20 .34 ±4.55 16 .11 ±4.16 12 .92 ±2.84 18 .42 ±4.16
+> Contradictory 5.66 ±2.01 5.95 ±2.37 8.86 ±3.30 9.58 ±3.01
+> Option-Redirecting 12 .86 ±6.86 53 .33 ±49 .00 18 .86 ±8.71 14 .22 ±6.74
+> Irrelevant 25 .26 ±12 .88 25 .43 ±13 .35 24 .80 ±12 .89 25 .54 ±12 .43
+
+Table 9: Auxiliary-text length statistics for 1,000 evaluated instances per dataset. Cells report per-instance token lengths (mean ±std). Strict instance-wise token-length matching is enforced only for Option-Redirecting relative to the corresponding Faithful text; other conditions are generated under fixed prompts with coarse length control. 
+
+## B Why Fine-tuning Is Not a Fair Test of Textual Bias 
+
+A core design choice of our study is to evaluate frozen VLMs. This is not merely a computational preference, but a methodological re-quirement for making an objective claim about textual bias induced by auxiliary text. Our goal is to isolate the causal effect of auxiliary textual inputs (under the Textual Reliability Ladder in Section 3) on the model’s final multiple-choice decision. If the model parame-ters are updated, performance changes can no longer be uniquely attributed to the reliability or type of the auxiliary text, because the model itself has changed. Textual bias in our setting is defined as decision-level over-reliance 
+
+on auxiliary text, especially when the text is question-aligned but visually ungrounded (e.g., Option-Redirecting ). Fine-tuning in-troduces multiple confounding factors that can mask or mimic bias reduction: (i) general capability gains (better instruction follow-ing, improved reasoning, better calibration), (ii) dataset adaptation 
+
+(learning answer-option priors or annotation artifacts), and (iii) 
+
+prompt/format learning (e.g., learning to output cleaner option to-kens). This concern is supported by prior work [8], which explicitly evaluates fine-tuning and shows that it tends to improve perfor-mance across all textual conditions, including the No-Aux case. Such uniform gains do not necessarily imply reduced reliance on misleading text; rather, they are also consistent with a globally stronger model. Consequently, a fine-tuned model may appear “more robust” simply because it becomes better at the task overall, not because it has become less biased toward unreliable auxiliary descriptions. In a ladder-style diagnosis, robustness is not equivalent to ignor-ing text. A model can reduce errors under Option-Redirecting by learning a blunt heuristic: always distrust auxiliary text . While this may raise worst-case robustness, it can simultaneously harm per-formance under Faithful text where auxiliary information is gen-uinely useful. This failure mode is difficult to disentangle under fine-tuning because the training objective does not explicitly constrain the model to retain beneficial text usage while selectively resist-ing misleading cues. By contrast, frozen-model evaluation makes this trade-off transparent: if the model collapses under Option-Redirecting but succeeds under Faithful, the gap is attributable to the input reliability rather than to a shifted learned policy. Our ladder evaluation is a controlled intervention: for each in-stance, we hold the image, question, and options fixed, and while controlling style and lexical shortcuts, and token-length matching Option-Redirecting to Faithful. This design is meaningful only when the model is fixed. Once fine-tuning is introduced, one must decide 
+
+what to fine-tune on (which datasets, which ladder conditions, what mixture ratios), and these choices can directly determine the appar-ent robustness. For example, including many Option-Redirecting samples in training may teach the model to discount auxiliary text in a dataset-specific manner, while excluding them yields a different behavior. Either way, the resulting comparison conflates the evalu-ation variable (text reliability) with the training variable (exposure and optimization), undermining the goal of an unbiased diagnosis. Our method is designed as an inference-time intervention that can be applied to off-the-shelf VLMs without retraining. This setting is practically important (e.g., when only black-box access or limited compute is available), and scientifically clean: keeping parameters frozen ensures that any behavioral change across ladder conditions is attributable to (a) the auxiliary text type, and (b) the explicit intervention we apply at inference time. Therefore, using frozen models provides a stricter and more interpretable testbed for study-ing textual bias and for validating mitigation mechanisms that do not rely on additional supervision or parameter updates. In short, fine-tuning is not a fair test for measuring textual bias under controlled ladder interventions, because it entangles robust-ness with general performance gains and training-dependent heuris-tics. Frozen-model evaluation is essential to attribute performance differences to auxiliary text reliability and to demonstrate that our inference-time approach specifically targets misleading textual influence rather than simply improving the model via parameter updates. 
+
+## C Inference-Time Intervention C.1 NSS Steering Vector Construction 
+
+We illustrate the construction of NSS steering vectors with a con-crete example from the dataset in Table 10 and Image 5. To construct NSS steering directions, we pair this instance with two answer continuations under an identical context: (i) a correct continuation selecting option A (building castles), and (ii) a redi-rected incorrect continuation selecting option C (fighting). By computing the post-MLP hidden-state residuals between these two continuations—while holding the image, question, op-tions, and auxiliary text fixed—we isolate representation differences MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+> Example for NSS vector construction.
+> "correct_value": "A: building castles", "incorrect_value": "C: fighting", "question": "What are the boys doing in the sand near the shoreline? Answer options: A. building castles B. tunneling C. fighting D. eating Here is some additional information which are text descriptions based on the image to assist you in answering the later question. Note, the information could be irrelevant, missing some information or inaccurate, please use it with caution: Two boys are wrestling and shoving each other in the sand."
+
+Table 10: A concrete example used to construct NSS steering vectors. 
+
+associated with correct vs. incorrect answer trajectories. Aggregat-ing such residuals across a small demonstration set and extracting the dominant principal component yields a global steering direction that captures systematic biases induced by misleading text. This direction is then applied uniformly at inference time to stabilize model behavior against textual noise. 
+
+## C.2 Stage 1: Noise-Stability Steering (NSS) 
+
+To ensure a fair ladder comparison, we keep hyperparameters fixed across all textual conditions within each model–dataset pair. Table 6 summarizes the hyperparameter settings used for the proposed two-stage inference-time intervention across all evaluated models and datasets. For Stage 1 NSS, we report the visual and textual steering coefficients ( 𝛼 image , 𝛼 text ), the decoder layer range where steering is applied, and the number of demonstrations used to estimate the steering directions. The above construction yields a pair of layer-wise steering direc-tions that are model-internal and data-agnostic : the visual direction captures the dominant drift under controlled visual corruption, while the textual direction captures the contrast between correct and misleading continuations under the same context. Importantly, both directions are estimated once from a small demonstration set and remain fixed throughout evaluation, so NSS does not introduce any instance-specific tuning. The goal of the textual residual is to capture an internal direc-tion that distinguishes being driven to the correct option from being attracted to a plausible but wrong option under the same visual– textual context. To this end, we construct two continuations for each demonstration: a correct answer 𝐴 + and an incorrect answer 
+
+𝐴 − , while keeping the image, question, options, and auxiliary text fixed. The resulting representation difference therefore removes context effects and highlights a decision-separating signal in the decoder space—i.e., the dominant direction along which the model’s hidden states shift when the selected option flips from wrong to right. In contrast, using only 𝐴 + would mostly encode generic com-pletion patterns or token identity, which are not aligned with our objective of reducing text-induced misselection. By explicitly in-cluding 𝐴 − as a “wrong-attractor” trajectory, NSS can steer the decoder away from misleading option trajectories while preserving the ability to benefit from Faithful auxiliary text. Across all models, NSS is applied uniformly across all layers. This design choice reflects the role of NSS as a global, static correction that reduces the model’s overall sensitivity to noisy or misleading textual signals, rather than resolving instance-specific grounding conflicts. Unlike Stage 2, NSS does not depend on the content of the current test sample and therefore provides a stable bias correction that is shared across inputs. 
+
+## C.3 Stage 2: Dynamic Grounding (DG) 
+
+Stage 2 DG hyperparameters, shown in Table 6, are more model-and dataset-dependent. We report the grounding strength 𝛽 DG , the number of question-relevant visual tokens 𝑘 selected for correction, and the decoder layer range where DG is applied. DG is consistently applied to higher decoder layers, where seman-tic alignment between auxiliary text, visual evidence, and answer options has the strongest influence on final decision-making. In contrast to NSS, DG is instance-specific and question-aware, and is effective when auxiliary text conflicts with visually grounded evidence. We observe clear dataset-dependent trends. For video-based datasets (Causal-VidQA), a larger 𝑘 is used, reflecting the higher redundancy and temporal variation across frames. Selecting more visual tokens allows DG to aggregate consistent evidence across time. For image-based datasets, smaller values of 𝑘 are sufficient, enabling DG to focus correction on the most discriminative visual regions without diluting the signal. 
+
+Auxiliary-text representation in DG.. Dynamic Grounding (DG) requires a vector representation of the auxiliary text to guide the adjustment of text-token hidden states. We evaluated two alterna-tives: (i) mean pooling over all auxiliary-text tokens and (ii) using the last auxiliary-text token. Empirically, using the last token consistently yields stronger performance across models and datasets, particularly under Option-Redirecting auxiliary text. The final token in the autoregressive decoder aggregates information from the preceding auxiliary-text tokens through self-attention and lies closest to the subsequent answer-generation step. As a result, it provides a more direct signal for correcting option-level biases in the decoder. Mean pooling, in contrast, averages across all tokens in the auxiliary text and may dilute decision-relevant information with background or descriptive tokens that are less related to the an-swer prediction. Therefore, all DG results in this work use the last auxiliary-text token as the auxiliary-text representation. 
+
+## D Experiment D.1 Experimental Setup 
+
+We apply a single fixed prompt template across all datasets, models, and textual conditions to avoid prompt-induced confounds: The template in Table 11 explicitly cautions the model that the auxiliary text may be unreliable, ensuring that any observed errors When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+Figure 6: Heatmap of percentage accuracy improvement over the base models using only Stage 1 (NSS) under different auxiliary-text conditions. Prompt Templates for Evaluating 
+
+Question: {question} Answer options: {options} Here are some additional information which are text descriptions based on the image to assist you for an-swering the later question. Note, the information could be irrelevant, missing some information or inaccurate, please use it with caution: {textual} Choose the CORRECT ID answer for the question below, you must response with the ID answer, don’t include text. 
+
+Table 11: Prompt templates used to evaluate. 
+
+reflect the model’s internal reliance on textual cues rather than prompt-induced misinstruction. 
+
+## D.2 Textual Reliability Ladder Results 
+
+Table 12 reports ladder performance for frozen VLMs without any inference-time intervention. We observe a clear reliability gradient: accuracy is highest with Faithful auxiliary text and degrades as text becomes less reliable, with Option-Redirecting producing the largest drops. These results indicate that when auxiliary text is fluent and question-aligned, current VLMs can exhibit strong 
+
+decision-level reliance on it. We use No-Aux as the text-free baseline to quantify the net effect of adding auxiliary text (help or harm), and Faithful as the reliability upper bound to characterize the ladder trend. Across models and datasets, Faithful consistently outperforms No-Aux, demonstrating that image-consistent auxiliary text pro-vides useful contextual evidence. In contrast, Irrelevant remains close to No-Aux, suggesting that purely unrelated text neither sys-tematically helps nor harms. When auxiliary text is Off-Question (visually grounded but not question-relevant), performance generally drops relative to Faithful and is often close to or slightly below No-Aux, consistent with mild distraction. Contradictory text further reduces accuracy, demon-strating that plausible but image-inconsistent statements can mis-lead VLMs even without option cues. Option-Redirecting yields the most severe degradation across models and datasets, and typically underperforms No-Aux, evi-dencing substantial net harm from biased auxiliary text. The ef-fect is especially pronounced on ScienceQA and VCR: for exam-ple, Qwen2.5VL-7B drops from 96 .1% (Faithful) to 37 .3% (Option-Redirecting) on ScienceQA and from 84 .5% to 46 .1% on VCR; InternVL3.5-4B shows similar drops (98 .3% → 35 .5% on ScienceQA; 82 .4% →
+
+38 .7% on VCR). On A-OKVQA, the degradation remains substantial but smaller (e.g., Qwen2.5VL-3B: 90 .9% → 67 .4%), while Causal-VidQA exhibits the smallest drop (e.g., 77 .3% → 65 .2% for Qwen2.5VL-3B), consistent with stronger constraints from direct visual evi-dence. 
+
+Model size helps in clean settings but does not remove text bias. 
+
+Larger backbones often improve Faithful accuracy (e.g., 7B/8B variants are generally stronger than 3B/4B), yet they remain vul-nerable to Option-Redirecting bias. Moreover, susceptibility varies by model family: for ScienceQA, Qwen3VL-8B retains 59 .0% under Option-Redirecting, whereas InternVL3.5-8B falls to 35 .9%, indi-cating that architectural/training differences affect how strongly auxiliary text dominates the final decision. The ladder results establish a clear reliability gradient and iden-tify Option-Redirecting as the dominant failure mode for frozen MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo                                                                                                                                                        
+
+> Model Dataset Faithful Contradictory Off-Question Option-Redirecting Irrelevant No-Aux
+> Qwen2.5VL-3B Causal-VidQA 77.3 71.6 72.3 65.2 72.3 71.8 ScienceQA 92.9 75.1 75.1 49.3 74.9 73.1 A-OKVQA 90.9 83.2 82.9 67.4 83.1 82.7 VCR 83.1 69.7 69.8 52.4 69.1 69.1 Qwen2.5VL-7B Causal-VidQA 77.9 71.7 73.3 65.3 72.6 72.1 ScienceQA 96.1 80.3 80.5 37.3 81.5 81.3 A-OKVQA 91.8 84.8 84.9 66.3 85.0 85.2 VCR 84.5 69.5 68.3 46.1 67.8 68.8 Qwen3VL-4B Causal-VidQA 75.7 70.0 69.6 64.2 69.0 70.0 ScienceQA 96.8 83.2 82.2 55.7 82.7 82.8 A-OKVQA 90.8 84.7 84.8 74.6 84.6 84.7 VCR 77.1 65.7 66.5 56.4 66.7 66.9 Qwen3VL-8B Causal-VidQA 77.5 70.9 71.6 64.6 71.2 71.2 ScienceQA 99.2 88.6 88.3 59.0 88.1 88.7 A-OKVQA 92.4 87.8 88.0 75.5 87.7 88.3 VCR 82.0 70.1 69.7 54.3 70.2 70.4 InternVL3.5-4B Causal-VidQA 78.5 69.9 71.4 52.0 69.7 70.1 ScienceQA 98.3 87.9 86.9 35.5 87.9 88.6 A-OKVQA 92.4 81.9 83.0 46.6 82.4 82.8 VCR 82.4 65.8 64.8 38.7 64.6 66.3 InternVL3.5-8B Causal-VidQA 80.6 71.1 71.7 52.9 71.2 72.2 ScienceQA 99.3 89.8 89.2 35.9 90.1 89.9 A-OKVQA 93.4 85.2 84.7 56.3 85.8 85.2 VCR 85.1 67.2 68.2 38.8 69.4 68.7
+
+Table 12: Ladder evaluation on frozen VLMs (no intervention). Accuracy (%) under different auxiliary-text conditions (Faithful, Contradictory, Off-Question, Option-Redirecting, Irrelevant, and No-Aux), measured on frozen VLMs without applying our method or any parameter updates. Each dataset uses 1,000 samples. 
+
+VLMs, motivating our two-stage inference-time intervention that specifically targets Option-Redirecting text bias while maintaining stability under other text conditions. 
+
+D.2.1 Why We Do Not Compare Against Additional Baselines. Our goal is to diagnose and mitigate decision-level text bias induced by auxiliary text under a controlled Textual Reliability Ladder, while keeping the underlying VLM frozen . This setting imposes specific requirements on what constitutes a fair and meaningful baseline. Below we clarify why we do not include several common categories of approaches. We do not compare against fine-tuning baselines because updat-ing model parameters confounds ladder attribution: performance changes may reflect general capability gains or training-induced heuristics rather than reduced reliance on unreliable auxiliary text (see Appendix B). Therefore, we restrict our study to frozen models to ensure a fair and interpretable ladder comparison. Most prior “debiasing” work in VQA focuses on dataset-level lan-guage priors (e.g., question-only shortcuts) and typically relies on architectural changes, auxiliary branches, counterfactual training, or additional supervision. These methods are not directly compa-rable to our setting, where the bias source is externally supplied auxiliary text whose reliability is systematically manipulated (Faith-ful / Contradictory / Option-Redirecting / etc.). In particular, our failure mode is Option-Redirecting misselection driven by question-aligned but visually ungrounded text, which is structurally different from classic question-only priors. 
+
+Test-time approaches for VLMs “language-prior” bias are not aligned with our ladder protocol. There exist training-free/post-hoc strate-gies that calibrate VLMs outputs using counterfactual inputs such as removing or corrupting the image, with the goal of reducing reliance on the underlying LLM prior. However, these methods are designed around an image-missing or image-incongruent baseline and primarily correct for vision-ignoring behavior, rather than for 
+
+auxiliary-text reliability and Option-Redirecting redirection under a fixed image. Applying such calibration would also change the eval-uation protocol by introducing additional counterfactual forward passes and assumptions (e.g., “uniform” outputs when the image is absent), which are orthogonal to our ladder interventions and may penalize cases where Faithful auxiliary text is genuinely informa-tive. For these reasons, we do not treat them as direct baselines for ladder robustness to misleading auxiliary text. When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil.                                                                                                                                                        
+
+> Model Dataset Faithful Contradictory Off-Question Option-Redirecting Irrelevant No-Aux
+> Qwen2.5VL-3B Causal-VidQA 77.4 71.5 72.1 65.8 72.0 71.7 ScienceQA 93.0 75.2 75.4 49.3 75.1 73.2 A-OKVQA 91.0 83.5 83.8 69.2 83.3 83.4 VCR 83.6 69.6 69.0 52.4 69.4 69.1 Qwen2.5VL-7B Causal-VidQA 77.8 71.4 73.5 65.6 72.8 72.3 ScienceQA 95.8 80.9 80.4 37.6 81.8 81.4 A-OKVQA 92.0 84.9 85.3 66.7 85.6 85.6 VCR 84.6 69.2 68.4 45.7 68.3 68.6 Qwen3VL-4B Causal-VidQA 75.7 70.1 70.0 64.7 69.1 70.2 ScienceQA 96.9 83.3 82.1 56.7 82.8 82.9 A-OKVQA 91.1 85.2 84.9 74.5 85.0 85.3 VCR 77.1 66.3 66.8 56.7 67.5 66.4 Qwen3VL-8B Causal-VidQA 77.6 71.2 71.3 64.8 70.8 70.7 ScienceQA 99.3 88.6 88.2 58.5 88.0 88.7 A-OKVQA 92.6 87.9 88.0 75.6 87.8 88.5 VCR 82.6 70.0 69.5 54.5 69.8 70.5 InternVL3.5-4B Causal-VidQA 78.3 69.8 70.9 52.4 69.6 69.8 ScienceQA 98.6 87.9 87.2 35.8 87.7 88.6 A-OKVQA 92.3 81.4 82.5 46.9 82.6 81.9 VCR 82.4 65.6 65.3 37.9 65.8 66.9 InternVL3.5-8B Causal-VidQA 80.8 72.4 71.8 52.9 71.7 72.4 ScienceQA 99.4 89.9 89.3 36.2 89.4 89.7 A-OKVQA 93.1 85.5 84.8 57.4 85.7 85.3 VCR 85.6 67.4 67.4 38.3 68.0 68.1
+
+Table 13: Only NSS on frozen VLMs. Ladder results reported as accuracy (%) under different auxiliary-text conditions (Faithful, Contradictory, Off-Question, Option-Redirecting, Irrelevant, and No-Aux). Only NSS is applied at inference time (no training or parameter updates). Each dataset uses 1,000 samples. 
+
+Prompting is known to affect modality preference and text bias. Prior work [8] systematically evaluates prompt factors (e.g., in-struction phrasing, token order) and demonstrates that prompt adjustments alone do not provide a consistent, model-agnostic so-lution to blind faith in text. Our evaluation therefore adopts a fixed prompting template that follows prior best practice and is kept 
+
+identical across all ladder conditions, models, and datasets. Since prompt engineering is not our target variable and has been ana-lyzed in depth in prior work, additional prompt baselines would not be informative for isolating the effect of auxiliary-text reliability or for validating our inference-time mechanism. Overall, we focus on the most controlled and interpretable com-parison: frozen VLMs under a fixed prompt, where only the auxiliary-text type (and our inference-time intervention) changes. This design enables an unbiased ladder diagnosis and a clean attribution of ro-bustness gains to the proposed two-stage method rather than to training-dependent confounds. 
+
+## D.3 Two-stage Inference-Time Intervention 
+
+D.3.1 Only Noise-Stability Steering (NSS) (Stage 1). We ablate our two-stage intervention by enabling only Stage 1, NSS , while dis-abling Stage 2 (DG). Recall that NSS is a global, static activation-level shift: the visual stream is made more noise-stable by subtracting a visual direction, and the text decoder is weakly biased toward correct continuations by adding a textual direction. Once the per-layer directions are computed offline, NSS is applied uniformly via forward hooks and requires no extra forward passes or per-instance adaptation at test time. Across models, datasets, and ladder conditions, NSS yields a modest average improvement of about +0.10 accuracy points (i.e., 
+
+percentage points ) and rarely causes large regressions (Figure 6, Table 13). This is consistent with NSS being option-agnostic and designed primarily as a stability prior rather than a fine-grained grounding fix. Notably, performance under Faithful auxiliary text remains essentially unchanged (average +0.11%), indicating that NSS does not sacrifice accuracy when the auxiliary text is reliable. We report macro-averaged gains. For each condition, we average 
+
+ΔAccuracy (NSS minus Frozen) over all model–dataset pairs (24 cells). For the overall effect across conditions, we additionally aver-age over all ladder conditions (144 cells total). The largest average gains occur under Option-Redirecting text (average +0.24%), where the model is most vulnerable to question-aligned but image-inconsistent evidence. For instance, on A-OKVQA with Qwen2.5VL-3B, NSS improves Option-Redirecting accuracy from 67 .4% to 69 .2% (+1.8%), while also slightly improving Faithful accuracy (90 .9% → 91 .0%). At the dataset level, this pattern is most MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo                                                                                                                                                        
+
+> Model Dataset Faithful Contradictory Off-Question Option-Redirecting Irrelevant No-Aux
+> Qwen2.5VL-3B Causal-VidQA 75.3 71.4 72.0 70.1 72.1 71.8 ScienceQA 91.3 74.8 75.3 54.6 74.4 72.8 A-OKVQA 89.1 83.1 83.8 75.1 83.5 83.0 VCR 79.6 70.5 69.9 59.3 70.9 69.6 Qwen2.5VL-7B Causal-VidQA 77.0 72.6 73.7 67.2 73.1 72.1 ScienceQA 96.0 80.9 80.3 51.3 80.6 81.3 A-OKVQA 91.3 85.1 84.8 73.9 85.3 85.5 VCR 81.6 69.7 69.4 54.1 69.6 69.0 Qwen3VL-4B Causal-VidQA 74.1 69.6 69.8 65.1 69.4 70.1 ScienceQA 95.7 82.4 82.1 64.5 82.4 82.8 A-OKVQA 89.1 84.8 85.6 78.2 85.6 84.8 VCR 75.6 66.3 66.9 59.5 67.1 67.4 Qwen3VL-8B Causal-VidQA 76.0 71.0 71.3 66.3 71.3 71.1 ScienceQA 98.2 87.8 87.7 68.5 87.3 88.7 A-OKVQA 91.6 87.6 87.6 80.6 87.7 88.3 VCR 79.0 70.3 70.0 61.9 70.0 70.4 InternVL3.5-4B Causal-VidQA 77.0 70.4 70.3 58.8 69.7 70.1 ScienceQA 97.6 87.6 87.1 50.6 87.2 88.7 A-OKVQA 92.0 81.9 82.4 54.1 82.8 82.8 VCR 79.5 65.9 64.9 43.7 65.5 66.8 InternVL3.5-8B Causal-VidQA 78.8 70.9 71.0 56.0 70.0 72.2 ScienceQA 99.3 89.4 89.7 47.5 89.4 90.2 A-OKVQA 92.7 85.1 85.5 64.7 85.4 85.2 VCR 82.7 67.9 67.5 46.0 68.9 68.7
+
+Table 14: Only DG on frozen VLMs. Ladder results reported as accuracy (%) under different auxiliary-text conditions (Faithful, Contradictory, Off-Question, Option-Redirecting, Irrelevant, and No-Aux). Only DG is applied at inference time (no training or parameter updates). Each dataset uses 1,000 samples. 
+
+pronounced on A-OKVQA (Option-Redirecting average +0.60%), suggesting that NSS can partially reduce the model’s tendency to over-trust semantically plausible textual cues in knowledge-heavy VQA. 
+
+D.3.2 Only Dynamic Grounding (DG) (Stage 2). We next isolate Stage 2 by enabling only (DG) on frozen VLMs, while disabling Stage 1 (NSS). Unlike NSS (a global, static shift), DG is instance-dependent : it uses the current image–question context to adjust how auxiliary text is incorporated at inference time, aiming to suppress text-driven shortcuts when the text is misleading. The ablation in Figure 7 shows that DG delivers substantially larger gains than NSS precisely in the failure mode we target: 
+
+Option-Redirecting auxiliary text. Across all four datasets, im-provements are consistently positive and often large (up to double digits), indicating that DG effectively counters Option-Redirecting misdirection. For example, on ScienceQA, DG yields strong gains across model families (e.g., +14.0% for Qwen2.5VL-7B and +15.1% for InternVL3.5-4B under Option-Redirecting; Figure 7). Similar trends appear on A-OKVQA (e.g., +7.7% on Qwen2.5VL-3B and +8.4% on InternVL3.5-8B) and on VCR (e.g., +6.9% on Qwen2.5VL-3B and +8.0% on Qwen2.5VL-7B). These results support the intended role of DG: when auxiliary text is question-aligned but option-biased, DG can re-anchor the decision to question-relevant visual evidence, preventing the model from following the redirected textual narra-tive. Under No-Aux , Irrelevant , and Off-Question conditions, the changes are generally small (near zero for most model–dataset pairs; Figure 7 and Table 14). This suggests DG does not introduce large distributional shifts when the auxiliary text is uninformative, and that its benefit primarily emerges when there is a strong text-induced bias to correct. A consistent pattern in Figure 7 is that DG can be mildly to mod-erately negative under Faithful text (e.g., around −0.4% to −1.8% on A-OKVQA/ScienceQA, and up to −3.5% on VCR for Qwen2.5VL-3B). This is expected from an intervention whose goal is to discount 
+
+potentially unreliable text: when auxiliary text is actually correct and helpful, aggressively reweighting or suppressing its influence can remove useful signal and reduce accuracy. Therefore, DG alone is not a universally safe default. Overall, the Only DG ablation indicates that DG is the primary mechanism for mitigating Option-Redirecting text bias, produc-ing large and consistent improvements under Option-Redirecting auxiliary text while remaining mostly stable when text is weakly informative. However, DG alone may degrade performance when the auxiliary text is Faithful, motivating the two-stage design: NSS When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil.                                                                                                                                                        
+
+> Model Dataset Faithful Contradictory Off-Question Option-Redirecting Irrelevant No-Aux
+> Qwen2.5VL-3B Causal-VidQA 75.7 72.1 71.9 70.2 72.1 72.1 ScienceQA 91.5 75.1 75.3 54.5 75.3 73.4 A-OKVQA 89.6 83.7 83.8 75.9 83.7 83.4 VCR 79.6 70.6 70.2 59.6 70.1 69.8 Qwen2.5VL-7B Causal-VidQA 77.1 72.9 73.9 68.0 73.3 72.3 ScienceQA 95.9 81.0 80.6 51.6 80.8 81.4 A-OKVQA 91.6 85.2 85.0 74.3 85.6 85.6 VCR 82.4 69.4 69.6 53.9 69.6 68.3 Qwen3VL-4B Causal-VidQA 74.2 70.1 69.8 65.2 69.4 70.2 ScienceQA 95.7 82.7 82.0 66.0 82.5 83.0 A-OKVQA 89.2 85.2 85.3 78.6 85.7 85.1 VCR 76.1 66.3 66.6 59.6 67.3 66.7 Qwen3VL-8B Causal-VidQA 76.2 70.8 71.3 66.2 71.0 70.8 ScienceQA 98.2 88.3 87.9 68.5 87.4 88.8 A-OKVQA 91.8 87.9 87.3 80.5 88.1 88.3 VCR 78.9 70.7 70.3 62.4 70.7 70.5 InternVL3.5-4B Causal-VidQA 76.4 69.5 69.7 58.6 68.9 70.2 ScienceQA 97.6 87.7 87.2 50.1 87.5 88.8 A-OKVQA 91.8 81.7 82.0 54.8 82.5 81.9 VCR 80.2 66.5 65.5 43.8 65.8 66.6 InternVL3.5-8B Causal-VidQA 79.9 72.2 71.2 58.0 71.0 72.3 ScienceQA 99.3 89.6 89.7 46.9 89.7 90.0 A-OKVQA 92.8 85.5 85.2 64.9 85.4 85.1 VCR 83.2 68.4 68.1 46.0 67.9 68.9
+
+Table 15: Combined intervention on frozen VLMs. Ladder results reported as accuracy (%) under different auxiliary-text conditions (Faithful, Contradictory, Off-Question, Option-Redirecting, Irrelevant, and No-Aux). We apply the combined inference-time components (DG + NSS) without any training or parameter updates. Each dataset uses 1,000 samples. 
+
+provides a conservative stabilization backbone, and DG supplies instance-aware correction when the auxiliary text is likely to be misleading. 
+
+D.3.3 Combine Two-stage. Finally, we apply the full two-stage inference-time intervention by combining NSS (Stage 1) and DG 
+
+(Stage 2) on frozen VLMs. This setting reflects our intended use case: NSS provides a lightweight, model-wide stabilization of internal rep-resentations, while DG performs instance-dependent re-grounding to suppress auxiliary-text shortcuts when the text is misleading. Both components are applied at test time only, requiring no training or parameter updates. Figure 4 shows a clear and consistent pattern: the combined method yields its strongest improvements under Option-Redirecting auxiliary text across all datasets and model families. The gains are often substantial, reaching up to +14 .6% points on ScienceQA (e.g., InternVL3.5-4B) and +14 .3% on ScienceQA (Qwen2.5VL-7B), while also being large on A-OKVQA (up to +8.6%), VCR (up to +8.1%), and Causal-VidQA (up to +6.6%). These results match the motivation of our approach: when the auxiliary text is question-aligned but intentionally pushes the model toward a wrong option, the two-stage intervention can effectively reduce option-targeted text bias and recover a significant portion of the lost accuracy (Table 15). Under Faithful auxiliary text, we observe a largely conserva-tive behavior: the combined intervention typically preserves the original performance and yields only small fluctuations around the frozen baseline. This is expected, since when the auxiliary text is already well-grounded and aligned with the visual evidence, the model’s hidden states are close to a “consistent” trajectory, leaving limited room for corrective steering. Nevertheless, a small num-ber of model–dataset pairs exhibit noticeably negative deltas (e.g., 
+
+−3.1%, −2.2%, −2.1%). We attribute these drops to an inherent trade-off of robustness-oriented steering: Stage 2 (DG) explicitly down-weights text representations when it detects a mismatch between the auxiliary-text summary token and question-relevant visual ev-idence, and Stage 1 (NSS) further imposes a global stability prior that can slightly dampen beneficial text signals. In rare cases where the model already exploits Faithful text extremely effectively (or when the question can be answered with minimal visual grounding), these conservative shifts may mildly reduce the model’s reliance on auxiliary cues and thus lead to a modest accuracy decrease. Importantly, such degradations remain limited in scope and do not change the overall conclusion of the combined method. The same hyperparameters that cause these rare Faithful regressions de-liver consistent and often substantial gains in the harmful regimes, MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+Figure 7: Heatmap of percentage accuracy improvement over the base models using only Stage 2 (DG) under different auxiliary-text conditions. Gains are largest under Option-Redirecting textual descriptions, while remaining stable across other auxiliary-text settings. 
+
+Figure 8: Layer-wise magnitude and cross-layer similarity of Stage 1 (NSS) and Stage 2 (DG) updates. Top: ℓ2 norms of NSS steering directions (vision/text) and DG adjustment vectors across layers, comparing stage-wise ablations (Only NSS, Only DG) with the Combined method. Bottom: cosine-similarity matrices across layers for the visual NSS directions and DG adjustments under the Combined setting. NSS directions remain stable and globally coherent across layers, while DG adjustments exhibit more localized, layer-dependent structure, supporting the role of NSS as a global static prior and DG as an instance-wise grounding correction. 
+
+where bias is most severe and where robustness is the primary ob-jective. In particular, the method recovers large amounts of accuracy under Option-Redirecting auxiliary text (e.g., up to +8.1%, +5.1%, and +6.6% on VCR and Causal-VidQA), indicating that the interven-tion effectively suppresses option-targeted text bias without broadly collapsing the model’s ability to benefit from helpful descriptions. Therefore, even when a few Faithful cases incur moderate negative deltas, the net effect across ladder conditions demonstrates that the When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+method maintains strong clean performance while substantially im-proving worst-case robustness against misleading, option-targeted auxiliary text. Outside Option-Redirecting, performance changes are generally small. Under No-Aux , Irrelevant , Off-Question , and Contradic-tory conditions, the improvements typically remain within about 
+
+±1% (Figure 4), indicating that the combined intervention does not introduce broad distributional shifts when the auxiliary text is ab-sent or weakly informative. This stability is important in practice, since real-world pipelines may provide auxiliary text of varying quality. A remaining limitation is that Faithful text can occasionally see small-to-moderate drops (notably on VCR for some models). This reflects the inherent tension faced by any bias-mitigation method: mechanisms that discount misleading auxiliary text can also down-weight helpful text in some instances. Nevertheless, combining NSS with DG is beneficial overall: compared to using DG alone, NSS acts as a conservative backbone that keeps representations more stable across conditions, while DG supplies the strong, instance-aware correction needed specifically for Option-Redirecting attacks. As a result, the full two-stage method achieves the best robustness profile: large targeted gains where text bias is most harmful, without sacrificing stability across the remaining ladder conditions. 
+
+Limited impact when text is weakly informative. Under Off-Question and No-Aux, the average effect is near zero, which is expected: when auxiliary text is irrelevant to the decision (or absent), there is less text-induced bias to correct, and a global shift should not materially change predictions. Despite the above gains, NSS does not reliably recover from severe option-targeted collapse in all settings. In particular, im-provements on VCR under Option-Redirecting are less consistent and can be negative for some models, highlighting a core constraint of Stage 1: NSS applies the same correction regardless of whether the current auxiliary text is Faithful, Contradictory, or adversarially Option-Redirecting. This motivates Stage 2 (DG), which is explicitly instance- and question-aware and can selectively realign auxiliary-text representations with question-relevant visual evidence. Overall, this ablation supports the intended division of labor: NSS provides a lightweight robustness baseline that stabilizes behavior across conditions with essentially zero test-time overhead, while the substantial and reliably targeted mitigation of option-targeted failures requires the dynamic grounding correction in Stage 2. 
+
+D.3.4 Option-Redirecting (Worst-Case Text Bias). We highlight the Option-Redirecting condition, where the auxiliary text is question-aligned but steers the model toward the same incorrect option, causing the most severe degradation. As summarized in the combined results (in Figure 4), our two-stage intervention yields the 
+
+largest accuracy recovery in this regime (e.g., up to +14.6% on Sci-enceQA, and consistently positive gains on A-OKVQA/VCR/Causal-VidQA), indicating that the method effectively restores correct, visually grounded choices when text bias is strongest. In the Option-Redirecting setting, each auxiliary text is con-structed to subtly favor a specific target incorrect option (the redi-rected option ). We define Redirect as the percentage of samples (out of 1,000) whose prediction matches the redirected option; lower values indicate stronger robustness to option-targeted textual bias. Table 7 reports this redirect count and confirms that the gains under Option-Redirecting are not merely aggregate accuracy fluc-tuations. Across all models and datasets, our two-stage method consistently reduces the number of redirected predictions, indicat-ing that it weakens the attraction to the biased option and shifts decisions back toward visually supported answers. The reduction magnitude varies by dataset and model scale (typically larger on ScienceQA/A-OKVQA than on Causal-VidQA), but the trend is uni-form: fewer redirected errors under the most adversarial auxiliary-text condition. 
+
+D.3.5 Why Combining NSS and DG Is Necessary. Stage-wise ab-lations (Figures 6–7) highlight a clear division of labor between the two stages. When enabling only Stage 1 (NSS) , we observe modest but consistent gains across auxiliary-text conditions, with the key effect being stability : performance does not degrade under misleading text and does not drop under Faithful descriptions. This aligns with NSS as a global, static correction that reduces sensitiv-ity to superficial textual noise rather than resolving fine-grained grounding conflicts. In contrast, only Stage 2 (DG) produces strong but selective improvements, concentrated under Option-Redirecting auxiliary text while remaining largely unchanged elsewhere. DG is instance-specific and activates precisely when the auxiliary text is question-aligned yet visually inconsistent and implicitly favors a particular option, in which case it realigns representations toward question-relevant visual evidence. When auxiliary text is Faithful or weakly informative, the correction becomes negligible. These results show that the stages are not interchangeable. NSS provides a robustness baseline that stabilizes representations against noisy textual cues, but is intentionally option-agnostic and there-fore cannot fully correct option-targeted misdirection. DG corrects decision-level option bias, but benefits from operating on more stable upstream representations. Combining NSS and DG yields a balanced intervention: NSS improves global stability, and DG provides fine-grained, instance-level correction precisely where harmful auxiliary text exerts the strongest influence. Figure 8 further corroborates this division of labor at the repre-sentation level. The NSS vector norms (both vision and text) are almost identical between Only NSS and Combined across lay-ers, indicating that Stage 1 provides a fixed, global steering prior that is estimated once and reused unchanged. In contrast, the DG adjustment magnitudes closely match between Only DG and Com-bined and increase with depth, showing that Stage 2 contributes an additional, sample-dependent correction on top of NSS rather than modifying it. Consistently, the cosine-similarity maps show broadly coherent NSS directions across layers, whereas DG adjust-ments exhibit a more localized (near-diagonal) similarity pattern, reflecting layer-wise, instance-specific grounding updates driven by question-relevant visual evidence. Together, these trends explain why the combined method re-tains NSS’s global stability while enabling DG’s targeted correction precisely under Option-Redirecting text. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Tam Le Thi Thanh, Hoang Tran Van, Hong-Hanh Nguyen-Le, and Thanh Duc Ngo 
+
+Figure 9: Input image for a successful correction case under Option-Redirecting auxiliary text. 
+
+Figure 10: Input image for a failure case under Option-Redirecting auxiliary text, where the redirected distractor remains dominant after applying NSS+DG. 
+
+## D.4 Qualitative Examples under Option-Redirecting 
+
+To provide a finer-grained view beyond dataset-level averages, we present qualitative examples under the Option-Redirecting set-ting and visualize the corresponding choice probabilities before and after applying NSS+DG (Figures 9–16). These cases directly illustrate the decision-level phenomenon studied in this work: mis-leading yet question-relevant auxiliary text can concentrate proba-bility mass on a specific redirected distractor, despite conflicting visual evidence. Successful examples (Figures 9, 11, 13, and 14) show that the proposed intervention can reduce this redirected preference and restore probability mass to the visually supported 
+
+Figure 11: Input image for a successful correction case under Option-Redirecting auxiliary text. 
+
+Figure 12: Input image for a failure case under Option-Redirecting auxiliary text. When Helpful Text Hurts: Option-Redirecting Bias in Vision–Language Models MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+Figure 13: Choice-level probability shift for the example in Figure 9. NSS+DG reduces the redirected distractor and in-creases the correct answer probability. 
+
+Figure 14: Choice-level probability shift for the example in Figure 11. The intervention successfully rebalances probabil-ity mass toward the visually grounded answer. 
+
+Figure 15: Choice-level probability shift for the example in Figure 12. Although NSS+DG changes the score distribution, the redirected distractor remains competitive, resulting in failure. 
+
+Figure 16: Choice-level probability shift for the example in Figure 10. The redirected distractor remains dominant after intervention, illustrating a failure case. 
+
+correct answer. Failure examples (Figures 12, 10, 15, and 16), in con-trast, indicate that such correction is not always sufficient when the option-targeted textual signal is particularly strong. Together, these examples offer an instance-level interpretation of the robustness gains and residual errors observed in the quantitative analysis.
