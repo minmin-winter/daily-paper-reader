@@ -1,0 +1,2951 @@
+Title: Hyperbolic Multimodal Continual Learning: A Closest-Admissible Solution
+
+URL Source: https://arxiv.org/pdf/2609.29329v1
+
+Published Time: Fri, 25 Sep 2026 01:08:42 GMT
+
+Number of Pages: 49
+
+Markdown Content:
+Hyperbolic Multimodal Continual Learning Preprint 
+
+# Hyperbolic Multimodal Continual Learning: A Closest-Admissible Solution 
+
+Jiahong Liu 1, Ming Shen 1, Xiaohao Liu 2, Rex Ying 3,Menglin Yang 4, Tat-Seng Chua 2, and Irwin King 1
+
+> 1
+
+The Chinese University of Hong Kong 2National University of Singapore 
+
+> 3
+
+Yale University 4The Hong Kong University of Science and Technology (Guangzhou) Email: jiahong.liu21@gmail.com , king@cse.cuhk.edu.hk 
+
+Abstract. Existing continual-learning methods protect parameters, replayed examples, or Euclidean feature subspaces. When applied to hyperbolic multimodal models, they do not explicitly preserve the Lorentz geometry that jointly encodes within-modality similarity, cross-modal correspondence, and semantic hierarchy; sequential updates can therefore retain task scores while still distorting previously learned relations. We address this gap with Hyperbolic Multimodal Continual Learning (HMCL). We show that preserving the old multimodal geometry amounts to restricting all modalities to one shared hyperbolic isometry, which induces a family of admissible first-order parameter changes. We formulate a joint closest-admissible (CA) correction that retains the shared rotation best matching the candidate modal updates; its minimal-rotation (MR) special case fixes this rotation to zero. Both variants correct the displacement realized by AdamW, and task anchoring bounds within-task accumulation while preserving learning freedom. Across a unified 16-task classification–retrieval stream with three hyperbolic backbones, HMCL improves final performance and backward transfer over sequential fine-tuning and four continual-learning baselines; HMCL-CA gives the highest Overall score on every backbone. A modality-extended stream confirms the retrieval gains. Representation analyses find 81.2–95.5% less radial, angular, cross-modal, and paired-distance drift; ImageNet–WordNet results show better semantic ancestry and radial hierarchy. Code and data download links are in the code repository. 
+
+Keywords: continual learning; hyperbolic geometry; multimodal learning; vision–language representation learning 
+
+# 1 Introduction Continual Learning of Multimodal Hyperbolic Representations    
+
+> Task 1 Task 2 Task N …… Task 3
+> ↓ 74% Less
+> Forgetting !
+> Catastrophic Forgetting !
+> Ours
+> ✗.Structure collapse
+> of previous tasks
+> X. Distortion of old-task knowledge and relations
+
+Figure 1. Continual adaptation of hyperbolic representations. Hy-perbolic multimodal embeddings jointly encode task semantics and their hierarchy. Unconstrained sequential optimization may gradually distort this geometry and weaken structures learned from earlier tasks. Geometry-aware updates can reduce this form of forgetting. 
+
+Multimodal contrastive learning (MCL) has become a standard approach for constructing representations shared across data types [1–3]. Trained with large paired corpora and contrastive objectives, these mod-els align modality-specific observations in a semantic space that supports effective zero-shot transfer [4–6]. Most existing systems place this shared space in a high-dimensional Euclidean domain and therefore treat the organization of semantic concepts as flat. Semantic organization across modalities is rarely flat, however. A broad concept generally covers numerous specialized instances, creating asymmetric, partially ordered relations between different levels of abstraction. Uniform Euclidean neighborhoods do not explicitly distinguish such general-to-specific structure, making these relations difficult to represent without distortion. 
+
+1arXiv:2609.29329v1 [cs.CV] 24 Sep 2026 Hyperbolic Multimodal Continual Learning Preprint 
+
+Hyperbolic Multimodal Learning. Negative-curvature geometry offers a useful alternative for hierarchical semantics. MERU [7] and subsequent compositional-entailment learning [8] show that hyperbolic geometry can support effective multimodal representations. Geodesic proximity reflects semantic similarity, whereas radial position and entailment relations encode specificity. Generic concepts tend to lie nearer the origin, and more specific concepts tend to lie farther away. Hyperbolic embeddings can therefore represent alignment and abstraction in the same space. Despite these advances, existing hyperbolic multimodal models have been developed mainly for static training distributions [7–10]. Real systems instead encounter new tasks, concepts, and domains over time, yet standard continual-learning mechanisms do not explicitly protect the Lorentz relations that organize multimodal similarity and hierarchy. How to adapt such models sequentially without deforming their learned geometry therefore remains open. 
+
+Continual Learning as Geometric Preservation. For a hyperbolic model, forgetting involves more than reduced accuracy on an earlier task. Parameter changes may deform within-modality neighborhoods, cross-modal correspondences, and the radial ordering that records semantic abstraction. Once these quantities drift, both similarity and hierarchy inherited from old tasks are altered. This observation motivates our central question: 
+
+which parameter changes preserve the previously learned hyperbolic multimodal geometry while leaving sufficient freedom to acquire a new task? 
+
+Our Approach. We view hyperbolic multimodal continual learning 1 as optimization over updates that satisfy geometric preservation constraints, which we call admissible updates . Under the assumptions in Section 5, old-task geometry is retained when all modalities change through the same hyperbolic isometry. A first-order form of this condition describes the corresponding parameter updates. We then pose a joint closest-admissible problem over the modal parameter changes and the generator of their shared rotation. Its unique solution is obtained from one Lyapunov equation and defines HMCL-CA; constraining the generator to zero yields the projection used by HMCL-MR. For the AdamW implementation evaluated in this work, HMCL corrects the parameter step produced after moment estimation and coordinate-wise scaling, and task anchoring limits its accumulation within a task. 
+
+Contributions. To the best of our knowledge, this work is the first to study continual hyperbolic multimodal representations explicitly through their geometry. Our main contributions are: 
+
+• We relate retention of old multimodal knowledge to a shared hyperbolic isometry and derive the associated set of first-order parameter updates. 
+
+• We formulate a joint closest-admissible problem whose shared-rotation solution is obtained from one Lyapunov equation. HMCL CA permits the common rotation selected by this solution, while HMCL MR 
+
+restricts the same admissible family to zero rotation. Task anchoring preserves admissibility and bounds within-task accumulation. 
+
+• Across three backbones, both HMCL variants improve final classification and retrieval scores, overall performance, and BWT over all external baselines, with CA attaining the best Overall score in every backbone block. Representation-space analyses further show that these task-level gains coincide with 81.2–95.5% less radial, angular, cross-modal, and paired-distance drift and with improvements in every reported ImageNet– WordNet hierarchy metric. The placement study identifies post-AdamW correction with task anchoring as the strongest stability–plasticity configuration. 
+
+Extension beyond the conference version. The ICML paper introduced the geometric preservation conditions and the zero-rotation MR update on a 15-task stream [11]. This article generalizes that foundation with the rotation-permitting CA update, optimizer-consistent analysis, and broader geometric evaluation: (i) Closest-admissible CA solution. We express preservation as a joint constrained least-squares problem over every modal parameter change and one shared skew-symmetric generator. Its Lyapunov-equation solution gives the rotation-permitting HMCL CA update; fixing 𝛀 = 0 recovers the conference-version HMCL MR update and places both in one admissible family (Section 6.1).  
+
+> 1A preliminary version of this work appeared at ICML 2026.
+> 2Hyperbolic Multimodal Continual Learning Preprint
+
+(ii) Finite-step preservation and controlled accumulation. Following the backbones’ AdamW training paradigm, we correct the realized parameter displacement after moment estimation and preconditioning. We show that task-anchored CA and MR updates remain in the shared admissible family and that their accumulation is uniformly bounded, and we derive residual-drift and complexity results for practical low-rank protection (Section 6.2 and Appendix F). (iii) Hierarchy-aware large-scale evaluation. We add ImageNet-1K to form a unified 16-task continual stream across MERU-L, MERU-B, and HyCoCLIP-B. Its WordNet structure directly verifies that the predictive-retention gains coincide with better preservation of semantic ancestry and abstraction order, rather than only higher aggregate scores (Section 7.4). (iv) Controlled component and trajectory analysis. The component study shows that correcting AdamW’s realized displacement is stronger than correcting its raw gradient and that task anchoring provides a further stability gain; the complete post-AdamW update therefore gives the best stability–plasticity balance (Section 7.6). Representation-drift and hierarchy analyses further verify that the gain accompanies less radial and relational distortion (Sections 7.3–7.5). 
+
+# 2 Related Work 
+
+2.1 Hyperbolic Multimodal Learning 
+
+The volume of hyperbolic space grows exponentially with radius. This property makes hyperbolic space useful for hierarchical or scale-free data and has motivated a broad literature on non-Euclidean representation learning [12–21], including recent calls to extend non-Euclidean geometry to foundation models [22]. Hyperbolic contrastive learning has been developed for node embeddings and graph-level anomaly detection, together with explicit analyses of dimensional collapse [23–25]. Universal cone constructions further recover implicit hierarchies without prespecified parent–child relations [26]. In recommendation and retrieval, hyperbolic geometry captures long-tailed interactions and hierarchical neighborhoods [27–29]. In computer vision, it has also been studied for image representation [30], hierarchy-aware zero-shot recognition [31], and contrastive modeling of scene–object structure [32]; its benefits can depend on the task and radial geometry [33]. The same idea has recently been applied to multimodal learning, where images and language often have clear relations of abstraction and specificity. MERU [7] introduced large-scale hyperbolic vision–language pretraining by mapping CLIP-like representations to a Lorentz hyperboloid. Later studies developed the setting in several directions. Pal et al. [8] modeled compositional entailment within each modality, relating complex scenes to visual primitives and compound expressions to simpler concepts. Ibrahimi et al. [34] analyzed the geometry and uncertainty encoded by hyperbolic vision–language embeddings, whereas Ramasinghe et al. [35] replaced proximity-based cross-modal alignment with an angular objective that accommodates the modality gap. Other work scales hyperbolic learning to multimodal large language models [9], filters underspecified image–text pairs using entailment-cone apertures [10], and applies hierarchical alignment to synthetic-caption detection [36] or open-vocabulary segmentation [37]. Low-rank adaptation has also become a broad foundation-model adaptation family, including multimodal and continual settings [38]; related work performs such adaptation directly on a hyperbolic manifold [39]. HySAC [40] organizes safety concepts through a hyperbolic hierarchy, while hyperbolic multimodal unlearning studies the selective removal of concepts from MERU [41]. These works focus on pretraining, task-specific adaptation, safety, or removal; they do not study preservation of shared Lorentz relations throughout sequential multi-task acquisition. 
+
+2.2 Continual Learning 
+
+Continual learning seeks to acquire tasks in sequence without erasing capabilities learned previously [3]. Existing methods typically rely on replay, regularization, or parameter isolation. Replay approaches retain representative examples and reuse them during later training, as in GEM [42] and DER [43]. Regularization methods such as EWC [44] penalize changes to parameters deemed important for earlier tasks. Parameter-isolation strategies instead reserve different model capacity for different tasks; examples include Progressive Neural Networks [45], PackNet [46], and Piggyback [47].  
+
+> 3Hyperbolic Multimodal Continual Learning Preprint
+
+Continual vision–language learning introduces an additional requirement: retention of cross-modal alignment together with modality-specific features [48]. Unlike CLIP domain adaptation and generalization [49], it must preserve a growing task history. Ni et al. [48] described Spatial Disorder , which combines within-modality rotation and between-modality deviation, as an important failure mode in continual CLIP adaptation. Later methods preserve zero-shot behavior through distillation [50], use mixture-of-experts adapters for task acquisition [51], or apply representation-level contrastive regularization, as in C-FLAT [52]. Personalized LLM research likewise identifies lifelong updating, evolving user memories, and forgetting-resistant adaptation as core challenges [53]. As a concrete parameter-efficient instance, PerFit models personalization through a shared low-rank representation shift and user-specific deviations, then intervenes directly in hidden states [54]. Related geometric work treats long-horizon memory as a nonuniform dynamical space [55] and tailors Lorentz representations to heterogeneous federated clients [56]. Hyperbolic continual learning has also been studied for hierarchical image recognition [57] and multimodal few-shot class-incremental learning [58], but these lines do not enforce preservation of one shared Lorentz isometry across modalities and sequential tasks. Our setting also considers the semantic hierarchy encoded by radial coordinates and entailment cones. This motivates update constraints that account for hyperbolic geometry as well as cross-modal alignment. 
+
+2.3 Projected Updates with Adaptive Optimizers 
+
+Projection-based continual-learning methods often express retention as a constraint on a gradient or a descent direction [42]. With scalar-step stochastic gradient descent, projecting the direction and projecting the resulting parameter displacement are equivalent up to the learning rate. AdamW breaks this equivalence through momentum, element-wise preconditioning, and decoupled decay [59]. Riemannian adaptive optimizers instead study parameters that themselves lie on a manifold and use manifold-wise gradients and updates [60]. Our setting is different. The Lorentz head is Euclidean-parameterized, while the continual-learning constraint requires earlier outputs to remain on one shared Lorentz-isometry orbit. 
+
+# 3 Preliminaries 
+
+3.1 Hyperbolic Geometry 
+
+Hyperbolic space is a non-Euclidean manifold of constant negative curvature. We work with its Lorentz, or hyperboloid, realization because it supports stable numerical optimization [14, 61]. Appendix B reviews the hierarchy motivation, Lorentz model, and Lorentz neural layers. 
+
+Lorentz model. Let the curvature be −1/𝐾 for 𝐾 > 0. A 𝑑 -dimensional hyperbolic space can be represented by the upper sheet of a hyperboloid in (𝑑 + 1)-dimensional Minkowski space. With metric tensor G = diag (− 1, 1, . . . , 1) ∈ 
+
+R(𝑑 +1) × ( 𝑑 +1) , the manifold is 
+
+H𝑑 𝐾 = {x ∈ R𝑑 +1 | x⊤Gx = −𝐾, 𝑥 0 > 0}. (1) A point x = [𝑥 0; x[1: 𝑑 ] ]⊤ ∈ H𝑑 𝐾 contains one time-like component 𝑥 0 and 𝑑 space-like components x[1: 𝑑 ] , consistent with the signature of the Lorentzian metric. 
+
+Lorentzian product and distance. For x, y ∈ H𝑑 𝐾 , their Lorentzian inner product is 
+
+⟨x, y⟩L = x⊤Gy = −𝑥 0 𝑦 0 +
+
+> 𝑑
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑥 𝑖 𝑦 𝑖 . (2) The associated geodesic distance is 
+
+𝑑 𝐾  
+
+> L
+
+(x, y) = √𝐾 arcosh (−⟨ x, y⟩L /𝐾 ) = √𝐾 arcosh  −x⊤Gy /𝐾  . (3) 
+
+Lorentz transformation layer. Consider a Lorentz embedding z ∈ R𝑑 +1 with positive time-like coordinate 𝑧 0
+
+and spatial block z𝑠 ∈ R𝑑 . Following [62], a Lorentz transformation layer maps it as 
+
+𝑓 (W; z) =
+
+"√︃ 
+
+𝐾 + ∥ Wz ∥22
+
+Wz 
+
+#
+
+, (4) 
+
+> 4
+
+Hyperbolic Multimodal Continual Learning Preprint 
+
+where W ∈ R𝑑 × ( 𝑑 +1) . The reconstructed first coordinate ensures that the output remains on H𝑑 𝐾 . We partition the parameters as W = [ w0 W𝑠 ], w0 ∈ R𝑑 ×1, W𝑠 ∈ R𝑑 ×𝑑 , so that w0 and W𝑠 act on the time-like and space-like inputs, respectively. 
+
+3.2 Hyperbolic Multimodal Learning 
+
+Let X𝑚,𝑚 ′
+
+= {( x𝑚 𝑖 , x𝑚 ′ 
+
+> 𝑖
+
+)} 𝑁 𝑖 =1 ⊂ X 𝑚 × X 𝑚 ′
+
+be 𝑁 semantically matched observations from modalities 𝑚 and 𝑚 ′. A multimodal model embeds them as matrices Z𝑚 , Z𝑚 ′
+
+∈ R𝑁 × ( 𝑑 +1) , whose 𝑖 th rows z𝑚 𝑖 and z𝑚 ′ 
+
+> 𝑖
+
+lie on H𝑑 𝐾 .
+
+Contrastive similarity. Pairwise similarity is defined by negative hyperbolic distance: 
+
+S𝑚 →𝑚 ′
+
+= −𝑑 𝐾  
+
+> L
+
+(Z𝑚 , Z𝑚 ′
+
+) = −√𝐾 arcosh 
+
+
+
+−Z𝑚 G(Z𝑚 ′
+
+)⊤/𝐾 
+
+
+
+. (5) Here arcosh is evaluated element-wise and 𝑆 𝑚 →𝑚 ′ 
+
+> 𝑖 𝑗
+
+= −𝑑 𝐾  
+
+> L
+
+(z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑗
+
+). The directional contrastive objective is 
+
+L𝑚 →𝑚 ′ = − 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+log exp (𝑆 𝑚 →𝑚 ′ 
+
+> 𝑖𝑖
+
+/𝜏 )
+
+Í𝑁 𝑗 =1 exp (𝑆 𝑚 →𝑚 ′ 
+
+> 𝑖 𝑗
+
+/𝜏 ) , (6) where 𝜏 is the temperature. Training uses the symmetric loss 
+
+Lcontrast = 12
+
+ L𝑚 →𝑚 ′ + L 𝑚 ′→𝑚 
+
+. (7) 
+
+Entailment cones. Hierarchy is represented by assigning each z𝑚 𝑖 ∈ H𝑑 𝐾 an entailment cone whose aperture is aper (z𝑚 𝑖 ) = sin −1 2𝜅 √𝐾 
+
+∥( z𝑚 𝑖 )[1: 𝑑 ] ∥2
+
+!
+
+, (8) with 𝜅 = 0.1 controlling behavior near the origin. Points with a smaller spatial norm represent broader concepts and receive wider cones; larger norms correspond to more specific concepts and narrower cones. The exterior angle from z𝑚 𝑖 to z𝑚 ′ 
+
+> 𝑖
+
+is 
+
+𝛾 𝑚,𝑚 ′ 
+
+> 𝑖
+
+:= ⟨z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+⟩L /𝐾, 
+
+ext (z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+) = cos −1©«
+
+(z𝑚 ′ 
+
+> 𝑖
+
+)0 + ( z𝑚 𝑖 )0𝛾 𝑚,𝑚 ′
+
+> 𝑖
+
+∥( z𝑚 𝑖 )[1: 𝑑 ] ∥2√︃ (𝛾 𝑚,𝑚 ′ 
+
+> 𝑖
+
+)2 − 1
+
+ª®®¬
+
+. (9) The entailment objective [15] penalizes a target that falls outside the source cone: 
+
+Lentail (z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+) = max 
+
+
+
+0, ext (z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+) − aper (z𝑚 𝑖 )
+
+
+
+. (10) This loss imposes the desired cross-modal partial order, for example by locating a general textual description above its visual instance in the hierarchy. 
+
+# 4 Problem Formulation 
+
+4.1 Continual Hyperbolic Multimodal Learning 
+
+We study a sequence of multimodal tasks whose representations share one hyperbolic space. At every stage, the learner absorbs the current task while retaining the within-modality, cross-modal, and hierarchical relations established by earlier tasks. Our setup follows the multimodal contrastive continual-learning protocol of [63]. For each modality 𝑚 ∈ { 1, . . . , 𝑀 }, a frozen pretrained encoder E𝑚 : X𝑚 → H𝑑 𝐾 is followed at task 𝑡 by a trainable Lorentz transformation 𝑇 (𝑡 ) 
+
+> 𝑚
+
+: H𝑑 𝐾 → H𝑑 𝐾 . Applied to data from the previous task, the encoder first produces 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+= E𝑚 (𝑋 𝑚 𝑡 −1) ∈ R𝑁 × ( 𝑑 +1) , (11) 
+
+5Hyperbolic Multimodal Continual Learning Preprint 𝑅 𝑅  
+
+> Still be farther Still be closer
+> So cute
+> [ROOT]
+> Exhausted doggo
+> Semantic Hierarchy Semantic Similarity
+> Partial order be maintained
+
+Text 
+
+Image 
+
+∗ 𝑅 ∗ 𝑅       
+
+> So cute
+> Theorem 1 & Corollary 1
+> Exhausted doggo
+> Task 𝑡 − 1, Stage 𝑡 − 1 Task 𝑡 − 1 , Stage 𝑡
+> Top-Down View
+> [ROOT]
+> ∆𝐳 ∆𝐳
+
+Figure 2. Geometry of continual hyperbolic multimodal learning. Geodesic proximity encodes semantic similarity, while radial distance from the origin records specificity. Under our preservation conditions, all modalities undergo one common hyperbolic isometry. From the top-down view, first-order preservation of radial hierarchy limits a permitted update to the tangent direction. 
+
+where every row lies on H𝑑 𝐾 and the superscript ∗ indicates a frozen pretrained representation. The stage-𝑡 
+
+transformation then maps these representations through the trainable Lorentz head: 
+
+Z𝑚,𝑡 𝑡 −1 = 𝑇 (𝑡 ) 
+
+> 𝑚
+
+(Z𝑚, ∗ 
+
+> 𝑡 −1
+
+) = 𝑓 
+
+
+
+W𝑚,𝑡 ; Z𝑚, ∗ 
+
+> 𝑡 −1
+
+
+
+∈ R𝑁 × ( 𝑑 +1) . (12) The same stage processes current-task observations as 
+
+Z𝑚,𝑡 𝑡 = 𝑇 (𝑡 )
+
+> 𝑚
+
+ E𝑚 (𝑋 𝑚 𝑡 ) ∈ R𝑁 × ( 𝑑 +1) . (13) Our notation Z𝑚,𝑠 𝑞 therefore identifies the data task 𝑞 , modality 𝑚 , and processing stage 𝑠 . For instance, 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+contains frozen features from task 𝑡 − 1, whereas Z𝑚,𝑡 𝑡 −1 contains their Lorentz embeddings after the stage-𝑡 
+
+transformation. Appendix A summarizes all symbols. 
+
+4.2 Geometric Stability and Plasticity 
+
+Stability. We describe retention of earlier hyperbolic knowledge through changes in the representation geometry. Because geodesic similarity is a monotone function of the Lorentzian inner product, we use three invariants 2. For every pair of distinct modalities 𝑚, 𝑚 ′ ∈ { 1, . . . , 𝑀 }:(P1 ) Intra-modal preservation: Z 𝑚,𝑡 𝑡 −1G(Z𝑚,𝑡 𝑡 −1)⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+G(Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+)⊤;(P2 ) Inter-modal preservation: Z 𝑚,𝑡 𝑡 −1G(Z𝑚 ′ ,𝑡 𝑡 −1 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+G(Z𝑚 ′ ,𝑡 −1  
+
+> 𝑡 −1
+
+)⊤;(P3 ) Hierarchical preservation: ∥( z𝑚,𝑡 𝑡 −1)[1: 𝑑 ] ∥2 = ∥( z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+)[1: 𝑑 ] ∥2.The first condition retains the relations internal to each modality. The second fixes cross-modal correspondences, and the third prevents a point from moving to a different radial level of the entailment hierarchy. Together, they protect semantic similarity, modality alignment, and specificity. Appendix C gives further justification. 
+
+Plasticity. Stability also leaves enough freedom to learn the current task. At stage 𝑡 , the embeddings {Z𝑚,𝑡 𝑡 }𝑀 𝑚 =1
+
+fit the joint multimodal distribution 𝑝 (1,2,...,𝑀 ) 
+
+> 𝑡
+
+. The transformation layers capture new task-specific patterns and associations without using all of their representation capacity. 
+
+> 2
+
+Since arcosh (·) in Appendix 21 is strictly monotone, equal similarities are equivalent to equal Lorentzian inner products in Definition 2. 
+
+6Hyperbolic Multimodal Continual Learning Preprint 
+
+Core difficulty. Conditions (P1) –(P3) describe this balance, but applying them directly during gradient-based training is difficult. Section 5 gives an equivalent geometric view that leads to practical constraints on parameter updates. 
+
+# 5 Geometric Conditions for Admissible Updates 
+
+We next convert the preservation requirements into a geometric description of the parameter changes that are permitted during continual adaptation. 
+
+5.1 Characterizing Preserved Representations 
+
+The following result identifies the transformation that can relate old-task embeddings before and after a learning stage without changing the three invariants. 
+
+Theorem 1 (Geometric Characterization of Preservation) . Suppose the task-𝑡 − 1 representations satisfy the full-rank condition in Appendix D.1, and the stage-to-stage correspondence follows the continuous optimizer path from the identity component. Conditions (P1) , (P2) , and (P3) are preserved from stage 𝑡 − 1 to stage 𝑡 if and only if one transformation 
+
+R =
+
+1 0⊤
+
+0 eR
+
+
+
+, eR ∈ SO (𝑑 ),
+
+acts on every modality, so that 
+
+Z𝑚,𝑡 𝑡 −1 = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+R⊤, 𝑚 ∈ { 1, . . . , 𝑀 }.
+
+Proof sketch. The intra- and inter-modal conditions preserve every required Lorentzian inner product among the task-𝑡 − 1 embeddings. Theorem 3 and Corollary 4 in Appendix D.1 then imply a unique Lorentz transformation 
+
+L ∈ SO + (1, 𝑑 ) shared by all modalities. The forward sheet fixes the time orientation, while continuity from the identity fixes the determinant sign. Hierarchical preservation additionally fixes every spatial norm and therefore every time-like coordinate. Full rank then gives L⊤e0 = e0, leaving only the block-diagonal spatial rotation R
+
+shown above. Appendix D contains the complete argument. 
+
+Role of non-degeneracy. Full rank is the worst-case identifiability condition: it uniquely determines the shared isometry over the entire ambient space. Practical HMCL protects only the retained low-rank subspace and therefore does not require this global uniqueness; deriving the update under the maximally constrained case gives a conservative, robust admissible rule. 
+
+5.2 First-Order Preservation of Hierarchy 
+
+On the Lorentz manifold, the time-like coordinate is determined by the spatial block. We exploit this dependence to obtain a local constraint that prevents a continual update from changing the radial level of an old embedding. 
+
+Corollary 1 (Updates under ( P3 )) . Let Δz = z𝑚,𝑡 𝑡 −1 − z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+be the change applied to an old-task embedding z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+.If its time-like coordinate is invariant to first order, as required by ( P3 ), then its spatial change obeys 
+
+z⊤[1: 𝑑 ] Δz[1: 𝑑 ] = 0. (14) 
+
+Takeaway. Corollary 1 requires the spatial displacement of an old embedding to be orthogonal to its current radial direction. In other words, a first-order hierarchy-preserving change lies along the tangent direction and does not introduce time-like drift and therefore avoids radial drift. 
+
+Geometric Interpretation. Figure 2 illustrates two implications of the analysis. Hyperbolic distance represents semantic similarity, while radius represents hierarchical specificity. Theorem 1 shows that both quantities remain unchanged across a stage transition when all modalities share the same hyperbolic isometry. From the top-down view, Corollary 1 further limits the local motion to a direction that keeps the radius fixed. A general continual-learning update is not subject to this condition and may distort the geometry even when its task loss is small. 
+
+> 7
+
+Hyperbolic Multimodal Continual Learning Preprint 
+
+# 6 Hyperbolic Multimodal Continual Learning 
+
+The preceding results describe the admissible family in representation space. We now transfer this family to the parameters of a Lorentz transformation layer and obtain a practical training update. 
+
+6.1 Geometrically Admissible HMCL Updates 
+
+Proposition 1 (Admissible Parameter Changes) . Consider the Lorentz layer from Section 3.1, parameterized by 
+
+W𝑚,𝑡 = [ w𝑚,𝑡  
+
+> 0
+
+W𝑚,𝑡 𝑠 ]. Assume that Theorem 1 holds at stage 𝑡 − 1. Define the applied parameter displacement as ΔW𝑚 = W𝑚,𝑡 − W𝑚,𝑡 −1. In the infinitesimal regime ∥ΔW𝑚 ∥𝐹 → 0, the collection of modal displacements is admissible if and only if there is one skew-symmetric matrix 𝛀 such that, simultaneously for every modality 𝑚 ,
+
+Z𝑚, ∗ 
+
+> 𝑡 −1
+
+ ΔW𝑚 ⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]𝛀 ⊤, 𝛀 ⊤ = −𝛀 . (15) The left-hand side of (15) is the first-order change of an old spatial representation. The right-hand side is the tangent motion of the rotation exp (𝛀 ). Crucially, the same 𝛀 appears for every modality. The condition therefore permits a common change of spatial coordinates, but excludes independent modal rotations that would alter cross-modal relations. Equation (15) includes both parameter blocks. Under the subspace regularity condition in Appendix E.2, the same output motion has a representative whose time-input column remains fixed; Appendix E.1 gives the precise condition. For every modality, we use the blockwise form 
+
+Δw𝑚  
+
+> 0
+
+= 0,
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( ΔW𝑚 𝑠 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1: 𝑑 ]𝛀 ⊤. (16) 
+
+Corollary 2 (HMCL-CA: Closest-Admissible Update) . Given candidate parameter displacements {𝜹 𝑚 =
+
+[ 𝜹 𝑚  
+
+> 0
+
+𝜹 𝑚 𝑠 ]} 𝑀 𝑚 =1, where 𝜹 𝑚  
+
+> 0
+
+∈ R𝑑 ×1 is the column acting on the time-like input coordinate and 𝜹 𝑚 𝑠 ∈ R𝑑 ×𝑑 
+
+is the block acting on the spatial input coordinates, HMCL-CA jointly selects the admissible displacements and their common rotation by solving 
+
+minimize   
+
+> {ΔW𝑚 },𝛀
+
+12
+
+> 𝑀
+
+∑︁ 
+
+> 𝑚 =1
+
+∥ΔW𝑚 − 𝜹 𝑚 ∥2
+
+> 𝐹
+
+subject to 𝛀 ⊤ = −𝛀 , Δw𝑚  
+
+> 0
+
+= 0,
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( ΔW𝑚 𝑠 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1: 𝑑 ]𝛀 ⊤,𝑚 = 1, . . . , 𝑀. 
+
+(17) 
+
+We denote the solution by {𝜹 CA ,𝑚 }𝑀 𝑚 =1 and 𝛀 ★. Under the regularity condition in Appendix E.2, the parameter displacements are unique and are obtained from one Lyapunov equation for 𝛀 ★. Thus, HMCL-CA retains the common rotation that best matches all modal candidates, rather than solving a separate rotation for each modality. 
+
+Corollary 3 (HMCL-MR: Minimal-Rotation Update) . Selecting 𝛀 = 0 in (17) gives, for each modality, 
+
+Z𝑚, ∗ 
+
+> 𝑡 −1,𝑠
+
+ 𝜹 MR ,𝑚 𝑠 
+
+⊤ = 0, 𝜹 MR ,𝑚  
+
+> 0
+
+= 0, (18) 
+
+where Z𝑚, ∗  
+
+> 𝑡 −1,𝑠
+
+= Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]. For an orthogonal projector P𝑡 −1 onto the protected old-feature subspace, the unique closest solution is 
+
+𝜹 MR ,𝑚 𝑠 = 𝜹 𝑚 𝑠 
+
+ I − P𝑡 −1
+
+. (19) 
+
+Here, P𝑡 −1 projects onto the protected old-feature subspace. This is the closest candidate displacement that induces no first-order motion on that subspace. 
+
+HMCL-MR is therefore the 𝛀 = 0 member of the same closest-admissible problem. Appendix E.1 proves Proposition 1; Appendices E.2 and E.3 give the corresponding derivations. In summary, hyperbolic preservation determines one admissible family: HMCL-CA selects its closest shared-rotation update, and HMCL-MR selects the zero-rotation member. 
+
+8Hyperbolic Multimodal Continual Learning Preprint 
+
+6.2 Stepwise Correction and Task Anchoring 
+
+We follow the standard training paradigm of the hyperbolic multimodal backbones, which optimizes their Euclidean-parameterized Lorentz heads with AdamW. Because AdamW’s moment estimation and coordinate-wise scaling make its realized parameter displacement different from the raw gradient, HMCL applies post-AdamW projection to that realized displacement. It then uses task anchoring to contract the corrected parameters toward the current task start. During task 𝑡 , 𝐽 denotes the total number of optimizer steps and 𝑘 ∈ { 0, . . . , 𝐽 − 1} indexes them, with 
+
+W𝑚,𝑡  
+
+> 0
+
+= W𝑚,𝑡 −1 and W𝑚,𝑡 𝐽 = W𝑚,𝑡 . A first subscript 𝑘 denotes the within-task optimizer step; a second subscript after a comma denotes an input block, with 0 for the time-like input column and 𝑠 for the spatial input block. Thus, for 𝑟 ∈ { opt , ★ },
+
+W𝑚,𝑡 𝑘 = [ w𝑚,𝑡 𝑘, 0 W𝑚,𝑡 𝑘,𝑠 ], 𝜹 𝑟 ,𝑚,𝑡 𝑘 = [ 𝜹 𝑟 ,𝑚,𝑡 𝑘, 0 𝜹 𝑟 ,𝑚,𝑡 𝑘,𝑠 ].
+
+In particular, the single subscript in W𝑚,𝑡  
+
+> 0
+
+identifies the full parameter matrix at optimizer step 0; it is not a block label. With the AdamW state left implicit, one optimizer step produces 
+
+fW𝑚,𝑡 𝑘 +1 = Opt 𝑚 𝑘 (W𝑚,𝑡 𝑘 , g𝑚,𝑡 𝑘 ),
+
+𝜹 opt ,𝑚,𝑡 𝑘 = fW𝑚,𝑡 𝑘 +1 − W𝑚,𝑡 𝑘 .
+
+Here g𝑚,𝑡 𝑘 is the raw gradient, whereas 𝜹 opt ,𝑚,𝑡 𝑘 is the realized parameter displacement proposed by AdamW before HMCL correction. It already includes the learning rate, moment estimation, coordinate-wise preconditioning, and decoupled weight decay; it is not a gradient. To state the geometric correction at the level of this proposed step, let 𝝃 𝑚,𝑡 𝑘 = [ 𝝃 𝑚,𝑡 𝑘, 0 𝝃 𝑚,𝑡 𝑘,𝑠 ] denote an arbitrary parameter displacement at within-task step 𝑘 , with the same time-input/spatial-input partition as W𝑚,𝑡 𝑘 . For any collection {𝝃 𝑚,𝑡 𝑘 }𝑀 𝑚 =1, define its Lorentz defect by 
+
+EL,𝑡 −1 ({ 𝝃 𝑚,𝑡 𝑘 }) = min 
+
+> 𝛀 ⊤=−𝛀
+> 𝑀
+
+∑︁ 
+
+> 𝑚 =1
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( 𝝃 𝑚,𝑡 𝑘,𝑠 )⊤
+
+− Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1: 𝑑 ]𝛀 ⊤
+
+> 2
+> 𝐹
+
++
+
+> 𝑀
+
+∑︁ 
+
+> 𝑚 =1
+
+∥𝝃 𝑚,𝑡 𝑘, 0 ∥22.
+
+Proposition 1 gives EL,𝑡 −1 = 0 exactly for a fixed time-input column and one spatial Lorentz rotation shared across modalities. Let P L  
+
+> 𝑡 −1
+
+be the Frobenius closest-point map onto this zero-defect family, denoted by A𝑡 −1. At optimizer step 𝑘 , the defect is evaluated at 𝝃 𝑚,𝑡 𝑘 = 𝜹 opt ,𝑚,𝑡 𝑘 , whose two blocks are 𝜹 opt ,𝑚,𝑡 𝑘, 0 and 𝜹 opt ,𝑚,𝑡 𝑘,𝑠 . We collect the modal displacements as 𝜹 opt ,𝑡 𝑘 = (𝜹 opt ,𝑚,𝑡 𝑘 )𝑀 𝑚 =1, with analogous notation for 𝜹 ★,𝑡 𝑘 . For 0 ≤ 𝛽 < 1, the combined update is 
+
+𝜹 ★,𝑡 𝑘 = P L  
+
+> 𝑡 −1
+
+(𝜹 opt ,𝑡 𝑘 ),
+
+W𝑚,𝑡 𝑘 +1 = 𝛽 W𝑚,𝑡  
+
+> 0
+
++ ( 1 − 𝛽 )
+
+
+
+W𝑚,𝑡 𝑘 + 𝜹 ★,𝑚,𝑡 𝑘 
+
+
+
+. (20) For a modal tuple U = (U𝑚 )𝑀 𝑚 =1, write ∥U ∥ ⊕𝐹 := (Í𝑚 ∥U𝑚 ∥2 
+
+> 𝐹
+
+)1/2.
+
+Theorem 2 (Anchored Admissibility and Bounded Accumulation) . For the update in (20) on a protected representation system fixed throughout task 𝑡 , the cumulative displacement A𝑡 𝐽 = (A𝑚 𝐽 )𝑀 𝑚 =1, where A𝑚 𝐽 = W𝑚,𝑡 𝐽 −W𝑚,𝑡  
+
+> 0
+
+,satisfies {A𝑚 𝐽 }𝑀 𝑚 =1 ∈ A 𝑡 −1 and EL,𝑡 −1 ({ A𝑚 𝐽 }) = 0. Thus, the protected representations undergo one shared first-order Lorentz rotation across all modalities. The projection is non-expansive in the joint Frobenius norm. If ∥𝜹 opt ,𝑡 𝑘 ∥⊕𝐹 ≤ 𝑢 max for every 𝑘 , then task anchoring with 0 < 𝛽 < 1 also gives the uniform bound 
+
+∥A𝑡 𝐽 ∥⊕𝐹 ≤ ( 1 − 𝛽 )𝑢 max /𝛽 .
+
+Takeaway. HMCL separates stability from plasticity at each optimizer step. Projection removes only the part of AdamW’s realized displacement that violates the shared Lorentz-isometry constraint, leaving the admissible component free to learn the current task. Task anchoring then limits cumulative drift without leaving this family. 
+
+9Hyperbolic Multimodal Continual Learning Preprint 
+
+# 7 Experiments 
+
+Our evaluation is organized around four questions concerning continual adaptation of hyperbolic multimodal models: 
+
+• RQ1: Does HMCL improve the stability–plasticity balance, measured by final performance and backward transfer, across hyperbolic multimodal backbones? 
+
+• RQ2: Does HMCL reduce radial, angular, cross-modal, and paired-distance drift on previously learned tasks? 
+
+• RQ3: Does the resulting representation preserve semantic hierarchies in quantitative and qualitative tests? 
+
+• RQ4: Within the unified HMCL update, what are the separate effects of correction placement and task anchoring? Accordingly, Section 7.2 addresses RQ1, Section 7.3 addresses RQ2, Sections 7.4 and 7.5 address RQ3, and Section 7.6 addresses RQ4. 
+
+7.1 Experimental Setup 
+
+Task Stream and Datasets. The continual stream combines 14 multimodal classification tasks with the COCO [64] and Flickr30K [65] cross-modal retrieval tasks. ImageNet-1K [66] is inserted after Caltech-101, yielding 16 tasks in total. Non-replay methods never revisit earlier-task data, whereas replay baselines access it only through a bounded buffer. Appendices G.1 and G.2 provide the complete dataset statistics, canonical order, and alternative-order protocols. 
+
+Metrics. For retrieval, the implementation records image-to-text and text-to-image Recall@ 𝑘 for 𝑘 ∈ { 1, 5, 10 }.The main comparison uses symmetric R@5, i.e., the mean of image-to-text and text-to-image R@5, for both retrieval tasks. Classification performance is top-1 accuracy. Overall is the unweighted mean of the 14 final classification accuracies and the two final symmetric retrieval scores. We define signed backward transfer as BWT = Performance final − Performance right after task ; thus, a negative value denotes forgetting. The main table reports this quantity separately for classification, retrieval, and all tasks. Reported entries are means and sample standard deviations over five paired seeds. 
+
+Baselines. Our comparison covers the principal families of continual-learning strategies under the same hyperbolic objective: ordinary sequential fine-tuning (Vanilla), parameter regularization (EWC), replay-based constrained optimization (GEM), vision–language distillation with flatness-aware optimization (C-FLAT), and dual-sided null-space projection (DNS) [42, 48, 52, 63]. This breadth tests HMCL against methods that preserve parameters, examples, representations, or update subspaces; none of them explicitly preserves a shared Lorentz isometry across modalities. 
+
+Implementation Details. We follow each backbone’s hyperbolic multimodal training paradigm: the pretrained encoder is frozen, continual adaptation is confined to a bias-free linear Lorentz head, and AdamW [59] optimizes the common objective. Classification and retrieval tasks use 10 and 15 epochs with learning rates 5 × 10 −4 and 5 × 10 −5, respectively; all use batch size 1024, curvature −0.1, and one accumulated AdamW step per epoch. Main HMCL runs apply post-AdamW correction followed by task anchoring. Every method shares the task order, cached 512-dimensional features, schedule, optimizer-step budget, and five paired seeds. Appendix H.5 gives the complete configurations and baseline memory budgets, while Appendices H.8, H.6, and H.7 report sensitivity and timing details. 
+
+7.2 Main Results (RQ1) 
+
+To answer RQ1, we compare final task performance and signed backward transfer under the matched 16-task protocol across all three hyperbolic multimodal backbones. 
+
+HMCL gives the strongest stability–plasticity balance across backbones. Table 1 shows that both complete HMCL variants outperform every external baseline on all three backbones in final classification and retrieval 
+
+> 10
+
+Hyperbolic Multimodal Continual Learning Preprint 
+
+Table 1. Continual-learning results on the unified 16-task stream (mean ± sample standard deviation over five paired seeds). Classification is top-1 accuracy, retrieval is symmetric R@5, and BWT is final minus immediate performance. Light-blue rows denote the complete post-AdamW, task-pullback HMCL variants; boldface marks the best result in each backbone block. The 
+
+Δ rows give HMCL CA ’s relative improvement over Vanilla, using the reduction in negative magnitude for BWT. All methods share the task order, cached features, training schedule, and optimizer-step budget.                                                                                                                                                                                                                                                                                                                                                                                                                               
+
+> Classification Retrieval Overall Backbone Method Acc ↑BWT A↑R@5 ↑BWT R5 ↑Performance ↑BWT ↑
+> MERU-L Vanilla 40 .251 ±0.202 −5.461 ±0.180 29 .625 ±0.110 −2.479 ±0.123 38 .922 ±0.165 −5.088 ±0.145 EWC 40 .321 ±0.187 −5.467 ±0.213 30 .215 ±0.146 −2.096 ±0.158 39 .058 ±0.153 −5.046 ±0.174 GEM 41 .613 ±0.288 −3.742 ±0.284 29 .220 ±0.299 −2.306 ±0.418 40 .064 ±0.276 −3.563 ±0.276 C-FLAT 40 .450 ±0.171 −3.945 ±0.108 29 .446 ±0.174 −2.032 ±0.115 39 .075 ±0.143 −3.706 ±0.086 DNS 40 .904 ±0.149 −4.912 ±0.174 29 .716 ±0.170 −2.455 ±0.100 39 .505 ±0.126 −4.605 ±0.149 HMCL MR 43 .891 ±0.085 −1.316 ±0.086 36 .300 ±0.114 −1.921 ±0.057 42 .942 ±0.070 −1.392 ±0.070
+> HMCL CA 43 .987 ±0.087 −1.305 ±0.090 36 .011 ±0.136 −2.046 ±0.099 42 .990 ±0.073 −1.398 ±0.078
+> 𝚫 vs. Vanilla +9.3% +76.1% +21.6% +17.5% +10.5% +72.5%
+> MERU-B Vanilla 43 .326 ±0.243 −6.617 ±0.244 30 .535 ±0.093 −4.610 ±0.120 41 .727 ±0.222 −6.366 ±0.218 EWC 43 .472 ±0.210 −6.490 ±0.217 30 .965 ±0.086 −4.291 ±0.172 41 .909 ±0.190 −6.215 ±0.189 GEM 44 .880 ±0.272 −3.803 ±0.093 32 .010 ±0.373 −3.009 ±0.238 43 .271 ±0.228 −3.704 ±0.056 C-FLAT 42 .561 ±0.236 −4.700 ±0.146 31 .459 ±0.161 −4.300 ±0.237 41 .174 ±0.211 −4.650 ±0.124 DNS 43 .769 ±0.163 −6.265 ±0.225 31 .423 ±0.073 −4.138 ±0.193 42 .226 ±0.151 −5.999 ±0.217 HMCL MR 45 .736 ±0.042 −3.448 ±0.112 36 .456 ±0.090 −1.392 ±0.162 44 .576 ±0.036 −3.191 ±0.089 HMCL CA 45 .746 ±0.078 −3.159 ±0.134 36 .522 ±0.083 −1.229 ±0.116 44 .593 ±0.071 −2.918 ±0.111
+> 𝚫 vs. Vanilla +5.6% +52.3% +19.6% +73.3% +6.9% +54.2%
+> HyCoCLIP-B Vanilla 40 .988 ±0.160 −4.421 ±0.097 62 .034 ±0.182 −2.544 ±0.172 43 .618 ±0.152 −4.186 ±0.087 EWC 41 .121 ±0.129 −4.385 ±0.122 63 .367 ±0.148 −1.423 ±0.091 43 .901 ±0.118 −4.014 ±0.107 GEM 42 .111 ±0.318 −3.236 ±0.353 62 .586 ±0.125 −1.449 ±0.121 44 .670 ±0.268 −3.013 ±0.315 C-FLAT 40 .951 ±0.116 −3.699 ±0.097 62 .010 ±0.042 −1.839 ±0.078 43 .583 ±0.104 −3.466 ±0.093 DNS 41 .356 ±0.105 −4.065 ±0.076 62 .536 ±0.189 −2.068 ±0.169 44 .004 ±0.108 −3.815 ±0.077 HMCL MR 44 .828 ±0.064 −0.635 ±0.069 72 .801 ±0.087 −0.879 ±0.091 48 .325 ±0.053 −0.666 ±0.069 HMCL CA 45 .108 ±0.031 −0.388 ±0.061 72 .772 ±0.073 −0.937 ±0.054 48 .566 ±0.024 −0.456 ±0.051
+> 𝚫 vs. Vanilla +10.1% +91.2% +17.3% +63.2% +11.3% +89.1%
+
+performance as well as in the Overall score. Their BWT values also move substantially toward zero, so higher final scores accompany stronger retention rather than sacrificing earlier tasks. HMCL CA gives the highest Overall score in every backbone block and consistently exceeds task-balanced GEM. DNS improves only modestly over Vanilla, suggesting that Euclidean null-space protection alone does not fully capture the constraints of hyperbolic representations. The agreement across classification and retrieval is informative because the former tests category discrimination, whereas the latter depends on preserving correspondence between modalities. Improvements in both settings are consistent with protecting their shared representation geometry, rather than benefiting only one prediction rule. Appendix H.1 provides the complete per-task results. 
+
+CA and MR expose complementary members of the admissible family. On the unified 16-task stream, CA generally gives higher classification and Overall scores, while MR is stronger on retrieval for MERU-L and HyCoCLIP-B and gives the best Overall BWT on MERU-L. This division is not universal: in the modality-extended stream below, CA also gives the stronger retrieval result on all three backbones. The evidence therefore supports a task-dependent stability–plasticity trade-off within one admissible family, rather than assigning a fixed empirical role to either variant. 
+
+HMCL remains stable throughout the task stream. Figure 3 normalizes each task by its own task-end score. On the displayed paired seed, Vanilla exhibits pronounced degradation on earlier tasks, whereas both HMCL variants keep the trajectories closer to their task-end reference. The contrast is visible across intermediate stages as well as 
+
+11 Hyperbolic Multimodal Continual Learning Preprint 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16                   
+
+> Aircraft Caltech101 ImageNet CIFAR10 CIFAR100 CLEVR
+> COCO (R)
+> Country211 DTD EuroSAT
+> Flickr30K (R)
+> Food101 MNIST Flowers102 PCam SST-2
+> (a) Vanilla
+> 12345678910 11 12 13 14 15 16
+> (b) HMCL MR
+> 12345678910 11 12 13 14 15 16
+> (c) HMCL CA
+> −50 −40 −30 −20 −10 010 15
+> Change from task-end score (%)
+
+Figure 3. Stage-wise relative task-performance change for HyCoCLIP-B on seed 42 in the unified 16-task stream. Columns correspond to the completed training stage 𝑡 , and rows correspond to evaluated task 𝑖 in stream order. Each observed cell reports 100 (𝑃 𝑖,𝑡 − 𝑃 𝑖,𝑖 )/ 𝑃 𝑖,𝑖 , where 𝑃 𝑖,𝑖 is the score immediately after task 𝑖 is learned; thus, the outlined diagonal is zero, red denotes relative degradation, and blue denotes improvement. The gray upper triangle contains tasks not yet introduced. All panels share one color scale, the outlined rightmost column gives the final-stage changes, and (R) marks retrieval tasks evaluated with symmetric R@5; the remaining tasks use top-1 accuracy. 
+
+at the final checkpoint, suggesting that the retention gains reflect sustained protection during adaptation rather than recovery only at the end of the stream. These old-task trajectories provide a stage-wise view of the five-seed BWT gains in Table 1; the displayed seed illustrates the temporal pattern rather than replacing the multi-seed comparison. 
+
+The gains persist under alternative task orders. Appendix G.2 evaluates two shuffled HyCoCLIP-B streams with the main-table configurations fixed and no order-specific retuning. Across the paired seeds, both HMCL variants retain higher final classification, retrieval, and Overall scores and less negative BWT than Vanilla under either permutation. Their relative ranking changes with the order: MR leads in Overall on one permutation, whereas CA leads on the other. These results support robustness beyond the canonical sequence while reinforcing that the preferred admissible representative depends on the task stream. 
+
+Table 2. Robustness to new modalities in a separate protocol with one audio and one thermal retrieval task (mean ± standard deviation over three paired seeds). Cls. is top-1 accuracy, Ret. is symmetric R@5, Overall averages all final task scores, and BWT is final minus immediate performance. Both HMCL variants use after-AdamW correction and step pullback ( 𝛽 = 0.015). Boldface marks the best result per backbone and metric.                                                                                                              
+
+> Backbone Metric Vanilla HMCL MR HMCL CA
+> MERU-L Cls. 42 .514 ±0.092 43 .894 ±0.130 43 .188 ±0.046 Ret. 16 .221 ±0.048 16 .278 ±0.105 18 .224 ±0.077
+> Overall 36 .327 ±0.064 37 .396 ±0.099 37 .315 ±0.026 BWT −4.876 ±0.054 −1.650 ±0.038 −1.110 ±0.036
+> MERU-B Cls. 44 .156 ±0.190 46 .646 ±0.213 45 .815 ±0.050 Ret. 14 .868 ±0.131 17 .000 ±0.076 18 .482 ±0.053
+> Overall 37 .265 ±0.116 39 .670 ±0.145 39 .384 ±0.028 BWT −7.293 ±0.191 −4.354 ±0.120 −2.871 ±0.067
+> HyCoCLIP-B Cls. 42 .869 ±0.154 44 .563 ±0.180 45 .348 ±0.077
+> Ret. 32 .970 ±0.123 33 .506 ±0.123 35 .407 ±0.081
+> Overall 40 .540 ±0.143 41 .961 ±0.155 43 .009 ±0.072
+> BWT −3.859 ±0.062 −2.603 ±0.056 −1.658 ±0.017
+
+HMCL remains effective when the stream introduces new modalities. Table 2 reports a separate protocol that adds one audio and one thermal retrieval task to the original stream. Both complete HMCL variants im-prove the Overall score and BWT over matched Vanilla training on every backbone. CA consis-tently improves retrieval R@5 while substan-tially reducing forgetting across the backbones. MR gives a slightly higher Overall score on the two MERU backbones, whereas CA is strongest on HyCoCLIP-B. The result shows that the shared geometric constraint remains useful when previously unseen modality types enter the stream. This extension is a distinct stress test: adaptation now accommodates ad-ditional cross-modal relations while retaining those learned earlier. The consistent retrieval gains suggest that geometric protection remains useful beyond the original image–text setting, although the changing MR–CA ranking cautions against treating either realization as uniformly preferable. Separate evaluation of earlier image–text tasks distinguishes retention of existing correspondences from new-modality gains. 
+
+12 Hyperbolic Multimodal Continual Learning Preprint R@1 R@5 R@10 R@1 R@5 R@10 020 40 60                        
+
+> Final recall (%)
+> T2I I2T
+> MERU-L
+> Vanilla HMCL-MR HMCL-CA
+> R@1 R@5 R@10 R@1 R@5 R@10 020 40 60
+> T2I I2T
+> MERU-B
+> R@1 R@5 R@10 R@1 R@5 R@10 025 50 75 100
+> T2I I2T
+> HyCoCLIP-B
+> R@1 R@5 R@10 R@1 R@5 R@10 020 40 60
+> Final recall (%)
+> T2I I2T
+> R@1 R@5 R@10 R@1 R@5 R@10 020 40 60
+> T2I I2T
+> R@1 R@5 R@10 R@1 R@5 R@10 025 50 75 100
+> T2I I2T
+> COCO Flickr30K
+
+Figure 4. Fine-grained final retrieval performance on COCO and Flickr30K in the separate stream augmented with audio and thermal tasks. Each panel reports the mean over three paired seeds for one backbone; T2I and I2T denote text-to-image and image-to-text Recall@ {1, 5, 10 }, respectively. Gray, blue, and green bars denote Vanilla, HMCL MR , and HMCL CA .Appendix H.4 reports exact means and standard deviations. Higher values indicate better retrieval. 
+
+The retrieval gains persist at fine granularity. Figure 4 shows final COCO and Flickr30K retrieval across backbones, directions, and recall cutoffs; Appendix H.4 gives the complete numerical results. Under the same modality-extension protocol, HMCL CA exceeds Vanilla and gives the highest score in all 36 backbone–dataset– direction–cutoff comparisons. Its advantage therefore spans both retrieval directions and every recall cutoff, not only symmetric R@5. 
+
+7.3 Quantitative Representation Drift (RQ2) 
+
+To answer RQ2, we go beyond task-level BWT, which records predictive change but does not identify which parts of the hyperbolic representation have moved. We compare each old task at its task-end checkpoint and at the final checkpoint using four complementary drift measures: 
+
+• Radial drift is the mean absolute change of the time-like coordinate, averaged over image and text anchors. It tests hierarchical preservation in Condition ( P3 ). 
+
+• Angular drift is the mean absolute change of the normalized spatial Gram matrix, averaged over the image and text blocks. It removes magnitude effects and tracks the intra-modal relations in Condition ( P1 ). 
+
+• Cross-modal drift is the mean absolute change of the normalized spatial image–text Gram block and therefore measures the inter-modal relations in Condition ( P2 ). 
+
+• Paired-distance drift is the mean change in Lorentz geodesic distance between matched image–text anchors. It tests cross-modal alignment in Condition ( P2 ) while remaining sensitive to hierarchy-related radial changes in Condition ( P3 ). Figure 5 shows lower drift for both HMCL variants across all 15 old tasks and all four measures. Both variants substantially suppress radial, angular, cross-modal, and paired-distance drift, with CA giving slightly lower mean drift throughout. For both variants, every paired comparison favors HMCL and is significant under an exact two-sided Wilcoxon signed-rank test ( 𝑝 = 6.1 × 10 −5; Bonferroni-adjusted 𝑝 = 2.4 × 10 −4 over four measures). The agreement between MR and CA shows that the stability gain is not specific to the zero-rotation realization: both retain radial hierarchy, within-modality relations, and cross-modal geometry throughout the stream. The joint behavior of these measures is more informative than any one measure alone. Small angular changes would not exclude radial contraction, and stable within-modality relations would not establish that image–text 
+
+13 Hyperbolic Multimodal Continual Learning Preprint Vanilla HMCL-MR HMCL-CA Retrieval task                   
+
+> Aircraft Caltech101 ImageNet CIFAR10 CIFAR100 CLEVR COCO Country211 DTD EuroSAT Flickr30K Food101 MNIST Flowers102 PCam
+> a) Radial drift
+> 00.30 0.60 0.90
+> Mean drift reduction vs. Vanilla
+> MR 89.4% CA 89.9%
+> b) Angular drift
+> 00.02 0.04 0.06 0.08
+> Mean drift reduction vs. Vanilla
+> MR 93.4% CA 93.8%
+> c) Cross-modal drift
+> 00.02 0.04 0.06 0.08
+> Mean drift reduction vs. Vanilla
+> MR 95.1% CA 95.5%
+> d) Paired-distance drift
+> 00.15 0.30 0.45
+> Mean drift reduction vs. Vanilla
+> MR 81.2% CA 83.3%
+
+Figure 5. Dataset-wise drift for MERU-L (seed 1024) on the unified 16-task stream, measured from each task-end checkpoint to the final checkpoint using 50 fixed test anchors per old task. The 15 plotted rows exclude SST-2 because it is the final task and hence has no post-task drift interval. Gray circles, blue diamonds, and green squares denote Vanilla, HMCL MR , and HMCL CA , respectively; shaded rows identify retrieval tasks. Lower values indicate better preservation. In-panel percentages report each HMCL variant’s relative reduction in mean drift over the 15 plotted tasks compared with Vanilla. 
+
+correspondence is retained. Lower paired-distance drift complements the normalized Gram measurements by tracking matched examples in the original Lorentz geometry. Taken together, the observations support preservation of both hierarchical and relational structure. They are consistent with the proposed mechanism, while remaining an empirical representation-space diagnostic rather than a proof that drift reduction alone causes the task-level gains. 
+
+7.4 ImageNet–WordNet Hierarchy (RQ3) 
+
+WordNet Evaluation Protocol. To answer RQ3 quantitatively, ImageNet measures new-task capacity and WordNet [67] measures whether the learned semantic hierarchy survives later tasks. Following the HyCoCLIP protocol [8] and standard hierarchical-classification evaluation [68], we report top-1 accuracy, tree-induced error (TIE), lowest-common-ancestor distance (LCA), ancestor Jaccard, and hierarchical precision and recall. Lower TIE and LCA are better; higher values are better for all other metrics. These metrics separate prediction correctness from semantic error severity: top-1 counts every mistake equally, whereas TIE and LCA distinguish nearby errors from cross-branch confusions; ancestor Jaccard measures shared ancestry, and hierarchical precision and recall summarize the correctness and coverage of predicted ancestor paths. Their joint use prevents an apparent hierarchy gain from being attributed to a change in accuracy or only one aspect of the tree path. We therefore compute the hierarchy scores from the same final predictions as top-1 and interpret improvement only when predictive retention and semantic proximity move consistently. Appendix H.1 gives the split, hierarchy mapping, retained ranks, and configuration details. 
+
+14 Hyperbolic Multimodal Continual Learning Preprint (a) ImageNet task end reference         
+
+> orangutan baboon macaque marmoset capuchin indri
+> Radial hierarchy collapses inward
+> (b) Vanilla final rad. 38.32% ·pair. 27.1%
+> (c) HMCL MR final rad. 0.18% ·pair. 5.8%
+> Depth rings and branches retained
+> (d) HMCL CA final rad. 0.16% ·pair. 8.2%
+> 0123
+> WordNet depth
+
+Figure 6. Radial geometry of the complete 20-class ImageNet primate WordNet subtree for HyCoCLIP-B (seed 42). (a) Geometry immediately after learning ImageNet; (b–d) geometry at the final checkpoint of the 16-task stream. Final representations are globally aligned to the task-end reference by a proper spatial rotation before display, so the remaining change reflects radial and relational distortion rather than an arbitrary global orientation. Node color denotes WordNet depth, and edges show the fixed subtree relations. “rad.” is the mean absolute radial change normalized by the task-end mean radius; “pair.” is the mean absolute change in pairwise Lorentz distance normalized by the task-end mean distance. Both quantities are computed in the original representation space rather than from the two-dimensional drawing. 
+
+Table 3. Final ImageNet accuracy and WordNet hierarchy metrics on the 16-task HyCoCLIP-B stream (five-seed means). HMCL uses the configurations in Table 1; shaded rows identify HMCL.                                                 
+
+> Method Top-1 ↑TIE ↓LCA ↓Jacc. ↑H-Prec. ↑H-Rec. ↑
+> Vanilla 39.404 3.598 2.217 0.7869 0.8539 0.8560 EWC 40.045 3.549 2.199 0.7901 0.8560 0.8583 C-FLAT 38.934 3.634 2.237 0.7849 0.8521 0.8552 DNS 39.494 3.594 2.222 0.7875 0.8538 0.8568 HMCL MR 45 .700 3.137 2.042 0.8162 0.8743 0.8757 HMCL CA 45 .590 3.156 2.051 0.8152 0.8735 0.8751
+
+HMCL preserves the ImageNet hierarchy. Table 3 reports the final HyCoCLIP-B checkpoints from Table 1. Both HMCL variants outperform all external baselines in top-1 accuracy and every hierarchy metric. Lower TIE and LCA together with higher ancestor Jaccard, hierarchical precision, and hierarchical recall show that their remaining errors preserve more of the correct WordNet ancestry. These concurrent gains show that hierarchy retention is not achieved by sacrificing classification performance. MR performs best on the ImageNet–WordNet measures, whereas CA gives the highest Overall score on the full stream, indicating a modest trade-off between hierarchy retention and aggregate performance. Thus, selecting a model solely by Overall can obscure differences in how well semantic ancestry survives continual adaptation. 
+
+The radial view makes hierarchy retention visible. Figure 6 shows a representative checkpoint trajectory alongside the five-seed metrics. Vanilla contracts the depth rings and disrupts branch layout, whereas both HMCL variants stay close to the task-end geometry. Their smaller radial and pairwise-distance errors indicate preservation of both depth organization and relations among concepts. Because the views are aligned by a global spatial rotation, this contrast is not simply a difference in drawing orientation. The visualization complements the hierarchy metrics in Table 3: the former reveals changes in representation geometry, whereas the latter evaluates semantic ancestry in the final predictions. Appendix H.2 reports modality-specific norm distributions over all 15 old tasks. 
+
+7.5 Representation-Space Case Study (RQ3) 
+
+Construction of the Concept Set. To complement the quantitative answer to RQ3, we study hierarchy retention through image traversals on Flickr30K. From the original captions, nouns and adjectives are collected to form a text vocabulary with different levels of semantic abstraction. Appendix G.3 details how the concept set is prepared. 
+
+Traversal Protocol. For each image, we trace its embedding toward the manifold origin [ROOT], which represents the generic concept. We sample 20 locations in the origin’s tangent space, map them back to the Lorentz hyperboloid, and retrieve the nearest text representation at each location. 
+
+Qualitative Finding. Figure 7 shows a recurring contrast in the displayed examples. HMCL maintains local semantic continuity along the geodesic—for example, hat → fashion → style and relaxation → vacation 
+
+→ peace —whereas Vanilla introduces abrupt off-path transitions such as volleyball → interest and aloof →
+
+sunken . Because the HMCL paths become progressively more generic before reaching [ROOT], the result suggests 
+
+15 Hyperbolic Multimodal Continual Learning Preprint                
+
+> HMCL (ours) Vanilla
+> hat volleyball fashion interest style fashion
+> [ROOT] [ROOT]
+> HMCL (ours) Vanilla
+> relaxation relaxation vacation aloof peace sunken
+> [ROOT] [ROOT]
+> HMCL (ours) Vanilla
+> defeat workout workout pilates peace race
+> [ROOT] [ROOT]
+
+Figure 7. Hierarchical concept retrieval along image-to-origin geodesics. For each Flickr30K example, we move from the image representation toward the manifold origin [ROOT] and display the nearest text concept along the resulting specific-to-generic path. HMCL gives more coherent sequences in these examples, such as hat → fashion → style , while Vanilla more often shifts to less related concepts after sequential training. 
+
+preservation of intermediate abstraction ordering rather than only convergence to the shared endpoint. This qualitative evidence complements the WordNet and radial-geometry results in Section 7.4, thereby providing a representation-level answer to RQ3. Appendix G.3 provides additional Flickr30K and COCO traversals. 
+
+7.6 Ablation Study (RQ4) 
+
+To answer RQ4, we isolate where the geometric correction is applied and whether task anchoring is added, while keeping the HyCoCLIP-B stream and evaluation metrics fixed.                                                                       
+
+> Table 4. Focused update-placement ablation on the 16-task HyCoCLIP-B stream (five-seed mean ±sample standard devia-tion). Each placement reports both MR and CA. Pre and Post apply the correction to the raw gradient and realized AdamW displacement, respectively; Post+Pullback adds task anchoring.
+> Update Corr. Overall ↑BWT ↑ImageNet ↑
+> Vanilla –43 .618 ±0.152 −4.186 ±0.087 39 .404 ±0.058 Pre MR 46 .397 ±0.124 −2.907 ±0.070 41 .303 ±0.095 CA 47 .172 ±0.129 −2.932 ±0.058 40 .871 ±0.007 Post MR 47 .780 ±0.106 −1.548 ±0.073 43 .760 ±0.032 CA 47 .785 ±0.102 −1.532 ±0.075 43 .759 ±0.043 Post + Pullback MR 48 .053 ±0.072 −0.239 ±0.057 46 .257 ±0.033 CA 48 .566 ±0.024 −0.456 ±0.051 45 .585 ±0.052
+
+Table 4 shows that all corrected configurations outperform Vanilla in the Overall score, BWT, and ImageNet accuracy. The consistent advantage of Post over Pre for both MR and CA shows that the constraint is most effective when applied to AdamW’s realized displacement rather than to the raw gra-dient. Pullback then complements the geometric correction by limiting cumulative within-task deviation, improving re-tention without removing the flexibility needed for the current task. Post+Pullback CA attains the highest Overall score, whereas Post+Pullback MR gives the strongest BWT and ImageNet retention. The placement comparison separates optimizer alignment from the choice of admissible representative. Both MR and CA benefit from correcting the realized displacement, consistent with the fact that AdamW’s momentum and adaptive scaling can change the direction proposed by the raw gradient. Task anchoring addresses a different source of deviation: locally corrected updates can still accumulate change over a task. The further retention gains with Pullback therefore support its complementary role within the integrated update, rather than an alternative to geometric correction. The MR ablation uses stronger task anchoring than its main-table configuration. As detailed in Appendix H.8, this favors retention, whereas the main-table setting favors the Overall score; the configurations therefore represent different stability–plasticity trade-offs within the same update. 
+
+16 Hyperbolic Multimodal Continual Learning Preprint 
+
+# 8 Conclusion 
+
+We presented a continual-learning formulation for hyperbolic multimodal representations and characterized the updates that retain within-modal relations, cross-modal alignment, and semantic hierarchy. HMCL translates these representation-space conditions into a shared admissible family with two complementary realizations: CA permits a common rotation, whereas MR selects the identity representative. Across backbones, both variants improve final performance and retention over the external baselines; CA achieves the highest Overall scores, while MR gives the best ImageNet–WordNet hierarchy scores. The stage-wise, drift, modality-extension, and hierarchy analyses show that these gains coincide with more stable radial and relational structure rather than reflecting one aggregate metric alone. The component study further shows that geometric correction and task anchoring address complementary sources of change. Together, the results support shared geometric admissibility as a practical stability–plasticity principle for continual adaptation in non-Euclidean representation spaces. 
+
+# References 
+
+[1] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al. ,“Learning transferable visual models from natural language supervision,” in ICML , 2021, pp. 8748–8763. [2] K. He, H. Fan, Y. Wu, S. Xie, and R. Girshick, “Momentum contrast for unsupervised visual representation learning,” in 
+
+CVPR , 2020, pp. 9729–9738. [3] D. Yu, X. Zhang, Y. Chen, A. Liu, Y. Zhang, P. S. Yu, and I. King, “Recent advances of multimodal continual learning: A comprehensive survey,” arXiv preprint arXiv:2410.05352 , 2024. [4] J. Han, R. Zhang, W. Shao, P. Gao, P. Xu, H. Xiao, K. Zhang, C. Liu, S. Wen, Z. Guo et al. , “ImageBind-LLM: Multi-modality instruction tuning,” arXiv preprint arXiv:2309.03905 , 2023. [5] S. Chen, H. Li, Q. Wang, Z. Zhao, M. Sun, X. Zhu, and J. Liu, “VAST: A vision-audio-subtitle-text omni-modality foundation model and dataset,” NeurIPS , vol. 36, pp. 72 842–72 866, 2023. [6] X. Liu, X. Xia, S.-K. Ng, and T.-S. Chua, “Principled multimodal representation learning,” arXiv preprint arXiv:2507.17343 , 2025. [7] K. Desai, M. Nickel, T. Rajpurohit, J. Johnson, and S. R. Vedantam, “Hyperbolic image-text representations,” in 
+
+International Conference on Machine Learning . PMLR, 2023, pp. 7694–7731. [8] A. Pal, M. van Spengler, G. M. D. di Melendugno, A. Flaborea, F. Galasso, and P. Mettes, “Compositional entailment learning for hyperbolic vision-language models,” in The Thirteenth International Conference on Learning Representations ,2025. [9] P. Mandica, L. Franco, K. Kallidromitis, S. Petryk, and F. Galasso, “Hyperbolic learning with multimodal large language models,” in European Conference on Computer Vision . Springer, 2024, pp. 382–398. [10] W. Kim, S. Chun, T. Kim, D. Han, and S. Yun, “Hype: Hyperbolic entailment filtering for underspecified images and texts,” in European Conference on Computer Vision . Springer, 2024, pp. 247–265. [11] J. Liu, M. Shen, X. Liu, R. Ying, M. Yang, T.-S. Chua, and I. King, “Hyperbolic multimodal continual learning,” in 
+
+International Conference on Machine Learning , 2026. [12] D. Krioukov, F. Papadopoulos, M. Kitsak, A. Vahdat, and M. Boguná, “Hyperbolic geometry of complex networks,” 
+
+Physical Review E—Statistical, Nonlinear, and Soft Matter Physics , vol. 82, no. 3, p. 036106, 2010. [13] M. Nickel and D. Kiela, “Poincaré embeddings for learning hierarchical representations,” Advances in neural information processing systems , vol. 30, 2017. [14] ——, “Learning continuous hierarchies in the Lorentz model of hyperbolic geometry,” in International Conference on Machine Learning . PMLR, 2018, pp. 3779–3788. [15] O. Ganea, G. Bécigneul, and T. Hofmann, “Hyperbolic neural networks,” Advances in neural information processing systems , vol. 31, 2018. [16] R. Shimizu, Y. Mukuta, and T. Harada, “Hyperbolic neural networks++,” arXiv preprint arXiv:2006.08210 , 2020. 17 Hyperbolic Multimodal Continual Learning Preprint [17] I. Chami, Z. Ying, C. Ré, and J. Leskovec, “Hyperbolic graph convolutional neural networks,” Advances in neural information processing systems , vol. 32, 2019. [18] M. Yang, M. Zhou, T. Zhang, J. Liu, Z. Li, L. Pan, H. Xiong, and I. King, “Hyperbolic graph neural networks: A review of methods and applications,” arXiv preprint arXiv:2202.13852 , 2022. [19] M. Yang, H. Verma, D. C. Zhang, J. Liu, I. King, and R. Ying, “Hypformer: Exploring efficient transformer fully in hyperbolic space,” in Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining ,2024, pp. 3770–3781. [20] P. Mettes, M. Ghadimi Atigh, M. Keller-Ressel, J. Gu, and S. Yeung, “Hyperbolic deep learning in computer vision: A survey,” International Journal of Computer Vision , vol. 132, no. 9, pp. 3484–3508, 2024. [21] J. Liu, M. Yang, and I. King, “Hyperbolic learning for structured data, knowledge, and memory: A tutorial,” in 
+
+Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2026, pp. 13 351–13 355. [22] N. He, J. Liu, B. Zhang, N. Bui, A. Maatouk, M. Yang, I. King, M. Weber, and R. Ying, “Position: Beyond Euclidean– foundation models should embrace Non-Euclidean geometries,” in Proceedings of the Fourth Learning on Graphs Conference , ser. Proceedings of Machine Learning Research, vol. 338, 2025. [23] J. Liu, M. Yang, M. Zhou, S. Feng, and P. Fournier-Viger, “Enhancing hyperbolic graph embeddings via contrastive learning,” NeurIPS Workshop on Self-Supervised Learning: Theory and Practice , 2022. [24] Y. Zhang, H. Zhu, M. Yang, J. Liu, R. Ying, I. King, and P. Koniusz, “Understanding and mitigating hyperbolic dimensional collapse in graph contrastive learning,” in Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2025, pp. 1984–1995. [25] Y. Fu, J. Li, J. Liu, Q. Xing, Q. Wang, and I. King, “HC-GLAD: Dual hyperbolic contrastive learning for unsupervised graph-level anomaly detection,” Neural Networks , p. 109009, 2026. [26] M. Yang, J. Liu, I. King, and R. Ying, “UHCone: Universal hyperbolic cone for implicit hierarchical learning,” in ICML Workshop on Geometry-grounded Representation Learning and Generative Modeling , 2024. [27] M. Yang, M. Zhou, J. Liu, D. Lian, and I. King, “HRCF: Enhancing collaborative filtering via hyperbolic geometric regularization,” in Proceedings of the ACM Web Conference 2022 , 2022, pp. 2462–2471. [28] M. Yang, Z. Li, M. Zhou, J. Liu, and I. King, “HICF: Hyperbolic informative collaborative filtering,” in Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2022, pp. 2212–2221. [29] Z. Qiu, J. Liu, Y. Chen, and I. King, “HiHPQ: Hierarchical hyperbolic product quantization for unsupervised image retrieval,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 38, no. 5, 2024, pp. 4614–4622. [30] V. Khrulkov, L. Mirvakhabova, E. Ustinova, I. Oseledets, and V. Lempitsky, “Hyperbolic image embeddings,” in 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2020, pp. 6417–6427. [31] S. Liu, J. Chen, L. Pan, C.-W. Ngo, T.-S. Chua, and Y.-G. Jiang, “Hyperbolic visual embedding learning for zero-shot recognition,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2020, pp. 9270–9278. [32] S. Ge, S. Mishra, S. Kornblith, C.-L. Li, and D. Jacobs, “Hyperbolic contrastive learning for visual representations beyond objects,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2023, pp. 6840–6849. [33] G. Moreira, M. Marques, J. P. Costeira, and A. Hauptmann, “Hyperbolic vs Euclidean embeddings in few-shot learning: Two sides of the same coin,” in Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision ,2024, pp. 2071–2079. [34] S. Ibrahimi, M. G. Atigh, N. Van Noord, P. Mettes, and M. Worring, “Intriguing properties of hyperbolic embeddings in vision-language models,” Transactions on Machine Learning Research , 2024. [35] S. Ramasinghe, V. Shevchenko, G. Avraham, and A. Thalaiyasingam, “Accept the modality gap: An exploration in the hyperbolic space,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 27 263–27 272. [36] F. Kong, Y. Chen, J. Cai, and D. Modolo, “Hyperbolic learning with synthetic captions for open-world detection,” in 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 16 762–16 771. 18 Hyperbolic Multimodal Continual Learning Preprint [37] Z. Peng, Z. Xu, Z. Zeng, C. Wen, Y. Huang, M. Yang, F. Tang, and W. Shen, “Understanding fine-tuning CLIP for open-vocabulary semantic segmentation in hyperbolic space,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 4562–4572. [38] M. Yang, J. Chen, J. Tao, Y. Zhang, J. Liu, J. Zhang, Q. Ma, H. Verma, R. Zhang, M. Zhou, I. King, and R. Ying, “Low-rank adaptation for foundation models: A comprehensive review,” arXiv preprint arXiv:2501.00365 , 2025. [39] M. Yang, R. B, A. Feng, B. Xiong, J. Liu, I. King, and R. Ying, “Hyperbolic fine-tuning for large language models,” in 
+
+Advances in Neural Information Processing Systems , vol. 38, 2025. [40] T. Poppi, T. Kasarla, P. Mettes, L. Baraldi, and R. Cucchiara, “Hyperbolic safety-aware vision-language models,” in 
+
+Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 4222–4232. [41] À. P. Vidal, K. Nasrollahi, T. B. Moeslund, and S. Escalera, “Machine unlearning in hyperbolic vs. Euclidean multimodal contrastive learning: Adapting alignment calibration to MERU,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 1644–1653. [42] D. Lopez-Paz and M. Ranzato, “Gradient episodic memory for continual learning,” Advances in neural information processing systems , vol. 30, 2017. [43] P. Buzzega, M. Boschini, A. Porrello, D. Abati, and S. Calderara, “Dark experience for general continual learning: a strong, simple baseline,” Advances in neural information processing systems , vol. 33, pp. 15 920–15 930, 2020. [44] J. Kirkpatrick, R. Pascanu, N. Rabinowitz, J. Veness, G. Desjardins, A. A. Rusu, K. Milan, J. Quan, T. Ramalho, A. Grabska-Barwinska et al. , “Overcoming catastrophic forgetting in neural networks,” Proceedings of the national academy of sciences , vol. 114, no. 13, pp. 3521–3526, 2017. [45] A. A. Rusu, N. C. Rabinowitz, G. Desjardins, H. Soyer, J. Kirkpatrick, K. Kavukcuoglu, R. Pascanu, and R. Hadsell, “Progressive neural networks,” arXiv preprint arXiv:1606.04671 , 2016. [46] A. Mallya and S. Lazebnik, “PackNet: Adding multiple tasks to a single network by iterative pruning,” in Proceedings of the IEEE conference on Computer Vision and Pattern Recognition , 2018, pp. 7765–7773. [47] A. Mallya, D. Davis, and S. Lazebnik, “Piggyback: Adapting a single network to multiple tasks by learning to mask weights,” in Proceedings of the European conference on computer vision (ECCV) , 2018, pp. 67–82. [48] Z. Ni, L. Wei, S. Tang, Y. Zhuang, and Q. Tian, “Continual vision-language representation learning with off-diagonal information,” in International Conference on Machine Learning . PMLR, 2023, pp. 26 129–26 149. [49] J. Li, Y. Li, Y. Fu, J. Liu, Y. Liu, M. Yang, and I. King, “CLIP-powered domain generalization and domain adaptation: A comprehensive survey,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 48, no. 5, pp. 5405–5424, 2026. [50] Z. Zheng, M. Ma, K. Wang, Z. Qin, X. Yue, and Y. You, “Preventing zero-shot transfer degradation in continual learning of vision-language models,” in Proceedings of the IEEE/CVF international conference on computer vision , 2023, pp. 19 125–19 136. [51] J. Yu, Y. Zhuge, L. Zhang, P. Hu, D. Wang, H. Lu, and Y. He, “Boosting continual learning of vision-language models via mixture-of-experts adapters,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2024, pp. 23 219–23 230. [52] A. Bian, W. Li, H. Yuan, M. Wang, Z. Zhao, A. Lu, P. Ji, T. Feng et al. , “Make continual learning stronger via C-FLAT,” 
+
+Advances in Neural Information Processing Systems , vol. 37, pp. 7608–7630, 2024. [53] J. Liu, Z. Qiu, Z. Li, Q. Dai, W. Yu, J. Zhu, M. Hu, M. Yang, T.-S. Chua, and I. King, “A survey of personalized large language models: Progress and future directions,” arXiv preprint arXiv:2502.11528 , 2025. [54] J. Liu, W. Yu, Q. Dai, Z. Li, J. Zhu, M. Yang, T.-S. Chua, and I. King, “PerFit: Exploring personalization shifts in representation space of LLMs,” in International Conference on Learning Representations , 2026. [55] J. Liu, W. Yu, Z. Qiu, M. Yang, and I. King, “Memory has geometry: Non-uniform geometric memory for long-horizon personalized AI,” arXiv preprint arXiv:2609.17969 , 2026. [56] J. Liu, R. S. B. B, X. Fu, M. Yang, W. Zhang, R. Ying, and I. King, “FlatLand: Personalized graph federated learning via tailored Lorentz space,” in International Conference on Machine Learning , 2026. 19 Hyperbolic Multimodal Continual Learning Preprint [57] M. Ayoughi, M. G. Atigh, M. M. Derakhshani, C. G. Snoek, P. Mettes, and P. Groth, “Continual hyperbolic learning of instances and classes,” arXiv preprint arXiv:2506.10710 , 2025. [58] T. Doan, S. Behpour, X. Li, W. He, L. Gou, and L. Ren, “A streamlined approach to multimodal few-shot class incremental learning for fine-grained datasets,” arXiv preprint arXiv:2403.06295 , 2024. [59] I. Loshchilov and F. Hutter, “Decoupled weight decay regularization,” arXiv preprint arXiv:1711.05101 , 2017. [60] G. Bécigneul and O. Ganea, “Riemannian adaptive optimization methods,” in 7th International Conference on Learning Representations, ICLR 2019, New Orleans, LA, USA, May 6-9, 2019 . OpenReview.net, 2019. [61] G. Mishne, Z. Wan, Y. Wang, and S. Yang, “The numerical stability of hyperbolic representation learning,” in International Conference on Machine Learning . PMLR, 2023, pp. 24 925–24 949. [62] W. Chen, X. Han, Y. Lin, H. Zhao, Z. Liu, P. Li, M. Sun, and J. Zhou, “Fully hyperbolic neural networks,” in Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2022, pp. 5672–5686. [63] X. Liu, X. Xia, S.-K. Ng, and T.-S. Chua, “Continual multimodal contrastive learning,” arXiv preprint arXiv:2503.14963 ,2025. [64] T.-Y. Lin, M. Maire, S. Belongie, J. Hays, P. Perona, D. Ramanan, P. Dollár, and C. L. Zitnick, “Microsoft COCO: Common objects in context,” in European Conference on Computer Vision . Springer, 2014, pp. 740–755. [65] P. Young, A. Lai, M. Hodosh, and J. Hockenmaier, “From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions,” Transactions of the association for computational linguistics ,vol. 2, pp. 67–78, 2014. [66] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “ImageNet: A large-scale hierarchical image database,” in 
+
+IEEE Conference on Computer Vision and Pattern Recognition , 2009, pp. 248–255. [67] G. A. Miller, “WordNet: A lexical database for English,” Communications of the ACM , vol. 38, no. 11, pp. 39–41, 1995. [68] A. Kosmopoulos, I. Partalas, E. Gaussier, G. Paliouras, and I. Androutsopoulos, “Evaluation measures for hierarchical classification: A unified view and novel approaches,” Data Mining and Knowledge Discovery , vol. 29, no. 3, pp. 820–865, 2015. [69] R. Sarkar, “Low distortion Delaunay embedding of trees in hyperbolic plane,” in International symposium on graph drawing . Springer, 2011, pp. 355–366. [70] T.-Y. Lam, Introduction to quadratic forms over fields . American Mathematical Soc., 2005, vol. 67. [71] V. Moretti, “The interplay of the polar decomposition theorem and the Lorentz group,” arXiv preprint math-ph/0211047 ,2002. [72] A. Krizhevsky, “Learning multiple layers of features from tiny images,” University of Toronto, Tech. Rep., 2009. [73] L. Fei-Fei, R. Fergus, and P. Perona, “Learning generative visual models from few training examples: An incremental Bayesian approach tested on 101 object categories,” in Proceedings of the IEEE Computer Society Conference on Computer Vision and Pattern Recognition , vol. 1, 2004, pp. 178–178. [74] L. Bossard, M. Guillaumin, and L. Van Gool, “Food-101 – mining discriminative components with random forests,” in 
+
+European Conference on Computer Vision . Springer, 2014, pp. 446–461. [75] M.-E. Nilsback and A. Zisserman, “Automated flower classification over a large number of classes,” in 2008 Sixth Indian Conference on Computer Vision, Graphics and Image Processing , 2008, pp. 722–729. [76] P. Helber, B. Bischke, A. Dengel, and D. Borth, “EuroSAT: A novel dataset and deep learning benchmark for land use and land cover classification,” IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing ,vol. 12, no. 7, pp. 2217–2226, 2019. [77] M. Cimpoi, S. Maji, I. Kokkinos, S. Mohamed, and A. Vedaldi, “Describing textures in the wild,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2014, pp. 3606–3613. [78] S. Maji, E. Rahtu, J. Kannala, M. Blaschko, and A. Vedaldi, “Fine-grained visual classification of aircraft,” arXiv preprint arXiv:1306.5151 , 2013. 20 Hyperbolic Multimodal Continual Learning Preprint [79] Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner, “Gradient-based learning applied to document recognition,” Proceedings of the IEEE , vol. 86, no. 11, pp. 2278–2324, 1998. [80] B. S. Veeling, J. Linmans, J. Winkens, T. Cohen, and M. Welling, “Rotation equivariant CNNs for digital pathology,” 
+
+arXiv preprint arXiv:1806.03962 , 2018. [81] J. Johnson, B. Hariharan, L. van der Maaten, L. Fei-Fei, C. L. Zitnick, and R. Girshick, “CLEVR: A diagnostic dataset for compositional language and elementary visual reasoning,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2017, pp. 2901–2910. [82] R. Socher, A. Perelygin, J. Wu, J. Chuang, C. D. Manning, A. Ng, and C. Potts, “Recursive deep models for semantic compositionality over a sentiment treebank,” in Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing . Association for Computational Linguistics, 2013, pp. 1631–1642. 21 Hyperbolic Multimodal Continual Learning Preprint 
+
+# Appendix 
+
+Supplementary derivations, implementation details, and extended results 
+
+Contents 
+
+A Notation Table . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23 B Additional Preliminaries . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 
+
+B.1 Why Hyperbolic Geometry Represents Hierarchies . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 B.2 Formal Description of the Lorentz Model . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 B.3 Lorentz Neural Layers . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 26 
+
+C Rationale for the Preservation Objectives . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 27 D Proofs for the Geometric Characterization . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 29 
+
+D.1 Shared Isometry Induced by Gram Preservation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 29 D.2 Removing the Boost Component . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 D.3 First-Order Hierarchy Preservation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 
+
+E Derivations for the HMCL Update . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 
+
+E.1 Proof of Proposition 1 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 E.2 Derivation of Corollary 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 34 E.3 Proof of Corollary 3 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 34 
+
+F Optimizer-Consistent HMCL: Derivations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 36 
+
+F.1 A Concrete Adaptive-Optimizer Mismatch . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 36 F.2 Lorentz Strain of a Realized Optimizer Candidate . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 36 F.3 Closest Projection of the Realized Step . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38 F.4 Task-Anchored Feasible Contraction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38 F.5 Residual Drift under Low-Rank PCA . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 39 F.6 Pseudocode, Optimizer State, and Complexity . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 40 
+
+G Additional Implementation Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 41 
+
+G.1 Dataset Details and Task Stream . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 41 G.2 Task-Order Robustness . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 41 G.3 Supplementary Materials for Case Study . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 42 
+
+H Extended Experimental Protocol and Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 45 
+
+H.1 ImageNet–WordNet Protocol and Per-Task Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 45 H.2 Modality-Specific Radial Contraction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 45 H.3 Stage-Wise Stability–Plasticity Diagnostics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 46 H.4 Fine-Grained Retrieval on the Modality-Extended Stream . . . . . . . . . . . . . . . . . . . . . . . . . 46 H.5 Reproducibility Notes . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 47 H.6 Robustness to AdamW Weight Decay . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 48 H.7 Clean Single-Stage Training Time . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 49 H.8 Pullback Hyperparameter Analysis . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 49 
+
+22 Hyperbolic Multimodal Continual Learning Preprint 
+
+# A Notation Table 
+
+Table 5 collects the symbols and conventions used in the main paper and this supplement. 
+
+Table 5. Summary of the notation used in this work. 
+
+Symbol Description Hyperbolic geometry and the Lorentz model 
+
+𝑑 Intrinsic hyperbolic dimension; the Lorentz ambient space has dimension 𝑑 + 1. 
+
+𝐾 Squared hyperboloid radius ( 𝐾 > 0); the sectional curvature is −1/𝐾 .
+
+H𝑑 𝐾 𝑑 -dimensional hyperbolic space with curvature −1/𝐾 .
+
+G Minkowski metric tensor, G = diag (− 1, 1, . . . , 1) ∈ R(𝑑 +1) × ( 𝑑 +1) .
+
+⟨· , ·⟩ L Lorentzian inner product, ⟨x, y⟩L = x⊤Gy .
+
+𝑑 𝐾  
+
+> L
+
+(x, y) Geodesic distance, √𝐾 arcosh (−⟨ x, y⟩L /𝐾 ).
+
+o Origin of the Lorentz model, (√𝐾, 0, . . . , 0)⊤ ∈ H𝑑 𝐾 .
+
+𝑥 0, x[1: 𝑑 ] Time-like coordinate and 𝑑 space-like coordinates of x.SO + (1, 𝑑 ), SO (𝑑 ) Proper orthochronous Lorentz group and spatial rotation group. 
+
+Multimodal learning 
+
+𝑀 Number of modalities. 
+
+𝑚, 𝑚 ′ Modality indices, 𝑚, 𝑚 ′ ∈ { 1, 2, . . . , 𝑀 }.
+
+𝑁 Number of paired samples in the current context. 
+
+X𝑚 Data space of modality 𝑚 .
+
+X𝑚,𝑚 ′
+
+Paired dataset {( x𝑚 𝑖 , x𝑚 ′ 
+
+> 𝑖
+
+)} 𝑁 𝑖 =1.
+
+x𝑚 𝑖 , z𝑚 𝑖 The 𝑖 -th input and its hyperbolic embedding for modality 𝑚 .
+
+Continual learning framework 
+
+𝑡 Task or stage index. 
+
+𝐽 Total number of optimizer steps within a task. 
+
+𝑘 Within-task optimizer-step index, 𝑘 ∈ { 0, . . . , 𝐽 − 1}.
+
+𝑇 (𝑡 ) 
+
+> 𝑚
+
+Lorentz transformation for modality 𝑚 at task 𝑡 .
+
+W𝑚,𝑡 Final Lorentz-head parameters at task 𝑡 .
+
+W𝑚,𝑡 𝑘 = [ w𝑚,𝑡 𝑘, 0 W𝑚,𝑡 𝑘,𝑠 ] Parameters after step 𝑘 , partitioned into the time-like input column and spatial input block; W𝑚,𝑡  
+
+> 0
+
+=
+
+W𝑚,𝑡 −1 and W𝑚,𝑡 𝐽 = W𝑚,𝑡 .
+
+fW𝑚,𝑡 𝑘 +1 Optimizer-proposed parameter candidate before HMCL correction. 
+
+g𝑚,𝑡 𝑘 Raw gradient at step 𝑘 .
+
+𝑋 𝑚 𝑡 Input data for task 𝑡 and modality 𝑚 .
+
+Z𝑚, ∗ 
+
+> 𝑞
+
+Frozen pretrained Lorentz representations of task-𝑞 data from modality 𝑚 .
+
+Z𝑚,𝑡 𝑞 The same data after the stage-𝑡 Lorentz head. 
+
+𝑓 (W; ·) Lorentz layer in (22). 
+
+Similarity measures and objectives S𝑚 →𝑚 ′
+
+Similarity matrix from modality 𝑚 to 𝑚 ′, with S𝑚 →𝑚 ′
+
+∈ R𝑁 × 𝑁 .
+
+𝑆 𝑚 →𝑚 ′ 
+
+> 𝑖 𝑗
+
+Entry (𝑖, 𝑗 ) of S𝑚 →𝑚 ′
+
+, equal to −𝑑 𝐾  
+
+> L
+
+(z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑗
+
+).
+
+𝜏 Temperature parameter for contrastive learning. 
+
+L𝑚 →𝑚 ′ Unidirectional contrastive loss from modality 𝑚 to 𝑚 ′.
+
+Lcontrast Symmetric contrastive loss 12 (L 𝑚 →𝑚 ′ + L 𝑚 ′→𝑚 ).aper (z) Entailment-cone aperture at embedding z.ext (z, z′) Exterior angle between embeddings z and z′.
+
+𝜅 Boundary constant for entailment cones (typically 𝜅 = 0.1). 
+
+Lentail Entailment loss for hierarchical relationships. 
+
+Geometric analysis and parameter updates L General Lorentz transformation, L ∈ SO + (1, 𝑑 ).
+
+R Spatial Lorentz rotation diag (1, eR).
+
+eR Spatial rotation matrix in SO (𝑑 ).
+
+𝜹 𝑚 = [ 𝜹 𝑚  
+
+> 0
+
+𝜹 𝑚 𝑠 ] Candidate parameter displacement, partitioned by input coordinate. Continued on next page 
+
+23 Hyperbolic Multimodal Continual Learning Preprint 
+
+Table 5 (continued) 
+
+Symbol Description 
+
+𝜹 opt ,𝑚,𝑡 𝑘 Optimizer-proposed displacement fW𝑚,𝑡 𝑘 +1 − W𝑚,𝑡 𝑘 before HMCL correction. 
+
+𝜹 ★,𝑚,𝑡 𝑘 Closest admissible displacement obtained from 𝜹 opt ,𝑚,𝑡 𝑘 .
+
+A𝑚 𝑘 Cumulative displacement W𝑚,𝑡 𝑘 − W𝑚,𝑡  
+
+> 0
+
+.
+
+EL,𝑡 −1 Defect from a shared first-order Lorentz rotation on protected representations. 
+
+A𝑡 −1, P L  
+
+> 𝑡 −1
+
+Zero-defect admissible family and its Frobenius closest-point map. 
+
+V𝑡 −1, P𝑡 −1 Protected-subspace basis and projector, with P𝑡 −1 = V𝑡 −1V⊤ 
+
+> 𝑡 −1
+
+.
+
+𝛽 Pullback coefficient toward the task-start parameters. 
+
+24 Hyperbolic Multimodal Continual Learning Preprint 
+
+# B Additional Preliminaries 
+
+B.1 Why Hyperbolic Geometry Represents Hierarchies 
+
+Hyperbolic space is a homogeneous geometry with constant negative curvature. Its volume expands exponentially with radius: in 𝑛 dimensions and curvature −1, a radius-𝑟 ball has volume 
+
+𝑉 H𝑛 (𝑟 ) ∝ 
+
+∫ 𝑟 
+
+> 0
+
+sinh 𝑛 −1 (𝑡 ) 𝑑𝑡, 
+
+which is asymptotically proportional to 𝑒 (𝑛 −1)𝑟 . Euclidean volume, in contrast, grows only as 𝑟 𝑛 . In the two-dimensional case, for instance, the hyperbolic disk area is 2 𝜋 (cosh 𝑟 − 1) rather than the Euclidean value 𝜋𝑟 2. This exponential capacity closely matches the growth of tree-structured data, which is why hyperbolic embeddings can represent taxonomies, trees, and knowledge graphs with low distortion [13, 69]. 
+
+B.2 Formal Description of the Lorentz Model 
+
+The Lorentz model embeds a 𝑑 -dimensional hyperbolic manifold as one sheet of a hyperboloid in (𝑑 +1)-dimensional Minkowski space. 
+
+Definition 1 (Minkowski Space and Metric) . Minkowski space is R𝑑 +1 equipped with the indefinite metric 
+
+G = diag (− 1, 1, . . . , 1) ∈ R(𝑑 +1) × ( 𝑑 +1) .
+
+Here 𝐾 > 0 denotes the squared hyperboloid radius used below, so the corresponding sectional curvature is −1/𝐾 .Its signature (− , +, . . . , +) distinguishes one time-like direction from 𝑑 space-like directions. 
+
+Definition 2 (Lorentzian Inner Product) . For x, y ∈ R𝑑 +1, their Lorentzian (Minkowski) inner product is 
+
+⟨x, y⟩L = x⊤Gy = −𝑥 0 𝑦 0 +
+
+> 𝑑
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑥 𝑖 𝑦 𝑖 .
+
+Definition 3 (Lorentz Manifold) . The Lorentz realization of 𝑑 -dimensional hyperbolic space with curvature −1/𝐾 
+
+is 
+
+H𝑑 𝐾 = x ∈ R𝑑 +1 : x⊤Gx = −𝐾, 𝑥 0 > 0 .
+
+We write L𝑑 𝐾 = (H𝑑 𝐾 , G) when referring to the manifold together with its metric. 
+
+Remark 1. Expanding the manifold constraint gives 
+
+−𝑥 20 +
+
+> 𝑑
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑥 2 
+
+> 𝑖
+
+= −𝐾, 𝑥 20 −
+
+> 𝑑
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑥 2 
+
+> 𝑖
+
+= 𝐾. 
+
+This equation describes a two-sheeted hyperboloid; 𝑥 0 > 0 selects its connected upper sheet. For any x ∈ H𝑑 𝐾 ,
+
+𝑥 0 =√︃ 𝐾 + ∥ x[1: 𝑑 ] ∥2 ≥ √𝐾, 
+
+where x[1: 𝑑 ] = (𝑥 1, . . . , 𝑥 𝑑 )⊤ contains the space-like coordinates. 
+
+Definition 4 (Lorentzian Distance) . The length of the geodesic between x, y ∈ L 𝑑 𝐾 is 
+
+𝑑 𝐾  
+
+> L
+
+(x, y) = √𝐾 arcosh 
+
+
+
+− ⟨x, y⟩L
+
+𝐾 
+
+
+
+= √𝐾 arcosh 
+
+
+
+− x⊤Gy 
+
+𝐾 
+
+
+
+. (21) 
+
+Remark 2. For points on the upper hyperboloid, ⟨x, y⟩L ≤ − 𝐾 , with equality if and only if x = y. The argument of 
+
+arcosh is therefore at least one, so (21) is well defined. Substituting x = y gives zero distance. 
+
+25 Hyperbolic Multimodal Continual Learning Preprint 
+
+Remark 3 (Relation to Ambient Euclidean Distance) . Far from the origin, geodesic distance increases approximately logarithmically with ambient Euclidean distance. This growth allows hyperbolic space to represent tree-like structures with low distortion. 
+
+The linear symmetries of the Lorentz model form a group of transformations that leave the Lorentzian inner product unchanged. 
+
+Definition 5 (Proper Orthochronous Lorentz Group) . The proper orthochronous Lorentz group is 
+
+SO + (1, 𝑑 ) = L ∈ R(𝑑 +1) × ( 𝑑 +1) : L⊤GL = G, det (L) = 1, 𝐿 00 ≥ 1 .
+
+Remark 4. The metric constraint makes L an isometry, the determinant condition excludes orientation-reversing reflections, and 𝐿 00 ≥ 1 preserves the time orientation of the upper hyperboloid. The group can also map any point on H𝑑 𝐾 to any other point: for x, y ∈ H𝑑 𝐾 , some L ∈ SO + (1, 𝑑 ) satisfies Lx = y.
+
+B.3 Lorentz Neural Layers 
+
+Definition 6 (Lorentz Transformation Layer [62]) . Let z ∈ R𝑑 +1 be a Lorentz representation, with time-like component 𝑧 0 > 0 and spatial block z𝑠 ∈ R𝑑 . A Lorentz transformation layer is defined by 
+
+𝑓 (W; z) =
+
+"√︃ 
+
+𝐾 + ∥ Wz ∥22
+
+Wz 
+
+#
+
+, W ∈ R𝑑 × ( 𝑑 +1) . (22) 
+
+Remark 5. The time-like output in (22) is reconstructed from the spatial output so that the result satisfies the Lorentz manifold constraint. 
+
+For the block-wise analysis, we partition the weights as 
+
+W = [ w0 W𝑠 ], w0 ∈ R𝑑 ×1, W𝑠 ∈ R𝑑 ×𝑑 , (23) where w0 multiplies the time-like input and W𝑠 acts on the space-like input coordinates. 
+
+> 26
+
+Hyperbolic Multimodal Continual Learning Preprint 
+
+# C Rationale for the Preservation Objectives 
+
+Continual learning aims to incorporate the current task while retaining information acquired earlier. For hyperbolic representations, that information is represented by geometry: pairwise relations encode semantic similarity, while radial position encodes semantic specificity and hierarchy [7]. We therefore use the following three requirements for representations of earlier data: (P1 ) Intra-modal preservation :
+
+Z𝑚,𝑡 𝑡 −1G(Z𝑚,𝑡 𝑡 −1)⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+G(Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+)⊤, ∀𝑚 ∈ { 1, . . . , 𝑀 };(P2 ) Inter-modal preservation :
+
+Z𝑚,𝑡 𝑡 −1G(Z𝑚 ′ ,𝑡 𝑡 −1 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+G(Z𝑚 ′ ,𝑡 −1  
+
+> 𝑡 −1
+
+)⊤, ∀𝑚 ≠ 𝑚 ′;(P3 ) Hierarchical preservation :
+
+∥( z𝑚,𝑡 𝑡 −1)[1: 𝑑 ] ∥ = ∥( z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+)[1: 𝑑 ] ∥, ∀𝑚 ∈ { 1, . . . , 𝑀 }.
+
+Table 6. Links between the desired semantic properties and the hyperbolic quantities that encode them. 
+
+Semantic Property Geometric Quantity Condition 
+
+− Directly constrained 
+
+Semantic similarity 𝑑 L (x, y) ∝ ⟨ x, y⟩L (P1 ), ( P2 )Semantic specificity 𝑑 L (x, o) ∝ ∥ x[1: 𝑑 ] ∥ (P3 )
+
+− Implied consequence (Proposition 2) Concept partial order aper (x), ext (x, y) Implied by the conditions 
+
+Table 6 links each preservation goal to the geometric quantity that represents it. Conditions ( P1 ) and ( P2 ) fix Lorentzian inner products. Since the distance in (21) is a monotone function of these products, the associated semantic similarities remain unchanged. Condition ( P3 ) fixes the spatial norm. On the hyperboloid, 
+
+𝑑 𝐾  
+
+> L
+
+(x, o) = √𝐾 arcosh 
+
+√︃ 
+
+1 + ∥ x[1: 𝑑 ] ∥22/𝐾 
+
+
+
+.
+
+Preserving the spatial norm therefore keeps a concept at the same level of specificity. Together, these invariants are also sufficient to retain the entailment relation used to encode concept order. 
+
+Proposition 2 (Invariance of the Concept Partial Order) . Let z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+∈ H𝑑 𝐾 be hyperbolic embeddings. If 
+
+∥( z𝑚 𝑖 )[1: 𝑑 ] ∥2 and ⟨z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+⟩L do not change, then the entailment relation z𝑚 𝑖 ⊒ z𝑚 ′ 
+
+> 𝑖
+
+is unchanged as well. Proof. Entailment holds when Lentail (z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+) = 0, or equivalently ext (z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+) ≤ aper (z𝑚 𝑖 ).
+
+The two angles are aper (z𝑚 𝑖 ) = sin −1 2𝜅 √𝐾 
+
+∥( z𝑚 𝑖 )[1: 𝑑 ] ∥
+
+!
+
+, (24) ext (z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+) = cos −1©«
+
+(z𝑚 ′ 
+
+> 𝑖
+
+)0 + ( z𝑚 𝑖 )0 ⟨z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+⟩L /𝐾 
+
+∥( z𝑚 𝑖 )[1: 𝑑 ] ∥√︃  ⟨z𝑚 𝑖 , z𝑚 ′ 
+
+> 𝑖
+
+⟩L /𝐾 2 − 1
+
+ª®®¬
+
+. (25) 
+
+27 Hyperbolic Multimodal Continual Learning Preprint 
+
+The aperture depends only on the spatial norm, while the exterior angle depends on that norm and the Lorentzian inner product. The time-like coordinate follows from the manifold constraint. If these quantities are preserved, neither side of the entailment inequality changes, so the corresponding partial-order relation is invariant. □
+
+> 28
+
+Hyperbolic Multimodal Continual Learning Preprint 
+
+# D Proofs for the Geometric Characterization 
+
+Definition 7 (Joint Embedding Matrix) . Consider 𝑁 paired examples from task 𝑡 ∈ T , evaluated at stage 𝑠 ∈ S for modalities 𝑚 1 and 𝑚 2. Given Z𝑚,𝑠 𝑡 ∈ R𝑁 × ( 𝑑 +1) with rows z𝑚,𝑠 𝑡 ,𝑖 ∈ H𝑑 𝐾 , define 
+
+Z𝑠 𝑡 , all :=
+
+Z𝑚 1 ,𝑠 𝑡 
+
+Z𝑚 2 ,𝑠 𝑡 
+
+
+
+∈ R2𝑁 × ( 𝑑 +1) .
+
+The ordering in this vertical concatenation retains the pairing between the two modalities. 
+
+Definition 8 (Extended Lorentz Gram Matrix) . For G = diag (− 1, 1, . . . , 1), the extended Gram matrix of the joint embeddings is 
+
+G𝑠 𝑡 , ext := Z𝑠 𝑡 , all G(Z𝑠 𝑡 , all )⊤ (26) 
+
+=
+
+Z𝑚 1 ,𝑠 𝑡 G(Z𝑚 1 ,𝑠 𝑡 )⊤ Z𝑚 1 ,𝑠 𝑡 G(Z𝑚 2 ,𝑠 𝑡 )⊤
+
+Z𝑚 2 ,𝑠 𝑡 G(Z𝑚 1 ,𝑠 𝑡 )⊤ Z𝑚 2 ,𝑠 𝑡 G(Z𝑚 2 ,𝑠 𝑡 )⊤
+
+
+
+. (27) 
+
+Its diagonal blocks contain within-modality Lorentzian products, while the off-diagonal blocks record the cross-modal geometry. 
+
+Definition 9 (Lorentz Boost) . For v ∈ R𝑑 with ∥v∥ < 1 and 𝛾 = (1 − ∥ v∥2)−1/2, the boost associated with v is 
+
+B =
+
+
+
+𝛾 −𝛾 v⊤
+
+−𝛾 v I + 𝛾 2
+
+1 + 𝛾 vv ⊤
+
+
+
+.
+
+It mixes the time-like coordinate with the direction v without independently rotating the spatial axes. 
+
+Definition 10 (Lorentz Rotation) . A spatial Lorentz rotation has block form 
+
+R =
+
+1 0⊤
+
+0 eR
+
+
+
+, eR⊤eR = I, det (eR) = 1.
+
+Thus eR ∈ SO (𝑑 ) rotates only the spatial coordinates. 
+
+D.1 Shared Isometry Induced by Gram Preservation 
+
+Lemma 1 (Witt’s Extension Theorem [70]) . Let (V , 𝑄 ) be a non-degenerate quadratic space. Any isometry 
+
+𝜙 : U → V ′ between subspaces U, V′ ⊆ V extends to an isometry of all of V.
+
+Remark 6. In matrix notation, if Z1QZ ⊤ 
+
+> 1
+
+= Z2QZ ⊤ 
+
+> 2
+
+for a non-degenerate symmetric Q, then an element T of 
+
+𝑂 (Q) = {T : T⊤QT = Q}
+
+maps the first set of rows to the second, i.e., Z2 = Z1T⊤.
+
+Lemma 2 (Hyperboloid-Preserving Isometries) . Let L ∈ 𝑂 (1, 𝑑 ) be an orientation-preserving isometry that maps the upper hyperboloid 
+
+H𝑑 𝐾 = {x : x⊤Gx = −𝐾, 𝑥 0 > 0}
+
+onto itself. Then L ∈ SO + (1, 𝑑 ).Proof. Because the upper sheet is invariant, applying L to o = (√𝐾, 0, . . . , 0)⊤ gives (Lo )0 = √𝐾 𝐿 00 > 0. The identity L⊤GL = G further implies 
+
+−𝐿 200 +
+
+> 𝑑
+
+∑︁ 
+
+> 𝑖 =1
+
+𝐿 2 
+
+> 𝑖 0
+
+= −1,
+
+so 𝐿 200 = 1 + Í𝑑 𝑖 =1 𝐿 2 
+
+> 𝑖 0
+
+≥ 1 and therefore 𝐿 00 ≥ 1. Orientation preservation gives det (L) = 1. Together with 
+
+L ∈ 𝑂 (1, 𝑑 ), these are the defining conditions of SO + (1, 𝑑 ). □
+
+29 Hyperbolic Multimodal Continual Learning Preprint 
+
+Theorem 3 (Uniqueness of the Lorentzian Isometry) . Let Z𝑠 𝑡 , all , Z𝑠 ′  
+
+> 𝑡 ′,all
+
+∈ R2𝑁 × ( 𝑑 +1) . Suppose (1) their extended Gram matrices agree, G𝑠 𝑡 , ext = G𝑠 ′ 
+
+> 𝑡 ′,ext
+
+; and (2) both joint matrices have full column rank 𝑑 + 1; and (3) the stage-to-stage correspondence is induced by a continuous path of full-column-rank configurations with the same extended Gram matrix, beginning at the first configuration. Then there is a unique L ∈ SO + (1, 𝑑 ) satisfying 
+
+Z𝑠 ′  
+
+> 𝑡 ′,all
+
+= Z𝑠 𝑡 , all L⊤.
+
+Proof. Full column rank means that the rows of both joint matrices span the ambient Lorentzian space. Associate each row z𝑚,𝑠 𝑡 ,𝑖 with the corresponding row z𝑚,𝑠 ′  
+
+> 𝑡 ′,𝑖
+
+. Equality of the extended Gram matrices gives 
+
+⟨z𝑚,𝑠 𝑡 ,𝑖 , z𝑚 ′ ,𝑠 𝑡 , 𝑗 ⟩L = ⟨z𝑚,𝑠 ′  
+
+> 𝑡 ′,𝑖
+
+, z𝑚 ′ ,𝑠 ′  
+
+> 𝑡 ′, 𝑗
+
+⟩L
+
+for every pair of samples and modalities. This correspondence is therefore an isometry on a generating set. Lemma 1 extends it to a global element L ∈ 𝑂 (1, 𝑑 ) such that 
+
+Z𝑠 ′  
+
+> 𝑡 ′,all
+
+= Z𝑠 𝑡 , all L⊤.
+
+It remains to identify the connected component. Let Z(𝜆 ) denote the path in condition (3), with Z(0) = Z𝑠 𝑡 , all . Full rank makes the corresponding isometry unique, and 
+
+L(𝜆 )⊤ =  Z(0)⊤Z(0) −1Z(0)⊤Z(𝜆 )
+
+makes its continuity explicit. Thus L(0) = I and L(1) = L. Since the determinant of an element of 𝑂 (1, 𝑑 ) is either 
+
++1 or −1, continuity gives det L(𝜆 ) = +1 throughout the path. All configurations remain on the forward sheet, so applying L(𝜆 ) to the origin gives 𝐿 00 (𝜆 ) > 0; the Lorentz constraint then gives 𝐿 00 (𝜆 ) ≥ 1. Hence L ∈ SO + (1, 𝑑 ).For uniqueness, assume that L1 and L2 both satisfy the relation. Then 
+
+Z𝑠 𝑡 , all (L⊤ 
+
+> 1
+
+− L⊤ 
+
+> 2
+
+) = 0.
+
+Since Z𝑠 𝑡 , all has column rank 𝑑 + 1, its right null space contains only zero; hence L1 = L2. □
+
+Corollary 4 (A Common Isometry for All Modalities) . Under Theorem 3, the same L ∈ SO + (1, 𝑑 ) acts on both modalities: 
+
+Z𝑚 1 ,𝑠 ′ 
+
+> 𝑡 ′
+
+= Z𝑚 1 ,𝑠 𝑡 L⊤, Z𝑚 2 ,𝑠 ′ 
+
+> 𝑡 ′
+
+= Z𝑚 2 ,𝑠 𝑡 L⊤.
+
+If, in addition, each modality-specific block has full column rank, then any modality-specific maps L1 and L2
+
+satisfying these two relations must obey L1 = L2 = L.Proof. Stacking the two modality-specific relations would produce 
+
+Z𝑠 ′  
+
+> 𝑡 ′,all
+
+=
+
+Z𝑚 1 ,𝑠 𝑡 L⊤
+
+> 1
+
+Z𝑚 2 ,𝑠 𝑡 L⊤
+
+> 2
+
+
+
+.
+
+Theorem 3 gives the unique transformation for the full stacked matrix, so both blocks admit the same restriction. Under the additional blockwise full-rank condition, subtracting the common relation from each modality-specific relation gives Z𝑚 𝑖 ,𝑠 𝑡 (L⊤ 
+
+> 𝑖
+
+− L⊤) = 0. The right null space is then trivial, and hence L𝑖 = L for 𝑖 ∈ { 1, 2}. □
+
+Remark 7. Conditions ( P1 ) and ( P2 ) are jointly equivalent to 
+
+G𝑡 𝑡 −1,ext = G𝑡 −1 
+
+> 𝑡 −1,ext
+
+.
+
+Theorem 3 and Corollary 4 therefore show that preserving both within-modal and cross-modal relations determines one Lorentz transformation shared by all modalities. 
+
+30 Hyperbolic Multimodal Continual Learning Preprint 
+
+D.2 Removing the Boost Component 
+
+Lemma 3 (Generation of SO + (1, 𝑑 ) [71]) . Every element of SO + (1, 𝑑 ) can be written as a finite composition of Lorentz rotations and boosts. 
+
+Remark 8. Boosts and spatial rotations are intrinsic linear transformations of the Lorentz model: if x ∈ H𝑑 𝐾 , then both Bx and Rx remain on H𝑑 𝐾 .
+
+Theorem 4 (Elimination of Boosts; Restatement of Theorem 1) . Suppose L ∈ SO + (1, 𝑑 ) maps every old representation according to z𝑚,𝑡 𝑡 −1 = Lz 𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+, and the stacked old-representation matrix has full column rank. If Condition ( P3 ) holds for all such representations, then 
+
+L =
+
+1 0⊤
+
+0 eR
+
+
+
+, eR ∈ SO (𝑑 ),
+
+i.e., L contains no nontrivial boost. Proof. For every old representation on H𝑑 𝐾 , Condition ( P3 ) fixes the spatial norm. The manifold constraint 
+
+𝑧 0 =√︃ 𝐾 + ∥ z[1: 𝑑 ] ∥22
+
+then also fixes the time-like coordinate. In row-matrix form, 
+
+Z𝑡 −1  
+
+> 𝑡 −1,all
+
+(L⊤e0 − e0) = 0, e0 = (1, 0, . . . , 0)⊤.
+
+Full column rank makes the right null space trivial, so L⊤e0 = e0. Writing L in time–space blocks and using 
+
+L⊤GL = G therefore gives 
+
+L = diag (1, eR), eR⊤eR = I.
+
+Finally, det L = 1 implies det eR = 1. Thus eR ∈ SO (𝑑 ) and no boost component remains. □
+
+D.3 First-Order Hierarchy Preservation 
+
+The next lemma relates perturbations of the spatial and time-like coordinates on the Lorentz hyperboloid and leads directly to Corollary 1. 
+
+Lemma 4 (First-Order Change of the Time-Like Coordinate) . Let z ∈ R𝑑 +1 obey 𝑧 20 − ∥ z[1: 𝑑 ] ∥22 = 𝐾 with 
+
+𝑧 0 > 0. For an infinitesimal perturbation Δz,
+
+Δ𝑧 0 = z⊤[1: 𝑑 ]
+
+𝑧 0
+
+!
+
+Δz[1: 𝑑 ] . (28) 
+
+Proof. Define the manifold constraint 
+
+𝜙 (z) = 𝑧 20 − ∥ z[1: 𝑑 ] ∥22 − 𝐾 = 0. (29) For ez = z + Δz, a first-order Taylor expansion gives 
+
+𝜙 (ez) = 𝜙 (z) + ∇ 𝜙 (z)⊤Δz + 𝑂 (∥ Δz∥22).
+
+Both z and ez lie on the manifold to first order, so 
+
+∇𝜙 (z)⊤Δz = 0. (30) Since 
+
+∇𝜙 (z) =
+
+ 2𝑧 0
+
+−2z[1: 𝑑 ]
+
+
+
+,
+
+Equation (30) becomes 2 𝑧 0Δ𝑧 0 − 2z⊤[1: 𝑑 ] Δz[1: 𝑑 ] = 0. Dividing by 2 𝑧 0 > 0 proves (28). □
+
+31 Hyperbolic Multimodal Continual Learning Preprint 
+
+Corollary 5 (Restatement of Corollary 1) . Let Δz = z𝑚,𝑡 𝑡 −1 − z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+denote the update of an old-task embedding. If Condition ( P3 ) makes its time-like coordinate invariant to first order, then 
+
+z⊤[1: 𝑑 ] Δz[1: 𝑑 ] = 0. (31) 
+
+Proof. Condition ( P3 ) sets Δ𝑧 0 = 0 to first order. Lemma 4 simultaneously requires 
+
+Δ𝑧 0 = z⊤[1: 𝑑 ] Δz[1: 𝑑 ]
+
+𝑧 0
+
+.
+
+Because 𝑧 0 > 0, combining the two statements yields (31). □
+
+32 Hyperbolic Multimodal Continual Learning Preprint 
+
+# E Derivations for the HMCL Update 
+
+E.1 Proof of Proposition 1 
+
+Proposition 3 (Restatement: Admissible Parameter Changes) . Consider the Lorentz layer in Section 3.1, with 
+
+W𝑚,𝑡 = [ w𝑚,𝑡  
+
+> 0
+
+W𝑚,𝑡 𝑠 ]. Assume that Theorem 1 holds at stage 𝑡 − 1. Define 
+
+ΔW𝑚 = W𝑚,𝑡 − W𝑚,𝑡 −1, ∥ΔW𝑚 ∥𝐹 → 0.
+
+The collection of modal displacements is admissible to first order if and only if one skew-symmetric 𝛀 satisfies, simultaneously for every modality, 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+(ΔW𝑚 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]𝛀 ⊤, 𝛀 ⊤ = −𝛀 . (32) 
+
+Proof. The spatial output of the Lorentz layer is linear in its parameters. Its block form is 
+
+𝑓 [1: 𝑑 ] (W𝑚,𝑡 ; Z𝑚, ∗ 
+
+> 𝑡 −1
+
+) = Z𝑚, ∗  
+
+> 𝑡 −1
+
+[0] ( w𝑚,𝑡  
+
+> 0
+
+)⊤ + Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( W𝑚,𝑡 𝑠 )⊤. (33) Consequently, the applied displacement changes the old spatial output by 
+
+Z𝑚,𝑡 𝑡 −1 [1 : 𝑑 ] = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ] + Z𝑚, ∗  
+
+> 𝑡 −1
+
+[0] ( Δw𝑚  
+
+> 0
+
+)⊤ + Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( ΔW𝑚 𝑠 )⊤. (34) Combining the two update terms gives the compact form 
+
+Z𝑚,𝑡 𝑡 −1 [1: 𝑑 ] = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1: 𝑑 ] + Z𝑚, ∗  
+
+> 𝑡 −1
+
+(ΔW𝑚 )⊤. (35) Theorem 1 also states that an admissible change of the old representations is a spatial rotation. In a neighborhood of the identity, write 
+
+R = I + 𝛀 + O(∥ 𝛀 ∥2 
+
+> 𝐹
+
+), 𝛀 ⊤ = −𝛀 .
+
+It follows that 
+
+Z𝑚,𝑡 𝑡 −1 [1 : 𝑑 ] = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]R⊤
+
+= Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ] + Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]𝛀 ⊤ + O(∥ 𝛀 ∥2 
+
+> 𝐹
+
+). (36) Equating the first-order terms of (35) and (36) yields 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+(ΔW𝑚 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]𝛀 ⊤, 𝛀 ⊤ = −𝛀 . (37) The same 𝛀 follows from Theorem 1 for all modalities. Conversely, (37) matches the tangent motion of that common rotation. Its spatial norm is unchanged to first order, and the reconstructed time-like coordinate in (4) is therefore unchanged as well. □
+
+The implementation fixes the time-input column and realizes the admissible output motion through ΔW𝑚 𝑠 . Such a representative exists exactly when col 
+
+
+
+Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1: 𝑑 ]𝛀 ⊤
+
+⊆ col 
+
+
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]
+
+
+
+. (38) The regularity condition in Appendix E.2 makes the two column spaces equal, so (38) holds for every admissible rotation. This gives the blockwise form in (16). 
+
+33 Hyperbolic Multimodal Continual Learning Preprint 
+
+E.2 Derivation of Corollary 2 
+
+Corollary 6 (Restatement: Closest-Admissible Update) . Given candidate modal displacements {𝜹 𝑚 =
+
+[ 𝜹 𝑚  
+
+> 0
+
+𝜹 𝑚 𝑠 ]} 𝑀 𝑚 =1, HMCL-CA jointly selects their closest admissible displacements and one shared rotation by solving 
+
+minimize   
+
+> {ΔW𝑚 },𝛀
+
+12
+
+> 𝑀
+
+∑︁ 
+
+> 𝑚 =1
+
+∥ΔW𝑚 − 𝜹 𝑚 ∥2
+
+> 𝐹
+
+subject to 𝛀 ⊤ = −𝛀 , Δw𝑚  
+
+> 0
+
+= 0,
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( ΔW𝑚 𝑠 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1: 𝑑 ]𝛀 ⊤, 𝑚 = 1, . . . , 𝑀. 
+
+(39) 
+
+Under the regularity condition below, the modal displacements are unique and are obtained from one Lyapunov equation for the common 𝛀 ★.
+
+We derive the joint HMCL-CA solution and make the shared rotation explicit. For each modality, let 
+
+X𝑚 = Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ], Y𝑚 = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1: 𝑑 ]. (40) Assume that Y𝑚 has full column rank and that col (X𝑚 ) = col (Y𝑚 ). Then 
+
+X𝑚 = Y𝑚 C𝑚 , C𝑚 = Y†
+
+> 𝑚
+
+X𝑚 , (41) where C𝑚 is invertible. Proposition 1 now gives 
+
+C𝑚 (ΔW𝑚 𝑠 )⊤ = 𝛀 ⊤ ⇐⇒ ΔW𝑚 𝑠 = 𝛀 C−⊤  
+
+> 𝑚
+
+. (42) The same 𝛀 occurs for every 𝑚 . Substituting (42) into the closest-admissible problem yields min 
+
+> 𝛀 ⊤=−𝛀
+
+12
+
+> 𝑀
+
+∑︁ 
+
+> 𝑚 =1
+
+𝛀 C−⊤  
+
+> 𝑚
+
+− 𝜹 𝑚 𝑠  
+
+> 2
+> 𝐹
+
+. (43) Define 
+
+H =
+
+> 𝑀
+
+∑︁ 
+
+> 𝑚 =1
+
+C−⊤  
+
+> 𝑚
+
+C−1 
+
+> 𝑚
+
+, F =
+
+> 𝑀
+
+∑︁ 
+
+> 𝑚 =1
+
+𝜹 𝑚 𝑠 C−1 
+
+> 𝑚
+
+. (44) Since every C𝑚 is invertible, H is positive definite. Stationarity of (43) over the skew-symmetric matrices gives the Lyapunov equation 
+
+𝛀 ★H + H𝛀 ★ = 2 Skew (F), Skew (F) = 12 (F − F⊤). (45) Positive definiteness of H gives a unique skew-symmetric solution. The closest admissible displacements are therefore 
+
+𝜹 CA ,𝑚 𝑠 = 𝛀 ★C−⊤  
+
+> 𝑚
+
+, 𝜹 CA ,𝑚  
+
+> 0
+
+= 0, 𝑚 = 1, . . . , 𝑀. (46) This construction solves for one rotation from all modal candidates. In the optimizer-consistent update, each 𝜹 𝑚 𝑠 is the spatial block of the displacement proposed by the chosen optimizer. 
+
+E.3 Proof of Corollary 3 
+
+Corollary 7 (HMCL-MR: Minimal-Rotation Update (Restatement)) . Let 𝜹 𝑚 𝑠 be an unconstrained candidate displacement and impose Proposition 1 while penalizing the induced rotation. In the minimum-rotation limit, 
+
+𝛀 ★ = 0 and 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( ΔW𝑚 𝑠 )⊤ = 0, Δw𝑚  
+
+> 0
+
+= 0. (47) 
+
+The canonical solution is the null-space projection 
+
+ΔW𝑚 𝑠 = 𝜹 𝑚 𝑠 (I − P𝑡 −1), P𝑡 −1 = (Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]) ⊤ 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]) ⊤†
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]. (48) 
+
+34 Hyperbolic Multimodal Continual Learning Preprint 
+
+Proof. Begin with the general admissible family 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( ΔW𝑚 𝑠 )⊤ = Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]𝛀 ⊤, 𝛀 ⊤ = −𝛀 . (49) Among these displacements, consider the rotation-regularized closest point to 𝜹 𝑚 𝑠 :min  
+
+> ΔW𝑚 𝑠 ,𝛀
+
+12 ∥ΔW𝑚 𝑠 − 𝜹 𝑚 𝑠 ∥2 
+
+> 𝐹
+
++ 𝜆 
+
+2 ∥𝛀 ∥2 
+
+> 𝐹
+
+s.t. (49) . (50) With multiplier 𝚲 , the Lagrangian is 
+
+L = 12 ∥ΔW𝑚 𝑠 − 𝜹 𝑚 𝑠 ∥2 
+
+> 𝐹
+
++ 𝜆 
+
+2 ∥𝛀 ∥2
+
+> 𝐹
+
++
+
+D
+
+𝚲 , Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( ΔW𝑚 𝑠 )⊤ − Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]𝛀 ⊤E
+
+. (51) Stationarity gives 
+
+ΔW𝑚 𝑠 = 𝜹 𝑚 𝑠 − 𝚲 ⊤Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ], (52) 
+
+𝛀 = 1
+
+𝜆 Skew 
+
+
+
+(Z𝑚,𝑡 −1  
+
+> 𝑡 −1
+
+[1 : 𝑑 ]) ⊤𝚲 
+
+
+
+, (53) where Skew (A) = (A − A⊤)/ 2. Substituting (52) into (49) yields 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]) ⊤𝚲 = Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( 𝜹 𝑚 𝑠 )⊤ + O( 𝜆 −1). (54) In the limit 𝜆 → ∞ , the rotation term vanishes and 
+
+𝚲 =
+
+
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]) ⊤†
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( 𝜹 𝑚 𝑠 )⊤. (55) Inserting this expression into (52) produces 
+
+ΔW𝑚 𝑠 = 𝜹 𝑚 𝑠 
+
+
+
+I − ( Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]) ⊤ 
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ] ( Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]) ⊤†
+
+Z𝑚, ∗  
+
+> 𝑡 −1
+
+[1: 𝑑 ]
+
+
+
+.
+
+Equation (53) simultaneously gives 𝛀 ★ = 0. Combining this spatial projection with Δw𝑚  
+
+> 0
+
+= 0 proves the stated canonical update. □
+
+35 Hyperbolic Multimodal Continual Learning Preprint 
+
+# F Optimizer-Consistent HMCL: Derivations 
+
+This appendix derives the direction–displacement mismatch, Lorentz defect, finite-step preservation result, feasible accumulation, and low-rank residual bound for the unified HMCL update. Throughout a fixed task, we omit the stage index 𝑡 and retain the optimizer-step index 𝑘 ; in (𝑘, 0) and (𝑘, 𝑠 ), the second entry identifies the time-like input column (0) or the spatial input block ( 𝑠 ), whereas W𝑚,𝑡  
+
+> 0
+
+denotes the task-start parameters. As established in the main paper, a common spatial rotation preserves the three HMCL conditions: CA estimates its skew generator 
+
+𝛀 , while MR selects the identity member 𝛀 = 0. Both corrections act on the fully formed candidate displacement. 
+
+F.1 A Concrete Adaptive-Optimizer Mismatch 
+
+Let S ⊆ R𝑞 be the linear subspace of admissible vectorized parameter displacements and let 𝚷 be its orthogonal projector. For a positive diagonal matrix Dopt , consider the preconditioned component of an AdamW step, 
+
+dpre = −𝜂 Dopt u, u ∈ S . (56) 
+
+Proposition 4 (Direction–Displacement Mismatch) . Suppose AdamW maps an admissible first-moment direction 
+
+u ∈ S to 
+
+dAdamW = −𝜂 Dopt u − 𝜂𝜔 𝜽 , (57) 
+
+where Dopt is a positive diagonal preconditioner and 𝜔 is the decoupled weight-decay coefficient. The preconditioned component remains admissible for every u ∈ S if and only if 
+
+(I − 𝚷 )Dopt 𝚷 = 0. (58) 
+
+The decay component is admissible exactly when 𝜔 = 0 or 𝜽 ∈ S .Proof of Proposition 4. Because 𝚷 projects onto S, every admissible direction can be written as u = 𝚷 a for some 
+
+a. The preconditioned direction remains in S for every admissible input if and only if its component in S⊥ vanishes: 
+
+(I − 𝚷 )Dopt u = (I − 𝚷 )Dopt 𝚷 a = 0 for every a. (59) This is equivalent to (I − 𝚷 )Dopt 𝚷 = 0. The decoupled decay term is −𝜂𝜔 𝜽 . It lies in S exactly when 𝜔 = 0 or 
+
+𝜽 ∈ S . Adding either non-admissible component to an admissible one does not restore the constraint in general. □
+
+A two-dimensional counterexample. Let S = span ([ 1, 1]⊤) and choose the admissible direction u = [1, 1]⊤.With Dopt = diag (1, 2) and no decay, AdamW-like scaling gives 
+
+dpre = −𝜂 [1, 2]⊤,
+
+which is not in S. Equivalently, the normal vector v⊥ = [1, −1]⊤ satisfies v⊤⊥u = 0 but v⊤⊥dpre = 𝜂 ≠ 0. The example is intentionally small: the same non-commutativity occurs between a low-rank representation projector and AdamW’s element-wise preconditioner in the Lorentz head. 
+
+F.2 Lorentz Strain of a Realized Optimizer Candidate 
+
+We now specialize the mismatch to the Lorentz representation geometry. For modality 𝑚 , let Y𝑚 ∈ R𝑁 𝑚 ×𝑑 contain the old spatial coordinates as rows, and let ΔY𝑚 contain their first-order changes under the realized optimizer candidate. Define 
+
+B𝑚 = arg min  
+
+> B
+
+∥ΔY𝑚 − Y𝑚 B⊤ ∥2 
+
+> 𝐹
+
+,
+
+E𝑚 = Δ Y𝑚 − Y𝑚 (B𝑚 )⊤.
+
+(60) Thus ΔY𝑚 = Y𝑚 (B𝑚 )⊤ + E𝑚 . Write B𝑚 = S𝑚 + 𝛀 𝑚 , where S𝑚 = Sym (B𝑚 ) and 𝛀 𝑚 = Skew (B𝑚 ). For a row 𝑖 ,we use the equivalent column-vector form Δy𝑚 𝑖 = B𝑚 y𝑚 𝑖 + e𝑚 𝑖 . 
+
+> 36 Hyperbolic Multimodal Continual Learning Preprint
+
+Proposition 5 (Lorentz Defect of a Realized Step) . Under the rank condition of Theorem 1, a realized first-order change preserves Conditions (P1) –(P3) if and only if 
+
+E𝑚 = 0, S𝑚 = 0, 𝛀 𝑚 = 𝛀 𝑚 ′
+
+for every 𝑚, 𝑚 ′. (61) 
+
+Equivalently, the change is induced by one shared skew-symmetric generator. Proof. Suppose first that the realized change preserves Conditions (P1) –(P3) to first order. Proposition 1 then gives one skew-symmetric generator 𝛀 shared by all modalities, so 
+
+ΔY𝑚 = Y𝑚 𝛀 ⊤ for every 𝑚. (62) Under the stated rank condition, the least-squares generator in (60) is unique. Hence E𝑚 = 0, B𝑚 = 𝛀 , and Sym (B𝑚 ) = 0 for every modality. Conversely, suppose (61) holds. Then all modalities satisfy (62) for the same skew-symmetric matrix 𝛀 . For an old spatial coordinate y, its induced time-like derivative under the reconstruction in (4) is 
+
+¤𝑧 0 = y⊤𝛀 y√︃ 
+
+𝐾 + ∥ y∥22
+
+= 0. (63) The first-order change of a spatial inner product is likewise 
+
+(𝛀 y𝑖 )⊤y 𝑗 + y⊤ 
+
+> 𝑖
+
+(𝛀 y 𝑗 ) = y⊤ 
+
+> 𝑖
+
+(𝛀 ⊤ + 𝛀 )y 𝑗 = 0. (64) The same cancellation applies across modalities because the generator is shared. The Lorentz Gram matrices and spatial radii are therefore stationary to first order, establishing Conditions (P1) –(P3) . □
+
+A compact measure of the departure from this shared tangent direction is 
+
+DL =∑︁ 
+
+> 𝑚
+
+ ∥S𝑚 ∥2 
+
+> 𝐹
+
++ ∥ E𝑚 ∥2
+
+> 𝐹
+
+ +∑︁ 
+
+> 𝑚<𝑚 ′
+
+∥𝛀 𝑚 − 𝛀 𝑚 ′
+
+∥2 
+
+> 𝐹
+
+. (65) It vanishes exactly for a shared first-order rotation under the same assumptions. 
+
+Radial and cone-aperture drift. Let 𝑟 = ∥y∥2 and a = Sy + 𝛀 y + e. A Taylor expansion and y⊤𝛀 y = 0 give 
+
+Δ𝑟 = y⊤ (Sy + e)
+
+𝑟 + O(∥ a∥22). (66) For ℎ(𝑟 ) = sin −1 (2𝜅 /𝑟 ),
+
+ℎ′ (𝑟 ) = − 2𝜅 𝑟 √𝑟 2 − 4𝜅 2 , (67) and therefore 
+
+Δ aper (y) = − 2𝜅 𝑟 √𝑟 2 − 4𝜅 2 Δ𝑟 + O(( Δ𝑟 )2). (68) In particular, decoupled decay has local generator Bdecay = −𝜂𝜔 I. It produces Δ𝑟 = −𝜂𝜔𝑟 + O(( 𝜂𝜔 )2) and therefore increases the cone aperture to first order. This calculation is a geometric interpretation of the decay term, not an explanation of the main-table results, which use zero weight decay; Appendix H.6 separately evaluates nonzero decay. 
+
+Lorentz Gram drift. Let z𝑖 = [𝑧 𝑖, 0; y𝑖 ] and ¤z𝑖 = [ ¤ 𝑧 𝑖, 0; a𝑖 ]. The first variation of an intra- or inter-modal Lorentz product is dd𝜖 
+
+ z𝑖 + 𝜖 ¤z𝑖 
+
+⊤G z 𝑗 + 𝜖 ¤z 𝑗 
+
+  
+
+> 𝜖 =0
+
+= ¤z⊤ 
+
+> 𝑖
+
+Gz 𝑗 + z⊤ 
+
+> 𝑖
+
+G¤z 𝑗 . (69) For one shared skew generator, both time-like derivatives vanish and the spatial terms cancel. Symmetric strain, residual motion, or different modality generators remove this cancellation. Equation (69) therefore links the optimizer defect in (65) directly to the similarity matrices used by the contrastive objective. 
+
+> 37
+
+Hyperbolic Multimodal Continual Learning Preprint 
+
+F.3 Closest Projection of the Realized Step 
+
+For one modality, omit the superscript 𝑚 and split the optimizer candidate at step 𝑘 into the time-like input column 𝜹 opt  
+
+> 𝑘, 0
+
+and spatial input block 𝜹 opt 
+
+> 𝑘,𝑠
+
+. Let P = VV ⊤ be an orthogonal projector and Q = I − P. We write 
+
+𝜹 𝑘 = [ 𝜹 𝑘, 0 𝜹 𝑘,𝑠 ] for a generic displacement at the same step. On the upper sheet of H𝑑 𝐾 , zero Lorentz geodesic distance is equivalent to equality of the two points. Because the spatial block of (4) is linear in its input and the time-input parameter block is fixed, the canonical zero-motion condition used in (19) is equivalent to 𝜹 𝑘,𝑠 P = 0 and 
+
+𝜹 𝑘, 0 = 0. The following theorem and corollary establish the closest-point and finite-step preservation claims used in Theorem 2. 
+
+Theorem 5 (Closest Identity-Isometry Representative) . Among displacements satisfying 𝜹 𝑘,𝑠 P = 0 and 𝜹 𝑘, 0 = 0,the unique displacement closest to the realized optimizer candidate is 
+
+𝜹 ★𝑘,𝑠 = 𝜹 opt  
+
+> 𝑘,𝑠
+
+(I − P), 𝜹 ★𝑘, 0 = 0. (70) 
+
+Proof of Theorem 5. Every spatial matrix has the orthogonal decomposition 
+
+𝜹 opt  
+
+> 𝑘,𝑠
+
+= 𝜹 opt 
+
+> 𝑘,𝑠
+
+P + 𝜹 opt 
+
+> 𝑘,𝑠
+
+Q. (71) The two terms are orthogonal in the Frobenius inner product because PQ = 0. A feasible spatial displacement D𝑘,𝑠 
+
+satisfies D𝑘,𝑠 P = 0 and therefore D𝑘,𝑠 = D𝑘,𝑠 Q. Hence 
+
+∥D𝑘,𝑠 − 𝜹 opt  
+
+> 𝑘,𝑠
+
+∥2 
+
+> 𝐹
+
+= ∥D𝑘,𝑠 − 𝜹 opt 
+
+> 𝑘,𝑠
+
+Q∥2 
+
+> 𝐹
+
++ ∥ 𝜹 opt 
+
+> 𝑘,𝑠
+
+P∥2 
+
+> 𝐹
+
+. (72) The second term is independent of D𝑘,𝑠 , while the first is uniquely minimized by D𝑘,𝑠 = 𝜹 opt 
+
+> 𝑘,𝑠
+
+Q. The time-like constraint has the unique closest value d𝑘, 0 = 0. Combining the two blocks gives (70). □
+
+This proof is independent of how the optimizer constructs 𝜹 opt  
+
+> 𝑘
+
+. Learning rates, moment estimates, preconditioners, and decay affect the candidate, while the Lorentz-derived projection solves the same closest-point problem for the displacement actually proposed. 
+
+Corollary 8 (Exact Protected Lorentz Invariants) . If an old frozen feature x lies in the range of P𝑡 −1, the update in (70) leaves its complete Lorentz representation unchanged after each finite step: 
+
+z𝑚 𝑘 +1 (x) = z𝑚 𝑘 (x). (73) 
+
+Hence its hyperbolic relations, spatial radius, and entailment-cone aperture are unchanged. Proof of Corollary 8. Let x = P𝑡 −1x. Equation (70) gives 
+
+𝜹 ★𝑘,𝑠 x = 𝜹 opt  
+
+> 𝑘,𝑠
+
+(I − P𝑡 −1)P𝑡 −1x = 0, (74) and the time-like input block is fixed. The spatial output of the Lorentz layer is therefore identical before and after the corrected step. Its reconstructed first coordinate, which is a deterministic function of the spatial norm, is identical as well. Thus each protected Lorentz point is unchanged. Every intra- and inter-modal Lorentz Gram entry, hyperbolic distance, spatial radius, and cone aperture formed from these points is consequently unchanged. □
+
+F.4 Task-Anchored Feasible Contraction 
+
+For a protected representation system fixed throughout task 𝑡 , let A𝑡 −1 be the joint admissible family in (17). It is linear because its defining constraints are linear in the modal displacements and their shared skew generator. For a modal tuple U = (U𝑚 )𝑀 𝑚 =1, define ∥U ∥ ⊕𝐹 =   Í 𝑚 ∥U𝑚 ∥2
+
+> 𝐹
+
+1/2. Here 𝑢 max bounds the realized AdamW displacement rather than the raw gradient. Its matrix-wide value can grow with the number of modal parameters even when the per-parameter step is small; the result requires only a finite bound, not 𝑢 max ≤ 1, although a larger value makes the numerical accumulation bound looser. 
+
+38 Hyperbolic Multimodal Continual Learning Preprint 
+
+Corollary 9 (Within-Stage Admissibility and Bounded Accumulation) . Let A𝑚  
+
+> 0
+
+= 0 for every modality 𝑚 denote the initial displacement from the task-start parameters. Given optimizer candidates 𝜹 opt ,𝑡 𝑘 , let D𝑡 𝑘 = P L  
+
+> 𝑡 −1
+
+(𝜹 opt ,𝑡 𝑘 ) =
+
+(D𝑚 𝑘 )𝑀 𝑚 =1 and define 
+
+A𝑚 𝑘 +1 = (1 − 𝛽 )( A𝑚 𝑘 + D𝑚 𝑘 ), 0 ≤ 𝛽 < 1. (75) 
+
+Then {A𝑚 𝑘 }𝑀 𝑚 =1 ∈ A 𝑡 −1 for every 𝑘 . Relative to the uncontracted candidate, the task-start distance is reduced by 
+
+1 − 𝛽 . The projection is non-expansive: ∥D𝑡 𝑘 ∥⊕𝐹 ≤ ∥ 𝜹 opt ,𝑡 𝑘 ∥⊕𝐹 . If the latter is at most 𝑢 max for all 𝑘 , then 
+
+∥A𝑡 𝐽 ∥⊕𝐹 ≤ 
+
+> 𝐽 −1
+
+∑︁ 
+
+> 𝑗 =0
+
+(1 − 𝛽 )𝐽 − 𝑗 ∥D𝑡 𝑗 ∥⊕𝐹 
+
+≤
+
+
+
+𝐽𝑢 max , 𝛽 = 0,
+
+(1 − 𝛽 ) [ 1 − ( 1 − 𝛽 )𝐽 ]
+
+𝛽 𝑢 max , 0 < 𝛽 < 1,
+
+≤ 1 − 𝛽 𝛽 𝑢 max (0 < 𝛽 < 1).
+
+(76) 
+
+Proof of Corollary 9. The set A𝑡 −1 is a linear subspace, so projection places every D𝑡 𝑘 in it and induction keeps every A𝑡 𝑘 in it. As the orthogonal projection onto this subspace, P L  
+
+> 𝑡 −1
+
+is non-expansive in the joint Frobenius norm. Unrolling the recurrence gives 
+
+A𝑡 𝐽 = 
+
+> 𝐽 −1
+
+∑︁ 
+
+> 𝑗 =0
+
+(1 − 𝛽 )𝐽 − 𝑗 D𝑡 𝑗 .
+
+The triangle inequality gives the data-dependent bound in (76); substituting the proposal bound 𝑢 max and summing the geometric series gives its two stated cases. □
+
+F.5 Residual Drift under Low-Rank PCA 
+
+Let X ∈ R𝑛 × 𝑝 contain the old frozen features, and let 𝚺 = X⊤X/𝑛 have eigenvalues 𝜆 1 ≥ · · · ≥ 𝜆 𝑝 ≥ 0. Let 
+
+P𝑟 be the orthogonal projector onto the top-𝑟 eigenspace and Q𝑟 = I − P𝑟 . For the zero-rotation restriction, 
+
+D𝑘,𝑠 = D𝑘,𝑠 Q𝑟 , so 1
+
+𝑛 ∥XD ⊤ 
+
+> 𝑘,𝑠
+
+∥2 
+
+> 𝐹
+
+= 1
+
+𝑛 ∥XQ 𝑟 D⊤ 
+
+> 𝑘,𝑠
+
+∥2 
+
+> 𝐹
+
+(77) 
+
+≤ ∥ D𝑘,𝑠 ∥22
+
+1
+
+𝑛 ∥XQ 𝑟 ∥2 
+
+> 𝐹
+
+(78) 
+
+= ∥D𝑘,𝑠 ∥22∑︁ 𝑖>𝑟 
+
+𝜆 𝑖 . (79) Thus the update is exact on the retained subspace, and its mean-squared effect outside that subspace is bounded by the PCA spectral tail. This is an average-energy statement. It does not bound the worst example or the worst earlier task. The task-anchored update retains the same subspace property. The joint bound also applies to every modal block; in particular, A𝐽 ,𝑠 = A𝐽 ,𝑠 Q𝑟 . Combining (76) with (79) gives, for 0 < 𝛽 < 1, 1
+
+𝑛 ∥XA ⊤ 
+
+> 𝐽 ,𝑠
+
+∥2 
+
+> 𝐹
+
+≤
+
+ 1 − 𝛽 𝛽 𝑢 max 
+
+2∑︁ 
+
+> 𝑖>𝑟
+
+𝜆 𝑖 . (80) The geometric correction controls the retained subspace exactly, whereas the anchor and the spectral tail jointly bound the average residual motion outside that subspace. 
+
+39 Hyperbolic Multimodal Continual Learning Preprint 
+
+F.6 Pseudocode, Optimizer State, and Complexity 
+
+Algorithms 1 and 2 instantiate the same post-optimizer, task-anchored update. They differ only in the closest-admissible correction: HMCL-MR fixes the shared rotation to zero, whereas HMCL-CA estimates one rotation jointly from all modal candidates. 
+
+Algorithm 1: Optimizer-Consistent HMCL-MR 
+
+Input: Current-task data D𝑡 ; task-start Lorentz heads {W𝑚,𝑡  
+
+> 0
+
+}𝑀 𝑚 =1; protected projector P𝑡 −1; optimizer Opt; anchoring coefficient 𝛽 .
+
+Output: Final task parameters {W𝑚,𝑡 𝐽 }𝑀 𝑚 =1.
+
+for optimizer step 𝑘 = 0, . . . , 𝐽 − 1 do 
+
+Compute the HMCL loss on D𝑡 and gradients {g𝑚,𝑡 𝑘 }𝑀 𝑚 =1;Let Opt update its state and propose {fW𝑚,𝑡 𝑘 +1}𝑀 𝑚 =1;
+
+for 𝑚 = 1, . . . , 𝑀 do 
+
+𝜹 opt ,𝑚,𝑡 𝑘 ← fW𝑚,𝑡 𝑘 +1 − W𝑚,𝑡 𝑘 ;
+
+𝜹 MR ,𝑚,𝑡 𝑘, 0 ← 0, 𝜹 MR ,𝑚,𝑡 𝑘,𝑠 ← 𝜹 opt ,𝑚,𝑡 𝑘,𝑠 (I − P𝑡 −1);
+
+cW𝑚,𝑡 𝑘 +1 ← W𝑚,𝑡 𝑘 + 𝜹 MR ,𝑚,𝑡 𝑘 ;
+
+W𝑚,𝑡 𝑘 +1 ← W𝑚,𝑡  
+
+> 0
+
++ ( 1 − 𝛽 )( cW𝑚,𝑡 𝑘 +1 − W𝑚,𝑡  
+
+> 0
+
+);
+
+return {W𝑚,𝑡 𝐽 }𝑀 𝑚 =1.
+
+Algorithm 2: Optimizer-Consistent HMCL-CA 
+
+Input: Current-task data D𝑡 ; task-start Lorentz heads {W𝑚,𝑡  
+
+> 0
+
+}𝑀 𝑚 =1; protected matrices {X𝑚 , Y𝑚 }𝑀 𝑚 =1 from Appendix E.2; optimizer Opt; anchoring coefficient 𝛽 .
+
+Output: Final task parameters {W𝑚,𝑡 𝐽 }𝑀 𝑚 =1.
+
+for 𝑚 = 1, . . . , 𝑀 do C𝑚 ← Y†
+
+> 𝑚
+
+X𝑚 ;
+
+H ← Í𝑀 𝑚 =1 C−⊤  
+
+> 𝑚
+
+C−1 
+
+> 𝑚
+
+;
+
+for optimizer step 𝑘 = 0, . . . , 𝐽 − 1 do 
+
+Compute the HMCL loss on D𝑡 and gradients {g𝑚,𝑡 𝑘 }𝑀 𝑚 =1;Let Opt update its state and propose {fW𝑚,𝑡 𝑘 +1}𝑀 𝑚 =1;
+
+for 𝑚 = 1, . . . , 𝑀 do 
+
+𝜹 opt ,𝑚,𝑡 𝑘 ← fW𝑚,𝑡 𝑘 +1 − W𝑚,𝑡 𝑘 ;
+
+F𝑘 ← Í𝑀 𝑚 =1 𝜹 opt ,𝑚,𝑡 𝑘,𝑠 C−1 
+
+> 𝑚
+
+;Solve 𝛀 ★𝑘 H + H𝛀 ★𝑘 = 2 Skew (F𝑘 );
+
+for 𝑚 = 1, . . . , 𝑀 do 
+
+𝜹 CA ,𝑚,𝑡 𝑘, 0 ← 0, 𝜹 CA ,𝑚,𝑡 𝑘,𝑠 ← 𝛀 ★𝑘 C−⊤  
+
+> 𝑚
+
+;
+
+cW𝑚,𝑡 𝑘 +1 ← W𝑚,𝑡 𝑘 + 𝜹 CA ,𝑚,𝑡 𝑘 ;
+
+W𝑚,𝑡 𝑘 +1 ← W𝑚,𝑡  
+
+> 0
+
++ ( 1 − 𝛽 )( cW𝑚,𝑡 𝑘 +1 − W𝑚,𝑡  
+
+> 0
+
+);
+
+return {W𝑚,𝑡 𝐽 }𝑀 𝑚 =1.For W𝑘,𝑠 ∈ R𝑑 × 𝑝 , the HMCL-MR correction 𝜹 𝑘,𝑠 ← 𝜹 𝑘,𝑠 − ( 𝜹 𝑘,𝑠 V)V⊤ costs O( 𝑑𝑝𝑟 ) and stores O( 𝑝𝑟 ) values. The dense HMCL-CA solver adds one 𝑑 × 𝑑 Lyapunov equation per step, with O( 𝑑 3) time; a rank-𝑟 realization reduces this solve to O( 𝑟 3). The PCA basis and the task-level CA factors are estimated once per stage. The optimizer state remains the state produced by the raw gradients; for AdamW, this state includes the first- and second-moment estimates. The guarantees concern the realized parameter trajectory rather than a transported optimizer state. 
+
+40 Hyperbolic Multimodal Continual Learning Preprint 
+
+# G Additional Implementation Details 
+
+G.1 Dataset Details and Task Stream 
+
+The unified journal benchmark contains 16 datasets and mixes image–text classification with bidirectional cross-modal retrieval. 
+
+G.1.1 Classification Datasets 
+
+The classification portion includes CIFAR-10 and CIFAR-100 [72], Caltech-101 [73], ImageNet-1K [66], Food-101 [74], Flowers-102 [75], EuroSAT [76], DTD [77], FGVC Aircraft [78], MNIST [79], PCAM [80], Country211 [1], CLEVR [81], and SST-2 [82]. Collectively, these benchmarks cover coarse object categories, fine-grained recognition, textures, scenes, and language sentiment. We regard each dataset as a separate task and evaluate it using the standard image–text classification protocol. 
+
+G.1.2 Retrieval Datasets 
+
+COCO [64] and Flickr30K [65] provide the retrieval stages. Both contain paired images and captions and are evaluated in the image-to-text and text-to-image directions. 
+
+G.1.3 Task Stream Construction 
+
+The datasets follow one fixed sequential order shared by every method and random seed. At a given stage, non-replay methods optimize only on the current dataset and do not revisit examples from completed tasks. Replay-based baselines additionally access earlier tasks through their explicitly bounded memory buffers, whose capacities are reported with the method configurations. Classification and retrieval are interleaved so that the stream requires the model to alternate between different multimodal objectives. 
+
+G.1.4 Dataset Statistics 
+
+Table 7 reports the train/test sizes, number of categories where applicable, and the evaluation measure for every stage. 
+
+Table 7. Composition and statistics of the 16-stage continual multimodal benchmark.                                                                                      
+
+> Dataset Task Classes Train Test Evaluation
+> FGVC Aircraft [78] Classification 100 3,334 3,333 Accuracy Caltech-101 [73] Classification 102 2,448 6,084 Accuracy ImageNet-1K [66] Classification 1,000 1,281,167 50,000 Accuracy CIFAR-10 [72] Classification 10 45,000 10,000 Accuracy CIFAR-100 [72] Classification 100 45,000 10,000 Accuracy CLEVR [81] Classification 84,500 5,000 Accuracy Country211 [1] Classification 211 31,650 21,100 Accuracy DTD [77] Classification 47 1,880 1,880 Accuracy EuroSAT [76] Classification 10 5,000 5,000 Accuracy Flowers-102 [75] Classification 102 1,020 6,149 Accuracy Food-101 [74] Classification 101 68,175 25,250 Accuracy MNIST [79] Classification 10 48,000 10,000 Accuracy PCAM [80] Classification 2262,144 32,768 Accuracy SST-2 [82] Classification 26,920 1,821 Accuracy COCO [64] Retrieval –118,287 5,000 Recall@K Flickr30K [65] Retrieval –29,000 1,000 Recall@K
+
+G.2 Task-Order Robustness 
+
+We permute all tasks in the unified 16-task benchmark and keep the HyCoCLIP-B backbone, optimizer, training schedule, and main-table HMCL configurations fixed. The task-order RNG is independent of the five paired training 
+
+41 Hyperbolic Multimodal Continual Learning Preprint 
+
+seeds, and no hyperparameter is selected on either shuffled stream. The two orders, generated once using order seeds 2608311 and 2608312, are: 
+
+seq2: Flickr30K → MNIST → PCAM → Food-101 → EuroSAT → Caltech-101 → SST-2 → COCO →
+
+Flowers-102 → CIFAR-10 → CLEVR → Aircraft → DTD → CIFAR-100 → Country211 → ImageNet. 
+
+seq3: DTD → ImageNet → CLEVR → CIFAR-10 → Flickr30K → PCAM → Flowers-102 → EuroSAT →
+
+COCO → CIFAR-100 → Country211 → Aircraft → MNIST → Food-101 → Caltech-101 → SST-2. Table 8 reports the direct five-seed results without relative-difference rows. On seq2, HMCL MR gives the highest Overall score and BWT, while HMCL CA gives the highest final retrieval score. On seq3, HMCL CA gives the highest Overall score, while HMCL MR gives the strongest retrieval score and marginally better Overall BWT. Both complete variants retain a clear advantage over Vanilla under each permutation, showing that the main result is not tied to the canonical task order. The separate AdamW weight-decay sweep is reported in Appendix H.6. 
+
+Table 8. Task-order robustness on HyCoCLIP-B using two fixed permutations of the unified 16-task stream (mean ± sample standard deviation over five paired seeds). Classification uses top-1 accuracy, retrieval uses symmetric R@5, and BWT is final minus immediate performance. Both HMCL variants use their fixed main-table configurations; no hyperparameter is retuned for either order.                                                                                                                                  
+
+> Classification Retrieval Overall Order Method Acc ↑BWT A↑R@5 ↑BWT R5 ↑Overall ↑BWT ↑
+> seq2 Vanilla 42 .095 ±0.128 −3.890 ±0.223 62 .673 ±0.095 −10 .002 ±0.092 44 .668 ±0.104 −4.654 ±0.187 seq2 HMCL MR 45 .441 ±0.049 −0.198 ±0.054 71 .263 ±0.082 −3.997 ±0.101 48 .669 ±0.047 −0.673 ±0.051
+> seq2 HMCL CA 45 .222 ±0.020 −0.324 ±0.058 71 .351 ±0.071 −4.139 ±0.057 48 .488 ±0.016 −0.801 ±0.054 seq3 Vanilla 41 .299 ±0.168 −4.686 ±0.051 62 .551 ±0.090 −5.551 ±0.193 43 .956 ±0.147 −4.794 ±0.050 seq3 HMCL MR 45 .278 ±0.062 −0.733 ±0.088 72 .613 ±0.081 −2.141 ±0.117 48 .695 ±0.053 −0.909 ±0.065
+> seq3 HMCL CA 45 .430 ±0.070 −0.684 ±0.124 72 .397 ±0.052 −2.579 ±0.034 48 .801 ±0.064 −0.920 ±0.113
+
+G.3 Supplementary Materials for Case Study 
+
+We further visualize how continual adaptation changes the visual–semantic hierarchy learned on Flickr30K. Nouns and adjectives extracted from the dataset captions augment the candidate text pool with concepts at different abstraction levels. Starting from an image embedding, we sample 20 locations on the geodesic leading to [ROOT], the manifold origin, and compare the nearest concepts recovered by HMCL and Vanilla. Examples (1)–(3) search a joint pool of captions, nouns, and adjectives; examples (4)–(6) use captions alone. Blue rows show traversals immediately after the Flickr30K stage, while green rows show the same analysis after the full continual sequence. In these examples, HMCL gives a clearer movement from image-specific descriptions toward more general concepts. Vanilla shows less consistent results after later tasks, which is consistent with greater semantic and hierarchical drift. 
+
+42 Hyperbolic Multimodal Continual Learning Preprint 
+
+After Flickr30K After the full stream 
+
+(1) 
+
+HMCL (ours) Vanilla 
+
+A dog runs on the green grass near a wooden fence . A black and white dog is running in a grassy garden surrounded by a white fence . dog handsome sincerity fondness 
+
+[ROOT] [ROOT] 
+
+HMCL (ours) Vanilla 
+
+A dog runs on the green grass near a wooden fence . A black and white dog is running in a grassy garden surrounded by a white fence . dog aloof sincerity pleasure 
+
+[ROOT] [ROOT] 
+
+(2) 
+
+HMCL (ours) Vanilla 
+
+The man with pierced ears is wearing glasses and an orange hat . The man with pierced ears is wearing glasses and an orange hat . hat fashion fashion style 
+
+[ROOT] [ROOT] 
+
+HMCL (ours) Vanilla 
+
+The man with pierced ears is wearing glasses and an orange hat . The man with pierced ears is wearing glasses and an orange hat . fashion kind cousin new 
+
+[ROOT] [ROOT] 
+
+(3) 
+
+HMCL (ours) Vanilla 
+
+A girl in a pink shirt slides down an inflatable fun slide .Young girl sliding down an inflated slide . summer summer conventional quality 
+
+[ROOT] [ROOT] 
+
+HMCL (ours) Vanilla 
+
+A girl in a pink shirt slides down an inflatable fun slide .Young girl sliding down an inflated slide . summer summer quick material 
+
+[ROOT] [ROOT] 
+
+43 Hyperbolic Multimodal Continual Learning Preprint 
+
+After Flickr30K After the full stream 
+
+(4) 
+
+HMCL (ours) Vanilla 
+
+Numerous Asian people working behind a counter . Numerous Asian people working behind a counter . An Asian food market where a woman is picking out food . An Asian food market where a woman is picking out food . Employees at a sushi restaurant prepare for dinner time rush . A cyclist wearing a black helmet is riding by some black vans . 
+
+[ROOT] [ROOT] 
+
+HMCL (ours) Vanilla 
+
+Numerous Asian people working behind a counter . Employees at a sushi restaurant prepare for dinner time rush . An Asian food market where a woman is picking out food . A cyclist wearing a black helmet is riding by some black vans . A cyclist wearing a black helmet is riding by some black vans . Two wet dogs run into the surf at sunset . 
+
+[ROOT] [ROOT] 
+
+(5) 
+
+HMCL (ours) Vanilla 
+
+2 boys in the foreground in a karate competition and coaches in background looking on with another coach sitting at table . A young boy demonstrates karate in a gymnasium . A young boy demonstrates karate in a gymnasium . A little girl dressed in yellow splashes in a shallow pool . Man standing by a poster of religious beliefs . A child plays at a playground . 
+
+[ROOT] [ROOT] 
+
+HMCL (ours) Vanilla 
+
+2 boys in the foreground in a karate competition and coaches in background looking on with another coach sitting at table . Two people are sitting outdoors on a blanket near a tree . A young boy demonstrates karate in a gymnasium . A surfer jumps a wave . Man standing by a poster of religious beliefs . A couple enjoying a glass of white wine . 
+
+[ROOT] [ROOT] 
+
+(6) 
+
+HMCL (ours) Vanilla 
+
+A young boy is sitting on the floor trying to take off his boots . A woman wearing glasses and an orange dress is standing with another woman wearing glasses and a green dress . A young boy puts on his boots at the top of a flight of stairs . Three young men wearing hooded sweatshirts , standing at a bench . A young boy demonstrates karate in a gymnasium . A couple enjoying a glass of white wine . 
+
+[ROOT] [ROOT] 
+
+HMCL (ours) Vanilla 
+
+A young boy is sitting on the floor trying to take off his boots . An Indian girl playing a guitar . A young boy puts on his boots at the top of a flight of stairs . A couple enjoying a glass of white wine . couple enjoying a glass of white wine . Two wet dogs run into the surf at sunset . 
+
+[ROOT] [ROOT] 
+
+44 Hyperbolic Multimodal Continual Learning Preprint 
+
+# H Extended Experimental Protocol and Results 
+
+H.1 ImageNet–WordNet Protocol and Per-Task Results 
+
+We use the unified 16-task stream and metric convention defined in the main paper; Appendix G.1 gives the complete task order and dataset statistics. ImageNet-1K [66] uses its official training split and 50,000-image validation split, and each class is associated with a WordNet synset [67]. The hierarchy evaluation additionally reports TIE, LCA, ancestor Jaccard, hierarchical precision, and hierarchical recall. The per-task and pullback analyses below use HyCoCLIP-B. Its cumulative protected basis follows the 80% explained-variance rule, with retained rank after each completed task 2, 12 , 29 , 29 , 29 , 29 , 32 , 32 , 32 , 32 , 32 , 33 , 33 , 33 , 29 .
+
+For both HMCL variants, we select one fixed configuration on seed 42 using the Overall–BWT trade-off and reuse it for the remaining reported seeds. The pullback analysis below varies only its coefficient after fixing the correction family and all other training choices. 
+
+Table 9. Final performance for every task in the extended stream (five-seed mean ± sample standard deviation). COCO and Flickr30K use symmetric R@5; all other tasks use top-1 accuracy. The two HMCL rows use the complete post-AdamW task-pullback configurations from Table 1; shaded cells denote HMCL, and boldface marks the best result for each task.                                                                                                                                                                                                                                                                                                                 
+
+> Method Aircraft Caltech ImageNet C10 C100 CLEVR COCO Country211
+> Vanilla 4.94 ±0.10 74 .26 ±0.15 39 .40 ±0.06 87 .80 ±0.12 48 .52 ±0.33 14 .33 ±0.22 48 .84 ±0.20 4.48 ±0.10 EWC 5.02 ±0.12 74 .63 ±0.08 40 .04 ±0.06 88 .17 ±0.12 49 .47 ±0.29 14 .40 ±0.20 50 .17 ±0.18 4.56 ±0.09 GEM 4.99 ±0.19 75 .09 ±0.26 39 .25 ±0.12 88 .71 ±0.31 50 .60 ±0.46 15 .00 ±0.98 49 .36 ±0.21 4.62 ±0.09 C-FLAT 4.83 ±0.12 74 .03 ±0.22 38 .93 ±0.01 87 .70 ±0.13 48 .87 ±0.19 16 .80 ±0.38 49 .08 ±0.14 4.60 ±0.06 HMCL MR 5.77 ±0.11 76 .63 ±0.14 45 .70 ±0.03 89 .52 ±0.07 56 .31 ±0.11 24 .49 ±0.89 60 .12 ±0.09 5.92 ±0.01 HMCL CA 5.80 ±0.08 76 .91 ±0.11 45 .59 ±0.05 89 .57 ±0.08 56 .77 ±0.20 25 .86 ±0.50 60 .10 ±0.09 6.09 ±0.04 Method DTD EuroSAT Flickr30K Food101 MNIST Flowers PCAM SST-2
+> Vanilla 24 .49 ±0.17 41 .00 ±0.65 75 .23 ±0.19 56 .78 ±0.20 28 .47 ±1.23 31 .68 ±0.33 62 .97 ±0.17 54 .70 ±0.35 EWC 24 .57 ±0.30 40 .64 ±0.87 76 .57 ±0.15 56 .99 ±0.14 28 .45 ±0.93 31 .92 ±0.37 61 .92 ±0.16 54 .90 ±0.26 GEM 25 .96 ±0.44 47 .99 ±1.56 75 .81 ±0.19 56 .85 ±0.60 30 .04 ±1.46 31 .87 ±0.65 63 .58 ±0.91 55 .00 ±0.23 C-FLAT 24 .35 ±0.39 40 .57 ±0.78 74 .94 ±0.17 56 .34 ±0.16 27 .47 ±1.14 31 .13 ±0.23 63 .79 ±0.22 53 .89 ±0.33 HMCL MR 27 .71 ±0.28 55 .87 ±0.50 85 .48 ±0.11 61 .10 ±0.11 29 .52 ±0.47 32 .74 ±0.15 60 .80 ±0.08 55 .52 ±0.08
+> HMCL CA 27 .89 ±0.19 56 .44 ±0.33 85 .45 ±0.13 61 .46 ±0.06 30 .49 ±0.54 32 .48 ±0.15 60 .79 ±0.09 55 .35 ±0.13
+
+The two HMCL variants attain the highest final score on 15 of the 16 tasks: HMCL CA leads on ten classification tasks, while HMCL MR leads on ImageNet-1K, both retrieval datasets, Flowers102, and SST-2. C-FLAT remains strongest on PCAM. This per-task breakdown agrees with the aggregate comparison: after matching both the optimizer-step budget and the global replay capacity, HMCL’s gain is distributed across classification and retrieval rather than being driven by a small subset of tasks. The complete per-run matrices, aggregation outputs, and source provenance accompany the extended experiment artifact. 
+
+H.2 Modality-Specific Radial Contraction 
+
+As a modality-specific complement to Figure 6 in the main paper, we examine MERU-L at seed 1024 under the fixed 16-task protocol. We include every dataset with a post-task forgetting interval: all 15 old tasks in the sequence, excluding only the final SST-2 task because no later learning follows it. For each old task, we sample 500 fixed test anchors and compare their spatial norms immediately after learning that task with those at the final checkpoint after the complete sequence. This gives 7,500 image and 7,500 matched text anchors per method. Figure 8 pools these anchors across all 15 old tasks; the dashed lines mark the corresponding pooled task-end medians. Vanilla retains only 0 .87 × of the image norm and 0 .79 × of the text norm at the median. The contraction appears in the task-level medians for 14 of 15 image tasks and all 15 text tasks. In contrast, HMCL MR retains 1 .00 × and 0.99 ×, respectively, and no task-level median falls below 0 .9× for either modality. Thus, the radial component of 
+
+45 Hyperbolic Multimodal Continual Learning Preprint 1.5 2.0 2.5 3.0 3.5  
+
+> Final spatial norm ‖zspace ‖2
+> 0% 5% 10% 15% 20% 25%
+> Old-task anchors
+
+(a) Vanilla         
+
+> median retained norm Image 0.87× Text 0.79×
+> 1.5 2.0 2.5 3.0 3.5
+> Final spatial norm ‖zspace ‖2
+
+(b) HMCL MR    
+
+> Image embeddings Text embeddings Task-end median
+> median retained norm Image 1.00× Text 0.99×
+
+Figure 8. Modality-specific spatial-norm distributions after the complete MERU-L continual stream (seed 1024). The distributions pool 500 fixed test anchors from each of the 15 old tasks in the 16-task sequence; SST-2 is excluded only because it is last and has no post-task forgetting interval. Bars show final-checkpoint norms of old-task image and text embeddings, and color-matched dashed lines show their pooled task-end medians. The inset values report the median per-anchor ratio 
+
+∥zfinal ,space ∥2/∥ ztask-end ,space ∥2.
+
+forgetting is a systematic contraction, especially for text, rather than merely nondirectional displacement. We avoid calling it a collapse to the origin because the Vanilla distributions remain nondegenerate. 
+
+Scope of the guarantee. The after-AdamW MR correction exactly preserves only the retained subspace represented by V𝑡 −1. Because PCA controls average residual energy rather than the worst individual task, small drift can remain outside that subspace; the correction also leaves AdamW’s moment states unchanged. These limits explain why the empirical hierarchy drift is strongly reduced rather than identically zero. 
+
+H.3 Stage-Wise Stability–Plasticity Diagnostics 1 2 3 4 5 6 7 8 9 10 11 −0.15 −0.10 −0.05 0.00 0.05              
+
+> Mean alignment deviation
+> -0.003 -0.004 -0.074 -0.002 0.002 -0.014 0.000 -0.069 -0.010 0.001 0.000
+> Old-task alignment
+> Stage t
+> 2345678910 11 −1.5 −1.0 −0.5 0.0 0.5
+> Mean higher-order term
+> -1.174 -0.001 -0.435 -0.058 -0.003 -0.001 -0.001 -0.009 -0.013 -0.003
+> Stage t> 1
+> (a) Stability analyses. (b) Plasticity analyses.
+
+Figure 9. Stage-wise stability and plasticity diagnostics replotted from the original CMCL analysis of Liu et al. [63]. At stage 
+
+𝑡 , panel (a) reports the mean deviation of previously learned modality-pair alignment scores from their preceding reference values; deviations close to zero indicate stable old-pair alignment. For 𝑡 > 1, panel (b) reports the mean higher-order term used to assess the source plasticity condition 𝑜 (𝜂 )/ 𝜂 ≤ 0; nonpositive values satisfy that condition. These theorem-specific quantities are not BWT or task-score gains. 
+
+The old-pair alignment deviations remain between −0.074 and 0 .002 and approach zero at several stages. The higher-order terms are nonpositive throughout; after the two largest early-stage terms, their magnitudes fall below 0.06. Because this diagnostic uses the original CMCL protocol, it is included here as a theorem-specific consistency check rather than as a result on the current 16-task HMCL benchmark. 
+
+H.4 Fine-Grained Retrieval on the Modality-Extended Stream 
+
+Figure 4 in the main paper summarizes final COCO and Flickr30K retrieval in the separate modality-extension protocol, which adds one audio and one thermal retrieval task to the original continual benchmark. Table 10 
+
+46 Hyperbolic Multimodal Continual Learning Preprint 
+
+Table 10. Fine-grained final retrieval performance in the separate protocol augmented with audio and thermal tasks (mean ±
+
+standard deviation over three paired seeds). T2I and I2T denote text-to-image and image-to-text retrieval, respectively. The methods and configurations match Table 2. Boldface marks the best result for each backbone and metric; shaded cells denote HMCL.                                                                                                                                                                                                                                                                                                                                                     
+
+> (a) COCO Backbone Method T2I I2T R@1 R@5 R@10 R@1 R@5 R@10
+> MERU-L Vanilla 9.303 ±0.072 23 .844 ±0.065 32 .835 ±0.108 15 .113 ±0.114 33 .633 ±0.220 43 .773 ±0.247 HMCL MR 8.848 ±0.067 22 .787 ±0.183 31 .955 ±0.245 15 .847 ±0.121 34 .573 ±0.549 45 .353 ±0.186 HMCL CA 10 .725 ±0.120 26 .557 ±0.143 36 .344 ±0.032 18 .040 ±0.250 37 .293 ±0.239 47 .913 ±0.348
+> MERU-B Vanilla 9.491 ±0.038 23 .635 ±0.113 32 .550 ±0.195 13 .067 ±0.522 29 .293 ±0.440 38 .740 ±0.596 HMCL MR 10 .782 ±0.045 26 .439 ±0.048 36 .166 ±0.137 15 .413 ±0.140 34 .113 ±0.090 44 .540 ±0.159 HMCL CA 12 .071 ±0.067 28 .605 ±0.068 38 .408 ±0.067 17 .360 ±0.216 36 .973 ±0.046 47 .780 ±0.203
+> HyCoCLIP-B Vanilla 21 .074 ±0.212 42 .901 ±0.334 54 .318 ±0.102 34 .900 ±0.180 60 .640 ±0.322 71 .847 ±0.153 HMCL MR 20 .219 ±0.063 42 .571 ±0.264 54 .019 ±0.277 36 .927 ±0.390 62 .660 ±0.278 73 .660 ±0.223 HMCL CA 23 .843 ±0.138 47 .056 ±0.164 58 .643 ±0.077 40 .767 ±0.250 66 .833 ±0.163 76 .827 ±0.129 (b) Flickr30K Backbone Method T2I I2T R@1 R@5 R@10 R@1 R@5 R@10
+> MERU-L Vanilla 12 .713 ±0.046 29 .227 ±0.266 38 .187 ±0.280 19 .500 ±0.265 39 .100 ±0.173 49 .933 ±0.404 HMCL MR 11 .147 ±0.130 27 .200 ±0.333 36 .073 ±0.489 21 .667 ±0.306 41 .067 ±0.058 50 .933 ±0.252 HMCL CA 14 .600 ±0.160 33 .040 ±0.365 43 .147 ±0.081 22 .633 ±0.404 44 .500 ±0.100 54 .833 ±0.153
+> MERU-B Vanilla 11 .813 ±0.061 27 .773 ±0.192 36 .613 ±0.428 15 .400 ±0.265 34 .633 ±0.751 43 .267 ±0.321 HMCL MR 13 .967 ±0.142 31 .780 ±0.140 41 .300 ±0.300 18 .733 ±0.493 40 .367 ±0.503 50 .767 ±0.603 HMCL CA 16 .673 ±0.227 35 .000 ±0.087 44 .833 ±0.151 20 .367 ±0.058 43 .367 ±0.569 54 .567 ±0.252
+> HyCoCLIP-B Vanilla 45 .073 ±0.391 70 .940 ±0.308 79 .693 ±0.061 64 .433 ±0.802 86 .100 ±0.173 92 .200 ±0.100 HMCL MR 45 .860 ±0.333 72 .207 ±0.469 81 .147 ±0.225 66 .433 ±0.814 87 .100 ±0.265 92 .900 ±0.265 HMCL CA 49 .613 ±0.147 76 .160 ±0.223 84 .240 ±0.140 69 .800 ±0.346 89 .167 ±0.351 94 .000 ±0.200
+
+provides the corresponding text-to-image and image-to-text Recall@ {1, 5, 10 } means and standard deviations for all three backbones and methods. This protocol is reported separately from the unified 16-task ImageNet experiment. 
+
+H.5 Reproducibility Notes 
+
+Before continual training, we validated the complete cached feature store against the expected sample counts, feature and label shapes, and label ranges. The canonical task order is Aircraft, Caltech-101, ImageNet-1K, CIFAR-10, CIFAR-100, CLEVR, COCO, Country211, DTD, EuroSAT, Flickr30K, Food-101, MNIST, Flowers-102, PCAM, and SST-2. The paired seeds are 42, 123, 456, 789, and 1024. All main results use cached 512-dimensional backbone features. ImageNet stores 1,281,167 image features and one seven-prompt text prototype per class; class prototypes are paired to image features by label inside each minibatch. For classification tasks, AdamW uses learning rate 5 × 10 −4, zero weight decay, 10 epochs, batch size 1024, and entailment weight 0.2. Retrieval tasks use learning rate 5 × 10 −5, zero weight decay, 15 epochs, batch size 1024, and the same entailment weight. “One optimizer step per epoch” means that gradients of all minibatch losses in that epoch are accumulated before a single AdamW update; gradients are cleared only at the epoch boundary. EWC accumulates its regularized loss in the same way. GEM likewise accumulates the current and memory gradients, applies its projection once when the epoch gradient violates a constraint, and then performs one AdamW step. Thus every method receives the same epoch-level parameter-update budget. 
+
+47 Hyperbolic Multimodal Continual Learning Preprint 
+
+Let 𝜌 denote retained PCA variance. The fixed HMCL settings are MR CA backbone 𝜌 𝛽 𝑘 min 𝜌 𝛽 𝑘 min 
+
+MERU-L .60 .14 8 .65 .13 8MERU-B .70 .075 8 .70 .075 /.20 11 HyCoCLIP-B .80 .125 8 .75 .15 1where the MERU-B CA entry .075/.20 gives classification/retrieval pullback coefficients. These configurations are fixed after selection on seed 42 and then reused without change for the other four seeds. EWC uses coefficient 10 −4 and memory size 512. GEM uses margin 0.5, the exact quadprog solver, and a task-balanced global buffer capped at 512 feature pairs; after all 16 tasks it contains 32 pairs per task. C-FLAT uses Co2L contrastive distillation with power 1.0 and memory size 512, perturbation radius 𝜌 = 0.2, and first-order coefficient 𝜆 = 0.2; AdamW is its wrapped base optimizer, with base AdamW on task 1 and C-FLAT activated from task 2. DNS uses its dual-sided Euclidean null-space projection under the same task order, cached inputs, schedule, and update budget. Each run writes a task-end checkpoint and partial performance matrix, and is accepted only when all 16 tasks are complete and the matrix is a finite 16 × 16 lower-triangular array. The experiment artifact retains the per-run configurations, matrices, checkpoints, source hashes, exclusion audit, and aggregation outputs. 
+
+H.6 Robustness to AdamW Weight Decay 
+
+The main-table experiments use zero weight decay. To test whether the conclusions depend on this choice, we sweep 𝜆 ∈ { 0, 10 −4, 10 −3, 10 −2} on HyCoCLIP-B while holding all other training conditions fixed. The MR pre 
+
+control applies the minimal-rotation correction to the raw gradient before AdamW and uses no pullback. We use the distinct notation MR pre because this control is not the complete post-AdamW, pullback-equipped HMCL MR 
+
+reported in the main comparison. HMCL CA uses the fixed complete configuration from the main comparison. 
+
+Table 11. Robustness to AdamW weight decay on HyCoCLIP-B (mean ± sample standard deviation over five paired seeds). Overall averages the final scores of 14 classification and two retrieval tasks; signed BWT is final minus immediate performance, so higher is better. All conditions share the task order, learning-rate schedule, epochs, batch size, loss, and update budget; only the weight-decay coefficient 𝜆 changes. MR pre is the raw-gradient, pre-AdamW minimal-rotation control, whereas HMCL CA 
+
+uses the complete post-AdamW correction.                                                                                  
+
+> 𝜆 Overall ↑BWT ↑
+> Vanilla MR pre HMCL CA Vanilla MR pre HMCL CA
+> 043 .618 ±0.152 46 .400 ±0.182 48 .566 ±0.024 −4.186 ±0.087 −2.929 ±0.106 −0.456 ±0.051
+> 10 −443 .618 ±0.151 46 .398 ±0.181 48 .565 ±0.023 −4.185 ±0.088 −2.931 ±0.104 −0.458 ±0.050
+> 10 −343 .616 ±0.151 46 .399 ±0.183 48 .565 ±0.022 −4.186 ±0.090 −2.928 ±0.106 −0.461 ±0.054
+> 10 −243 .606 ±0.151 46 .384 ±0.180 48 .563 ±0.025 −4.191 ±0.088 −2.940 ±0.103 −0.459 ±0.051
+
+Table 11 shows negligible sensitivity throughout the tested range. From 𝜆 = 0 to 10 −2, the Overall score of MR pre remains between 46.384 and 46.400, with BWT between −2.940 and −2.928; the Overall score of HMCL CA 
+
+remains between 48.563 and 48.566, with BWT between −0.461 and −0.456, and it is strongest in every condition. The relatively mild aggregate forgetting of MR pre is concentrated in the 14 classification tasks (BWT approximately 
+
+−2.69), whereas its two retrieval tasks have BWT approximately −4.65. Hence this control confirms that minimal rotation already protects much of the old classification geometry, while the complete CA correction gives the more consistent cross-task result. Most importantly, the ordering among Vanilla, MR pre , and HMCL CA is unchanged by AdamW weight decay. 
+
+48 Hyperbolic Multimodal Continual Learning Preprint 
+
+H.7 Clean Single-Stage Training Time MERU-L MERU-B HyCoCLIP-B 050 100 150 200 250       
+
+> Training time (s)  172.4 194.6 172.7 188.5 177.4 183.1 191.4 184.3 182.0
+> Vanilla HMCL MR HMCL CA
+
+Figure 10. Clean ImageNet-1K training time at the third con-tinual stage (seed 42). Each bar is one complete synchronized 
+
+fit_task timing on a common RTX A6000 under the matched schedule; values are seconds. Jobs are serialized, and accepted runs contain no foreign GPU compute PID. 
+
+We measure method-side cost on ImageNet-1K, the third task after sequentially learning Aircraft and Caltech-101. For every backbone–method pair, seed 42 uses the same cached features, 10-epoch schedule, batch size, and epoch-level optimizer-step budget as the main comparison. The timer brackets the complete fit_task 
+
+call with CUDA synchronization. It therefore includes cached-tensor transfer to the device, optimization and, for HMCL, geometric correction, pullback, and the method’s task-end state update, while excluding disk cache loading, evaluation, and checkpoint serialization. The nine displayed jobs are run serially on the same RTX A6000. The dispatcher first waits for the preceding experiment queue to exit and then requires six consec-utive five-second samples with no compute process, at most 2% utilization, and at most 32 MiB allocated mem-ory. During a run, it records the GPU compute PIDs, utilization, memory, temperature, and power approximately once per second. The presence of any compute PID other than the timed process invalidates that attempt and triggers a fresh idle wait and retry. No displayed attempt was invalidated or retried. Figure 10 shows that Vanilla and the two HMCL variants remain in the same computational regime: all measurements lie between 172.4 and 194.6 seconds. Averaging the within-backbone ratios to Vanilla gives 1 .022 ×
+
+for HMCL MR and 1 .037 × for HMCL CA . Thus, in this clean single-run diagnostic, the complete HMCL corrections add only a small average cost relative to Vanilla. Because there is one timing run per pair, the differences below 10% should not be interpreted as a statistically resolved ranking. 
+
+H.8 Pullback Hyperparameter Analysis 
+
+We vary 𝛽 only after fixing the post-optimizer MR correction, task order, protected subspace, and all training hyperparameters. The selected setting uses 𝛽 = 0.125 from a screening grid spanning 0.05 to 0.25. Relative to the matched 𝛽 = 0.20 setting, reducing 𝛽 to 0.125 improves the Overall score by 0.6% and mean classification accuracy by 1.2%, while retrieval R@5 decreases by 2.1%. It also worsens forgetting, BWT, and final ImageNet retention. The pullback coefficient therefore selects the stability–plasticity operating point and is not treated as a method component in the main ablation. 
+
+49

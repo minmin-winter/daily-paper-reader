@@ -1,0 +1,1409 @@
+Title: MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning
+
+URL Source: https://arxiv.org/pdf/2610.01352v1
+
+Published Time: Fri, 02 Oct 2026 01:54:11 GMT
+
+Number of Pages: 42
+
+Markdown Content:
+# MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Juekai Lin ∗1,2 , Honglin Lin ∗2,3 , Yuqian Yuan 1, Xiaolong Wu 2,4 , Jie Cao 1, Liang Liang 1,
+
+Yunqi Cao 1, Yun Zhu 1, Wenqiao Zhang 1, Lijun Wu 21Zhejiang University, 2Shanghai Artificial Intelligence Laboratory, OpenDataLab, 3Shanghai Jiao Tong University, 4Tongji University Open multimodal reasoning models have benefited from large-scale reasoning supervision, yet reliable post-training remains challenging, with bottlenecks extending beyond model scaling to uneven data quality, inefficient supervision construction, imbalanced difficulty, and cross-domain interference. We introduce MMVistaReason (MVR) , an open-data and post-training recipe that addresses these challenges from three perspectives: (1) broader capability coverage ,which organizes multimodal reasoning into two complementary groups—Analytical reasoning, emphasizing structured and knowledge-intensive problem solving, and Real-World reasoning, emphasizing visual perception and spatial grounding; (2) efficient SFT and RL data construc-tion , which standardizes heterogeneous open data through staged cleaning and annotation, combines difficulty-aware cascaded teacher distillation with answer-likelihood-based trajectory selection to construct MVR-SFT-528K, and applies scale-specific frontier filtering for MVR-RL-63K; and (3) specialize-then-integrate training , which trains complementary RL experts for each reasoning group and consolidates their capabilities through multi-teacher on-policy distillation (MOPD). Our analyses reveal a capacity-dependent interaction between supervi-sion difficulty, trajectory quality, and model capacity, showing that smaller students benefit more from selected supervision while larger students are more robust to trajectory variation and mixed-domain interference. We find that mixed-domain RL introduces benchmark-level negative transfer, whereas MOPD provides more consistent capability integration, with the pre-ferred KL direction varying across model scales. Across 15 multimodal benchmarks, MVR-4B achieves an average score of 72.8, outperforming Qwen3.5-9B (Instruct) and MMFineReason-8B while using about 70% fewer samples than MMFineReason. Scaling to 9B further improves the average to 74.4, surpassing Qwen3.5-35B-A3B (Instruct). Overall, MMVistaReason demon-strates that systematic open-data construction and capacity-aware post-training provide a practical and scalable path toward reliable multimodal reasoning models. 
+
+Date: October 2, 2026 
+
+Equal Contributions: Juekai Lin, Honglin Lin 
+
+Correspondence: Lijun Wu, wulijun@pjlab.org.cn 
+
+Project: https://github.com/JackieForest/MMVistaReason 
+
+# 1 Introduction 
+
+Open multimodal reasoning has rapidly progressed from visual instruction tuning to large-scale reasoning supervision. Recent long-form reasoning datasets have substantially improved mathematical and scientific reasoning in open vision-language models (VLMs) [22, 26, 75, 35, 50, 27], as well as diagrammatic and spatial reasoning [65, 2, 32, 71]. In particular, MMFineReason (MFR) shows that carefully curated supervision enables compact VLMs to compete with much larger models, while difficulty-aware subsets can approach full-data performance. Meanwhile, advances in large language 1arXiv:2610.01352v1 [cs.CV] 1 Oct 2026 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+models (LLMs) have highlighted systematic post-training recipes, including high-quality instruction data [12, 70], rejection sampling [21, 18], verifiable feedback [5], and reinforcement learning [59]. Extending these principles to multimodal reasoning remains challenging because open multimodal data vary in visual context, quality, answerability, format, and difficulty. Therefore, reliable multimodal reasoning requires not only larger models or more data, but systematic recipes for constructing supervision, adapting it to model capacity, and integrating complementary reasoning capabilities. Despite recent progress in multimodal reasoning data construction and post-training [22, 26, 75, 65, 2], three key challenges remain: • Broader and more balanced capability coverage. Existing multimodal reasoning data are still dominated by analytical tasks such as mathematics, science, and structured visual reasoning, while real-world capabilities including perception, counting, spatial understanding, and GUI grounding receive comparatively less emphasis. A reliable multimodal reasoner should therefore develop strong and balanced capabilities across both analytical and real-world scenarios. • Data efficiency and adaptive distillation. Multimodal samples vary in difficulty and trajectory quality, while conventional pipelines often distill supervision from a single large teacher at high inference cost. Moreover, SFT and RL require different supervision: SFT benefits from reliable trajectories matched to student capacity, whereas RL favors frontier prompts that remain learnable under the current policy, motivating efficient and stage-specific data construction. • Cross-domain interference and capability integration. Training heterogeneous reasoning do-mains under a single mixed objective can introduce negative transfer across tasks [45]. While specialist models can better capture domain-specific capabilities, integrating these complemen-tary strengths into a unified generalist remains underexplored. On-policy distillation methods [1, 36] provide a promising direction for capability integration on student-generated trajectories. To address these challenges, we introduce MMVistaReason (MVR) , a systematic framework that advances existing multimodal reasoning recipes in both data construction and model optimization. We build a broader and more balanced corpus spanning two complementary groups: Analytical , covering mathematics, science, visual logic, and charts with an emphasis on structured, knowledge-intensive, and symbolic reasoning; Real-World , covering general perception, counting, spatial understanding, and GUI grounding with greater emphasis on fine-grained visual perception and spatial grounding. 
+
+For SFT , we develop a difficulty-aware cascaded distillation pipeline that identifies challenging samples and routes unresolved examples to progressively stronger same-family teachers. Verified correct trajectories are selected through Answer-Likelihood Best-of-N, yielding reliable and difficulty-stratified supervision. This enables us to study how supervision difficulty and trajectory quality interact with model capacity. For RL , we use the rollout pass rates of the SFT model at each scale to identify frontier prompts with learning potential. We balance these prompts across the Analytical and Real-World groups and train complementary RL experts specialized for each reasoning group. For MOPD , we consolidate the capabilities of both experts into a unified generalist through multi-teacher on-policy distillation, where routed experts provide token-level supervision on student-induced trajectories. We investigate both forward- and reverse-KL objectives for capability integration. Extensive experiments demonstrate the effectiveness of MMVistaReason from three perspectives. (1) 
+
+Overall performance: Across 15 multimodal benchmarks, MVR-4B achieves an average of 72.8, outper-forming Qwen3.5-9B (Instruct) and MFR-8B while using half the model size and approximately 70% fewer SFT samples than MFR. Scaling to 9B improves the average to 74.4, surpassing Qwen3.5-35B-A3B (Instruct). (2) Data construction: Our analyses reveal a capacity-dependent interaction between super-vision difficulty, data scale, and trajectory quality. Smaller students benefit more from broader selected supervision, whereas the 9B student matches full-data performance using only a 124K moderately difficult subset. Answer-Likelihood Best-of-N provides more reliable trajectory selection than random or length-based strategies across model scales. (3) Training strategy: Complementary RL experts 2MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning MMVistaReason SFT-528K                                 
+
+> Logic/Game/ Puzzle 47K General 32K Spatial 24K GUI/Web 10K
+> MMVistaReason RL-63K
+> Spatia Science l
+> General
+> Counting
+> GUI
+> +.((%1/. 5(. !*+.,+.) .2(0." 
+>   "+12%(%1/. 301 `!                     
+> #/0-' (.&* %2*"+12%  %2*"(01(  *%0$+4  
+
+Figure 1: Overview of MMVistaReason benchmark performance. Left: MMVistaReason achieves strong scores against representative baselines; right: MMVistaReason-SFT-528K and MMVistaReason-RL-63K cover diverse reasoning domains and complementary training groups. develop domain-specific strengths, while MOPD consolidates these capabilities into unified models, improving the SFT generalists from 70.8 to 72.8 at 4B and from 72.3 to 74.4 at 9B. Compared with mixed-domain RL, MOPD provides consistent improvements with reduced cross-domain interference, while the preferred KL direction varies with model scale. Together, these results validate the efficient data construction and specialize-then-integrate post-training recipes of MMVistaReason. Our contributions are summarized as follows: • We introduce MMVistaReason (MVR) , a systematic recipe suite that broadens multimodal reasoning from a narrower task focus to balanced Analytical and Real-World scenarios, with MVR-4B outperforming MFR-8B using half the model size and about 70% fewer SFT samples. • We develop an efficient SFT and RL data construction pipeline combining cascaded teacher distillation, Answer-Likelihood Best-of-N selection, and scale-specific frontier filtering to build two compact, high-quality resources: MVR-SFT-528K and MVR-RL-63K . Our analysis further reveals a capacity-dependent relationship between supervision difficulty and data scale. • We develop a specialize-then-integrate training recipe with complementary RL experts and multi-teacher on-policy distillation (MOPD), showing that it reduces mixed-domain interference and provides consistent capability integration across scales, with scale-dependent preferences between forward- and reverse-KL objectives. 
+
+# 2 Related Work 
+
+## 2.1 Multimodal Reasoning Recipes 
+
+Early multimodal training recipes primarily relied on LLM-generated visual instructions and super-vised fine-tuning over broad task mixtures, establishing general-purpose visual instruction-following capabilities [28, 24]. Subsequent studies introduced domain-specific or rationale-enriched supervision, including MathV360K, LLaVA-CoT-100K, and MAmmoTH-VL, to provide more explicit reasoning signals and improve performance in specialized scenarios [48, 65, 13]. More recent data-centric efforts further investigate the effects of context sources, data composition, reasoning quality, and difficulty-aware sample selection, shifting attention from data scaling toward deliberate curation of multimodal reasoning supervision [2, 26]. Beyond supervised fine-tuning, recent works have explored 3MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+reinforcement learning with outcome-level or step-level rewards for multimodal reasoning [17, 38, 74]. R1-Onevision and OpenMMReasoner further adopt two-stage SFT-RL pipelines, combining supervised initialization with subsequent policy optimization to improve multimodal reasoning performance [22, 68, 75]. However, existing open multimodal reasoning recipes typically optimize a single gen-eralist model over aggregated mixed-domain data, without explicitly addressing the heterogeneous capabilities required by different reasoning scenarios [26, 68, 75]. Meanwhile, controlled studies have shown that VLM fine-tuning can exhibit both positive and negative cross-task transfer, suggesting limitations of uniform joint optimization and motivating more adaptive training strategies [45]. Our work builds upon these efforts by combining systematic data construction, complementary expert specialization, and capability integration for reliable multimodal reasoning post-training. 
+
+## 2.2 Knowledge Distillation 
+
+Knowledge distillation transfers capabilities from a strong teacher to a compact student, traditionally by matching softened output distributions [14, 67]. For autoregressive models, sequence-level distillation further extends this paradigm by training students on complete teacher-generated sequences rather than independent token labels [19]. Recent LLM distillation methods explore objectives tailored for generative models, such as MiniLLM’s reverse-KL optimization [11]. In multimodal reasoning, offline distillation commonly leverages strong teachers to generate structured rationales or reasoning trajectories, which are then used as fixed supervised fine-tuning targets [65, 13, 15]. However, in practical settings, this paradigm introduces a mismatch between teacher-generated trajectories and student-induced states during autoregressive generation [1]. On-policy distillation addresses this issue by sampling trajectories from the student policy and query-ing teachers for token-level supervision on student-induced prefixes [1]. Recent studies further extend this paradigm through self-distillation, efficient prefix-level supervision, and relaxed imitation ob-jectives [77, 73, 20]. Beyond single-teacher transfer, MOPD integrates multiple domain-specific RL teachers into a unified student [36, 9, 69, 16, 51]. On-policy distillation has also been explored in multimodal models: VOLD combines GRPO with distillation from a text-only reasoning teacher, Visual-Advantage OPD emphasizes tokens containing fine-grained visual evidence, and OPOD co-ordinates specialized teachers across text, image, and audio modalities [3, 29, 78]. Building upon these advances, our work employs multi-teacher on-policy distillation to consolidate complementary real-world and analytical RL experts into unified multimodal generalists. 
+
+# 3 MMVistaReason Recipes 
+
+In this section, we present the MMVistaReason recipe framework, which consists of three components: Data Cleaning Recipe, Data Construction Recipe, Model Training and Integration Recipe. Together, they provide a unified pipeline from open-data curation to SFT and RL data construction, domain-specific RL training, and multi-teacher OPD integration. 
+
+## 3.1 Data Cleaning Recipe 
+
+We aggregate diverse open-source multimodal VQA-style datasets, which contain substantial redun-dancy and noise due to their heterogeneous origins. We therefore adopt a staged cleaning pipeline combining rule-based filtering with MLLM-assisted semantic cleaning and annotation. 
+
+Deduplication and Image Quality Filtering. We first remove redundant and visually invalid samples. For deduplication, samples with the same image and identical question-answer pairs are removed, while those sharing the same image with highly similar questions are treated as near-duplicates; different questions associated with the same image are retained. We combine image SHA-256 hashes, 4MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning Data Cleaning Recipe Data Construction Recipe Model Training and Integration Recipe 
+
+Multi-Source Data Pool 
+
+Dedup & Quality Filter MLLM-Assisted Cleaning 
+
+> MMR1
+> MMFineReason
+> Vero DeepVision PRISM SciMM
+> Other Open Sources
+
+Data Mixture 
+
+> drop near-duplicate question drop exact QA duplicates shash / pHash / CLIP
+> Unopenable | small | blank | blurry | extreme AR images
+> Language Standardization
+> Irrelevant Content Removal Answerability Filtering Instruction Refinement Answer Extraction & Canonicalization
+> category tags
+> Clean Dat Standardized and a
+
+A. Difficulty Filtering B. Cascaded SFT Trace Construction SFT Generalis C. RL Data Selection t
+
+> (Foundation for RL and MOPD)
+
+Base Model 
+
+> MMVistaReason SFT-528 K
+> RL-Analytical-39K RL-Real-World-24K
+
+MMVistaReason 
+
+> (Unified Model)
+> Real-World Expert Analytical Expert
+> GUI/Web/General/Spatial/P erception/Counting... Science/Mathematics/Logic/ Puzzle/Game/Chart/Doc...
+
+Multi-Teacher OPD  
+
+> multiple rollouts
+> Small-Weak Model
+> Difficulty Filtering via Rollout Accurac
+> (Qwen3.5-4B Inst.)
+> y
+> Cleaned Data Pool
+> RL Data Pool
+> SFT Data & Teacher Unsolved
+> Select Verifiable Short Answers and Rollout x
+> (MM Vista Reason-SFT)
+> SFT Generalist
+> 8Too Easy Too Hard Select Range Main Focus
+> Prioritize learnable samples with reliable verification
+> Qwen3.5-9B Qwen3.5-27B Qwen3.5-122B
+> Candidate Samples
+> 4 rollouts 4 rollouts 4 rollouts
+> 9B Unsolved 27B Unsolved Discarded Samples (too hard / QA noise)
+> Trajectory Selection
+> Format Valid Highest Answer Likelihood Progressive Distillation & Efficient Scaling
+> The required <think>/<answer> forma
+> MV
+> MV
+> MVR-SFT-355K R-SFT-124K R-SFT-49K
+> tcorrect answer Trajectorie with verified
+> Correct Answer
+> sThe correct trajectory with the highest likelihood
+
+Figure 2: Overview of the MMVistaReason Recipes. It introduces a unified pipeline covering data cleaning, reasoning trace construction, reinforcement learning, and multi-teacher integration, enabling scalable training of reliable multimodal reasoning models from open data. perceptual hashes (pHash), and CLIP-based semantic similarity for duplicate detection. We further discard corrupted, low-resolution, blank, blurry, or extreme-aspect-ratio images. 
+
+MLLM-Assisted Cleaning and Annotation. We then employ Qwen3.5-122B-A10B, a strong multi-modal model, to perform semantic-level cleaning and normalization through six steps: • Language Standardization. Translate non-English questions into English while preserving formulas, variables, option labels, units, and visual identifiers. • Irrelevant Content Removal. Remove unrelated links, advertisements, watermarks, problem indices, score annotations, and other distracting artifacts. • Answerability Filtering. Remove samples that cannot be reliably answered from multimodal input, such as incomplete questions, external action requirements, or non-answering tasks. • Instruction Refinement. Rewrite low-quality meta-instructions that unnecessarily discourage reasoning, while preserving the original task semantics. • Answer Extraction. Extract the final answer from noisy answer fields containing text or interme-diate reasoning, providing clean targets for subsequent normalization and verification. • Answer Canonicalization. Normalize answers into consistent and verifiable forms, particularly by recovering option labels for multiple-choice questions whose answers contain option content. 
+
+Data Annotation and Standardization. After cleaning, we annotate each sample with its reasoning domain and question type, providing structured labels for subsequent domain-aware data organization and sampling. We then convert all samples into a unified schema containing normalized image-question-answer fields, annotation labels, and source metadata (representative data examples are provided in Appendix D). This standardized representation enables consistent difficulty filtering, reasoning-trace construction, balanced sampling, and downstream SFT and RL training. 5MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning Dedup + Quality Control Raw Pool            
+
+> 2.2M 1.9M
+> Image Quality Filter
+> 294K 1.7M
+> Qualified Pool
+> 741K Difficulty Filtering
+> Difficulty Filter
+> 977K
+> 9B SFT Data
+> 355K
+> 27B SFT Data
+> Remaining Pool
+> 387K 124K
+> Remaining Pool
+> 122B SFT Data
+> 263K
+> RL Data
+> SFT-Unselected
+> 214K 63K
+> Real-world
+> 23.6K
+> Analytical
+> 39.5K
+> Domain Allocation across Distillation Subsets CoT Token Length Distribution across Domains
+> MVR-SFT-355K MVR-SFT-124K
+> 100%
+> Science 10.3% N=175K
+> Mathematics Logic/Game/Puzzle
+> 6,144 5,120 4,096 3,072 7,168 2,048 1,024
+> Token Count (Qwen3.5 Tokenizer)
+> 10 0
+> N=10K
+> Share of Each Domain
+> 50% 75%
+> MVR-SFT-49K
+> 0% 25%
+> Chart/Table/Doc 8.8%
+> 0.05 1
+> N=109K
+> General 14.5% N=32K
+> Spatial 14.9%
+> 0.5
+> N=24K
+> GUI/Web
+> 8,192
+
+MVR-SFT-49K 
+
+> 3389 (5.4%)
+> 0.125
+> 91 (0.1%)
+> 0.25
+> 6781 (10.8%)
+
+MVR-SFT-355K 
+
+> 36163 (57.3%)
+> 0.375
+> 19726 (31.3%)
+> Percentage of Samples
+> 0.5
+> 22422 (35.5%)
+
+Teacher-Unsolved 
+
+> 12071 (19.1%)
+
+MVR-SFT-124K 
+
+> 11479 (18.2%)
+> 0.625
+> 10750 (17.0%)
+> 0.75
+> 3280 (5.2%)
+> Science Mathematics Logic/Game/Puzzle Chart/Table/Doc General Spatial GUI/Web
+> 0.875
+> 52 (0.1%)
+
+(a) Data Filtering and Balancing Pipeline (b) SFT / RL Data Statistics 
+
+> 49K
+
+Post-SFT Mastery        
+
+> (pass rate)
+> Median
+> 5.3% N=131K
+> 4.9% N=47K
+> 64.1% 25.6% 22.5% 72.2% 73.2% 21.9% 22.7% 68.5% 17.6% 67.9% 58.1% 27.0% 34.9% 26.8% 38.3%
+> MLLM Clean MLLM Filter
+> 205K
+
+RL Data Source 
+
+Figure 3: Data flow and statistics of MMVistaReason. (a) Data filtering and balancing from the raw pool to SFT and RL data. (b) Statistics of MMVistaReason datasets. 
+
+Dataset Distill-model #Samples Tokens Mean Std. Median P25 P75 P95 Min Max 
+
+MVR-SFT-355K Qwen3.5-9B 354,886 631.72M 1,780.06 2,203.43 900 436 2,195 6,316 26 16,374 MVR-SFT-124K Qwen3.5-27B 124,010 309.30M 2,494.13 3,290.11 1,031 440 2,998 10,414 45 16,375 MVR-SFT-49K Qwen3.5-122B 48,913 103.04M 2,106.55 3,120.21 670 340 2,313 9,657 39 16,381 
+
+MVR-SFT-528K All 527,809 1.04B 1,978.09 2,607.77 906 426 2,359 7,625 26 16,381 
+
+Table 1: Statistics of MMVistaReason (MVR)-SFT-528K and its sub-datasets. Each sub-dataset is distilled from the teacher model that first solves the sample in the cascaded rejection sampling pipeline. Token statistics are computed over model responses using the Qwen3.5 tokenizer. 
+
+## 3.2 Data Construction Recipe 
+
+Based on the cleaned data pool, we construct MMVistaReason-SFT-528K and MMVistaReason-RL-63K for subsequent model training, with the latter comprising scale-specific RL subsets for 4B and 9B models. For trajectory verification, all generated responses are judged by Qwen3.5-27B , prioritizing answer correctness while also considering overall reasoning consistency. 
+
+SFT Data Construction. We construct SFT trajectories with a difficulty-aware cascaded pipeline , first filtering trivial samples and assigning harder samples to progressively stronger teachers. This design focuses supervision on challenging examples while reducing unnecessary calls to large teacher models. We first use Qwen3.5-4B (Instruct) for model-aware difficulty filtering . For each sample z = ( x, a), we generate four responses and compute the verified pass rate: 
+
+p4B (z) = 14
+
+4
+
+# ∑
+
+k=1
+
+V(yk, a),where V(·) denotes the verification function. We retain only samples with p4B (z) = 0, i.e., those that fail all four rollouts, thereby filtering out trivial samples before reasoning-trace construction. For the retained hard samples, we apply cascaded rejection sampling with progressively stronger same-family teachers: Qwen3.5-9B, 27B, and 122B (instruct mode). For each sample z = ( x, a), teacher 
+
+Tj generates K = 4 responses, and the verified correct set is defined as 
+
+Yj(z) = {yj,k | V(yj,k, a) = 1, k = 1, . . . , K}.6MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+The sample is assigned to the first teacher that produces at least one correct response: 
+
+j∗(z) = min {j | |Y j(z)| > 0}.Samples that remain unsolved by all teachers are discarded, as they may be overly difficult, ambiguous, or noisy. For the selected teacher, we further perform Answer-Likelihood Best-of-N trajectory selection. We first retain trajectories with verified correct answers and valid response formats, requiring complete <think>...</think> reasoning and <answer>...</answer> final-answer tags. If only one valid trajectory remains, it is directly selected. When multiple valid trajectories are available, we rank them by the normalized log-likelihood of the final answer tokens under the corresponding teacher: 
+
+y∗(z) = arg max   
+
+> y∈eYj∗(z)
+
+1
+
+|a|
+
+> |a|
+
+# ∑
+
+> t=1
+
+log pTj∗ (z) (at | x, ry, a<t),where eYj∗ (z) denotes the set of correct and format-valid trajectories, and ry denotes the reasoning trace preceding the final answer. This normalization reduces the bias introduced by answer length and favors trajectories that more confidently support the verified final answer. The selected reasoning trajectories constitute MMVistaReason-SFT-528K , comprising three subsets constructed by Qwen3.5-9B, 27B, and 122B through the cascaded pipeline with reduced inference cost. 
+
+RL Data Construction. For RL data construction, we start from the hard pool retained by the 4B difficulty filter, ensuring non-trivial candidates. We remove samples with overly long or difficult-to-verify answers for reliable correctness evaluation. We then use the corresponding SFT-trained model 
+
+π(s) 
+
+> SFT
+
+at each scale s to identify frontier samples that the current policy solves inconsistently. For each answer-verifiable sample z = ( x, a), we generate eight rollouts and compute the verified pass rate: 
+
+p(s)
+
+> SFT
+
+(z) = 18
+
+> 8
+
+# ∑
+
+> i=1
+
+V(yi, a), yi ∼ π(s)
+
+> SFT
+
+(· | x),where V(·) denotes the verification function. We retain samples within scale-specific frontier interval: 
+
+D(s) 
+
+> frontier
+
+=
+
+n
+
+z | τlow ≤ p(s)
+
+> SFT
+
+(z) ≤ τhigh 
+
+o
+
+.In practice, with eight rollouts, we retain samples solved between one and seven times, while prioritiz-ing those solved two to six times. This removes fully failed samples, which are often overly difficult or noisy, and fully solved samples, which provide limited additional learning signals. According to the reasoning characteristics of tasks, we perform balanced sampling across reasoning domains at each scale and organize the selected frontier samples into two complementary groups: 
+
+D(s) 
+
+> RL
+
+= D(s) 
+
+> real-world
+
+∪ D (s)
+
+> analytical
+
+.Here, D(s) 
+
+> real-world
+
+covers general and spatial visual reasoning, including perception, counting, GUI-related tasks, and real-world visual scenarios, while D(s) 
+
+> analytical
+
+includes mathematics, science, log-ic/puzzle, and chart/document reasoning. The resulting scale-specific subsets form MMVistaReason-RL-63K , which is used to train the complementary RL experts and multi-teacher OPD. 
+
+Data Analysis. Figure 3 summarizes the overall data flow and statistics of MMVistaReason. For the SFT corpus, different teacher-derived subsets and reasoning domains show clear diversity. The three subsets are not simply scaled replicas: MVR-SFT-355K dominates most reasoning-intensive do-mains, contributing 64.1–73.2% of Science, Mathematics, Logic/Game/Puzzle, and Chart/Table/Doc, 7MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+whereas MVR-SFT-49K places greater emphasis on GUI/Web (38.3%) and MVR-SFT-124K contributes relatively more to Spatial data (27.0%). This complementary allocation indicates that cascaded teacher distillation provides supervision with varying domain coverage and reasoning complexity beyond data scale. At the domain level, Science, Mathematics, and Chart/Table/Doc together account for 78.61% of the corpus. Mathematics and Logic/Game/Puzzle generally contain longer reasoning traces, while General and GUI/Web are much shorter. Overall, MMVistaReason-SFT covers diverse reasoning formats, ranging from short-form visual understanding to long-form analytical reasoning. For the RL data, we analyze its source composition and Post-SFT Mastery distribution across the scale-specific subsets. MVR-RL-63K is mainly drawn from the three SFT-derived subsets, which together contribute 80.9%, while Teacher-Unsolved accounts for 19.1%. This indicates that RL training is not simply a continuation over SFT data, but also introduces frontier samples that were not converted into verified SFT trajectories by teacher distillation. We define Post-SFT Mastery as the pass rate of the corresponding SFT model over eight rollouts. Most RL samples fall into the middle mastery range of 0.375–0.625, accounting for 83.83% of the RL set. These samples are neither trivial nor nearly unsolvable; instead, they are cases where the corresponding SFT model can sometimes answer correctly but has not mastered the reasoning process stably. Therefore, MVR-RL focuses on policy-relative frontier examples suitable for further expert specialization through reinforcement learning. Overall, the SFT corpus provides broad and diverse reasoning supervision, while the RL corpus focuses on post-SFT frontier samples with remaining improvement potential. This complementary design supports our staged training recipe: SFT first builds general multimodal reasoning ability, and RL further strengthens unstable reasoning behaviors. 
+
+## 3.3 Model Training and Integration Recipe 
+
+Full-data SFT. We first train unified reasoning models on the full MMVistaReason-SFT-528K corpus. Given an input x and its selected reasoning trajectory y, the SFT objective is 
+
+LSFT = −E(x,y)∼D SFT log πθ (y | x).This stage establishes a general multimodal reasoning policy that serves as the initialization for subsequent expert specialization and capability integration. 
+
+Expert Specialization via RL. Starting from the corresponding SFT model, we train two complementary RL experts on scale-specific subsets of MMVistaReason-RL-63K , corresponding to Real-World Visual Reasoning and Analytical Visual Reasoning. For each model scale s and reasoning group g ∈{real-world, analytical }, we initialize the expert from π(s) 
+
+> SFT
+
+and optimize it on the subset: 
+
+π(s) 
+
+> ϕg
+
+← RL 
+
+
+
+π(s)
+
+> SFT
+
+, D(s,g)
+
+> RL
+
+
+
+.We adopt Group Sequence Policy Optimization (GSPO) [79], which performs policy optimization with sequence-level importance ratios to reduce the token-level importance bias in GRPO and improve overall training stability. The optimization objective is defined as: 
+
+JGSPO (ϕg) = E
+
+"
+
+1
+
+G
+
+> G
+
+# ∑
+
+> i=1
+
+min 
+
+
+
+si(ϕg) bAi, clip  si(ϕg), 1 − ϵ, 1 + ϵ bAi
+
+#
+
+,where si(ϕg) denotes the importance ratio computed from the sequence likelihood, bAi is the group-relative advantage estimate, and ϵ is the clipping threshold for stable optimization. For reward computation, we extract the final answer enclosed by the <answer>...</answer> tags from each rollout and use Qwen3.5-27B as an LLM judge to evaluate its correctness against the normalized reference answer. The resulting judgment is used as the reward signal for policy optimization. 8MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning Multi-Teacher On-Policy Distillation. After obtaining the complementary RL experts, we integrate their specialized capabilities back into the unified SFT model through multi-teacher on-policy distil-lation (MOPD) . The student is initialized from the SFT generalist and generates responses using its current policy. For expert routing, each training sample is assigned to the corresponding Real-World or Analytical expert according to its reasoning group. Rather than generating independent teacher trajectories, the selected expert evaluates the prefixes actually visited by the student and provides token-level distributional supervision on these on-policy states. Specifically, for each student prefix st = ( x, y<t), the routed expert πϕg provides its top-K token probabilities. The student probabilities are evaluated on the same teacher-selected token support, allowing the student to absorb the distributional preferences of the expert. We consider both forward-and reverse-KL objectives on the teacher-selected top-K token support, with the core forms: 
+
+LFKL = 1
+
+|y|
+
+> |y|
+
+# ∑
+
+> t=1
+
+# ∑ 
+
+> v∈T gt
+
+πϕg (v | st) log πϕg (v | st)
+
+πθ (v | st) , LRKL = 1
+
+|y|
+
+> |y|
+
+# ∑
+
+> t=1
+
+# ∑ 
+
+> v∈T gt
+
+πθ (v | st) log πθ (v | st)
+
+πϕg (v | st) .Here, g ∈ { real-world, analytical } denotes the reasoning group used for expert routing, and T gt
+
+denotes the top-K token support selected by the routed expert πϕg at prefix st. Following MOPD [36], Reverse-KL further applies a correction for top-K truncation bias. We investigate both forward- and reverse-KL objectives to study how different distribution-matching directions affect the integration of complementary expert capabilities into the final MMVistaReason models. 
+
+# 4 Experiments 
+
+## 4.1 Experimental Setup 
+
+Supervised Fine-Tuning. We initialize the model from Qwen3.5-Base and perform supervised fine-tuning on MMVistaReason-SFT-528K using LLaMA-Factory [80]. All training responses follow the 
+
+<think>...</think> and <answer>...</answer> format to encourage structured reasoning. 
+
+Reinforcement Learning. We train complementary RL experts with VeRL [47] on scale-specific subsets of MMVistaReason-RL-63K , corresponding to Real-World and Analytical Reasoning. We optimize both experts with GSPO using a global batch size of 256 and sample 8 rollouts per training example. 
+
+On-Policy Distillation. We perform MOPD with VeRL [47] to integrate the Real-World and Analytical experts into a unified model. The student is initialized from the SFT model, and each sample is routed to its corresponding expert for teacher-top-K supervision on student trajectories, with K = 32. 
+
+Evaluation and Benchmarks. We evaluate all models with VLMEvalKit [7] on diverse multimodal benchmarks. We use greedy decoding with temperature set to 0 and set the maximum generation length to 16,384 tokens. We report both domain-level scores and overall average performance. To ensure a comprehensive assessment, we evaluate our model across 15 multimodal benchmarks spanning two key reasoning categories: • Real-World Visual Reasoning: covers diverse real-world visual understanding capabilities, including GUI interaction, general VQA, spatial reasoning, visual perception, and counting. We evaluate on OSWorld-G [64], CV-Bench-2D [53], CV-Bench-3D [53], MMBench-EN [31], RealWorldQA [61] and CountBenchQA [41]. • Analytical Visual Reasoning: focuses on structured and knowledge-intensive reasoning, includ-ing science, mathematics, logic/puzzle, and chart/document reasoning. We evaluate on Scien-tists’ First Exam (SFE) [81], MMMU val [72], ScienceQA [34], MathVista mini [35], MathVerse mini 
+
+[76], LogicVista [63], VisuLogic [66], ChartQA [37], and CharXiv reas. [57]. 9MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Table 2: Comparison of MMVistaReason (MVR) models with representative closed-source, open-weight, and open-source VLMs across diverse multimodal benchmarks.                                                                                                                                                                                                             
+
+> Benchmarks Closed-source VLMs Open-weight VLMs Open-source VLMs Ours Gemini-3 Flash GPT-5.1 Qwen3.5-9B (Instruct) Qwen3.5-35B A3B (Instruct) InternVL3.5 30B-A3B InternVL3.5 241B-A28B OMR 7B MFR 4B MFR 8B MVR 4B MVR 9B
+> OSWorld-G 65.4 62.6 60.4 62.8 45.7 54.9 32.8 41.4 48.3 58.5 64.8 CV-Bench-2D 84.6 83.0 82.9 79.4 80.3 81.2 76.9 79.2 80.2 82.4 83.2 CV-Bench-3D 92.8 91.6 91.3 93.1 87.8 89.3 84.0 89.1 90.8 91.8 92.4 MMBench-EN 91.5 89.6 90.5 92.1 85.2 87.8 88.3 88.8 89.5 90.6 92.2 RealWorldQA 80.9 79.1 76.8 76.7 72.3 75.2 68.8 74.6 75.2 77.4 77.4 CountBenchQA 95.3 91.8 89.5 92.1 84.7 90.4 81.9 87.1 88.1 91.5 92.8
+> Real-World Avg. 85.1 83.0 81.9 82.7 76.0 79.8 72.1 76.7 78.7 82.0 83.8 SFE 30.5 27.1 18.8 22.3 20.7 19.6 11.2 15.7 17.0 19.8 20.7 MMMU val 77.2 77.6 69.2 76.1 69.4 73.3 57.6 69.6 71.2 71.8 73.6 ScienceQA 98.7 96.9 97.1 98.2 97.7 98.2 96.9 96.3 97.2 96.8 97.4 MathVista mini 85.4 83.9 82.1 84.2 75.6 82.7 79.3 80.5 82.1 82.4 83.6 MathVerse mini 83.3 80.7 76.9 80.6 61.8 68.5 63.7 78.7 80.4 79.7 82.4 LogicVista 70.2 68.2 65.1 68.5 53.9 66.7 51.9 66.9 68.5 66.4 68.5 VisuLogic 34.7 31.9 28.9 30.1 28.8 29.1 26.0 29.4 29.8 29.0 30.2 ChartQA 88.0 85.7 85.1 86.3 82.1 83.4 84.1 84.2 85.1 86.2 87.6 CharXiv reas. 75.6 69.5 67.2 69.6 46.7 47.6 49.1 58.2 60.8 66.9 68.8
+> Analytical Avg. 71.5 69.1 65.6 68.4 59.6 63.2 57.8 64.4 65.8 66.6 68.1
+> Overall Avg. 76.9 74.6 72.1 74.1 66.2 69.9 63.5 69.3 70.9 72.8 74.4
+
+Baselines. Our baselines fall into three main categories for comprehensive comparison: (1) Closed-source VLMs , including Gemini-3-Flash [10] and GPT-5.1 [39]; (2) Open-weight VLMs (Instruct mode), including Qwen3.5-9B [44], Qwen3.5-35B-A3B [43], InternVL3.5-30B-A3B [56], and InternVL3.5-241B-A28B [56]; (3) Open-source Reasoning VLMs , including OpenMMReasoner (OMR)-7B [75], MMFineReason (MFR)-4B [26], and MMFineReason (MFR)-8B [26]. 
+
+## 4.2 Main Results 
+
+Table 2 compares MMVistaReason models with representative closed-source, open-weight, and open-source VLMs. MMVistaReason achieves strong performance at both scales, with overall averages of 
+
+72.8 and 74.4 for the 4B and 9B models, respectively. Despite its compact scale, MMVistaReason-4B outperforms MFR-8B by 1.9 points and Qwen3.5-9B (Instruct) by 0.7 points. Scaling to 9B further improves performance, surpassing the much larger Qwen3.5-35B-A3B (Instruct) by 0.3 points and approaching GPT-5.1, demonstrating strong parameter efficiency and scalability. 
+
+Strong Real-World Visual Reasoning. MVR-4B achieves a Real-World average of 82.0 , outperforming MFR-8B by 3.3 points, with notable gains on OSWorld-G ( 58.5 , +10.2) and CountBenchQA ( 91.5 ,+3.4). Scaling to 9B further raises the average to 83.8 , surpassing Qwen3.5-35B-A3B (Instruct) by 1.1 points, with particularly strong results on OSWorld-G ( 64.8 ) and CountBenchQA ( 92.8 ). These results demonstrate strong and scalable capabilities across diverse real-world visual reasoning tasks. 
+
+Competitive Analytical Visual Reasoning. MVR-4B achieves an Analytical average of 66.6 , outper-forming Qwen3.5-9B (Instruct) and MFR-8B by 1.0 and 0.8 points, respectively. Scaling to 9B further improves the average to 68.1 , approaching the much larger Qwen3.5-35B-A3B (Instruct). Notably, MVR-9B achieves 82.4 on MathVerse mini , surpassing the 35B model and GPT-5.1, while reaching 87.6 
+
+on ChartQA. These results demonstrate strong analytical reasoning with high parameter efficiency. 
+
+Broad Generalization across Diverse Multimodal Scenarios. Across 15 diverse multimodal bench-marks, MMVistaReason demonstrates broad coverage across both Real-World and Analytical scenarios. Its consistent and balanced performance shows that the gains are not confined to a single domain, but extend across perception, spatial understanding, science, mathematics, logic, and chart reasoning. 10 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Table 3: Performance comparison across different model scales and training stages on multimodal benchmarks. The best result within each model scale is highlighted in bold. Inst. and Think. denote the instruct and thinking modes of the Qwen3.5 models, respectively.                                                                                                                                                                                                
+
+> Benchmark 4B Models 9B Models Base Inst. Think. SFT MOPD Base Inst. Think. SFT MOPD
+> OSWorld-G 41.5 52.0 54.2 54.0 58.5 43.2 60.4 62.6 59.9 64.8
+> CV-Bench-2D 80.9 82.7 82.1 80.8 82.4 81.8 82.9 83.1 80.3 83.2
+> CV-Bench-3D 91.2 90.5 91.9 90.6 91.8 91.6 91.3 92.6 91.8 92.4 MMBench-EN 89.8 90.2 90.0 90.1 90.6 91.0 90.5 90.8 91.7 92.2
+> RealWorldQA 75.2 75.0 77.9 73.9 77.4 75.3 76.8 79.0 75.2 77.4 CountBenchQA 84.7 87.3 92.6 88.7 91.5 87.3 89.5 94.3 90.7 92.8
+> Real-World Avg. 77.2 79.6 81.4 79.7 82.0 78.4 81.9 83.7 81.6 83.8
+> SFE 16.6 20.1 19.6 17.8 19.8 16.9 18.8 20.1 18.2 20.7
+> MMMU val 63.9 67.1 70.0 70.7 71.8 67.3 69.2 72.8 71.4 73.6
+> ScienceQA 94.2 95.8 97.1 96.2 96.8 95.3 97.1 97.2 96.9 97.4
+> MathVista mini 75.4 81.5 83.5 80.4 82.4 79.2 82.1 83.8 82.1 83.6 MathVerse mini 66.3 73.3 76.4 78.3 79.7 72.0 76.9 81.9 80.9 82.4
+> LogicVista 58.1 62.9 68.5 65.1 66.4 61.7 65.1 69.4 66.0 68.5 VisuLogic 21.3 27.8 29.2 28.1 29.0 22.5 28.9 31.2 28.8 30.2 ChartQA 82.6 85.2 85.1 83.9 86.2 85.6 85.1 87.2 85.1 87.6
+> CharXiv reas. 57.9 65.1 66.3 63.6 66.9 62.8 67.2 69.0 65.6 68.8
+> Analytical Avg. 59.6 64.3 66.2 64.9 66.6 62.6 65.6 68.1 66.1 68.1 Overall Avg. 66.6 70.4 72.3 70.8 72.8 68.9 72.1 74.3 72.3 74.4
+
+Notably, both 4B and 9B models maintain strong performance across heterogeneous tasks, highlighting the effectiveness and scalability of our unified post-training recipe. 
+
+## 4.3 Performance across Training Stages 
+
+Table 3 compares different training stages across 4B and 9B model scales. Overall, our training recipe consistently improves performance across diverse multimodal benchmarks. At both scales, the SFT models surpass their corresponding Qwen3.5 (Instruct) counterparts. The final MMVistaReason-4B achieves an overall average of 72.8 , outperforming Qwen3.5-4B (Thinking), while MMVistaReason-9B reaches 74.4 , performing on par with and slightly surpassing Qwen3.5-9B (Thinking). 
+
+SFT Establishes a Strong Reasoning Foundation. Starting from Qwen3.5-Base models, our SFT models improve the overall average from 66.6 to 70.8 at 4B and from 68.9 to 72.3 at 9B, both surpassing their corresponding Qwen3.5-Instruct models. At 4B, the gains over the Instruct model are pronounced on reasoning-intensive benchmarks, including MMMU val (67.1 →70.7), MathVerse mini (73.3 →78.3), and LogicVista (62.9 →65.1), with similar trends observed at 9B. These results suggest that our curated SFT trajectories consistently strengthen analytical reasoning and generalize well across model scales, providing a strong foundation for subsequent reinforcement learning. 
+
+MOPD Further Integrates Complementary Capabilities. After RL expert specialization and MOPD integration, MMVistaReason improves the overall average from 70.8 to 72.8 at 4B and from 72.3 to 74.4 
+
+at 9B. The gains are consistent across both reasoning groups, with Real-World averages improving from 79.7 to 82.0 and 81.6 to 83.8, and Analytical averages from 64.9 to 66.6 and 66.1 to 68.1, respectively. Notable gains over the SFT models appear on OSWorld-G (+4.5/+4.9), RealWorldQA (+3.5/+2.2), and CharXiv reas. (+3.3/+3.2) at 4B/9B. These results indicate that expert specialization followed by MOPD effectively consolidates complementary capabilities into stronger unified models across scales. 11 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 0 49K 124K 355K 528K  
+
+> Number of SFT Samples
+> 62 64 66 68 70 72 74
+> Average Score (%)
+> Model Capacity
+> 2B Params 4B Params 9B Params
+> 49K 124K 355K 528K Training Data Scale
+
+Figure 4: Data scale and performance trade-off across different student model capacities. 
+
+## 4.4 Further Analysis 
+
+To further examine the effectiveness and robustness of our proposed framework, we conduct a series of in-depth analyses from multiple perspectives. These studies provide additional insights into the key design choices and training behaviors of MMVistaReason. 
+
+Data Scale and Performance Trade-off. Figure 4 investigates the relationship among SFT data scale, supervision difficulty, and student model capacity. To analyze the effect of model capacity, we fine-tune Qwen3.5-2B-Base, Qwen3.5-4B-Base, and Qwen3.5-9B-Base on different SFT subsets under identical training settings. We compare MVR-SFT-49K, MVR-SFT-124K, and MVR-SFT-355K, which are constructed from different teachers in the cascade, together with the full mixed dataset MVR-SFT-528K. These subsets differ not only in scale, but also in teacher source and sample difficulty, allowing us to further examine how data scale and supervision difficulty interact with student model capacity. For smaller models, broader supervision spanning multiple difficulty levels brings consistent gains. The 2B model improves from 63.9 on the 49K subset to 65.6 on the full 528K mixture, while the 4B model improves from 69.8 to 70.8, surpassing the Qwen3.5-4B-Instruct baseline of 70.4. Notably, the 49K subset is generated by the strongest 122B teacher and consists of more difficult samples that cannot be solved by the preceding teachers. However, using this subset alone yields relatively weak performance for both the 2B and 4B students. This suggests that high-quality yet overly difficult supervision may not be fully absorbed by smaller students; compared with training only on the hardest reasoning trajectories, the full mixture with multiple difficulty levels is better suited to compact models. In contrast, the 9B model exhibits a non-monotonic trend. The 124K subset generated by the 27B teacher achieves an overall score of 72.3 , matching the full 528K mixture while outperforming the 355K subset at 71.7 and the Qwen3.5-9B (Instruct) baseline at 72.1. In particular, the 355K subset is generated by a teacher of the same 9B scale. Despite being the largest individual subset, it provides only limited gains for the 9B student, suggesting that samples already solvable by a same-capacity teacher may offer insufficient additional supervision. By contrast, moderately harder supervision from the stronger 27B teacher enables the 9B student to match full-data performance with only 124K 12 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning OSWorld-G MMBench RealWorldQA CountBenchQA CV-Bench-2D CV-Bench-3D SFE MMMU-Val ScienceQA MathVista MathVerse LogicVista VisuLogic ChartQA CharXiv-Reas.      
+
+> 0.75
+> 0.50
+> 0.25
+> 0.00 0.25 0.50 0.75 1.00
+> +0.4
+> +0.3
+> +0.4
+> +0.6
+> +0.1
+> -0.2
+> +0.4
+> +0.5
+> -0.2
+> +1.1
+> +0.2 +0.2
+> -0.2
+> +0.4
+> -0.4 -0.4
+> -0.1
+> +0.1
+> -0.2
+> +0.1
+> +0.2 +0.2
+> +0.3 +0.3
+> +0.7
+> +0.4
+> +0.5
+> +0.0 +0.3
+> -0.2
+> OSWorld-G MMBench RealWorldQA CountBenchQA CV-Bench-2D CV-Bench-3D SFE MMMU-Val ScienceQA MathVista MathVerse LogicVista VisuLogic ChartQA CharXiv-Reas.
+> 0.75
+> 0.50
+> 0.25
+> 0.00 0.25 0.50 0.75 1.00
+> Answer-Likelihood BoN (Ours) Longest Correct Trajectory
+> +0.4
+> +0.2
+> -0.3
+> +0.8
+> +0.3
+> +1.0
+> -0.1
+> +1.0
+> +0.5
+> +0.6
+> +0.1
+> +0.2
+> -0.2
+> +0.2
+> -0.3
+> -0.6
+> -0.4
+> -0.5
+> -0.4
+> +0.2
+> -0.2
+> +0.4 +0.3 +0.3
+> +0.5
+> +0.3
+> +0.5
+> -0.5
+> -0.6
+> -0.4
+> Delta Score over Random Correct Trajectory
+
+Figure 5: Benchmark-wise score changes of different reasoning trajectory selection strategies over random correct trajectory selection for 4B (top) and 9B (bottom) student models. samples, highlighting the importance of supervision difficulty over data scale for larger students. Overall, these results show that more SFT data is not always better; its effectiveness depends critically on the match between supervision difficulty and student model capacity, rather than on scaling data volume alone. This further highlights the value of cascaded data construction in providing difficulty-stratified supervision that better matches students of different capacities. 
+
+Effect of Reasoning Trajectory Selection. We further investigate the impact of reasoning trajectory selection across 4B and 9B student models. For each training sample, multiple teacher-generated trajec-tories may reach the same correct final answer, while their supervision quality can vary substantially. To isolate the effect of trajectory selection, we fix both the training samples and candidate trajectory pool, and compare three strategies: random correct trajectory selection, longest correct trajectory selection, and our answer-likelihood Best-of-N selection. Figure 5 reports the benchmark-wise score changes over random selection. Answer-likelihood Best-of-N yields positive average gains at both model scales. At 4B, notable improvements are observed on CV-Bench-3D (+1.0), MMMU val (+1.0), and CountBenchQA (+0.8), while at 9B, the largest gains appear on MathVista mini (+1.1), CountBenchQA (+0.6), and MMMU val (+0.5). Although slight degradation occurs on a few benchmarks, the overall trend indicates that answer likelihood serves as an effective proxy for identifying higher-quality reasoning trajectories. In contrast, selecting the longest correct trajectory is less stable, particularly at 4B. Longer trajectories can introduce redundancy or noise and therefore do not consistently provide better supervision. Nevertheless, the longest-trajectory strategy outperforms our selection on several benchmarks, especially at 9B, suggesting that tasks requiring more extensive multi-step reasoning may still benefit from longer reasoning traces. Thus, trajectory length can be useful for particular tasks, but is less reliable as a general selection criterion. We observe that trajectory selection has a smaller impact on the 9B student. The average gain of answer-likelihood Best-of-N over random selection decreases from +0.29 at 4B to +0.24 at 9B, while the longest-trajectory strategy becomes more stable. This suggests that larger students are more robust to variations in trajectory quality, whereas smaller students benefit more from careful trajectory selection. 13 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Table 4: Benchmark-wise and domain-level performance of complementary RL experts across different model scales. RW and Ana. denote Real-World and Analytical experts, respectively. Benchmark names are abbreviated due to space constraints. Green and red backgrounds indicate gains and drops over the corresponding SFT model. The ∆ rows report the improvement of MOPD over SFT.                                                                                                                                                                                                
+
+> Scale Stage Real-World Visual Reasoning Analytical Visual Reasoning
+> OSW CV2D CV3D MMB RWA Count Avg. SFE MMMU SQA MVis MVer LVis VLog CQA CharXiv Avg. 4B
+> SFT 54.0 80.8 90.6 90.1 73.9 88.7 79.7 17.8 70.7 96.2 80.4 78.3 65.1 28.1 83.9 63.6 64.9 RW Expert 59.5 82.9 92.3 91.2 78.6 91.4 82.7 17.0 67.6 95.9 80.5 77.1 64.9 27.8 83.1 64.7 64.3 Ana. Expert 53.7 78.9 90.6 90.1 74.3 87.7 79.2 19.6 71.4 97.2 82.5 79.8 66.7 29.1 86.7 66.7 66.6 MOPD 58.5 82.4 91.8 90.6 77.4 91.5 82.0 19.8 71.8 96.8 82.4 79.7 66.4 29.0 86.2 66.9 66.6
+> ∆vs. SFT ↑4.5 ↑1.6 ↑1.2 ↑0.5 ↑3.5 ↑2.8 ↑2.3 ↑2.0 ↑1.1 ↑0.6 ↑2.0 ↑1.4 ↑1.3 ↑0.9 ↑2.3 ↑3.3 ↑1.7
+> 9B
+> SFT 59.9 80.3 91.8 91.7 75.2 90.7 81.6 18.2 71.4 96.9 82.1 80.9 66.0 28.8 85.1 65.6 66.1 RW Expert 66.3 84.4 92.8 92.7 77.9 92.6 84.5 17.8 70.6 97.0 82.2 80.0 66.8 28.0 84.7 67.4 66.0 Ana. Expert 61.1 81.1 91.7 91.5 74.6 89.7 81.6 20.6 73.3 97.5 84.5 82.7 68.0 30.1 87.4 69.3 68.2 MOPD 64.8 83.2 92.4 92.2 77.4 92.8 83.8 20.7 73.6 97.4 83.6 82.4 68.5 30.2 87.6 68.8 68.1
+> ∆vs. SFT ↑4.9 ↑2.9 ↑0.6 ↑0.5 ↑2.2 ↑2.1 ↑2.2 ↑2.5 ↑2.2 ↑0.5 ↑1.5 ↑1.5 ↑2.5 ↑1.4 ↑2.5 ↑3.2 ↑2.0
+
+Overall, these results validate answer-likelihood Best-of-N as an effective trajectory selection strategy and highlight the interaction between supervision quality and student model capacity. 
+
+Performance of Complementary RL Experts. Table 4 examines whether the two RL experts develop complementary capabilities across model scales. Real-world benchmarks emphasize perception, spatial understanding, counting, and visual grounding, whereas analytical benchmarks focus on structured, knowledge-intensive, and symbolic reasoning. We therefore train the Real-World and Analytical RL Experts from corresponding MVR-SFT models and evaluate their specialization patterns. The Real-World Expert strengthens real-world visual reasoning across model scales. Its Real-World Avg. improves from 79.7 to 82.7 at 4B and from 81.6 to 84.5 at 9B, with gains across all six real-world benchmarks. Representative improvements include OSWorld-G (54.0 →59.5 / 59.9 →66.3) and RealWorldQA (73.9 →78.6 / 75.2 →77.9). Meanwhile, its Analytical Avg. decreases slightly, from 64.9 to 64.3 at 4B and from 66.1 to 66.0 at 9B, suggesting weaker cross-domain interference at the larger scale. The Analytical Expert also exhibits clear specialization across model scales. Its Analytical Avg. in-creases from 64.9 to 66.6 at 4B and from 66.1 to 68.2 at 9B, with gains across all nine analytical benchmarks. Representative improvements include SFE (17.8 →19.6 / 18.2 →20.6) and CharXiv reas. 
+
+(63.6 →66.7 / 65.6 →69.3) at 4B/9B. In contrast, its Real-World Avg. decreases slightly from 79.7 to 79.2 at 4B but remains unchanged at 81.6 for 9B, showing that stronger analytical specialization can be achieved without noticeably sacrificing overall real-world performance at the larger scale. Overall, the two experts exhibit clear complementary specialization across model scales: the Real-World Expert strengthens perceptual and real-world capabilities, whereas the Analytical Expert improves structured analytical reasoning. Their domain-specific gains and reduced cross-group interference at larger scale validate our domain-grouped RL design and motivate multi-teacher integration. 
+
+Beyond Individual Expert Teachers. Table 4 further shows that the final MMVistaReason models go beyond simply selecting either expert teacher. After multi-teacher integration, the Real-World Avg. reaches 82.0/83.8 at 4B/9B, close to the corresponding experts at 82.7/84.5, while the Analytical Avg. reaches 66.6/68.1, matching or nearly matching the Analytical Experts at 66.6/68.2. This shows that MOPD preserves most specialized gains from both experts within a unified model across scales. At the benchmark level, MVR inherits improvements from both experts across scales. On real-world tasks, OSWorld-G improves from 54.0 to 58.5 at 4B and from 59.9 to 64.8 at 9B, while CountBenchQA improves from 88.7 to 91.5 and from 90.7 to 92.8, respectively. On analytical tasks, SFE improves from 17.8 to 19.8 and from 18.2 to 20.7, while CharXiv reas. improves from 63.6 to 66.9 and from 65.6 to 68.8. Notably, MVR improves over the corresponding SFT model on all 15 benchmarks at both scales, 14 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning OSW MMB RWA Count CV2D CV3D RW Avg. MMMU SQA SFE MVis MVer LVis VLog CQA CharXiv Ana. Avg. Overall                                                                                                                                             
+
+> SFT Mixed-RL MOPD-RKL MOPD-FKL
+> Real-World Visual Reasoning Analytical Visual Reasoning Overall
+> 54.0 90.1 73.9 88.7 80.8 90.6 79.7 70.7 96.2 17.8 80.4 78.3 65.1 28.1 83.9 63.6 64.9 70.8 56.2 90.0 75.9 90.6 80.2 90.5 80.6 70.0 96.0 17.1 80.5 77.9 65.3 28.6 85.5 65.1 65.1 71.3
+> 59.4 90.2 76.7 90.1 82.8 91.9 81.9 70.9 96.1 19.2 81.7 79.2 66.7 28.4 85.6 66.0 66.0 72.3 58.5 90.6 77.4 91.5 82.4 91.8 82.0 71.8 96.8 19.8 82.4 79.7 66.4 29.0 86.2 66.9 66.6 72.8
+> OSW MMB RWA Count CV2D CV3D RW Avg. MMMU SQA SFE MVis MVer LVis VLog CQA CharXiv Ana. Avg. Overall
+> SFT Mixed-RL MOPD-RKL MOPD-FKL
+> Real-World Visual Reasoning Analytical Visual Reasoning Overall
+> 59.9 91.7 75.2 90.7 80.3 91.8 81.6 71.4 96.9 18.2 82.1 80.9 66.0 28.8 85.1 65.6 66.1 72.3 63.3 91.6 76.3 92.8 81.9 92.0 83.0 71.1 96.8 18.9 82.8 81.5 66.4 28.6 86.5 67.1 66.6 73.2 64.8 92.2 77.4 92.8 83.2 92.4 83.8 73.6 97.4 20.7 83.6 82.4 68.5 30.2 87.6 68.8 68.1 74.4 65.2 92.1 77.5 91.6 82.2 92.1 83.5 73.2 97.3 20.1 83.7 82.4 69.6 29.1 87.4 70.1 68.1 74.2
+> 1
+> 012345
+> vs. SFT
+
+Figure 6: Comparison of Mixed-RL and MOPD under different KL directions across model scales. Colors indicate changes over MVR-SFT for 4B (top) and 9B (bottom) models. indicating broad capability integration rather than optimization toward a single reasoning group. Notably, MVR surpasses both expert teachers on several benchmarks, including CountBenchQA, SFE, and MMMU val . This suggests that MOPD is not merely a compromise between specialists, but can combine complementary supervision into a unified model that exceeds either expert. Such gains may arise because on-policy distillation exposes each teacher to student-generated states, allowing expert guidance to refine weaknesses of the shared policy. Together, these results support our specialize-then-integrate design, where domain-specific RL develops complementary capabilities and MOPD consolidates them without inheriting cross-domain trade-offs. 
+
+Multi-Teacher Integration Compared with Mixed-Domain RL. Figure 6 compares mixed-domain RL with multi-teacher on-policy distillation across model scales. Mixed-RL improves performance at both scales, raising the Overall Avg. from 70.8 to 71.3 at 4B and from 72.3 to 73.2 at 9B. Real-World and Analytical averages improve from 79.7 to 80.6 and 64.9 to 65.1 at 4B, and from 81.6 to 83.0 and 66.1 to 66.6 at 9B. The larger 9B gains suggest that larger models better absorb heterogeneous RL signals. However, Mixed-RL still introduces uneven adaptation and local negative transfer. At 4B, it underper-forms the SFT baseline on 7 of 15 benchmarks, with the largest drop of 0.7 points on MMMU val and SFE. At 9B, only four benchmarks regress and the largest drop shrinks to 0.3 points. This suggests that larger model capacity mitigates interference from heterogeneous RL signals, but does not eliminate it, motivating a more reliable strategy for integrating domain-specific capabilities. In contrast, multi-teacher on-policy distillation provides an integration strategy. At 4B, MOPD-RKL and MOPD-FKL reach 72.3 and 72.8 overall, while at 9B they reach 74.4 and 74.2, outperforming Mixed-RL. The preferred divergence varies with scale: FKL performs better at 4B, whereas RKL is stronger at 9B. Nevertheless, their gap is small compared with the advantage over Mixed-RL. Moreover, the best MOPD variant at each scale improves or matches Mixed-RL on all 15 benchmarks. This suggests that expert-based on-policy integration matters more than the exact KL direction, enabling domain-matched supervision to consolidate complementary capabilities with less interference. 15 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning Effect of KL Direction in MOPD. We further study the effect of KL direction in MOPD across model scales. Both Forward-KL and Reverse-KL outperform the SFT baseline and Mixed-RL in overall performance, confirming the effectiveness of expert distillation on student-induced on-policy trajectories. At 4B, Forward-KL outperforms Reverse-KL (72.8 vs. 72.3), whereas at 9B, Reverse-KL performs slightly better (74.4 vs. 74.2), revealing a scale-dependent preference for KL direction. Specifically, the two KL directions exhibit task- and scale-dependent preferences. At 4B, Reverse-KL performs better on several real-world benchmarks, while Forward-KL is stronger on most remaining tasks. At 9B, Reverse-KL becomes more competitive across benchmarks. This pattern suggests that its mode-seeking behavior may become more beneficial as student capacity increases, whereas smaller students benefit more from the broader distribution matching of Forward-KL. Since both RL experts are initialized from the same SFT generalist, their output distributions remain relatively aligned with the student, allowing both KL objectives to provide effective supervision. Forward-KL offers broader distribution matching that may be easier for smaller students to absorb, whereas Reverse-KL can better exploit sharper expert preferences at larger scale. Importantly, the gap between the two objectives remains small at both scales, suggesting that MOPD is robust to the exact KL direction and that expert-based on-policy integration is the primary source of improvement. 
+
+# 5 Conclusion 
+
+In this work, we present MMVistaReason , an open-data framework and adaptive training recipe for reliable multimodal reasoning. Rather than treating multimodal reasoning as a problem driven only by model scaling, we view it as a joint challenge of data construction, difficulty-aware sample selection, expert specialization, and capability integration. Through systematic data cleaning, answer normalization, model-aware difficulty filtering, cascaded rejection sampling, and Answer-Likelihood Best-of-N trajectory selection, MMVistaReason transforms heterogeneous open data into high-quality and verifiable reasoning supervision. Building on this corpus, we develop a training pipeline that establishes strong SFT generalists, then trains complementary RL experts for reasoning scenarios, and finally integrates their specialized capabilities through multi-teacher on-policy distillation. Extensive experiments across 4B and 9B scales show that MMVistaReason achieves strong and balanced per-formance across diverse multimodal reasoning benchmarks, while analyses reveal that supervision difficulty, trajectory quality, and integration behavior interact with student model capacity. In partic-ular, domain-specific specialization followed by MOPD better consolidates complementary expert capabilities with reduced cross-domain interference. Overall, MMVistaReason provides a practical and scalable path for building reliable multimodal reasoning models from open data. 16 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+# References 
+
+[1] Rishabh Agarwal, Nino Vieillard, Yongchao Zhou, Piotr Stanczyk, Sabela Ramos Garea, Matthieu Geist, and Olivier Bachem. On-policy distillation of language models: Learning from self-generated mistakes. In 
+
+International Conference on Learning Representations , volume 2024, pages 21246–21263, 2024. [2] Hritik Bansal, Devendra Singh Sachan, Kai-Wei Chang, Aditya Grover, Gargi Ghosh, Wen-tau Yih, and Ramakanth Pasunuru. Honeybee: Data recipes for vision-language reasoners. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 26262–26273, 2026. [3] Walid Bousselham, Hilde Kuehne, and Cordelia Schmid. Vold: Reasoning transfer from llms to vision-language models via on-policy distillation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 26209–26218, 2026. [4] Mengzhang Cai, Xin Gao, Yu Li, Honglin Lin, Zheng Liu, Zhuoshi Pan, Qizhi Pei, Xiaoran Shang, Mengyuan Sun, Zinan Tang, et al. Opendataarena: A fair and open arena for benchmarking post-training dataset value. 
+
+arXiv preprint arXiv:2512.14051 , 2025. [5] Guanzheng Chen, Michael Qizhe Shieh, and Lidong Bing. Longrlvr: Long-context reinforcement learning requires verifiable context rewards. arXiv preprint arXiv:2603.02146 , 2026. [6] Yew Ken Chia, Vernon Toh Yan Han, Deepanway Ghosal, Lidong Bing, and Soujanya Poria. Puzzlevqa: Diagnosing multimodal reasoning skills of language models with abstract visual patterns. ACL , 2024. [7] Haodong Duan, Junming Yang, Yuxuan Qiao, Xinyu Fang, Lin Chen, Yuan Liu, Xiaoyi Dong, Yuhang Zang, Pan Zhang, Jiaqi Wang, et al. Vlmevalkit: An open-source toolkit for evaluating large multi-modality models. In Proceedings of the 32nd ACM international conference on multimedia , pages 11198–11201, 2024. [8] Yichen Feng, Zhangchen Xu, Fengqing Jiang, Yuetai Li, Bhaskar Ramasubramanian, Luyao Niu, Bill Yuchen Lin, and Radha Poovendran. Visualsphinx: Large-scale synthetic vision logic puzzles for rl. arXiv preprint arXiv:2505.23977 , 2025. [9] Huan-ang Gao, Haohan Chi, Yong Yan, Shiyuan Feng, Hanlin Wu, Zheng Jiang, Bingxiang He, Wei-Ying Ma, Ya-Qin Zhang, and Hao Zhou. Open-mopd: Diagnosing and fixing capability imbalance in multi-teacher on-policy distillation. arXiv preprint arXiv:2608.19098 , 2026. [10] Google. Gemini 3 Flash: Frontier Intelligence Built for Speed. https://blog.google/ products-and-platforms/products/gemini/gemini-3-flash/ , 2025. Accessed: 2026-08-14. [11] Yuxian Gu, Li Dong, Furu Wei, and Minlie Huang. Minillm: Knowledge distillation of large language models. In International Conference on Learning Representations , volume 2024, pages 32694–32717, 2024. [12] Etash Guha, Ryan Marten, Sedrick Keh, Negin Raoof, Georgios Smyrnis, Hritik Bansal, Marianna Nezhurina, Jean Mercat, Trung Vu, Zayne Sprague, et al. Openthoughts: Data recipes for reasoning models. In 
+
+International Conference on Learning Representations , volume 2026, pages 108059–108130, 2026. [13] Jiawei Guo, Tianyu Zheng, Yizhi Li, Yuelin Bai, Bo Li, Yubo Wang, King Zhu, Graham Neubig, Wenhu Chen, and Xiang Yue. Mammoth-vl: Eliciting multimodal reasoning with instruction tuning at scale. In 
+
+Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 13869–13920, 2025. [14] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 , 2015. [15] Cheng-Yu Hsieh, Chun-Liang Li, Chih-Kuan Yeh, Hootan Nakhost, Yasuhisa Fujii, Alex Ratner, Ranjay Krishna, Chen-Yu Lee, and Tomas Pfister. Distilling step-by-step! outperforming larger language models with less training data and smaller model sizes. In Findings of the association for computational linguistics: ACL 2023 , pages 8003–8017, 2023. [16] Bo Huang, Fengxiang Li, Hao Xu, Haoyang Huang, Hongyi Fu, Jinhua Hao, Kun Yuan, Minglei Zhang, Pengcheng Xu, Shiyang Liu, et al. Kat-coder-v2. 5 technical report. arXiv preprint arXiv:2607.05471 , 2026. 
+
+17 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+[17] Wenxuan Huang, Bohan Jia, Shaosheng Cao, Zheyu Ye, Zhe Xu, Yao Hu, Shaohui Lin, et al. Vision-r1: Incentivizing reasoning capability in multimodal large language models. In International Conference on Learning Representations , volume 2026, pages 63794–63812, 2026. [18] Ammar Khairi, Daniel Dsouza, Marzieh Fadaee, and Julia Kreutzer. Making, not taking, the best of n. In 
+
+International Conference on Learning Representations , volume 2026, pages 149049–149083, 2026. [19] Yoon Kim and Alexander M Rush. Sequence-level knowledge distillation. In Proceedings of the 2016 conference on empirical methods in natural language processing , pages 1317–1327, 2016. [20] Jongwoo Ko, Sara Abdali, Young Jin Kim, Tianyi Chen, and Pashmina Cameron. Scaling reasoning efficiently via relaxed on-policy distillation. arXiv preprint arXiv:2603.11137 , 2026. [21] Reiss Koh, Wonbeen Oh, Jaein Jang, MinHyung Lee, Hyeongjin Kim, Ah Kim, Joonkee Kim, Junghyun Lee, Taehyeon Kim, and Se-Young Yun. Adastar: Adaptive data sampling for training self-taught reasoners. 
+
+Advances in Neural Information Processing Systems , 38:91484–91515, 2026. [22] Sicong Leng, Jing Wang, Jiaxi Li, Hao Zhang, Zhiqiang Hu, Boqiang Zhang, Yuming Jiang, Hang Zhang, Xin Li, Lidong Bing, et al. Mmr1: Enhancing multimodal reasoning with variance-aware sampling and open resources. arXiv preprint arXiv:2509.21268 , 2025. [23] Ang Li, Charles Wang, Deqing Fu, Kaiyu Yue, Zikui Cai, Wang Bill Zhu, Ollie Liu, Peng Guo, Willie Neiswanger, Furong Huang, et al. Zebra-cot: A dataset for interleaved vision language reasoning. arXiv preprint arXiv:2507.16746 , 2025. [24] Bo Li, Yuanhan Zhang, Dong Guo, Renrui Zhang, Feng Li, Hao Zhang, Kaichen Zhang, Peiyuan Zhang, Yanwei Li, Ziwei Liu, et al. Llava-onevision: Easy visual task transfer. arXiv preprint arXiv:2408.03326 , 2024. [25] Shijie Lian, Changti Wu, Laurence Tianruo Yang, Hang Yuan, Bin Yu, Lei Zhang, and Kai Chen. Euclid’s gift: Enhancing spatial perception and reasoning in vision-language models via geometric surrogate tasks. arXiv preprint arXiv:2509.24473 , 2025. [26] Honglin Lin, Zheng Liu, Yun Zhu, Chonghan Qin, Juekai Lin, Xiaoran Shang, Conghui He, Wentao Zhang, and Lijun Wu. Mmfinereason: Closing the multimodal reasoning gap via open data-centric methods. arXiv preprint arXiv:2601.21821 , 2026. [27] Juekai Lin, Yun Zhu, Honglin Lin, Sijing Li, Tianwei Lin, Zheng Liu, Xiaoyang Wang, Wenqiao Zhang, and Lijun Wu. Scientific graphics program synthesis via dual self-consistency reinforcement learning. arXiv preprint arXiv:2604.06079 , 2026. [28] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. Visual instruction tuning. Advances in neural information processing systems , 36:34892–34916, 2023. [29] Ruiqi Liu, Xiaolei Lv, Gengsheng Li, Ximo Zhu, Zhiheng Wang, Zhengbo Zhang, Junkai Chen, Zhiheng Li, Bo Li, Jun Gao, et al. Visual-advantage on-policy distillation for vision-language models. arXiv preprint arXiv:2605.21924 , 2026. [30] Shudong Liu, Hongwei Liu, Junnan Liu, Linchen Xiao, Songyang Gao, Chengqi Lyu, Yuzhe Gu, Wenwei Zhang, Derek F Wong, Songyang Zhang, et al. Compassverifier: A unified and robust verifier for llms evaluation and outcome reward. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 33454–33482, 2025. [31] Yuan Liu, Haodong Duan, Yuanhan Zhang, Bo Li, Songyang Zhang, Wangbo Zhao, Yike Yuan, Jiaqi Wang, Conghui He, Ziwei Liu, et al. Mmbench: Is your multi-modal model an all-around player? In European conference on computer vision , pages 216–233. Springer, 2024. [32] Yuhong Liu, Beichen Zhang, Yuhang Zang, Yuhang Cao, Long Xing, Xiaoyi Dong, Haodong Duan, Dahua Lin, and Jiaqi Wang. Spatial-ssrl: Enhancing spatial understanding via self-supervised reinforcement learning. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 9570–9581, 2026. [33] lmms lab. Multimodal open r1, 2025. URL https://github.com/EvolvingLMMs-Lab/open-r1-multimodal .
+
+18 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+[34] Pan Lu, Swaroop Mishra, Tanglin Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in neural information processing systems , 35:2507–2521, 2022. [35] Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. Mathvista: Evaluating mathematical reasoning of foundation models in visual contexts. In International Conference on Learning Representations , volume 2024, pages 23439– 23554, 2024. [36] Wenhan Ma, Jianyu Wei, Liang Zhao, Hailin Zhang, Bangjun Xiao, Lei Li, Qibin Yang, Bofei Gao, Yudong Wang, Rang Li, et al. Mopd: Multi-teacher on-policy distillation for capability integration in llm post-training. 
+
+arXiv preprint arXiv:2606.30406 , 2026. [37] Ahmed Masry, Jia Qing Tan, Shafiq Joty, Enamul Hoque, et al. Chartqa: A benchmark for question answering about charts with visual and logical reasoning. In Findings of the association for computational linguistics: ACL 2022 , pages 2263–2279, 2022. [38] Fanqing Meng et al. Mm-eureka: Exploring the frontiers of multimodal reasoning with rule-based rein-forcement learning. In Findings of the Association for Computational Linguistics: EMNLP 2025 , 2025. URL 
+
+https://arxiv.org/abs/2503.07365 .[39] OpenAI. GPT-5.1 Instant and GPT-5.1 Thinking System Card Addendum. https://openai.com/index/ gpt-5-system-card-addendum-gpt-5-1/ , 2025. Accessed: 2026-08-14. [40] OpenDataLab, Shanghai Artificial Intelligence Laboratory. Sciverse. https://sciverse.opendatalab.com/ ,2026. Accessed 2026. [41] Roni Paiss, Ariel Ephrat, Omer Tov, Shiran Zada, Inbar Mosseri, Michal Irani, and Tali Dekel. Teaching clip to count to ten. In 2023 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 3147–3157. IEEE, 2023. [42] Runqi Qiao, Peiqing Yang, Yanzi Wang, Xiaowan Wang, Enhui Wan, Guanting Dong, Shiqiang Lang, Sitong Zhou, Yida Xu, Yuchen Zeng, et al. We-math 2.0: A versatile mathbook system for incentivizing visual mathematical reasoning. In International Conference on Learning Representations , volume 2026, pages 150171– 150218, 2026. [43] Qwen Team. Qwen3.5-35B-A3B. https://huggingface.co/Qwen/Qwen3.5-35B-A3B , 2026. Accessed: 2026-08-14. [44] Qwen Team. Qwen3.5-9B. https://huggingface.co/Qwen/Qwen3.5-9B , 2026. Accessed: 2026-08-14. [45] Bhuvan Sachdeva, Karan Uppal, Abhinav Java, and Vineeth N. Balasubramanian. Understanding task transfer in vision-language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2026. [46] Gabriel Sarch, Linrong Cai, Qunzhong Wang, Haoyang Wu, Danqi Chen, and Zhuang Liu. Vero: An open rl recipe for general visual reasoning. arXiv preprint arXiv:2604.04917 , 2026. [47] Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng, Haibin Lin, and Chuan Wu. Hybridflow: A flexible and efficient rlhf framework. arXiv preprint arXiv: 2409.19256 , 2024. [48] Wenhao Shi, Zhiqiang Hu, Yi Bin, Junhua Liu, Yang Yang, See Kiong Ng, Lidong Bing, and Roy Ka-Wei Lee. Math-llava: Bootstrapping mathematical reasoning for multimodal large language models. In Findings of the Association for Computational Linguistics: EMNLP 2024 , pages 4663–4680, 2024. [49] Haoxiang Sun, Lizhen Xu, Bing Zhao, Wotao Yin, Wei Wang, Boyu Yang, Rui Wang, and Hu Wei. Deepvision-103k: A visually diverse, broad-coverage, and verifiable mathematical dataset for multimodal reasoning. 
+
+arXiv preprint arXiv:2602.16742 , 2026. [50] Haoyi Tao, Chaozheng Huang, Nan Wang, Han Lyu, Linfeng Zhang, Guolin Ke, and Xi Fang. Omniscience: A large-scale multi-modal dataset for scientific image understanding. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , pages 9860–9870, 2026. [51] Foundation Model Team. Mach-mind-4-flash technical report. arXiv preprint arXiv:2607.09375 , 2026. 
+
+19 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+[52] Jingqi Tong, Jixin Tang, Hangcheng Li, Yurong Mou, Ming Zhang, Jun Zhao, Yanbo Wen, Fan Song, Jiahao Zhan, Yuyang Lu, et al. Code2logic: Game-code-driven data synthesis for enhancing vlms general reasoning. 
+
+arXiv preprint arXiv:2505.13886 , 2025. [53] Shengbang Tong, Ellis Brown, Penghao Wu, Sanghyun Woo, Manoj Middepogu, Sai C Akula, Jihan Yang, Shusheng Yang, Adithya Iyer, Xichen Pan, et al. Cambrian-1: A fully open, vision-centric exploration of multimodal llms. Advances in Neural Information Processing Systems , 37:87310–87356, 2024. [54] Haozhe Wang, Chao Qu, Zuming Huang, Wei Chu, Fangzhen Lin, and Wenhu Chen. Vl-rethinker: Incentiviz-ing self-reflection of vision-language models with reinforcement learning. arXiv preprint arXiv:2504.08837 ,2025. [55] Sudong Wang, Weiquan Huang, Xiaomin Yu, Zuhao Yang, Hehai Lin, Keming Wu, Chaojun Xiao, Chen Chen, Wenxuan Wang, Beier Zhu, et al. Beyond sft-to-rl: Pre-alignment via black-box on-policy distillation for multimodal rl. arXiv preprint arXiv:2604.28123 , 2026. [56] Weiyun Wang, Zhangwei Gao, Lixin Gu, Hengjun Pu, Long Cui, Xingguang Wei, Zhaoyang Liu, Linglin Jing, Shenglong Ye, Jie Shao, et al. Internvl3. 5: Advancing open-source multimodal models in versatility, reasoning, and efficiency. arXiv preprint arXiv:2508.18265 , 2025. [57] Zirui Wang, Mengzhou Xia, Luxi He, Howard Chen, Yitao Liu, Richard Zhu, Kaiqu Liang, Xindi Wu, Haotian Liu, Sadhika Malladi, et al. Charxiv: Charting gaps in realistic chart understanding in multimodal llms. 
+
+Advances in Neural Information Processing Systems , 37:113569–113697, 2024. [58] Lai Wei, Yuting Li, Kaipeng Zheng, Chen Wang, Yue Wang, Linghe Kong, Lichao Sun, and Weiran Huang. Advancing multimodal reasoning via reinforcement learning with cold start. arXiv preprint arXiv:2505.22334 ,2025. [59] Xumeng Wen, Zihan Liu, Shun Zheng, Shengyu Ye, Zhirong Wu, Yang Wang, Zhijian Xu, Xiao Liang, Junjie Li, Ziming Miao, et al. Reinforcement learning with verifiable rewards implicitly incentivizes correct reasoning in base llms. In International Conference on Learning Representations , volume 2026, pages 49450–49483, 2026. [60] Luis Wiedmann, Orr Zohar, Amir Mahla, Xiaohan Wang, Rui Li, Thibaud Frere, Leandro von Werra, Aritra Roy Gosthipaty, and Andr´ es Marafioti. Finevision: Open data is all you need. arXiv preprint arXiv:2510.17269 , 2025. [61] xAI. Grok-1.5 vision preview. https://x.ai/news/grok-1.5v , April 2024. April 12, 2024. [62] Zhiheng Xi, Guanyu Li, Yutao Fan, Honglin Guo, Yufang Liu, Xiaoran Fan, Jiaqi Liu, Jingchao Ding, Wangmeng Zuo, Zhenfei Yin, et al. Bmmr: A large-scale bilingual multimodal multi-discipline reasoning dataset. arXiv preprint arXiv:2507.03483 , 2025. [63] Yijia Xiao, Edward Sun, Tianyu Liu, and Wei Wang. Logicvista: Multimodal llm logical reasoning benchmark in visual contexts. arXiv preprint arXiv:2407.04973 , 2024. [64] Tianbao Xie, Jiaqi Deng, Xiaochuan Li, Junlin Yang, Haoyuan Wu, Jixuan Chen, Wenjing Hu, Xinyuan Wang, Yuhui Xu, Zekun Wang, et al. Scaling computer-use grounding via user interface decomposition and synthesis. Advances in Neural Information Processing Systems , 38, 2026. [65] Guowei Xu, Peng Jin, Ziang Wu, Hao Li, Yibing Song, Lichao Sun, and Li Yuan. Llava-cot: Let vision language models reason step-by-step. In 2025 IEEE/CVF International Conference on Computer Vision (ICCV) ,pages 2087–2098. IEEE, 2025. [66] Weiye Xu, Jiahao Wang, Weiyun Wang, Zhe Chen, Wengang Zhou, Aijun Yang, Lewei Lu, Houqiang Li, Xiaohua Wang, Xizhou Zhu, et al. Visulogic: A benchmark for evaluating visual reasoning in multi-modal large language models. In International Conference on Learning Representations , volume 2026, pages 25966– 26003, 2026. [67] Xiaohan Xu, Ming Li, Chongyang Tao, Tao Shen, Reynold Cheng, Jinyang Li, Can Xu, Dacheng Tao, and Tianyi Zhou. A survey on knowledge distillation of large language models. arXiv preprint arXiv:2402.13116 ,2024. [68] Yi Yang, Xiaoxuan He, Hongkun Pan, Xiyan Jiang, Yan Deng, Xingtao Yang, Haoyu Lu, Dacheng Yin, Fengyun Rao, Minfeng Zhu, et al. R1-onevision: Advancing generalized multimodal reasoning through 
+
+20 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+cross-modal formalization. In 2025 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 2376–2385. IEEE, 2025. [69] Zhuolin Yang, Zihan Liu, Yang Chen, Wenliang Dai, Boxin Wang, Sheng-Chieh Lin, Chankyu Lee, Yangyi Chen, Dongfu Jiang, Jiafan He, et al. Nemotron-cascade 2: Post-training llms with cascade rl and multi-domain on-policy distillation. arXiv preprint arXiv:2603.19220 , 2026. [70] Yixin Ye, Zhen Huang, Yang Xiao, Ethan Chern, Shijie Xia, and Pengfei Liu. Limo: Less is more for reasoning. 
+
+arXiv preprint arXiv:2502.03387 , 2025. [71] Yuqian Yuan, Wenqiao Zhang, Juekai Lin, Yu Zhong, Mingjian Gao, Binhe Yu, Yunqi Cao, Wentong Li, Yueting Zhuang, and Beng Chin Ooi. Lmms meet object-centric vision: Understanding, segmentation, editing and generation. arXiv preprint arXiv:2604.11789 , 2026. [72] Xiang Yue, Yuansheng Ni, Kai Zhang, Tianyu Zheng, Ruoqi Liu, Ge Zhang, Samuel Stevens, Dongfu Jiang, Weiming Ren, Yuxuan Sun, et al. Mmmu: A massive multi-discipline multimodal understanding and reasoning benchmark for expert agi. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 9556–9567, 2024. [73] Dongxu Zhang, Zhichao Yang, Sepehr Janghorbani, Jun Han, Andrew Ressler II, Qian Qian, Gregory D Lyng, Sanjit Singh Batra, and Robert E Tillman. Fast and effective on-policy distillation from reasoning prefixes. In 
+
+Findings of the Association for Computational Linguistics: ACL 2026 , pages 25553–25569, 2026. [74] Jingyi Zhang, Jiaxing Huang, Huanjin Yao, Shunyu Liu, Xikun Zhang, Shijian Lu, and Dacheng Tao. R1-vl: Learning to reason with multimodal large language models via step-wise group relative policy optimization. In 2025 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 1859–1869. IEEE, 2025. [75] Kaichen Zhang, Keming Wu, Zuhao Yang, Bo Li, Kairui Hu, Bin Wang, Xingxuan Li, and Lidong Bing. Openmmreasoner: Pushing the frontiers in multimodal reasoning with an open and general recipe. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 19276–19286, 2026. [76] Renrui Zhang, Dongzhi Jiang, Yichi Zhang, Haokun Lin, Ziyu Guo, Pengshuo Qiu, Aojun Zhou, Pan Lu, Kai-Wei Chang, Yu Qiao, et al. Mathverse: Does your multi-modal llm truly see the diagrams in visual math problems? In European Conference on Computer Vision , pages 169–186. Springer, 2024. [77] Siyan Zhao, Zhihui Xie, Mengchen Liu, Jing Huang, Guan Pang, Feiyu Chen, and Aditya Grover. Self-distilled reasoner: On-policy self-distillation for large language models. arXiv preprint arXiv:2601.18734 ,2026. [78] Tong Zhao, Yuyang Hu, Reed Li, Yu Lu, Haibo Shi, Yutao Zhu, and Zhicheng Dou. Opod: On-policy omni distillation. arXiv preprint arXiv:2607.20918 , 2026. [79] Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, Jingren Zhou, and Junyang Lin. Group sequence policy optimization. arXiv preprint arXiv:2507.18071 , 2025. [80] Yaowei Zheng, Richong Zhang, Junhao Zhang, Yanhan Ye, Zheyan Luo, Zhangchi Feng, and Yongqiang Ma. Llamafactory: Unified efficient fine-tuning of 100+ language models. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 3: System Demonstrations) , Bangkok, Thailand, 2024. Association for Computational Linguistics. URL http://arxiv.org/abs/2403.13372 .[81] Yuhao Zhou, Yiheng Wang, Xuming He, Ruoyao Xiao, Zhiwei Li, Qiantai Feng, Zijie Guo, Yuejin Yang, Hao Wu, Wenxuan Huang, et al. Scientists’ first exam: Probing cognitive abilities of mllm via perception, understanding, and reasoning. Advances in Neural Information Processing Systems , 38, 2026. 
+
+21 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+# Appendix 
+
+# A Additional Data Analysis 
+
+## A.1 SFT Data Statistics 
+
+We provide additional analysis of the SFT corpus (MMVistaReason-SFT-528K), including its open-data sources, subset composition, difficulty characteristics, and task diversity. 
+
+Open-Data Source Composition. We further analyze the source composition of MMVistaReason-SFT-528K. As shown in Table 5, the corpus is constructed from a diverse collection of open multimodal datasets spanning science, mathematics, spatial reasoning, charts, visual logic, and general visual understanding. Compared with existing multimodal reasoning recipes, our corpus draws from a broader range of sources and task scenarios. The broad source coverage highlights the heterogeneous open-data foundation of MMVistaReason and supports supervision across reasoning scenarios. Table 5: Detailed source composition of MMVistaReason-SFT-528K . We report the number of samples and response tokens for each source subset.                                                                   
+
+> Subset Name Samples Tokens Subset Name Samples Tokens
+> SciMM [40] 247,292 291,185,096 vero captioning IF [46] 4,506 2,755,634 MMR1 [22] 77,116 322,402,209 PRISM [55] 3,831 11,606,008 vero spatial action [46] 30,153 48,377,896 Euclid30K [25] 3,038 14,260,100 FineVision [60] 22,799 42,814,429 WaltonColdStart [58] 2,932 7,034,074 vero chart ocr [46] 21,998 19,464,798 ViRL39K [54] 2,236 6,383,976 deepvision math [49] 19,550 88,001,303 LLaVA-CoT [65] 2,018 906,254 vero knowledge recognition [46] 19,058 9,900,384 MMK12 [38] 1,215 5,194,661 GameQA-140K [52] 16,933 45,353,567 Zebra-CoT-Physics [23] 874 2,044,486 vero stem [46] 16,333 48,929,432 WeMath2 [42] 841 2,889,230 vero counting grounding search [46] 13,173 9,424,096 mmopenr1-8k [33] 690 1,799,171 BMMR [62] 10,504 32,139,488 VisualSphinx [8] 617 1,682,056 deepvision visual logic [49] 9,709 28,925,351 PuzzleQA [6] 393 578,248
+> Total Samples: 527,809 Total Tokens: 1,044,051,947
+
+Difficulty Characteristics of SFT Subsets To further characterize the difficulty differences among SFT subsets produced by the cascaded teacher distillation process, we analyze their SFT rollout pass-rate 
+
+distributions. As shown in Table 6, subsets distilled from stronger teachers exhibit lower average pass rates, indicating progressively harder supervision signals. Table 6: Difficulty distribution of different SFT subsets generated by cascaded teacher distillation. 
+
+SFT Subset Mastery=0.25 Mastery=0.50 Mastery=0.75 Mastery=1.00 Weighted Mean 
+
+MVR-SFT-49K (122B) 69.26% 19.53% 7.61% 3.61% 0.3639 MVR-SFT-124K (27B) 49.74% 25.50% 15.17% 9.59% 0.4616 MVR-SFT-355K (9B) 40.49% 26.23% 19.06% 14.23% 0.5176 
+
+Question Type Distribution of SFT Subsets We further analyze the question type distribution of different SFT subsets. As shown in Table 7, the constructed corpus covers diverse multimodal reasoning formats, including numeric, short-answer, multiple-choice, and entity-based questions. The complementary distributions across teacher-derived subsets demonstrate the diversity of supervision introduced by the cascaded distillation strategy. 
+
+Domain-wise Token Statistics We further report detailed response-token statistics for each reasoning domain in Table 8. The domains exhibit substantial differences in both data scale and reasoning length. 22 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Table 7: Question subtype distribution of MVR-SFT-528K constructed by different teacher models. Each entry reports the number of samples and the corresponding ratio within each subset. 
+
+Subtype 122B Teacher 27B Teacher 9B Teacher Overall 
+
+Numeric 12,058 (24.65%) 37,806 (30.49%) 110,705 (31.19%) 160,569 (30.42%) Short Phrase 16,985 (34.72%) 41,626 (33.57%) 89,283 (25.16%) 147,894 (28.02%) Multiple Choice 4,665 (9.54%) 19,954 (16.09%) 72,450 (20.42%) 97,069 (18.39%) Entity Name 7,188 (14.70%) 16,611 (13.39%) 51,856 (14.61%) 75,655 (14.33%) Yes/No 748 (1.53%) 2,562 (2.07%) 13,504 (3.81%) 16,814 (3.19%) Position 6,358 (13.00%) 2,720 (2.19%) 5,045 (1.42%) 14,123 (2.68%) Counting 769 (1.57%) 2,273 (1.83%) 10,429 (2.94%) 13,471 (2.55%) Color 90 (0.18%) 305 (0.25%) 1,055 (0.30%) 1,450 (0.27%) Category 43 (0.09%) 135 (0.11%) 529 (0.15%) 707 (0.13%) Short Fact 9 (0.02%) 18 (0.01%) 30 (0.01%) 57 (0.01%) 
+
+Total 48,913 (100%) 124,010 (100%) 354,886 (100%) 527,809 (100%)                                                                         
+
+> Domain #Samples Tokens Mean Std. Median P75 P95 Max
+> Science 175,007 208.90M 1,193.7 1,365.4 681 1,420 3,723 16,369 Mathematics 130,677 518.85M 3,970.5 3,739.1 2,669 5,875 12,188 16,381 Logic/Game/Puzzle 47,140 131.24M 2,784.1 2,448.5 2,107 3,919 7,421 16,375 Chart/Table/Doc 109,250 121.95M 1,116.3 1,314.4 588 1,393 3,708 16,039 General 32,165 15.75M 489.5 635.3 277 513 1,532 13,725 Spatial 23,470 42.31M 1,802.6 2,182.1 978 2,238 6,344 16,374 GUI/Web 10,100 5.06M 500.5 878.3 255 426 1,689 16,192
+> All Domains 527,809 1.04B 1,978.1 2,607.8 906 2,359 7,625 16,381
+
+Table 8: Domain-wise response-token statistics of MVR-SFT-528K. Token statistics are computed over model responses using the Qwen3.5 tokenizer for all seven reasoning domains. Mathematics accounts for only 24.76% of the samples but contributes 49.70% of the response tokens, with the highest mean length of 3,970.5 tokens and a P95 length of 12,188 tokens. Logic/Game/Puzzle is similarly reasoning-intensive, contributing a larger proportion of tokens than samples. Spatial has a moderate median length but a pronounced long-tailed distribution, with its P95 reaching 6,344 tokens. In comparison, Science and Chart/Table/Doc contain large numbers of samples with relatively moderate response lengths, whereas General and GUI/Web are dominated by short-form responses. These statistics demonstrate that MVR-SFT balances large-scale visual supervision with computationally intensive long-form reasoning data of varying complexity. 
+
+## A.2 RL Data Statistics 
+
+We provide a comprehensive statistical analysis of the RL data used to construct the domain-specific experts. This analysis offers a systematic overview of the data composition and characteristics. 
+
+Difficulty Distribution of RL Experts. We further compare the difficulty characteristics of RL expert training sets across different model scales. As shown in Table 9, both Analytical and Real-World RL subsets concentrate around the medium difficulty range, with a median SFT rollout pass rate of 0.5. Analytical RL is consistently more challenging, with mean pass rates of 0.4502 and 0.4503 at 4B and 9B, respectively, compared with 0.4981 for Real-World RL at both scales. Notably, the overall difficulty profiles remain highly consistent across model scales, showing that our scale-specific frontier selection constructs RL subsets with stable and well-matched difficulty distributions. 23 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Table 9: Difficulty distribution of 4B and 9B RL experts measured by SFT rollout pass rate.                                                       
+
+> RL Expert 0.125 0.250 0.375 0.500 0.625 0.750 0.875 Mean Median
+> 4B Analytical RL 44 1,955 6,654 7,633 2,620 194 25 0.4502 0.500 4B Real-World RL 01,348 2,939 3,270 2,624 1,416 00.4981 0.500 9B Analytical RL 47 2,085 7,097 8,142 2,795 207 27 0.4503 0.500 9B Real-World RL 01,393 3,036 3,377 2,711 1,463 00.4981 0.500 Overall 91 6,781 19,726 22,422 10,750 3,280 52 0.4681 0.500
+
+Question Type Distribution of RL Experts. We further analyze the task-type distribution of RL experts across model scales. As shown in Table 10, Analytical RL is dominated by multiple-choice and numeric reasoning tasks, while Real-World RL contains substantially more counting and position-related questions. These domain-specific patterns remain highly consistent between 4B and 9B, indicating stable and well-preserved task compositions across scales. Moreover, these task types generally have well-defined answer spaces, enabling reliable automatic verification and reducing reward ambiguity during reinforcement learning. The complementary yet stable distributions provide diverse and verifiable supervision signals for effective domain-specific RL training. Table 10: Question type distribution of 4B and 9B RL experts.                                                 
+
+> Question Type 4B Analytical 4B Real-World 9B Analytical 9B Real-World
+> Multiple Choice 11,269 (58.92%) 4,975 (42.90%) 11,669 (57.20%) 5,002 (41.75%) Numeric 5,250 (27.45%) 254 (2.19%) 5,007 (24.54%) 287 (2.40%) Counting 396 (2.07%) 3,404 (29.35%) 446 (2.19%) 3,482 (29.07%) Position 22 (0.12%) 1,943 (16.75%) 37 (0.18%) 2,052 (17.13%) Short Phrase 1,107 (5.79%) 560 (4.83%) 1,813 (8.89%) 659 (5.50%) Entity Name 778 (4.07%) 175 (1.51%) 978 (4.79%) 205 (1.71%) Yes/No 248 (1.30%) 221 (1.91%) 360 (1.76%) 242 (2.02%) Color 46 (0.24%) 58 (0.50%) 66 (0.32%) 49 (0.41%) Category 9 (0.05%) 6 (0.05%) 23 (0.11%) 2 (0.02%) Short Fact 0 (0.00%) 1 (0.01%) 1 (0.00%) 0 (0.00%)
+> Total 19,125 (100%) 11,597 (100%) 20,400 (100%) 11,980 (100%)
+
+# B Experimental Details 
+
+## B.1 Distillation Details 
+
+For cascaded reasoning trajectory distillation, we employ Qwen3.5-9B, Qwen3.5-27B, and Qwen3.5-122B-A10B as teacher models, deployed on 1, 2, and 4 NVIDIA A100 GPUs with 80 GB memory, respectively. To control the computational cost of large-scale trajectory generation, all teacher models are run in instruct mode ( enable thinking=False ). For each input sample, we generate four candidate trajectories and set the maximum generation length to 16,384 tokens. Under this deployment configu-ration, the 9B, 27B, and 122B-A10B teachers process approximately 200, 120, and 80 samples per hour, respectively, corresponding to roughly 800, 480, and 320 generated trajectories per hour. This cascaded design reduces distillation cost by routing only difficult samples to larger teachers. 
+
+## B.2 Training Details 
+
+Supervised Fine-Tuning. We conduct SFT with LLaMA-Factory on 8 NVIDIA A100 GPUs with 80GB memory each. We use full-parameter fine-tuning with packed sequences, FlashAttention-2, and a 24 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Table 11: Training hyperparameters for SFT, RL, and MOPD.               
+
+> SFT Params. Parameter Value
+> Framework LLaMA-Factory Fine-tuning type Full fine-tuning GPU Number 8DeepSpeed ZeRO-2 Flash attention FlashAttention-2 Liger kernel Enabled Packing Enabled Cutoff length 16,384 Image min pixels 1,024 Image max pixels 589,824 Global batch size 32 Learning rate 1.0
+
+× 10 −5               
+
+> Scheduler Cosine Warmup ratio 0.1 Training epochs 2
+> RL Params. Parameter Value
+> Framework VeRL RL objective GSPO GPU Number 8Global batch size 256 Max prompt length 4,096 Max response length 16,384 Rollouts 8Temperature 1.0 Top-p0.95 Actor learning rate 5
+
+× 10 −7                 
+
+> Weight decay 0.1 Warmup steps 20 Training steps 200 Judge temperature 0.1 Judge top-p1.0
+> MOPD Params. Parameter Value
+> Framework VeRL Student GPUs 4GPUs per teacher 2Global batch size 256 Max prompt length 4,096 Max response length 16,384 Rollouts per prompt 2Temperature 1.0 Top-p0.95 Actor learning rate 5.0
+
+× 10 −7     
+
+> Weight decay 0.1 Warmup steps 20 Training steps 300 Top-K32 LR schedule Constant
+
+cutoff length of 16,384 tokens for efficient long-context training. The global batch size is set to 32. Other SFT hyperparameters are summarized in Table 11. 
+
+Reinforcement Learning. We train RL experts with VeRL on 8 NVIDIA H200 GPUs with 141GB memory each. We adopt GSPO as the RL objective and sample 8 rollouts per prompt. The maximum prompt and response lengths are set to 4,096 and 16,384, respectively. We use an answer-only judge reward during RL training. Detailed RL hyperparameters are shown in Table 11. 
+
+Multi-Teacher On-Policy Distillation. We perform MOPD with VeRL on NVIDIA H200 GPUs with 141GB memory. The student uses 4 GPUs, while each teacher uses 2 GPUs. The student generates on-policy responses, and the corresponding teacher provides top-K token-level supervision with 
+
+K = 32. Other MOPD settings are reported in Table 11. 
+
+## B.3 Evaluation Details 
+
+We conduct evaluation using VLMEvalKit [7]. All evaluations are performed on NVIDIA H200 GPUs with 141GB memory. For evaluation metrics, we replace traditional exact string matching with CompassVerifier [30], which adopts an LLM-as-a-Judge to more reliably assess response correctness. Following OpenDataArena [4] and the official evaluation setting, we use deterministic decoding with temperature 0.0, top-p 1.0, and top-k -1. We further apply a repetition penalty of 1.05 and set the maximum response length to 16,384 tokens. Responses that do not produce a valid final answer within this budget are not counted as correct. For benchmarks with unusually large performance deviations, we additionally conduct manual inspections to verify the reliability of the evaluation results. 
+
+# C Prompt Templates 
+
+In this section, we present the prompts used in our experiments. 25 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+## C.1 MLLM-Assisted Cleaning and Annotation 
+
+Prompt 1: Language Standardization 
+
+Role. You are a careful multilingual data curator for multimodal visual reasoning tasks. 
+
+Inputs. An image and a raw question that may contain non-English text, mathematical expressions, variables, units, option labels, or visual identifiers. 
+
+Task. Standardize the question into English while preserving the original task meaning. Follow these rules: • If the question is not in English, translate it into fluent and natural English. • If the question is already in English, keep its meaning unchanged and only fix minor language issues when necessary. • Preserve all mathematical formulas, variables, numbers, units, option labels, and visual identifiers. • Do not change the answer space, add new constraints, remove options, or simplify the reasoning required by the question. • Do not solve the problem or provide the final answer. 
+
+Output (strict). The last line must be a single JSON object with exactly these keys: • standardized question , is translated , reason 
+
+No extra keys. No fences. No text after the JSON. 
+
+JSON schema example.   
+
+> {"standardized question":"", "is translated":false, "reason":"" }
+
+Image. 
+
+<IMAGE START> 
+
+{image }
+
+<IMAGE END> 
+
+Raw Question. 
+
+<QUESTION START> 
+
+{question }
+
+<QUESTION END> 
+
+Prompt 2: Irrelevant Content Removal 
+
+Role. You are a strict data curator for multimodal visual reasoning tasks. 
+
+Inputs. An image and a standardized question that may contain unrelated or distracting content. 
+
+Task. Remove irrelevant content from the question while preserving the original task meaning. Follow these rules: • Remove unrelated links, advertisements, watermarks, source notes, problem indices, score annotations, and irrelevant metadata. • Remove boilerplate instructions that are not necessary for answering the visual reasoning question. • Preserve all task-relevant information, including formulas, variables, numbers, units, option labels, visual identifiers, and constraints. • Do not remove content that is necessary to understand or answer the question. • Do not solve the problem or provide the final answer. 
+
+Output (strict). The last line must be a single JSON object with exactly these keys: • error type , corrected text , reason 
+
+The value of error type should be a list. If no irrelevant content is found, return an empty list and keep the original question as corrected text . No extra keys. No fences. No text after the JSON. 
+
+JSON schema example. 
+
+26 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning   
+
+> {"error type":[], "corrected text":"", "reason":"" }
+
+Example. If the standardized question is “What is this? https://example.com”, remove the unrelated link:   
+
+> {"error type":["irrelevant content"], "corrected text":"What is this?", "reason":"The URL is unrelated to the visual reasoning question and is removed." }
+
+Image. 
+
+<IMAGE START> 
+
+{image }
+
+<IMAGE END> 
+
+Standardized Question. 
+
+<QUESTION START> 
+
+{question }
+
+<QUESTION END> 
+
+Prompt 3: Answerability Filtering 
+
+Role. You are a strict data curator for multimodal visual reasoning tasks. 
+
+Inputs. An image, a cleaned question, and a reference answer. 
+
+Task. Determine whether the sample can be reliably answered from the given multimodal input. Follow these rules: • Mark the sample as answerable only if the question can be answered from the image and the provided text. • Mark the sample as unanswerable if the question is incomplete, ambiguous, missing key context, or depends on unavailable information. • Mark the sample as unanswerable if it requires external actions, web browsing, file access, interaction with an interface, or information beyond the given image and text. • Mark the sample as unanswerable if it is not a real question, such as a captioning-only request, open-ended discussion, subjective preference, or instruction without a verifiable answer. • Do not solve the problem or modify the question. 
+
+Output (strict). The last line must be a single JSON object with exactly these keys: • answerable , reason 
+
+No extra keys. No fences. No text after the JSON. 
+
+JSON schema example.   
+
+> {"answerable":false, "reason":"" }
+
+Example. If the cleaned question is “Open the website shown in the image and report the current price”, the sample should be marked as unanswerable because it requires external web access:   
+
+> {"answerable":false, "reason":"The question requires external web browsing and cannot be answered from the given image and text alone." }
+
+Image. 
+
+<IMAGE START> 
+
+{image }
+
+<IMAGE END> 
+
+Cleaned Question. 
+
+<QUESTION START> 
+
+{question }
+
+<QUESTION END> 
+
+Reference Answer. 
+
+27 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+<ANSWER START> 
+
+{answer }
+
+<ANSWER END> 
+
+Prompt 4: Instruction Refinement 
+
+Role. You are a careful data curator for multimodal visual reasoning tasks. 
+
+Inputs. An image and a cleaned question that may contain low-quality meta-instructions. 
+
+Task. Refine the question instruction while preserving the original task semantics. Follow these rules: • If the question contains instructions that may reduce reasoning quality, rewrite them into instructions that encourage thoughtful reasoning. • Examples of low-quality instructions include “just give the answer”, “do not think”, “give me the final answer only”, or similar phrases. • Replace such instructions with reasoning-friendly guidance, such as “provide a clear reasoning process before the final answer”. • Preserve the original visual reasoning task, answer space, formulas, variables, numbers, units, option labels, and constraints. • Do not add new task requirements, change the question meaning, remove necessary information, or solve the problem. 
+
+Output (strict). The last line must be a single JSON object with exactly these keys: • refined question , has low quality instruction , rewritten instruction , reason 
+
+No extra keys. No fences. No text after the JSON. 
+
+JSON schema example.   
+
+> {"refined question":"", "has low quality instruction":false, "rewritten instruction":"", "reason":"" }
+
+Example. If the cleaned question is “Please directly answer the question: what are the roots of this equation?”, the low-quality meta-instruction should be rewritten to encourage reasoning:   
+
+> {"refined question":"Please provide a clear reasoning process before giving the roots of this equation.", "has low quality instruction":true, "rewritten instruction":"Please directly answer the question", "reason":"The original instruction discourages reasoning, so it is replaced with reasoning-friendly guidance while preserving the task meaning." }
+
+Image. 
+
+<IMAGE START> 
+
+{image }
+
+<IMAGE END> 
+
+Cleaned Question. 
+
+<QUESTION START> 
+
+{question }
+
+<QUESTION END> 
+
+Prompt 5: Answer Extraction 
+
+Role. You are a careful data curator for multimodal visual reasoning tasks. 
+
+Inputs. An image, a refined question, and a raw answer that may contain reasoning steps, explanations, options, or noisy text. 
+
+Task. Extract the final answer from the raw answer field while preserving the original answer meaning. Follow these rules: 
+
+28 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+• If the raw answer contains reasoning, explanations, or intermediate steps, extract only the final answer. • If the raw answer contains multiple candidate answers, extract the one explicitly indicated as the final answer. • Preserve important answer details, including option labels, numbers, units, variables, signs, and mathematical expressions. • Do not infer a new answer from the image or question; only extract the answer already present in the raw answer field. • Do not rewrite the question, solve the problem, or add new reasoning. 
+
+Output (strict). The last line must be a single JSON object with exactly these keys: • extracted answer , has reasoning or noise , reason 
+
+No extra keys. No fences. No text after the JSON. 
+
+JSON schema example.   
+
+> {"extracted answer":"", "has reasoning or noise":false, "reason":"" }
+
+Image. 
+
+<IMAGE START> 
+
+{image }
+
+<IMAGE END> 
+
+Refined Question. 
+
+<QUESTION START> 
+
+{question }
+
+<QUESTION END> 
+
+Raw Answer. 
+
+<ANSWER START> 
+
+{answer }
+
+<ANSWER END> 
+
+Prompt 6: Answer Canonicalization 
+
+Role. You are a careful data curator for multimodal visual reasoning tasks. 
+
+Inputs. An image, a refined question, and an extracted answer. 
+
+Task. Normalize the extracted answer into a concise, consistent, and verifiable form while preserving its original meaning. Follow these rules: • If the question is multiple-choice and the answer contains option content, recover the corresponding option label from the question. • If both the option label and option content are available, output the answer in the form of the option label followed by the answer content. • Normalize minor formatting differences, such as extra spaces, redundant punctuation, capitalization, and unnecessary explanatory words. • Preserve important answer details, including numbers, units, variables, signs, option labels, and mathematical expressions. • Do not infer a new answer from the image or question; only canonicalize the given extracted answer. • Do not solve the problem, add reasoning, or change the answer meaning. 
+
+Output (strict). The last line must be a single JSON object with exactly these keys: • canonical answer , answer type , recovered option label , reason 
+
+No extra keys. No fences. No text after the JSON. 
+
+JSON schema example. 
+
+29 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning   
+
+> {"canonical answer":"", "answer type":"", "recovered option label":"", "reason":"" }
+
+Example. If the question options include “(D) photosynthesis”, and the extracted answer is “photosynthesis”, the canonical answer should recover the corresponding option label:  
+
+> {"canonical answer":"D. photosynthesis", "answer type":"multiple-choice", "recovered option label":"D", "reason":"The extracted answer matches the content of option D."
+> }
+
+Image. 
+
+<IMAGE START> 
+
+{image }
+
+<IMAGE END> 
+
+Refined Question. 
+
+<QUESTION START> 
+
+{question }
+
+<QUESTION END> 
+
+Extracted Answer. 
+
+<ANSWER START> 
+
+{answer }
+
+<ANSWER END> 
+
+Prompt 7: Reasoning Domain Classification 
+
+Role. You are a careful data annotator for multimodal visual reasoning tasks. 
+
+Inputs. An image, a cleaned question, and a canonical answer. 
+
+Task. Classify the sample into exactly one reasoning domain according to the primary reasoning skill required to answer the question. Use only the following categories: • science : scientific or academic reasoning, including physics, chemistry, biology, geography, astronomy, medicine, scientific diagrams, experimental setups, scientific processes, and knowledge-intensive academic questions. • math : mathematical reasoning, including arithmetic, algebra, geometry, probability, equations, formulas, numerical computation, quantitative comparison, and abstract mathematical problem solving. • chart/table/doc : reasoning over charts, tables, plots, documents, forms, slides, receipts, reports, text-heavy images, or other structured visual materials that require reading and interpreting visualized or document-like information. • logic/game/puzzle : logical reasoning, games, puzzles, rule-based reasoning, pattern reasoning, sequence reasoning, Raven-style problems, visual logic, and tasks that require inferring rules or constraints. • general : general visual question answering, including object recognition, scene understanding, attributes, colors, materials, counting without complex computation, common-sense visual understanding, and everyday image questions. • spatial : spatial reasoning, including relative positions, directions, distances, object relations, 2D or 3D layouts, orientation, viewpoint understanding, navigation-like reasoning, and geometric relations grounded in the image. • gui/web : graphical user interface or web-page understanding, including screenshots, buttons, menus, icons, toolbars, web layouts, interface navigation, and app or browser interaction contexts. 
+
+Important Notes. 
+
+• Choose the domain based on the main skill required to answer the question, not the dataset source or superficial keywords. • If the answer mainly comes from reading a chart, table, plot, document, or text-heavy visual material, prefer chart/table/doc , even if the answer is numeric. 
+
+30 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+• If the task requires scientific knowledge or interpreting a scientific diagram, prefer science ; if it mainly requires abstract calculation or formula manipulation, prefer math .• If the task mainly asks about positions, directions, layouts, viewpoints, or spatial relations, prefer spatial 
+
+over general .• If the image is a software, mobile, desktop, or web interface screenshot, prefer gui/web .• Use general only when the sample does not require specialized scientific, mathematical, logical, spatial, chart/document, or GUI/web reasoning. • Do not solve the problem, modify the question, or change the answer. 
+
+Output (strict). The last line must be a single JSON object with exactly this key: • domain 
+
+The value of domain must be exactly one of the seven categories above. No extra keys. No fences. No text after the JSON. 
+
+JSON schema example.   
+
+> {"domain":"science" }
+
+Image. 
+
+<IMAGE START> 
+
+{image }
+
+<IMAGE END> 
+
+Cleaned Question. 
+
+<QUESTION START> 
+
+{question }
+
+<QUESTION END> 
+
+Canonical Answer. 
+
+<ANSWER START> 
+
+{answer }
+
+<ANSWER END> 
+
+## C.2 SFT Trajectory Construction 
+
+Prompt 8: Reasoning Trajectory Distillation 
+
+Image. 
+
+{image }
+
+You are a multimodal reasoning assistant. Solve the problem using all relevant information from the image and the question. Your response will be used as a high-quality reasoning trajectory for training another model. Therefore, your reasoning should be correct, clear, concise, and grounded in the image and question. Please follow these requirements: 1. Carefully understand the task. • Identify what the question asks. • If the question contains multiple sub-questions, answer all of them. • If the question specifies an answer format, such as an option, coordinate, JSON, bbox, point, action format, or LaTeX format such as \boxed {} , follow it exactly in the final answer. 2. Use the visual information. • Inspect the image carefully. 
+
+31 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+• Use relevant diagrams, charts, tables, screenshots, UI elements, labels, coordinates, symbols, spatial relations, and visual details. • Do not ignore the image when the question depends on it, or invent unsupported visual details. 3. Reason clearly and with sufficient detail. • Write the reasoning process before the final answer line. • The reasoning should directly solve the problem and remain concise, logical, and useful. • Avoid unnecessary repetition, irrelevant content, or discussions about the prompt and output format. • For mathematical or scientific problems, include necessary calculations, units, and logical steps. • For multiple-choice questions, compare the options when useful and select the best answer. • For visual grounding, point, bbox, GUI, or action tasks, identify the target carefully and follow the required output schema. 4. Give the final answer. • After the reasoning process, write the final answer in the required format. • The final answer must be placed inside <answer>...</answer> .• If the problem specifies a required final answer format, such as \boxed {} , JSON, bbox, point 2d , option letter, coordinate, or action dictionary, put that format inside <answer>...</answer> .• The content inside <answer>...</answer> should contain only the final answer, such as an option, number, short phrase, coordinate, JSON, bbox, action dictionary, or multiple sub-question answers. 
+
+Problem. 
+
+{question }
+
+Your response must follow this order: Write the complete and correct reasoning process first. Then write the final answer line. The last line of your response must match this template exactly: 
+
+> Therefore, the final answer is <answer>ANSWER</answer>
+
+Replace ANSWER with the actual solution to the problem. Do not write anything after the final answer line. 
+
+Prompt 9: Distillation Trajectory Verification 
+
+System Prompt. 
+
+> You are an impartial grading expert. Evaluate whether the candidate response correctly solves the given problem. Final-answer correctness is the primary criterion, while the reasoning trajectory should be considered as a secondary consistency check.
+
+Role. Given an original question, a standard answer, and a complete candidate response, determine whether the response should be regarded as correct. The candidate response may contain both a reasoning trajectory and a final answer. 
+
+Evaluation Protocol. 
+
+1. Response Validity. 
+
+• Reject responses that are incomplete, severely truncated, repetitive, or explicit refusals. • Minor stylistic issues, redundancy, or harmless formatting differences should not affect the judgment. 2. Final-Answer Correctness — Primary Criterion. 
+
+• First determine whether the candidate’s final answer is semantically equivalent to the standard answer. • Equivalent mathematical expressions, reasonable numerical precision differences, and semantically equivalent textual answers should be accepted. 
+
+32 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+• For multiple-choice questions, compare the selected option and its corresponding content with the standard answer. • For multi-part questions, all required parts must be correctly answered. • If the final answer is incorrect, classify the response as incorrect regardless of the preceding reasoning. 3. Reasoning Consistency — Secondary Criterion. 
+
+• If the final answer is correct, further examine whether the reasoning trajectory is generally consistent with the question, visual evidence, and final answer. • Check for major logical contradictions, mathematical errors, unsupported visual claims, or factual errors that substantially undermine the validity of the solution. • Minor omissions, shortcuts, imprecise wording, or non-essential intermediate imperfections may be tolerated if they do not affect the validity of the overall solution. • If the trajectory contains a substantive reasoning error that invalidates the solution process, classify the response as incorrect even if the final answer matches the standard answer. 4. Overall Judgment. 
+
+• Classify the response as correct when the final answer is correct and the reasoning contains no major inconsistency. • Otherwise, classify the response as incorrect .
+
+Original Question. 
+
+> <Original Question Begin>
+> {question }
+> <Original Question End>
+
+Standard Answer. 
+
+> <Standard Answer Begin>
+> {gold answer }
+> <Standard Answer End>
+
+Candidate Response. 
+
+> <Candidate Response Begin>
+> {llm response }
+> <Candidate Response End>
+
+Output Format. 
+
+> Return exactly one valid JSON object on a single line. Do not output Markdown, code fences, or any additional text.
+> {"verdict":"correct|incorrect","reasoning consistent":true|false,"reason":"brief justification" }
+
+Final Instruction. 
+
+> Evaluate the final answer first and use the reasoning trajectory as a secondary consistency check. Return only the required single-line JSON object.
+
+# D Data Examples 
+
+We show representative examples that reflect the diversity and broad task range of MMVistaReason. Example 1: Science 
+
+Image. 
+
+33 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+ID. 
+
+scimm 752608 
+
+System Prompt. 
+
+You are a helpful assistant. When answering the question, first provide the reasoning process enclosed in <think >... </think > tags. Then provide the final answer enclosed in 
+
+<answer >... </answer > tags. 
+
+Question. 
+
+<image> What type of product is formed from the hydrogenation of furfuralacetone according to the analysis text? 
+
+Answer. 
+
+Saturated alcohol 
+
+Metadata. 
+
+source: scimm keep domain: science type: close subtype: short phrase distill model: qwen3.5-27b difficulty: 0.25 
+
+Response. 
+
+<think> The image displays a catalytic hydrogenation reaction scheme using Ru@SILP (ruthenium on a silica-immobilized liquid phase catalyst) under 20 bar H 2, 120 ◦C, for 18 hours. On the left are five substrate molecules; on the right are their corresponding products after hydrogenation. Furfuralacetone is identified as the red molecule in the bottom row of substrates: it has a furan ring attached to an unsaturated ketone chain --- specifically, 4-(furan-2-yl)-3-buten-2-one (also known as furylacrolein or furfuralacetone). Its structure includes a furan ring and an α, β-unsaturated ketone group. Looking at the product column on the far right, directly aligned with furfuralacetone (bottom red reactant), the product shown is a saturated alcohol: the furan ring remains intact, but the double bond in the side chain is reduced, and the ketone is reduced to a secondary alcohol. The resulting molecule is 4-(furan-2-yl)butan-2-ol. This transformation corresponds to full hydrogenation of both the C=C double bond and the C=O carbonyl group of the enone system, yielding a saturated alcohol while preserving the heteroaromatic furan ring. Thus, according to the visual data in the image, the hydrogenation of furfuralacetone yields a saturated aliphatic alcohol derivative where the enone functionality is fully reduced. </think> Therefore, the final answer is <answer>saturated alcohol</answer> 
+
+34 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Example 2: Math 
+
+Image. 
+
+ID. 
+
+mmfr 113858 
+
+System Prompt. 
+
+You are a helpful assistant. When answering the question, first provide the reasoning process enclosed in <think >... </think > tags. Then provide the final answer enclosed in 
+
+<answer >... </answer > tags. 
+
+Question. 
+
+<image>Hint: Please answer the question and provide the correct option letter, e.g., A, B, C, D, at the end. Question: Determine the area of the highlighted section. Choices: (A) 12.6 (B) 50.3 (C) 100.5 (D) 402.1 
+
+Answer. 
+
+B
+
+Metadata. 
+
+source: FineVision-geometry3k(mathv360k) domain: math type: close subtype: multiple choice distill model: qwen3.5-27b difficulty: 1.0 
+
+Response. 
+
+<think> To determine the area of the highlighted section, we analyze the shape and its components. The figure consists of: - A large semicircle on top (diameter = 12 in.) - Two small semicircles removed from the bottom left and right (each with diameter = 4 in., since total width is 12 in., and they are symmetrically placed with a middle segment) - One small semicircle added downward in the center (also diameter = 4 in.) Wait --- let’s look more carefully at the diagram. Actually, the dashed line shows three points equally spaced along the 12-inch base. The tick marks suggest that each segment between centers is 4 inches. So: - Total width = 12 in. - Divided into 3 equal parts → each part is 4 in. - Therefore, the two side ‘‘bites’’ are semicircles of diameter 4 in. (radius 2 in.), cut out from the main shape. 
+
+35 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+- The bottom middle protrusion is also a semicircle of diameter 4 in. (radius 2 in.), added to the shape. But wait --- actually, looking again: the overall shape appears to be constructed as follows: Imagine a large rectangle or semicircle? No --- better approach: Notice that the entire shape can be seen as: 
+
+→ A large semicircle of diameter 12 in. (area = 12 πr2 = 12 π(6)2 = 18 π)MINUS two small semicircles (on the sides, cut out), each of diameter 4 in. → radius 2 in. PLUS one small semicircle at the bottom center (added), also diameter 4 in. → radius 2 in. But note: removing two semicircles and adding one net removes one semicircle worth of area. Alternatively, think geometrically: The shape is equivalent to: Large semicircle (d=12) minus one small semicircle (d=4). Why? Because you remove two small semicircles from the top edge (but they’re below the diameter?), no --- let’s reinterpret. Actually, standard interpretation for such figures (common in geometry problems): This shape is formed by: - Taking a large semicircle of diameter 12 in. (so radius 6 in.) - Subtracting two smaller semicircles (each diameter 4 in., so radius 2 in.) from the flat side --- but those would be indents. - And adding a semicircle of diameter 4 in. hanging down from the center. But visually, the net effect is: Area = Area of large semicircle - Area of two small semicircles + Area of one small semicircle = Area of large semicircle - Area of one small semicircle Because -2 +1 = -1. So: Large semicircle: diameter 12 → radius 6 → area = (1/2 ) ∗ π ∗ 62 = 18 π
+
+Small semicircle: diameter 4 → radius 2 → area = (1/2 ) ∗ π ∗ 22 = 2π
+
+Thus, shaded area = 18 π − 2π = 16 π
+
+Now compute numerically: π ≈ 3.1416 → 16 ∗ 3.1416 ≈ 50.2656 ≈ 50.3 
+
+Therefore, the area is approximately 50.3 square inches. Matching choice: (B) 50.3 </think> Therefore, the final answer is <answer>B</answer> 
+
+Example 3: Logic/Game/Puzzle 
+
+Image. 
+
+ID. 
+
+mmfr 304654 
+
+System Prompt. 
+
+You are a helpful assistant. When answering the question, first provide the reasoning process 
+
+36 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+enclosed in <think >... </think > tags. Then provide the final answer enclosed in 
+
+<answer >... </answer > tags. 
+
+Question. 
+
+<image> **Rules:** 1. This is a maze mini-game. The player needs to navigate around obstacles to reach the destination and achieve victory. 2. The red circle represents the player, the green block is the goal and the blue blocks are obstacles. 3. The player can only move within the white blocks. 4. The coordinates are given in the format (row, col), where row represents the vertical position and col represents the horizontal position. **Question:** Which directions are available to move now? **Options:** A. up B. down C. up, left D. up, right E. up, down, left F. up, down, right G. down, left, right H. up, down, left, right 
+
+Answer. 
+
+G
+
+Metadata. 
+
+source: GameQA-140K domain: logic/game/puzzle type: close subtype: multiple choice distill model: qwen3.5-27b difficulty: 0.75 
+
+Response. 
+
+<think> To determine which directions are available to move from the current position of the player (red circle), we need to: 1. Identify the coordinates of the red circle. - From the image, the red circle is at row 1, column 7, i.e., (1, 7). 2. Check adjacent cells (up, down, left, right) to see if they are white (walkable) or blue (obstacle). - Up: (0, 7). This cell is within the grid and appears white in the maze path? Let us check visually. Looking at row 0, columns 0--10, the top row is entirely light blue, meaning it is an obstacle. So up from (1,7) goes to (0,7), which is blue and not walkable. - Down: (2, 7). In the image, this cell is white and therefore walkable. - Left: (1, 6). This cell is white and therefore walkable. - Right: (1, 8). This cell is also white and therefore walkable. Wait, let me double-check with the actual maze structure shown. Looking at the maze layout more carefully: - At (1,7): red dot. - Above it (0,7): part of the outer border. The entire row 0 is shaded light blue, so that is an obstacle and cannot be used. - Below it (2,7): white square, so the player can go down. - To the left (1,6): white square, so the player can go left. - To the right (1,8): white square, so the player can go right. So available moves are down, left, and right. But wait, option G is ‘‘down, left, right’’, which matches. However, let me re-express based on visual inspection: In row 1: - Columns: 0=blue, 1=white, 2=white, 3=blue, 4=white, 5=white, 6=white, 7=red (player), 8=white, 9=white, 10=blue. So from (1,7): 
+
+37 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+- Left: (1,6) = white, so OK. - Right: (1,8) = white, so OK. - Down: (2,7) = white, so OK. - Up: (0,7) = row 0, all blue, so not walkable. Thus, available directions are left, right, and down. That corresponds to option G. </think> Therefore, the final answer is <answer>G</answer> 
+
+Example 4: Chart/Table/Doc 
+
+Image. 
+
+ID. 
+
+vero 129302 
+
+System Prompt. 
+
+You are a helpful assistant. When answering the question, first provide the reasoning process enclosed in <think >... </think > tags. Then provide the final answer enclosed in 
+
+<answer >... </answer > tags. 
+
+Question. 
+
+<image> What is the x-coordinate of the bar with the maximum z-height in subplot (b)? 
+
+Answer. 
+
+3
+
+Metadata. 
+
+source: vero chart ocr-ecd vqa domain: chart/table/doc type: close subtype: numeric distill model: qwen3.5-27b difficulty: 0.25 
+
+Response. 
+
+<think> To solve this problem, we need to examine subplot (b), which is a 3D bar chart titled ‘‘3D Chart: Bar Representation of Measured Data’’. The question asks for the **x-coordinate** of the bar with the **maximum z-height**. Step 1: Understand the axes. - The X-axis is labeled ‘‘X-axis (Category 1)’’ and ranges from 0 to 4 (approximately). - The Y-axis is labeled ‘‘Y-axis (Category 2)’’ and ranges from 0.0 to 3.0. - The Z-axis is labeled ‘‘Z-axis (Measurement)’’ and shows the height of each bar. Step 2: Identify the tallest bar visually. 
+
+38 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+Looking at the 3D bar chart in subplot (b), the tallest bar (highest z-value) is the yellow-green bar located near the center-right of the plot. Its z-height appears to be around 5 or slightly above, clearly higher than any other bar. Step 3: Determine its x-coordinate. We project that bar down onto the X-axis. Observing the position along the X-axis (‘‘Category 1’’), this bar aligns with approximately **x = 3.0**. Let’s verify by checking nearby bars: - At x=2, there are several bars but none reach as high as the one at x=3. - At x=4, the purple bar is tall but not as tall as the yellow-green one at x=3. - The yellow-green bar is positioned directly above x=3 on the X-axis. Thus, the bar with maximum z-height has an x-coordinate of 3. </think> Therefore, the final answer is <answer>3</answer> 
+
+Example 5: General 
+
+Image. 
+
+ID. 
+
+vero 19012 
+
+System Prompt. 
+
+You are a helpful assistant. When answering the question, first provide the reasoning process enclosed in <think >... </think > tags. Then provide the final answer enclosed in 
+
+<answer >... </answer > tags. 
+
+Question. 
+
+<image> What kind of bird is in the photo? 
+
+Answer. 
+
+Red-legged Honeycreeper (Cyanerpes cyaneus) 
+
+Metadata. 
+
+source: vero captioning IF-pixmo ask model anything domain: general type: close subtype: entity name distill model: qwen3.5-27b difficulty: 0.5 
+
+Response. 
+
+<think> To identify the bird in the photo, we analyze its key visual features: 1. **Coloration**: The bird has a striking electric blue body, which is very distinctive. 2. **Head crest**: It displays a bright turquoise-green crest on top of its head, standing erect --- a hallmark feature. 3. **Wings and back**: The wings are black with a vivid blue stripe running along the edge (coverts), contrasting sharply with the blue body. 4. **Legs**: The legs are bright red or orange-red, another notable trait. 
+
+39 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+5. **Beak**: Short, pointed, dark beak suited for nectar feeding. 6. **Tail**: Relatively short tail, also mostly black with some blue at the base. These characteristics --- especially the combination of brilliant blue plumage, greenish-blue crest, black wings with blue edges, and red legs --- are diagnostic of the **Red-legged Honeycreeper** (*Cyanerpes cyaneus*). This species is found from Mexico through Central America to northern South America, often in tropical forests and gardens. Males are brightly colored as seen here; females are more olive-green with less vibrant crests. The image clearly shows an adult male due to the intense coloration and prominent crest. </think> Therefore, the final answer is <answer>Red-legged Honeycreeper</answer> 
+
+Example 6: Spatial 
+
+Image. 
+
+ID. 
+
+vero 400822 
+
+System Prompt. 
+
+You are a helpful assistant. When answering the question, first provide the reasoning process enclosed in <think >... </think > tags. Then provide the final answer enclosed in 
+
+<answer >... </answer > tags. 
+
+Question. 
+
+<image> The original image has three regions marked as 1, 2, and 3. Consider the content, positional relationships, depths of the three regions and other cues, and sort the depths of the three regions from smallest to largest from the camera, where the format of the answer is ‘‘Smallest, Middle, Largest’’ (e.g., ‘‘1, 2, 3’’). 
+
+Answer. 
+
+2, 1, 3 
+
+Metadata. 
+
+source: vero spatial action-spatial ssrl domain: spatial type: close subtype: position distill model: qwen3.5-122b difficulty: 0.5 
+
+Response. 
+
+<think> To determine the relative depths of regions 1, 2, and 3 from the camera: 
+
+40 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+- Region 1 is a lamppost located in the foreground, clearly closer to the viewer than the buildings or distant trees. It stands on the grassy area but is positioned such that it partially overlaps with background elements, indicating it is nearer. - Region 2 is a patch of lawn in the immediate foreground, extending toward the bottom of the frame. Since it lies directly beneath the lamppost (region 1) and extends into the scene without obstruction, it is actually closer to the camera than region 1, because the base of the lamppost emerges from this lawn, meaning the lawn starts at the very front edge of the image. Wait, let us re-evaluate based on visual depth cues: Actually, looking again: Region 2 is labeled on the grass in the lower-left portion of the image. This is part of the open lawn that stretches from the bottom edge of the photo toward the middle ground. The lamppost (region 1) is standing on this lawn, slightly further back. You can see the base of the lamppost embedded in the grass near region 2. So region 2 is closer to the camera than region 1. Region 3 is on the facade of a large stone building in the mid-to-background. This building is clearly behind both the lawn and the lamppost. You can tell by perspective: the building appears smaller due to distance, and other objects like trees and pathways lie between the camera and the building. Additionally, the tree branches overhead span across the top of the image. They are likely in the extreme foreground, even closer than region 2, but since we are only comparing regions 1, 2, and 3, we ignore them for ranking. So ordering by depth, where smallest means closest: - Region 2: closest, because it is the foreground lawn right at the bottom of the frame. - Region 1: middle, because the lamppost stands on the lawn, so it is farther than region 2 but still in the foreground or midground. - Region 3: farthest, because it is on the distant building. Thus, sorted from smallest (closest) to largest (farthest) depth: 2, 1, 3. </think> Therefore, the final answer is <answer>2, 1, 3</answer> 
+
+Example 7: GUI/Web 
+
+Image. 
+
+ID. 
+
+scimm 847127 
+
+System Prompt. 
+
+You are a helpful assistant. When answering the question, first provide the reasoning process enclosed in <think >... </think > tags. Then provide the final answer enclosed in 
+
+<answer >... </answer > tags. 
+
+Question. 
+
+<image> How many customized sections follow the generic template on the M&S study site? 
+
+Answer. 
+
+5
+
+Metadata. 
+
+41 MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning 
+
+source: scimm keep domain: gui/web type: close subtype: counting distill model: qwen3.5-9b difficulty: 0.25 
+
+Response. 
+
+<think> To determine how many customized sections follow the generic template on the M&S (Mathematics and Statistics) study site, we analyze the structure of the page shown in the image. The page is organized into several distinct functional areas or ‘‘sections’’ that appear after the top navigation bar, including ‘‘Study Home’’ and ‘‘Connect’’, which can be considered the generic template. These sections include: 1. **Your modules** -- Contains information about past/future modules and a link to study record. 2. **Your subjects** -- Shows subject/qualification registration status and a browse button. 3. **Free learning** -- Features OpenLearn content with an accompanying image. 4. **News** -- Displays posted updates, such as internship announcement and scholarship information. 5. **Upcoming events** -- Lists scheduled events with dates and descriptions. Each of these five sections has its own content, layout, and purpose, suggesting they are customized for user interaction and information delivery on this specific M&S study portal. No other distinct section types beyond these five are visible on the main content area below the header. Thus, there are **five** customized sections following the generic template. </think> Therefore, the final answer is <answer>5</answer> 
+
+42

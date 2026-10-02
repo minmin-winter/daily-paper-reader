@@ -6,51 +6,91 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-10-01
-- 运行时间：2026-10-01 23:55:59 UTC
+- 最新运行日期：2026-10-02
+- 运行时间：2026-10-02 23:40:08 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：0
-- 速读区：10
+- 本次总论文数：23
+- 精读区：9
+- 速读区：14
 
 ### 今日简报（AI）
-今天扫读10篇、精读0篇，主线落在音视频联合生成和视觉语言模型的能力边界上。最值得看的是同获7.0的AV-GRPO与音视频生成编辑统一分类框架，前者偏跨模态解耦强化学习，后者适合快速建立全局图谱。普通读者可先读这两篇音视频方向，再补《Seeing and Solving Are Not Enough》以理解VLM评测为何不只看“看见”和“解题”。
-- 详情：[/202610/01/README](/202610/01/README)
+2026-10-02 日报收录23篇，精读9篇、速读14篇，多模态理解与生成仍是焦点。  
+最值得看的是两项9.0分工作：PixelUMM 的“无编码器统一图像与视频理解生成”，以及 Gestalt 的“大型多模态交互模型”。  
+普通读者可先精读这两篇，再用速读里的7.0分工作补齐对抗自训练、多模态情感分析与情感冲突评估线索。
+- 详情：[/202610/02/README](/202610/02/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [PixelUMM: Encoder-Free Unified Image and Video Understanding and Generation](/202610/02/2609.38597v1-pixelumm-encoder-free-unified-image-and-video-understanding-and-generation)  
+   标签：评分：9.0/10、query:unified-mm
+   evidence：无编码器统一多模态模型，统一图像与视频理解生成
+2. [Gestalt: Large Multimodal Interplay Model](/202610/02/2610.00576v1-gestalt-large-multimodal-interplay-model)  
+   标签：评分：9.0/10、query:unified-mm
+   evidence：带跨模态交互词元的统一离散扩散架构
+3. [One Geometry, Different Outcomes: Readout-Dependent Effects of the Modality Gap in Vision-Language Models](/202610/02/2609.36101v1-one-geometry-different-outcomes-readout-dependent-effects-of-the-modality-gap-in-vision-language-models)  
+   标签：评分：8.0/10、query:native-multi
+   evidence：对图像与文本嵌入之间模态间隙的几何分析
+4. [Perception-Inspired Bayesian Causal Fusion for Audiovisual Source Localization](/202610/02/2609.36441v1-perception-inspired-bayesian-causal-fusion-for-audiovisual-source-localization)  
+   标签：评分：8.0/10、query:balanced-mml
+   evidence：贝叶斯因果门控决定是否以及多大程度融合各模态
+5. [Seeing What Should Be Heard: Diagnosing and Repairing Cross-Modal Shortcuts in Omni-Modal LLMs](/202610/02/2609.36798v1-seeing-what-should-be-heard-diagnosing-and-repairing-cross-modal-shortcuts-in-omni-modal-llms)  
+   标签：评分：8.0/10、query:balanced-mml
+   evidence：诊断并修复全模态大模型对图像模态的偏好偏差
+6. [LoopVL: Recurrent Visual Intelligence](/202610/02/2609.38426v1-loopvl-recurrent-visual-intelligence)  
+   标签：评分：8.0/10、query:native-multi
+   evidence：从零训练的统一视觉语言多模态模型
+7. [Beyond Layers: Position-Resolved Gradient Conflict and Position-Aware Modulation for Unified Multimodal Models](/202610/02/2609.38485v1-beyond-layers-position-resolved-gradient-conflict-and-position-aware-modulation-for-unified-multimodal-models)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：诊断并调制统一多模态模型中理解与生成目标间的梯度冲突
+8. [Prototype-guided Bilateral Alignment Multimodal Federated Learning](/202610/02/2609.38925v1-prototype-guided-bilateral-alignment-multimodal-federated-learning)  
+   标签：评分：8.0/10、query:balanced-mml
+   evidence：应对多模态联邦学习中的严重模态失衡
+9. [Multimodal Flow: Unified Flow Modeling of Language and Vision in Embedding Spaces](/202610/02/2609.40362v1-multimodal-flow-unified-flow-modeling-of-language-and-vision-in-embedding-spaces)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：语言与视觉的统一连续生成模型
 
 ### 速读区论文标签
-1. [AV-GRPO: Modality-Anchored Decoupling Diffusion Reinforcement Learning for Joint Audio-Video Generation](/202610/01/2609.29816v2-av-grpo-modality-anchored-decoupling-diffusion-reinforcement-learning-for-joint-audio-video-generation)  
-   标签：评分：7.0/10、query:balanced-mml
-   evidence：模态锚定解耦以应对联合音视频生成中的模态失衡
-2. [Seeing and Solving Are Not Enough for Vision-Language Models](/202610/01/2609.33694v1-seeing-and-solving-are-not-enough-for-vision-language-models)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：视觉语言模型视觉问答分析
-3. [Joint and Cross-Modal Video-Audio Generation and Editing: A Unified Formulation and Design Taxonomy](/202610/01/2609.34381v1-joint-and-cross-modal-video-audio-generation-and-editing-a-unified-formulation-and-design-taxonomy)  
+1. [Mutually Adversarial Self-Training with Evolving Data for Unified Multimodal Models](/202610/02/2609.36224v1-mutually-adversarial-self-training-with-evolving-data-for-unified-multimodal-models)  
    标签：评分：7.0/10、query:unified-mm
-   evidence：音视频对上的统一形式化联合生成与编辑
-4. [Learning Native Reflection in Unified Models with Interleaved Reinforcement Learning](/202610/01/2609.35767v1-learning-native-reflection-in-unified-models-with-interleaved-reinforcement-learning)  
-   标签：评分：7.0/10、query:native-multi
-   evidence：在统一多模态模型中通过交错强化学习习得原生反思能力
-5. [SetOPD: From Few Visual Exemplars to Multimodal Candidate Sets for Remote-Sensing Open-Prompt Detection](/202610/01/2609.32529v1-setopd-from-few-visual-exemplars-to-multimodal-candidate-sets-for-remote-sensing-open-prompt-detection)  
+   evidence：统一多模态模型的对抗式自训练
+2. [Prediction-Layer Branch Calibration for Multimodal Sentiment Analysis](/202610/02/2609.37100v1-prediction-layer-branch-calibration-for-multimodal-sentiment-analysis)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：样本自适应约束混合平衡各分支预测
+3. [VISTA: Value-Informed Event Appraisal for Multimodal Emotion Conflict](/202610/02/2609.37324v1-vista-value-informed-event-appraisal-for-multimodal-emotion-conflict)  
+   标签：评分：7.0/10、query:balanced-mml
+   evidence：多模态线索冲突下的模态仲裁
+4. [UniEvo-VL: An On-policy Self-Distillation Training Recipe for Multimodal Model Self-improvement](/202610/02/2609.38721v1-unievo-vl-an-on-policy-self-distillation-training-recipe-for-multimodal-model-self-improvement)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：面向统一多模态生成与理解模型的自蒸馏训练方案
+5. [Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation](/202610/02/2609.39168v1-reinforcing-multimodal-reasoning-via-token-level-perception-grounded-advantage-estimation)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：提升视觉基础多模态推理的词元级奖励
+6. [Video Evidence Indexing: Learning Where to Look from Video Previews for Token-Budgeted Long-Video Question Answering](/202610/02/2610.00757v1-video-evidence-indexing-learning-where-to-look-from-video-previews-for-token-budgeted-long-video-question-answering)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：面向长视频问答的令牌预算证据定位
+7. [MMVistaReason: Toward Open-Data and Post-Training Recipes for Multimodal Reasoning](/202610/02/2610.01352v1-mmvistareason-toward-open-data-and-post-training-recipes-for-multimodal-reasoning)  
+   标签：评分：7.0/10、query:mm-reasoning
+   evidence：面向开放多模态推理模型的后训练方案
+8. [Hyperbolic Multimodal Continual Learning: A Closest-Admissible Solution](/202610/02/2609.29329v1-hyperbolic-multimodal-continual-learning-a-closest-admissible-solution)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：在双曲多模态模型中保持跨模态对应与模态内相似性
+9. [Advancing Video-Text Pretraining with Multi-View Captions](/202610/02/2609.35090v1-advancing-video-text-pretraining-with-multi-view-captions)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：多模态检测中保留模态特定解码状态
-6. [UniCache: Task- and Type-Aware KV Cache Compression for Unified Multimodal Models](/202610/01/2609.32831v1-unicache-task--and-type-aware-kv-cache-compression-for-unified-multimodal-models)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：面向统一多模态模型的任务与类型感知KV缓存压缩
-7. [PILAR: A Page-Grounded Unified Evidence Representation via an Entity-Linked Assertion Graph for Open-Domain QA Agents over Multimodal Document Corpora](/202610/01/2609.32895v1-pilar-a-page-grounded-unified-evidence-representation-via-an-entity-linked-assertion-graph-for-open-domain-qa-agents-over-multimodal-document-corpora)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：页面锚定的统一证据表示，将文本、表格与图片事实映射到公共断言空间
-8. [SceneScaffold: Active Scene-State Construction for Unified 3D Scene Understanding](/202610/01/2609.33518v1-scenescaffold-active-scene-state-construction-for-unified-3d-scene-understanding)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：结合LLM推理的统一三维多模态理解
-9. [NavJev: Efficient Vision-Language Navigation via Action-Centric Visual Compression and Discriminative Action-Semantic Memory](/202610/01/2609.34969v1-navjev-efficient-vision-language-navigation-via-action-centric-visual-compression-and-discriminative-action-semantic-memory)  
+   evidence：生成多视角字幕以改进视频-文本多模态预训练监督
+10. [Visual Parallel Search: Learning to Search High-Resolution Images with Parallel Tile Inspection and Adaptive Zoom](/202610/02/2609.37002v2-visual-parallel-search-learning-to-search-high-resolution-images-with-parallel-tile-inspection-and-adaptive-zoom)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：将导航从重复多模态生成重构为视觉压缩加类型化动作选择，融合视觉与语言输入
-10. [Who Is Left of Whom? Tracing Spatial Evidence and Role Binding in Relative-Position Reasoning](/202610/01/2609.35486v1-who-is-left-of-whom-tracing-spatial-evidence-and-role-binding-in-relative-position-reasoning)  
+   evidence：并行图块检查与自适应缩放用于高分辨率视觉问答
+11. [Language as the Interface: Foundation-Model Contrastive Learning Links Transcriptomes and Electrophysiology](/202610/02/2609.37024v1-language-as-the-interface-foundation-model-contrastive-learning-links-transcriptomes-and-electrophysiology)  
+   标签：评分：6.0/10、query:native-multi
+   evidence：通过对比学习对齐不同模态的表示
+12. [InsightMap: Structured Spatial Modeling for Embodied Multimodal Reasoning](/202610/02/2609.37187v1-insightmap-structured-spatial-modeling-for-embodied-multimodal-reasoning)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：追踪视觉语言模型相对位置推理中的空间证据与角色绑定
+   evidence：共享多模态骨干联合建模空间与动作的具身推理
+13. [ResComEmb: Effective and Efficient Multimodal Embedding via Residual Homogeneity Compression](/202610/02/2609.37225v1-rescomemb-effective-and-efficient-multimodal-embedding-via-residual-homogeneity-compression)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：面向统一表示的通用多向量多模态嵌入
+14. [PAIQ: Patch-Aligned Semantic Injection via Residual Rotation](/202610/02/2609.37685v2-paiq-patch-aligned-semantic-injection-via-residual-rotation)  
+   标签：评分：6.0/10、query:unified-mm
+   evidence：将互补的SigLIP语义注入DINOv3特征以形成统一视觉表示
 
 
 <div class="dpr-home-promo-card">

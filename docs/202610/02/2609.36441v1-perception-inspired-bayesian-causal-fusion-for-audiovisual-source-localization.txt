@@ -1,0 +1,213 @@
+Title: Perception-Inspired Bayesian Causal Fusion for Audiovisual Source Localization
+
+URL Source: https://arxiv.org/pdf/2609.36441v1
+
+Published Time: Wed, 30 Sep 2026 00:37:46 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# PERCEPTION-INSPIRED BAYESIAN CAUSAL FUSION FOR AUDIOVISUAL SOURCE LOCALIZATION 
+
+# Kyung Yun Lee ♯ Sungnyun Kim ♭ Sebastian J. Schlecht ♮ Tae-Hyun Oh ♭ Vesa V¨ alim¨ aki ♯♯ Acoustics Lab, Dept. of Information and Communications Eng., Aalto University, Espoo, Finland 
+
+♭Korea Advanced Institute of Science and Technology (KAIST), Daejeon, South Korea 
+
+♮Multimedia Comms. & Signal Process., Friedrich-Alexander-Universit¨ at Erlangen-N¨ urnberg, Germany 
+
+ABSTRACT 
+
+Multimodal fusion promises more accurate perception but only when the modalities share a common cause. When they do not, the second modality carries no information about the target, and fusing it can only corrupt the estimate. We cast this whether-to-fuse decision as Bayesian causal inference, following the optimal-observer model of human multisensory perception, and implement it as a plug-and-play layer on top of frozen audio and visual models for sound event local-ization and detection. The model infers a common-cause posterior over visible candidates, then gates precision-weighted fusion accord-ingly. Fusing unconditionally more than doubles the direction error, whereas the causal gate improves on-screen localization while limit-ing off-screen degradation, without any joint network retraining. 
+
+Index Terms — Audiovisual fusion, Bayesian causal inference, common-cause inference, multisensory cue combination, sound event localization and detection 
+
+1. INTRODUCTION 
+
+Humans combine sensory cues into a coherent understanding of the world, motivating a growing body of multimodal machine learning research [1, 2]. Multimodal learning outperforms unimodal learn-ing when the modalities carry complementary information about a shared latent state [3]. Therefore, whether this fusion helps or harms depends on whether such a shared state exists. Consider vision and hearing. Sound propagates around obsta-cles and arrives from every direction, but vision covers only a limited field of view. This asymmetry is natural for both humans and ma-chines; a robot, a wearable device, or an AR headset likewise pairs a forward-facing camera with multi-channel microphones. A source that is occluded, outside the field of view, or behind the observer therefore remains audible but invisible (Figure 1). When a source 
+
+is visible, vision offers higher spatial precision than audio [4, 5], so combining them reduces error. When it is not visible, the vi-sual channel is conditionally independent of the source, and fusing it pulls the estimate toward an unrelated entity [6, 7]. Before asking how to fuse, the observer must first determine 
+
+whether to fuse at all. Yet jointly trained networks delegate this decision to learned representations [8, 9] with no explicit gate. Uncertainty-aware methods weigh modalities by estimated relia-bility [10, 11, 12] but modulate influence continuously rather than inferring whether a shared cause exists. On-screen sound separation systems address a related trade-off by learning to suppress off-screen audio through calibrated audiovisual correspondence [7, 13], and negative-audio evaluations expose the failure mode when this distinction is ignored [6]. These methods require end-to-end train-off -FoV off -FoV GT Audio selected unselected        
+
+> man Audio maleSpeech (-32°, -1°) Audio music (+111°, -12°) GT maleSpeech (-15°, -15°) GT music (+117°, -27°) −150 −100 −50 050 100 150
+> azimuth (°)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> spatial likelihood
+> in-FoV off -FoV off -FoV
+> on: PAVC = 0.87 off: PAVC = 0.00
+> audio — maleSpeech (on) GT — maleSpeech (on) visual — maleSpeech (on) fused — maleSpeech (on) audio — music (o ff )GT — music (o ff )
+
+Fig. 1 : Overview of Bayesian causal fusion on an example frame. Top: video frame with detected objects (orange: selected candi-date; grey: unselected), ground-truth source location, and audio-only estimate for two concurrent sound events—an on-screen event (maleSpeech ) with a compatible visible candidate and an off-screen event ( music ) with no matching candidate. Bottom: audio and visual angular Gaussians for each modality and the resulting precision-weighted fused estimate. For the candidate identified as sharing a common cause, the fused estimate is closer to the ground-truth location than the audio-only estimate. ing on mixed on/off-screen data and target source separation or localization heatmaps rather than spatial event estimation. Perception science offers a normative answer. K¨ ording et al. [4] showed that human multisensory cue combination is well described by an optimal observer that performs causal inference : the brain first infers whether cues share a common cause, integrating them via precision-weighted combination when they do and segregating when they do not. The ventriloquist effect and its collapse at large dis-parities are natural consequences of this framework [4, 5, 14]. The entire benefit of integration depends on a shared cause, i.e., without one, the second modality carries no information and integrating it can only degrade the estimate. We target a complementary setting: post-hoc gating of frozen single-modality estimators for sound event localization and de-arXiv:2609.36441v1 [eess.AS] 29 Sep 2026 tection (SELD) [15]. We call this approach Bayesian causal fu-sion (C AUSAL ), operationalizing K¨ ording et al.’s causal-inference observer [4] with three extensions: (i) generalizing the two-cue azimuth model to multiple visual candidate rays on the sphere, (ii) operating post-hoc on frozen audio and visual models—no com-ponent is retrained, and (iii) evaluating the resulting gate both as a common-cause classifier and as a localization corrector under DCASE on/off-screen protocols. We evaluate on the DCASE2025 Task 3 stereo on/off-screen dataset [16] as well as a four-channel microphone version [17] that we construct for full-sphere assess-ment. Frozen audio [16, 18] and visual [19] models serve as noisy estimators, much like biological sensors, in a limited-FOV (field of view) camera paired with spatial audio where the causal question arises naturally at every frame. The remainder of this paper is organized as follows. Section 2 formulates the whether-to-fuse decision as Bayesian causal infer-ence and derives the proposed multi-candidate fusion rule. Section 3 evaluates the approach on two DCASE datasets in terms of common-cause classification and localization accuracy. Section 4 concludes the paper. 
+
+2. METHOD 
+
+This section derives the Bayesian causal fusion model. We review the optimal-observer framework, define the audio and visual obser-vations on the sphere, and present the proposed multi-candidate pos-terior and model-averaged integration rule in Sec. 2.4. 
+
+2.1. Optimal observer model 
+
+Following K¨ ording et al. [4], consider an observer that must localize a source at true direction s ∈ S2 from two noisy sensory measure-ments: an audio observation xa and a visual observation xv . A latent causal variable C determines the generative structure (Figure 2): • Common cause (C = 1 ): a single source at direction s generates both observations xa and xv , which are then noisy measurements of the same s, so integrating them reduces localization uncertainty. • Independent causes (C = 0 ): the audio and visual signals orig-inate from different sources, i.e., xv ⊥ s | C=0 . The visual ob-servation carries no information about the audio source direction, and the observer should segregate. The optimal Bayesian observer must simultaneously infer the causal structure and estimate source location. Under squared error, the op-timal estimate decomposes via the law of total expectation [4]: 
+
+ˆs∗ = p ˆsint + (1 − p) ˆ sseg , (1) where p = P (C=1 | xa, xv ) is the common-cause posterior, ˆsint 
+
+is the precision-weighted integrated estimate under assumed com-mon cause, and ˆsseg is the segregated (audio-only) estimate under assumed independent causes. Full integration ( p=1 ) and full seg-regation ( p=0 ) are special cases, and the optimal observer inter-polates between them weighted by its belief about causal structure. The common-cause posterior is the causal gate for multisensory in-tegration, which determines whether visual data has any information value at all. 
+
+2.2. Audio and visual observations 
+
+We now instantiate the abstract framework with concrete direction estimates: the audio observation xa becomes a decoded direction 
+
+a ∈ S2, and each candidate visual observation becomes a camera 𝑥 𝑎 𝑥 𝑉  𝑥 𝑎 𝑥 𝑉 
+
+𝐶 
+
+𝐶 = 1  𝐶 = 0 
+
+Fig. 2 : The two causal structures. C=1 : a single source (the dog) generates both the visual observation xv and the audio observation 
+
+xa, so integration is beneficial. C=0 : the visual and audio signals have independent causes, so integration corrupts the estimate. ray vj ∈ S2 indexed by detected object j. The binary causal vari-able generalizes to multiple visual candidates, C ∈ { 0, 1, . . . , J c},where C=j for j≥1 means that candidate j and the sound share a common source, and C=0 means that none of the visible candidates explains the sound, either because the source is off-screen, occluded, or missed by the detector. At each 100 -ms frame, a frozen audio model operating pro-duces an event class c and a Cartesian unit direction a ∈ S2. Afrozen open-vocabulary detector is prompted with labels of poten-tially sounding objects ( e.g., dog , vacuum cleaner , person ) and pro-duces labeled bounding boxes {bj }Jj=1 , each with class label ℓj . Be-cause the detector and the audio model use different taxonomies, a manual mapping pairs each of the 26 detector labels with a com-patible DCASE class ( e.g., vacuum cleaner → domestic sounds ); only detections that match the current audio event c are retained as candidates Jc = {j : ℓj ∈ S (c)}. In principle, an LLM or audio-language embeddings such as CLAP [20] can advance this step [21]. Each bounding box center (uj , r j ) is projected to a unit camera ray with focal length f = ( W/ 2) cot(Ω /2) , where Ω is the horizon-tal field of view: 
+
+vj = [f, W/ 2 − uj , H/ 2 − rj ]⊤
+
+∥[f, W/ 2 − uj , H/ 2 − rj ]⊤∥2
+
+∈ S2, (2) where W/ 2−uj and H/ 2−rj are the pixel offsets from the image center along the azimuth and elevation axes, respectively. 
+
+2.3. Angular likelihood 
+
+Audio and visual localization uncertainty is estimated on training events as great-circle RMS errors σa and σv . Their common-cause separation has RMS σ∆ = ( σ2 
+
+> a
+
++σ2 
+
+> v
+
+)1/2, expressed in radians below. We model a candidate direction under a common cause by a von Mises–Fisher (vMF) density centered on a,
+
+p(vj | a, C = j) = κ exp( κa⊤vj )4π sinh κ , κ = 2
+
+σ2∆
+
+. (3) Under C=0 (no common cause), a candidate direction is uniform over solid angle, p(vj | C = 0) = 1 /(4 π). The spherical angular Bayes factor is therefore 
+
+Λj = κ
+
+sinh κ exp( κa⊤vj ). (4) 
+
+2.4. Causal posterior and fusion 
+
+Let Jc = |J c| and let πvis denote the training frequency of on-screen events among candidate-eligible samples, used as a proxy prior for a visible cause. This prior is divided equally among candidates: 
+
+P (C=j) = πvis /J c, P (C=0) = 1 − πvis . The common-cause posterior is 
+
+P (C = j | a, v1: J , c ) = (πvis /J c)Λ j
+
+(1 − πvis ) + P 
+
+> k∈J c
+
+(πvis /J c)Λ k
+
+. (5) For brevity, let pj ≜ P (C=j | a, v1: J , c ) denote this posterior. We use PAVC = 1 − p0 as the common-cause posterior, the multi-candidate generalization of p in (1). When Jc=0 , the independent-cause probability is 1. Implementing the causal gate of (1), we first infer causal struc-ture, then integrate. Conditioned on C=j, the precision-weighted integrated direction estimate is 
+
+ˆsj = σ−2 
+
+> a
+
+a + σ−2 
+
+> v
+
+vj
+
+∥σ−2 
+
+> a
+
+a + σ−2 
+
+> v
+
+vj ∥2
+
+. (6) We propose to obtain the final estimate by directly implementing (1) as a multi-candidate model average on the sphere: 
+
+ˆs = p0 a + P 
+
+> j∈J c
+
+pj ˆsj
+
+∥p0 a + P 
+
+> j∈J c
+
+pj ˆsj ∥2
+
+. (7) The denominator projects the weighted combination back to the unit sphere. When PAVC ≈ 0, the visual terms vanish and the estimate reduces to the audio direction a; when PAVC ≈ 1, it reduces to precision-weighted cue combination with the dominant candidate. Averaging over all candidates rather than selecting the most proba-ble one ( arg max j pj ) avoids discontinuities: when two candidates carry similar posterior mass, a small change in the audio observation can flip the winner, causing the fused estimate to jump. The model average moves continuously as posterior mass shifts between can-didates. No threshold is needed. The posterior continuously gates how much vision influences the estimate, reflecting the conditional independence xv ⊥ s | C=0 .
+
+3. EXPERIMENTS AND RESULTS 
+
+We evaluate on two dataset configurations, assessing common-cause classification (Sec. 3.3), localization accuracy (Sec. 3.4), and com-parison with the jointly trained DCASE2025 baseline (Sec. 3.5). 
+
+3.1. Setup Datasets. We evaluate on two versions of the DCASE2025 Task 3 dataset [16], both derived from STARSS23 [17]. (i) Stereo : the original DCASE2025 release with stereo audio (azimuth only) and perspective video at 640 ×360 with horizontal FOV Ω=100 ◦ [16]. 
+
+(ii) Four-channel microphone (MIC) : a tetrahedral array counterpart using the same temporal crops and camera yaws, providing full-sphere (azimuth + elevation) evaluation. The microphone directions are rotated to the camera viewing direction so that audio and vi-sual rays share the same coordinate frame. Multi-channel arrays are 
+
+Table 1 : Common-cause classification on eligible events using two proxy labels. Higher AUROC and AP indicate better discrimination; lower Brier score and ECE indicate better calibration. Calibration metrics are reported only for the probabilistic C AUSAL posterior.                                      
+
+> Method Proxy AUROC AP Brier ECE FORCED on-screen 0.500 0.332 ——GATE -20 on-screen 0.828 0.723 ——CAUSAL (proposed) on-screen 0.920 0.847 0.093 0.060 FORCED common-cause 0.500 0.302 ——GATE -20 common-cause 0.839 0.706 ——CAUSAL (proposed) common-cause 0.924 0.805 0.085 0.048
+
+standard for spatial scene understanding [17], making this a more realistic setting. No ground-truth common-cause label exists, so we evaluate the common-cause posterior against two proxies. (a) On-screen : the DCASE2025 human annotation of whether the source is within the field of view [16]. This is a necessary precondition for a visual common cause, but permissive: a source may be on-screen with-out a matching detection. (b) Common-cause : an on-screen event whose ground-truth location lies within 20 ◦ of a semantically com-patible Grounding DINO detection. This is a tighter approximation of whether a matched visual candidate exists, but it shares the de-tector and semantic mapping with the causal gate’s candidate set, so high agreement is partly a consequence of shared inputs rather than independent validation of causal inference. 
+
+Models. For stereo, we use the official DCASE2025 check-points 1: audio-only SELDnet (A UDIO ) and jointly trained audio-visual SELDnet (AV-BASE ). For microphone, we use an available open source model from the DCASE2024 challenge [18] 2. In both settings, Grounding DINO Tiny [19] serves as the open-vocabulary detector, prompted with a fixed vocabulary of 26 sounding-object labels. The semantic mapping S(c) (Sec. 2) pairs each detector label with one of the 13 DCASE classes. All components are frozen, and causal fusion is applied post-hoc as described in Sec. 2. 
+
+3.2. Compared methods 
+
+Audio and visual detections are fixed across all methods; only the fusion strategy varies. We compare four strategies that differ in how/whether the common-cause posterior PAVC gates fusion, with the audio-only estimate being the baseline and the last being the method from Sec. 2.4: • A UDIO : retain audio direction ( PAVC =0 ; full segregation). • F ORCED : always fuse with the nearest compatible candidate (PAVC =1 ; full integration). • G ATE -20: fuse only when audio–visual disparity < 20 ◦ (hard angular gate). • C AUSAL (Bayesian causal fusion; the proposed method): infer 
+
+PAVC via (5), then model-average via (7). AUDIO and F ORCED are the two limiting cases of the causal infer-ence model [4]. GATE -20 is an ad-hoc threshold. CAUSAL tests whether the normative solution provides a better gate. 
+
+3.3. Common-cause classification 
+
+Before evaluating localization, we ask whether the inferred common-cause posterior discriminates events for which visual integration is 
+
+> 1https://github.com/partha2409/DCASE2025 seld baseline
+> 2https://github.com/axeber01/ngcc-seld
+
+Table 2 : MIC full-sphere class-macro DOAE ( ◦) on eligible events, following the official DCASE protocol. ∆ (◦) is relative to A UDIO .Lower is better.                             
+
+> DOAE ( ◦)∆(◦) from audio Method All On Off On Off AUDIO 30.41 28.15 30.95 0.00 0.00 FORCED 61.47 12.74 89.20 −15.41 +58.26 GATE -20 29.64 26.21 31.03 −1.94 +0.08 CAUSAL (proposed) 29.50 25.40 31.20 −2.75 +0.26
+
+plausible (Table 1), using the two proxies from Sec. 3.1. An event is eligible when the detector finds at least one compat-ible object; otherwise all methods reduce to the audio-only estimate. Of the eligible events, only 33.2% are on-screen, while 66.8% are off-screen. The stricter proxy identifies 30.2% as plausible common-cause cases. The detector-independent on-screen label provides the stronger test. The continuous posterior discriminates on-screen from off-screen events (AUROC 0.920 , AP 0.847 ; Table 1), substantially ex-ceeding chance. Because G ATE -20 is a binary decision, its AUROC reduces to balanced accuracy at a single operating point; the localiza-tion comparison in Sec. 3.4 provides the primary evaluation. Against the common-cause proxy, C AUSAL achieves AUROC 0.924 and AP 
+
+0.805 . This second result is less independent because the proxy reuses the detector and semantic mapping that construct the model’s candidate set. Neither proxy directly annotates causal structure, so these results demonstrate the gate’s discriminative value rather than recovery of a latent causal variable. Because the posterior is used as a continuous fusion weight, dis-crimination alone is insufficient: its probabilities must also be cali-brated. We measure calibration with the Brier score (mean squared error between predicted probability and label) and expected calibra-tion error (ECE; mean absolute gap between predicted confidence and observed accuracy across probability bins). CAUSAL obtains a Brier score of 0.093 and an ECE of 0.060 against the on-screen proxy. Against the common-cause proxy, the corresponding values are 0.085 and 0.048 . Thus, within a semantically compatible can-didate set, spatial disparity alone yields a discriminative and well-calibrated gate with respect to these proxies, without spectral, tem-poral, or learned cross-modal features. For reproducibility, training-split estimation yielded σa=14 .7◦,
+
+σv =5 .5◦, and πvis =0 .33 ; all three values were frozen before test-set evaluation. 
+
+3.4. Localization 
+
+Table 2 reports the effect on localization. Since only a minority of eligible events are on-screen, overall gains are modest even when per-condition effects are large. F ORCED fusion improves on-screen DOAE but roughly doubles eligible-event error, because off-screen events are pulled toward unrelated detections. This is the cost of integrating when C=0 .Table 2 also reveals that C AUSAL improves on-screen DOAE by 2.75 ◦ while limiting off-screen degradation to +0 .26 ◦, reduc-ing eligible-event error by 0.91 ◦. Its on-screen gain exceeds that of G ATE -20 ( 2.75 ◦ vs. 1.94 ◦) because the posterior weights strong candidates more heavily instead of applying one fixed threshold. 
+
+Table 3 : DCASE2025 stereo comparison on the test split (class-macro DOAE, following the official protocol). AUDIO and AV- 
+
+> BASE
+
+are the two official DCASE2025 baseline checkpoints [16]; CAUSAL applies post-hoc causal fusion to A UDIO ’s detections. DOAE ( ◦, lower is better); on/off-screen accuracy (higher is better).                   
+
+> DOAE ( ◦)On/Off Method All On Off Accuracy AUDIO 24.58 16.59 25.74 —AV-BASE 22.16 19.13 22.89 0.74 CAUSAL (proposed) 24.24 13.78 25.96 0.76
+
+3.5. Comparison with DCASE 2025 Task 3 baseline 
+
+The DCASE 2025 Task 3 baseline includes a jointly trained audio-visual model, enabling a direct comparison with a learned fusion approach. We apply causal fusion to the stereo dataset using the official audio-only checkpoint [16]. Since stereo front-back ambi-guity folds azimuths into [−90 ◦, 90 ◦], the vMF likelihood reduces to a wrapped Gaussian; the model is otherwise identical to Sec. 2. We compare against both official baselines (A UDIO and the jointly trained AV-BASE [16]). On/off-screen classification accuracy is de-fined as 1[PAVC > 0.5] for C AUSAL and the model’s internal flag for the AV-BASE .Table 3 shows that C AUSAL reduces on-screen DOAE by 2.81 ◦
+
+relative to A UDIO . The jointly trained AV-BASE achieves the lowest aggregate and off-screen DOAE, but its on-screen DOAE ( 19 .13 ◦)is worse than both A UDIO (16 .59 ◦) and C AUSAL (13 .78 ◦), indicat-ing that joint training does not learn an effective on/off-screen gate. CAUSAL attains higher on/off-screen accuracy ( 0.76 vs. 0.74 ) with-out any joint training. 
+
+4. CONCLUSION 
+
+We cast the whether-to-fuse decision as Bayesian causal inference, following the optimal-observer model of human multisensory per-ception [4], and applied it as a plug-and-play layer above frozen au-dio and visual models for sound event localization and detection. Without the gate, fusion with off-screen sources drastically raises direction error, because the visual channel is conditionally indepen-dent of the source. With the gate, precision-weighted cue combi-nation captures the on-screen benefit while containing off-screen harm. Because the gate operates post-hoc on frozen models, it is plug-and-play: no multimodal training is needed, and any improved audio or visual model can be substituted directly. On two datasets, this zero-training-cost fusion improves on-screen DOAE over the audio-only baseline. On the stereo dataset, it also achieves better on-screen localization and on/off-screen classification than a jointly trained audiovisual system [16]. The gate currently relies on an open-vocabulary detector and a manual binary class mapping; fail-ures in either reduce the candidate set and default to audio-only, which is safe but forgoes visual benefit. A natural extension is to replace the hard semantic filter with a soft compatibility score from an audio-language model such as CLAP [20], removing the need for a manual class mapping. The same principle of inferring whether modalities share a common cause before combining them may ap-ply to other multimodal settings where the second modality is not always informative. 5. ACKNOWLEDGMENTS 
+
+This work was supported by the HUCE infrastructure of the Aalto School of Electrical Engineering. SJS were supported through the joint German Academic Exchange Service (DAAD) and Research Council of Finland (RCF) Project (57763119) ”Immersive Aug-mented Acoustics (IAA)”. 
+
+6. REFERENCES 
+
+[1] Tadas Baltruˇ saitis, Chaitanya Ahuja, and Louis-Philippe Morency, “Multimodal machine learning: A survey and tax-onomy,” IEEE transactions on pattern analysis and machine intelligence , vol. 41, no. 2, pp. 423–443, 2018. [2] Songtao Li and Hao Tang, “Multimodal alignment and fusion: A survey: S. li, h. tang,” International Journal of Computer Vision , vol. 134, no. 3, pp. 103, 2026. [3] Yu Huang, Chenzhuang Du, Zihui Xue, Xuanyao Chen, Hang Zhao, and Longbo Huang, “What makes multi-modal learning better than single (provably),” Advances in Neural Information Processing Systems , vol. 34, pp. 10944–10956, 2021. [4] Konrad P K¨ ording, Ulrik Beierholm, Wei Ji Ma, Steven Quartz, Joshua B Tenenbaum, and Ladan Shams, “Causal inference in multisensory perception,” PLoS one , vol. 2, no. 9, pp. e943, 2007. [5] David Alais and David Burr, “The ventriloquist effect results from near-optimal bimodal integration,” Current biology , vol. 14, no. 3, pp. 257–262, 2004. [6] Xavier Juanola, Gloria Haro, and Magdalena Fuentes, “A crit-ical assessment of visual sound source localization models in-cluding negative audio,” in IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2025, pp. 1–5. [7] Efthymios Tzinis, Scott Wisdom, Tal Remez, and John R Her-shey, “Audioscopev2: Audio-visual attention architectures for calibrated open-domain on-screen sound separation,” in Eu-ropean Conference on Computer Vision . Springer, 2022, pp. 368–385. [8] Zhou Lu, “A theory of multimodal learning,” Advances in Neural Information Processing Systems , vol. 36, pp. 57244– 57255, 2023. [9] Davide Berghi, Peipei Wu, Jinzheng Zhao, Wenwu Wang, and Philip JB Jackson, “Fusion of audio and visual embeddings for sound event localization and detection,” in IEEE Interna-tional Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2024, pp. 8816–8820. [10] Zongbo Han, Changqing Zhang, Huazhu Fu, and Joey Tianyi Zhou, “Trusted multi-view classification with dynamic eviden-tial fusion,” IEEE transactions on pattern analysis and ma-chine intelligence , vol. 45, no. 2, pp. 2551–2566, 2022. [11] Suwon Shon, Tae-Hyun Oh, and James Glass, “Noise-tolerant audio-visual online person verification using an attention-based neural network fusion,” in IEEE International Confer-ence on Acoustics, Speech and Signal Processing (ICASSP) ,2019, pp. 3995–3999. [12] Oscar Ovanger, Levi Harris, and Timothy H Keitt, “Adaptive evidence weighting for audio-spatiotemporal fusion,” arXiv preprint arXiv:2602.03817 , 2026. [13] Efthymios Tzinis, Scott Wisdom, Aren Jansen, Shawn Her-shey, Tal Remez, Daniel P. W. Ellis, and John R. Hershey, “Into the wild with AudioScope: Unsupervised audio-visual separa-tion of on-screen sounds,” in Proc. ICLR , 2021. [14] Ladan Shams and Ulrik R Beierholm, “Causal inference in perception,” Trends in cognitive sciences , vol. 14, no. 9, pp. 425–432, 2010. [15] Sharath Adavanne, Archontis Politis, Joonas Nikunen, and Tuomas Virtanen, “Sound event localization and detection of overlapping sources using convolutional recurrent neural net-works,” IEEE Journal of Selected Topics in Signal Processing ,vol. 13, no. 1, pp. 34–48, 2018. [16] Kazuki Shimada, Archontis Politis, Iran R Roman, Parthasaarathy Sudarsanam, David Diaz-Guerra, Ruchi Pandey, Kengo Uchida, Yuichiro Koyama, Naoya Takahashi, Takashi Shibuya, et al., “Stereo sound event localization and detection with onscreen/offscreen classification,” arXiv preprint arXiv:2507.12042 , 2025. [17] Kazuki Shimada, Archontis Politis, Parthasaarathy Su-darsanam, Daniel A Krause, Kengo Uchida, Sharath Ada-vanne, Aapo Hakala, Yuichiro Koyama, Naoya Takahashi, Shusuke Takahashi, et al., “Starss23: An audio-visual dataset of spatial recordings of real scenes with spatiotemporal anno-tations of sound events,” Advances in neural information pro-cessing systems , vol. 36, pp. 72931–72957, 2023. [18] Axel Berg, Johanna Engman, Jens Gulin, Karl ˚ Astr¨ om, and Magnus Oskarsson, “Learning multi-target tdoa features for sound event localization and detection,” in the Detection and Classification of Acoustic Scenes and Events 2024 Workshop (DCASE2024) , 2024, pp. 16–20. [19] Shilong Liu, Zhaoyang Zeng, Tianhe Ren, Feng Li, Hao Zhang, Jie Yang, Qing Jiang, Chunyuan Li, Jianwei Yang, Hang Su, et al., “Grounding dino: Marrying dino with grounded pre-training for open-set object detection,” in Euro-pean conference on computer vision . Springer, 2024, pp. 38– 55. [20] Benjamin Elizalde, Soham Deshmukh, Mahmoud Al Ismail, and Huaming Wang, “Clap learning audio concepts from nat-ural language supervision,” in IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2023, pp. 1–5. [21] Kazuki Shimada, Kengo Uchida, Yuichiro Koyama, Takashi Shibuya, Shusuke Takahashi, Yuki Mitsufuji, and Tatsuya Kawahara, “Open-vocabulary sound event localization and detection with joint learning of clap embedding and activity-coupled cartesian doa vector,” IEEE Transactions on Audio, Speech and Language Processing , vol. 33, pp. 2946–2960, 2025.

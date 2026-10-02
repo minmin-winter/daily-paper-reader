@@ -1,0 +1,625 @@
+Title: Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation
+
+URL Source: https://arxiv.org/pdf/2609.39168v1
+
+Published Time: Thu, 01 Oct 2026 01:07:48 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+## Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation 
+
+Zhihan Zhang 
+
+Singapore Management University Singapore, Singapore zhihanzhang.2024@phdcs.smu.edu.sg 
+
+Lizi Liao 
+
+Singapore Management University Singapore, Singapore lzliao@smu.edu.sg 
+
+Abstract 
+
+Reinforcement Learning with Verifiable Rewards (RLVR) has im-proved the reasoning capabilities of Multimodal Large Language Models (MLLMs), yet existing frameworks rely on coarse, sequence-level reward signals that lack the fine-grained supervision over the visually-grounded steps within a multimodal reasoning chain. We investigate this gap through the lens of two token-level metrics: 
+
+visual dependency (i.e. how much a token’s prediction relies on the input image features) and predictive entropy . Our empirical analysis reveals two key findings: (1) correct reasoning chains exhibit a markedly sharper entropy reduction as visual grounding intensi-fies, compared to incorrect ones; (2) pivotal tokens, those whose misprediction triggers reasoning collapse, are statistical outliers in the joint distribution of visual dependency and predictive en-tropy derived from correct chains. Motivated by these findings, we propose Token-level Perception-grounded Advantage Estimation (TPAE ), which estimates token-level advantages by measuring each token’s statistical consistency with the vision-entropy patterns of correct rollouts. TPAE leverages this granular score to modulate the sequence-level advantage, producing a fine-grained supervi-sion signal that can be integrated into various RLVR frameworks. Extensive experiments on seven benchmarks show that TPAE con-sistently outperforms leading strong baselines, yielding more stable and efficient optimization for multimodal reasoning. The code is publicly available at https://github.com/Zhihan72/TPAE. 
+
+CCS Concepts 
+
+• Computing methodologies → Reinforcement learning ; Com-puter vision tasks ; Natural language generation .
+
+Keywords 
+
+Multimodal Large Language Model; Multimodal Reasoning; Rein-forcement Learning 
+
+ACM Reference Format: 
+
+Zhihan Zhang and Lizi Liao. 2026. Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation. In Proceedings of the 34th ACM International Conference on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3767308.3835936 
+
+This work is licensed under a Creative Commons Attribution 4.0 International License. 
+
+MM ’26, Rio de Janeiro, Brazil 
+
+© 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3835936 OVisual Dependency Predictive Entropy Tokens in Incorrect Trajectories Reference Distribution 
+
+> Statistical Outliers Hallucinated Visual Inference
+
+Vision-Entropy Distribution 
+
+> Let's think step by step: Step 1: There are 7 objects in total: 1 red cube, 1 purple cube, 1 small gray cube, 1 green cube, 1 large gray metallic cube, 1 large red metallic cube, 1 small brown sphere.
+
+Question: What is the total number of objects left after removing all yellow cubes and brown spheres, and then adding the number of red and purple cubes? 
+
+Answer: 8
+
+Model Response:  
+
+> the image. Removing this brown sphere leaves 6 objects remaining. Step 4: There are 2 red cubes and 1 purple cube, totalling 3 objects to be added. Step 5: The final number of objects is 6 + 3 = 9. Final answer: \boxed{9} Step 2: There are no yellow cubes in the image, so no objects are removed. Step 3: There is 1 brown sphere in
+
+Figure 1: Token-level joint distribution of visual dependency and predictive entropy, where outlier tokens from incorrect trajectories emerge as the triggers of reasoning collapse. 
+
+1 Introduction 
+
+Reinforcement Learning from Verifiable Rewards (RLVR), powered by efficient online algorithms such as Group Relative Policy Op-timization (GRPO) [24], has fundamentally shifted the frontier of reasoning capabilities in Large Language Models (LLMs). By opti-mizing models using verifiable signals, such as structured thinking formats and final answer accuracy, RLVR has demonstrated strong empirical success in models like DeepSeek-R1 [4]. Translating this success to Multimodal Large Language Models (MLLMs), however, introduces unique complexities where fine-grained perception is tightly synthesized with multi-step logical deduction [19, 31, 43]. This challenge has motivated an array of research aimed at adapt-ing RLVR to multimodal reasoning, primarily through data-centric enhancements [4, 5, 9, 38], reward modelling [6, 7, 18, 34], and rollout-level algorithmic adjustments [17, 30, 39]. Despite this progress, existing RLVR frameworks for multimodal reasoning are fundamentally limited by the coarse granularity of their reward signals [8, 33, 35, 45]. Mainstream reinforcement learn-ing (RL) algorithms such as GRPO [24] and DAPO [40] derive a single, rollout-level advantage from outcome-based rewards, as-signing a uniform advantage value to every token within a rollout. This undiscriminating assignment treats all tokens—whether reli-ably perception-grounded or responsible for reasoning failures—as equally contributing to the final answer, introducing gradient noise arXiv:2609.39168v1 [cs.AI] 30 Sep 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Zhihan Zhang and Lizi Liao 
+
+that hinders policy convergence [14, 26]. A natural remedy is to in-troduce finer-grained supervision via process-level reward models [6, 35]; however, this approach requires training a separate learned scorer, which is data-demanding, computationally expensive, and vulnerable to reward hacking. This motivates a key research ques-tion: Can we obtain fine-grained, perception-grounded advantage estimates directly from the policy’s own reasoning behavior, without the overhead of auxiliary reward models? 
+
+To answer this question, we begin by examining two intrinsic metrics that are readily available from the policy model itself: a token’s visual dependency and its predictive entropy. Through an empirical analysis of 12,800 reasoning trajectories generated by Qwen2.5-VL-7B across 100 questions, we uncover a striking pat-tern illustrated in Figure 2: correct reasoning chains exhibit sharply lower entropy as visual dependency increases, whereas incorrect chains maintain high entropy despite strong visual dependency —a phenom-enon we term non-resolving grounding , where the model attends to the visual input but fails to extract the information needed to dis-ambiguate its next-token predictions. This widening gap between correct and incorrect chains establishes the coupling of visual de-pendency and predictive entropy as an effective, model-intrinsic indicator of multimodal reasoning quality. To pinpoint the mechanistic drivers of this divergence, we zoom into the token-level distribution. Using the joint distribution of vi-sual dependency and entropy from correct reasoning chains as a ref-erence, we measure the statistical alignment of each token in failed trajectories against the reference. While the majority of tokens in incorrect reasoning chains fall within the reference distribution, a critical 7.64% emerge as severe outliers ( e.g. , the red-highlighted tokens in Figure 1). A rigorous human evaluation of 200 randomly sampled outliers confirms that these divergent tokens are not random noise but the semantic pivots that trigger visual mis-grounding and logical reasoning errors —precisely the tokens that a fine-grained advantage estimator should down-weight. Building on these findings, we propose Token-level Perception-grounded Advantage Estimation ( TPAE ), a novel algorithm that re-fines coarse, rollout-level reward signals into dense, token-level ad-vantage estimates within multimodal RLVR frameworks—without training any auxiliary reward model. TPAE jointly tracks each to-ken’s visual dependency and predictive entropy—its vision-entropy state —and leverages correct rollouts to build reference distributions over these states. Each token is scored by its statistical alignment with the corresponding reference distribution through a hypoth-esis testing perspective: tokens consistent with the reference are deemed trustworthy, while severe outliers are penalized. These per-token scores then modulate the rollout-level advantage, di-recting gradient updates toward perceptually grounded reasoning and away from the triggers of reasoning failure. As a lightweight, model-intrinsic module, TPAE can be seamlessly integrated into existing RL algorithms such as GRPO and DAPO. We validate the effectiveness of TPAE in advancing multimodal reasoning by integrating it into two base RL algorithms across two MLLM backbones. Our evaluation results across seven diverse benchmarks demonstrate that integrating TPAE with either GRPO or DAPO yields consistent performance gains; notably, our TPAE-D-Qwen2.5-7B surpasses existing state-of-the-art multimodal rea-soning models utilizing the same Qwen2.5-VL-7B backbone. To sum up, our main contributions are threefold: 
+
+• We reveal that the coupling between token-level visual depen-dency and predictive entropy is an effective, model-intrinsic in-dicator of multimodal reasoning quality, and identify statistically divergent tokens as the drivers of reasoning failures. 
+
+• We propose TPAE, a token-level perception-grounded advantage estimation algorithm that translates this insight into dense, per-token supervision requiring no auxiliary reward model. 
+
+• Extensive experiments across seven multimodal benchmarks demonstrate the superior performance of TPAE over baseline algorithms and existing state-of-the-art models. 
+
+2 Related Work 
+
+Multimodal Large Language Model. Existing advancements in MLLMs have primarily focused on the modality alignment via mul-timodal projectors that bridge vision encoders with pre-trained Large Language Model (LLM) backbones. Diverse alignment strate-gies have been explored to optimize visual perception, ranging from compressing visual tokens [1, 13] to fusing multiple vision encoders [15, 29]. Beyond the exploration of architecture of MLLMs, large-scale instruction tuning has emerged as a central technique for improving multimodal alignment and overall performance on multimodal benchmarks [1, 16]. However, MLLMs still exhibit a significant performance gap in complex multimodal reasoning tasks [19, 27, 28, 43, 44]. Drawing on the success of policy optimization in textual reasoning, recent works have begun adapting foundational algorithms such as PPO [23] and GRPO [24] to the multimodal setting to tackle increasingly complex reasoning tasks. 
+
+Multimodal Reinforcement Learning. Most strategies in mul-timodal reinforcement learning have focused on enhancing the RLVR framework from three perspectives: data, rollout and reward. Data-centric methods focus on the curation of large-scale, visually-grounded datasets by distilling chain-of-thought trajectories from proprietary models, typically employing a two-stage training para-digm consisting of initial supervised fine-tuning (SFT) followed by reinforcement learning via the GRPO objective [2, 4, 5, 9, 10, 38]. Works on rollout improvements focus on diversifying the rollout space by visual augmentations [17, 39] or sample replay mecha-nisms [12, 30]. Reward-centric works aim to evaluate the visual grounding of rollouts by either enforcing verifiable intermediate steps—such as the generation of spatial coordinates for relevant objects [7, 18] or auxiliary captioning tasks [34]—or by deploying external neural reward models for dense supervision [6, 42]. However, existing works predominantly conceptualize visual grounding as a post-hoc supervisory constraint, treating sampled rollouts as static artifacts for external verification. While more recent efforts have introduced token-level visual dependency to probe the internal dynamics of multimodal reasoning, this metric remains relegated to passive filters or heuristic penalties within the optimization objective [8, 33]. In this work, we propose TPAE, a novel perception-grounded advantage estimation algorithm that leverages the token-level joint dynamics of visual dependency and predictive entropy to modulate the coarse reward signal. Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Token-level Vision-Entropy Distribution 
+
+68.5% 18.8% 9.0% 3.7% 
+
+Perception Error Reasoning Error Calculation Error Random Noise Correct Trajectories 
+
+Global Statistics Over Visual Dependency 
+
+Reference Distribution 
+
+>   
+>     
+>            
+>          
+>                                          
+
+     
+
+     
+
+>  
+
+      
+
+Log-Frequency <latexit sha1_base64="UuUo19vI8Uh3DQueb6Sqx8XhyBg=">AAAB63icbVBNS8NAEJ3Ur1q/qh69LBbBU0lEqseiF48V7Ae0sWy2m3bp7ibsboQS+he8eFDEq3/Im//GTZqDtj4YeLw3w8y8IOZMG9f9dkpr6xubW+Xtys7u3v5B9fCoo6NEEdomEY9UL8CaciZp2zDDaS9WFIuA024wvc387hNVmkXywcxi6gs8lixkBJtM8txHb1ituXU3B1olXkFqUKA1rH4NRhFJBJWGcKx133Nj46dYGUY4nVcGiaYxJlM8pn1LJRZU+2l+6xydWWWEwkjZkgbl6u+JFAutZyKwnQKbiV72MvE/r5+Y8NpPmYwTQyVZLAoTjkyEssfRiClKDJ9Zgoli9lZEJlhhYmw8FRuCt/zyKulc1L1GvXF/WWveFHGU4QRO4Rw8uIIm3EEL2kBgAs/wCm+OcF6cd+dj0Vpyiplj+APn8wcPzI2d</latexit> 
+
+10 1 
+
+> <latexit sha1_base64="+uAHQ/q3qlCi8MgIVlqdJzTAHeg=">AAAB7nicbVDLSgNBEOyNrxhfUY9eBoPgxbArGj0GvXiMYB6QrGF20kmGzM4uM7NCWPIRXjwo4tXv8ebfOEn2oIkFDUVVN91dQSy4Nq777eRWVtfWN/Kbha3tnd294v5BQ0eJYlhnkYhUK6AaBZdYN9wIbMUKaRgIbAaj26nffEKleSQfzDhGP6QDyfucUWOlpuc+pmeXk26x5JbdGcgy8TJSggy1bvGr04tYEqI0TFCt254bGz+lynAmcFLoJBpjykZ0gG1LJQ1R++ns3Ak5sUqP9CNlSxoyU39PpDTUehwGtjOkZqgXvan4n9dOTP/aT7mME4OSzRf1E0FMRKa/kx5XyIwYW0KZ4vZWwoZUUWZsQgUbgrf48jJpnJe9Srlyf1Gq3mRx5OEIjuEUPLiCKtxBDerAYATP8ApvTuy8OO/Ox7w152Qzh/AHzucPRQ+O5A==</latexit>
+
+10  5 
+
+> <latexit sha1_base64="oiCe2Y2rKkrNfidsguYWJuHW0fs=">AAAB7nicbVDLSgNBEOyNrxhfUY9eBoPgxbAbJHoMevEYwTwgWcPsZJIMmZ1dZnqFsOQjvHhQxKvf482/cZLsQRMLGoqqbrq7glgKg6777eTW1jc2t/LbhZ3dvf2D4uFR00SJZrzBIhnpdkANl0LxBgqUvB1rTsNA8lYwvp35rSeujYjUA05i7od0qMRAMIpWannuY3pRmfaKJbfszkFWiZeREmSo94pf3X7EkpArZJIa0/HcGP2UahRM8mmhmxgeUzamQ96xVNGQGz+dnzslZ1bpk0GkbSkkc/X3REpDYyZhYDtDiiOz7M3E/7xOgoNrPxUqTpArtlg0SCTBiMx+J32hOUM5sYQyLeythI2opgxtQgUbgrf88ippVspetVy9vyzVbrI48nACp3AOHlxBDe6gDg1gMIZneIU3J3ZenHfnY9Gac7KZY/gD5/MHQICO4Q==</latexit>
+
+10  2
+
+Average Entropy 0.2 0.4 0.6 0.8 0-0.5 1.0-1.5 2.0-2.5 3.0-3.5 4.0-4.5 5.0-5.5 6.0-6.5 7.0-7.5 8.0-8.5 > 9.0 Visual Dependency OIn-distribution Tokens 
+
+42.3 32.0 0.9 1.0 3.4 1.9 14.9 2.9 
+
+40 30 20 10 Percent (%) 
+
+0.7 
+
+0O Visual Dependency mean - 1 std Entropy mean mean mean + 1 std mean - 1 std mean + 1 std Incorrect Trajectories Divergent Tokens O0.1 0.3 0.5 0.7 Tokens from Incorrect Trajectories Tokens from Correct Trajectories Note: “std” refers to “standard deviation”. 
+
+Figure 2: Empirical analysis of reasoning trajectories using Qwen2.5-VL-7B. (a) Distribution of average entropy and log-frequency across visual dependency levels (left). (b) Density of token-level vision-entropy misalignment relative to the reference distribution center (upper right). (c) Error analysis of divergent tokens through human annotation (lower right). 
+
+3 Preliminary 
+
+Existing RLVR frameworks rely on coarse, sequence-level reward signals that overlook the varying significance of individual tokens. To move beyond this simplification, we introduce token-level en-tropy and visual dependency as granular metrics to characterize the internal dynamics of multimodal reasoning generation. Our empirical analysis reveals that correct reasoning chains exhibit a sharper entropy reduction tied to visual grounding than the incor-rect trajectories. Furthermore, a non-trivial proportion of tokens from incorrect trajectories emerge as statistical outliers relative to the correct reference distribution. Through human evaluation, these outliers are confirmed to be the pivotal triggers responsible for multimodal reasoning collapse. 
+
+3.1 Group Relative Policy Optimization 
+
+Group Relative Policy Optimization (GRPO) [24] is a variant of the Proximal Policy Optimization (PPO) [23] algorithm that removes the requirement for a separate value model by estimating advantages via group-based computation. For a given multimodal input (𝐼, 𝑞 )
+
+consisting of a visual context 𝐼 and a textual query 𝑞 , the old policy model 𝜋 𝜃 old samples a group of 𝐺 rollouts, {𝑜 𝑖 }𝐺 𝑖 =1.In the RLVR framework, each rollout 𝑜 𝑖 is assigned a binary reward 𝑅 𝑖 ∈ { 0, 1}, determined solely on whether its final answer matches the ground truth. The token-level advantage ˆ 𝐴 𝑖,𝑗 is then defined as the sequence-level reward normalized across the group: ˆ𝐴 𝑖,𝑗 = ˆ𝐴 𝑖 = 𝑅 𝑖 − mean ({ 𝑅 𝑘 }𝐺 𝑘 =1)
+
+std ({ 𝑅 𝑘 }𝐺 𝑘 =1) (1) The policy 𝜋 𝜃 is then updated to maximize a clipped surrogate objective, where this uniform advantage ˆ 𝐴 𝑖 is broadcast to every token 𝑜 𝑖 𝑗 within the rollout 𝑜 𝑖 :
+
+LGRPO (𝜃 ) = E[ { 𝑜 𝑖 }𝐺 𝑖 =1∼𝜋 𝜃 old (· | 𝐼,𝑞 ) ] 
+
+1
+
+𝐺 
+
+𝐺 ∑︁ 
+
+𝑖 =1
+
+1
+
+|𝑜 𝑖 |
+
+|𝑜 𝑖 |∑︁ 
+
+𝑗 =1
+
+n
+
+min 
+
+
+
+𝑟 𝑖,𝑗 (𝜃 ) ˆ𝐴 𝑖,𝑗 , clip (𝑟 𝑖,𝑗 (𝜃 ), 1 − 𝜀, 1 + 𝜀 ) ˆ𝐴 𝑖,𝑗 
+
+
+
+− 𝛽 DKL [𝜋 𝜃 |𝜋 ref ]
+
+o (2) where 𝑟 𝑖,𝑡 (𝜃 ) = 𝜋 𝜃 (𝑜 𝑖,𝑗 |𝐼,𝑞,𝑜 𝑖, < 𝑗 )
+
+𝜋 𝜃 old (𝑜 𝑖,𝑗 |𝐼,𝑞,𝑜 𝑖, < 𝑗 ) is the probability ratio. Decoupled Clip and Dynamic Sampling Policy Optimization (DAPO) [40] is a notable extension of GRPO, incorporating several modifications such as clip-higher, dynamic sampling, and token-level policy gradient loss (see supplementary materials for details). In this work, we investigate the application of our method to both GRPO and DAPO algorithms. 
+
+3.2 Token Entropy and Visual Dependency 
+
+While GRPO mitigates reward sparsity through a group-relative advantage estimation, it relies on a coarse, sequence-level signal that ignores the varying significance of individual tokens. To move beyond this sequence-level simplification, we introduce token en-tropy and visual dependency as granular metrics to characterize the internal dynamics of the multimodal generation process. 
+
+3.2.1 Predictive Entropy. The token-level entropy quantifies the model’s predictive uncertainty in the reasoning chain. Specifically, for token 𝑜 𝑖 𝑗 in rollout 𝑜 𝑖 , the policy model generates a probability distribution 𝑃 𝑖 𝑗 over the vocabulary V, i.e. 𝑃 𝑖,𝑗 = 𝜋 𝜃 (· | 𝐼, 𝑞, 𝑜 𝑖, <𝑗 ).The entropy of this prediction is then calculated as 
+
+H𝑖,𝑗 := −∑︁ 
+
+𝑣 ∈ V 
+
+𝑃 𝑖,𝑗 (𝑣 ) log 𝑃 𝑖,𝑗 (𝑣 ) (3) where 𝑃 𝑖,𝑗 (𝑣 ) represents the likelihood of choosing token 𝑣 . A low 
+
+H𝑖,𝑗 value indicates that the model is highly confident, with its probability concentrated on a single optimal next token. In contrast, MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Zhihan Zhang and Lizi Liao Policy Model Original Image Masked Image 
+
+<latexit sha1_base64="BmSw30aFMf58YvcJNvUbJlvmmjU=">AAAB7XicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BLx4jmBhIljA7mU0mmccyMyuEJf/gxYMiXv0fb/6Nk2QPmljQUFR1090VJZwZ6/vfXmFtfWNzq7hd2tnd2z8oHx61jEo1oU2iuNLtCBvKmaRNyyyn7URTLCJOH6Px7cx/fKLaMCUf7CShocADyWJGsHVSS/UyNpr2yhW/6s+BVkmQkwrkaPTKX92+Iqmg0hKOjekEfmLDDGvLCKfTUjc1NMFkjAe046jEgpowm187RWdO6aNYaVfSorn6eyLDwpiJiFynwHZolr2Z+J/XSW18HWZMJqmlkiwWxSlHVqHZ66jPNCWWTxzBRDN3KyJDrDGxLqCSCyFYfnmVtC6qQa1au7+s1G/yOIpwAqdwDgFcQR3uoAFNIDCCZ3iFN095L96797FoLXj5zDH8gff5A+Lnj1o=</latexit> 
+
+oij 
+
+<latexit sha1_base64="wHw4uI/nqSO61S7pmUhGHYJWaw4=">AAAB73icbVDLSgNBEOyNrxhfUY9eBoPgKeyKRC9C0IvHCOYByRJmJ5NkzOzOOtMrhCU/4cWDIl79HW/+jZNkD5pY0FBUddPdFcRSGHTdbye3srq2vpHfLGxt7+zuFfcPGkYlmvE6U1LpVkANlyLidRQoeSvWnIaB5M1gdDP1m09cG6GiexzH3A/pIBJ9wShaqaW6qXiYXGG3WHLL7gxkmXgZKUGGWrf41ekploQ8QiapMW3PjdFPqUbBJJ8UOonhMWUjOuBtSyMacuOns3sn5MQqPdJX2laEZKb+nkhpaMw4DGxnSHFoFr2p+J/XTrB/6aciihPkEZsv6ieSoCLT50lPaM5Qji2hTAt7K2FDqilDG1HBhuAtvrxMGmdlr1Ku3J2XqtdZHHk4gmM4BQ8uoAq3UIM6MJDwDK/w5jw6L8678zFvzTnZzCH8gfP5Az6WkB8=</latexit> 
+
+oij = t
+
+Question <latexit sha1_base64="fflT8DIRgZ1NzRM/p9XN3nEVhs4=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHaNQY9ELx4hkUcCGzI79MLI7Ow6M2tCCF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaHSPJb3ZpygH9GB5CFn1Fip/tgrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmhdlr1Ku1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AN8vjQA=</latexit> 
+
+q
+
+T/F Rollouts 
+
+<latexit sha1_base64="oOPmtLRLeOWw1sRHtib0/kWP+fg=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BPXiMmBckS5id9CZDZmeXmVkhhHyCFw+KePWLvPk3TpI9aGJBQ1HVTXdXkAiujet+O7m19Y3Nrfx2YWd3b/+geHjU1HGqGDZYLGLVDqhGwSU2DDcC24lCGgUCW8Hodua3nlBpHsu6GSfoR3QgecgZNVZ6vOvVe8WSW3bnIKvEy0gJMtR6xa9uP2ZphNIwQbXueG5i/AlVhjOB00I31ZhQNqID7FgqaYTan8xPnZIzq/RJGCtb0pC5+ntiQiOtx1FgOyNqhnrZm4n/eZ3UhNf+hMskNSjZYlGYCmJiMvub9LlCZsTYEsoUt7cSNqSKMmPTKdgQvOWXV0nzouxVypWHy1L1JosjDydwCufgwRVU4R5q0AAGA3iGV3hzhPPivDsfi9ack80cwx84nz/1B42a</latexit> 
+
+DT
+
+<latexit sha1_base64="brgqXcU4uMWLm6KbSULBrwCsBVU=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BRTxGNA9IljA76SRDZmeXmVkhLPkELx4U8eoXefNvnCR70MSChqKqm+6uIBZcG9f9dnIrq2vrG/nNwtb2zu5ecf+goaNEMayzSESqFVCNgkusG24EtmKFNAwENoPR9dRvPqHSPJKPZhyjH9KB5H3OqLHSw033tlssuWV3BrJMvIyUIEOtW/zq9CKWhCgNE1TrtufGxk+pMpwJnBQ6icaYshEdYNtSSUPUfjo7dUJOrNIj/UjZkobM1N8TKQ21HoeB7QypGepFbyr+57UT07/0Uy7jxKBk80X9RBATkenfpMcVMiPGllCmuL2VsCFVlBmbTsGG4C2+vEwaZ2WvUq7cn5eqV1kceTiCYzgFDy6gCndQgzowGMAzvMKbI5wX5935mLfmnGzmEP7A+fwB38+NjA==</latexit> 
+
+DF
+
+<latexit sha1_base64="dkY6YG68ymUod1QaUMynw/pnCD8=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BLx4jmgckS5idzCZD5rHMzAphySd48aCIV7/Im3/jJNmDJhY0FFXddHdFCWfG+v63V1hb39jcKm6Xdnb39g/Kh0cto1JNaJMornQnwoZyJmnTMstpJ9EUi4jTdjS+nfntJ6oNU/LRThIaCjyULGYEWyc9qH7QL1f8qj8HWiVBTiqQo9Evf/UGiqSCSks4NqYb+IkNM6wtI5xOS73U0ASTMR7SrqMSC2rCbH7qFJ05ZYBipV1Ji+bq74kMC2MmInKdAtuRWfZm4n9eN7XxdZgxmaSWSrJYFKccWYVmf6MB05RYPnEEE83crYiMsMbEunRKLoRg+eVV0rqoBrVq7f6yUr/J4yjCCZzCOQRwBXW4gwY0gcAQnuEV3jzuvXjv3seiteDlM8fwB97nDwGMjaI=</latexit> 
+
+o1
+
+<latexit sha1_base64="BVf4tA0urauKTTNsxvt2cdv8Dkw=">AAAB6nicbVBNSwMxEJ34WetX1aOXYBE8ld0i1WPRi8eK9gPapWTTbBuaTZYkK5SlP8GLB0W8+ou8+W9M2z1o64OBx3szzMwLE8GN9bxvtLa+sbm1Xdgp7u7tHxyWjo5bRqWasiZVQulOSAwTXLKm5VawTqIZiUPB2uH4dua3n5g2XMlHO0lYEJOh5BGnxDrpQfWr/VLZq3hz4FXi56QMORr90ldvoGgaM2mpIMZ0fS+xQUa05VSwabGXGpYQOiZD1nVUkpiZIJufOsXnThngSGlX0uK5+nsiI7Exkzh0nTGxI7PszcT/vG5qo+sg4zJJLZN0sShKBbYKz/7GA64ZtWLiCKGau1sxHRFNqHXpFF0I/vLLq6RVrfi1Su3+sly/yeMowCmcwQX4cAV1uIMGNIHCEJ7hFd6QQC/oHX0sWtdQPnMCf4A+fwADEI2j</latexit> 
+
+o2
+
+<latexit sha1_base64="xCU7wtlvX574oMXPubG/EXNkn68=">AAAB6nicbVBNSwMxEJ3Ur1q/qh69BIvgqeyKVI9FLx4r2g9ol5JNs21oNlmSrFCW/gQvHhTx6i/y5r8xbfegrQ8GHu/NMDMvTAQ31vO+UWFtfWNzq7hd2tnd2z8oHx61jEo1ZU2qhNKdkBgmuGRNy61gnUQzEoeCtcPx7cxvPzFtuJKPdpKwICZDySNOiXXSg+pf9ssVr+rNgVeJn5MK5Gj0y1+9gaJpzKSlghjT9b3EBhnRllPBpqVealhC6JgMWddRSWJmgmx+6hSfOWWAI6VdSYvn6u+JjMTGTOLQdcbEjsyyNxP/87qpja6DjMsktUzSxaIoFdgqPPsbD7hm1IqJI4Rq7m7FdEQ0odalU3Ih+Msvr5LWRdWvVWv3l5X6TR5HEU7gFM7Bhyuowx00oAkUhvAMr/CGBHpB7+hj0VpA+cwx/AH6/AEGGI2l</latexit> 
+
+o4
+
+<latexit sha1_base64="eWKFZ5IAZO0ZUnxaXYrNCQLqyaw=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRo9BLx4jmgckS5idzCZD5rHMzAphySd48aCIV7/Im3/jJNmDRgsaiqpuuruihDNjff/LK6ysrq1vFDdLW9s7u3vl/YOWUakmtEkUV7oTYUM5k7RpmeW0k2iKRcRpOxrfzPz2I9WGKflgJwkNBR5KFjOCrZPuVf+iX674VX8O9JcEOalAjka//NkbKJIKKi3h2Jhu4Cc2zLC2jHA6LfVSQxNMxnhIu45KLKgJs/mpU3TilAGKlXYlLZqrPycyLIyZiMh1CmxHZtmbif953dTGV2HGZJJaKsliUZxyZBWa/Y0GTFNi+cQRTDRztyIywhoT69IpuRCC5Zf/ktZZNahVa3fnlfp1HkcRjuAYTiGAS6jDLTSgCQSG8AQv8Opx79l7894XrQUvnzmEX/A+vgEHnI2m</latexit> 
+
+o5<latexit  sha1_base64="r8W2eYnoFQcqPN4bL6QPXfDdmDA=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69BIvgqSQi1WPRi8cK9gPaUDabTbt2sxt2J0Ip/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZemApu0PO+ncLa+sbmVnG7tLO7t39QPjxqGZVpyppUCaU7ITFMcMmayFGwTqoZSULB2uHodua3n5g2XMkHHKcsSMhA8phTglZq9Wik0PTLFa/qzeGuEj8nFcjR6Je/epGiWcIkUkGM6fpeisGEaORUsGmplxmWEjoiA9a1VJKEmWAyv3bqnlklcmOlbUl05+rviQlJjBknoe1MCA7NsjcT//O6GcbXwYTLNEMm6WJRnAkXlTt73Y24ZhTF2BJCNbe3unRINKFoAyrZEPzll1dJ66Lq16q1+8tK/SaPowgncArn4MMV1OEOGtAECo/wDK/w5ijnxXl3PhatBSefOYY/cD5/ALHpjzo=</latexit> 
+
+> · · ·  <latexit  sha1_base64="r8W2eYnoFQcqPN4bL6QPXfDdmDA=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69BIvgqSQi1WPRi8cK9gPaUDabTbt2sxt2J0Ip/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZemApu0PO+ncLa+sbmVnG7tLO7t39QPjxqGZVpyppUCaU7ITFMcMmayFGwTqoZSULB2uHodua3n5g2XMkHHKcsSMhA8phTglZq9Wik0PTLFa/qzeGuEj8nFcjR6Je/epGiWcIkUkGM6fpeisGEaORUsGmplxmWEjoiA9a1VJKEmWAyv3bqnlklcmOlbUl05+rviQlJjBknoe1MCA7NsjcT//O6GcbXwYTLNEMm6WJRnAkXlTt73Y24ZhTF2BJCNbe3unRINKFoAyrZEPzll1dJ66Lq16q1+8tK/SaPowgncArn4MMV1OEOGtAECo/wDK/w5ijnxXl3PhatBSefOYY/cD5/ALHpjzo=</latexit>
+> · · ·
+
+TPAE GRPO Advantage 
+
+<latexit sha1_base64="imTgC4NjSGnP68xxbDkL7HErdGw=">AAAB8HicbVBNS8NAEJ3Ur1q/qh69BIvgqSQi1WPVi8cK9kPaUDbbTbt0dxN2J0IJ/RVePCji1Z/jzX/jts1Bqw8GHu/NMDMvTAQ36HlfTmFldW19o7hZ2tre2d0r7x+0TJxqypo0FrHuhMQwwRVrIkfBOolmRIaCtcPxzcxvPzJteKzucZKwQJKh4hGnBK300BsRzK6mfb9frnhVbw73L/FzUoEcjX75szeIaSqZQiqIMV3fSzDIiEZOBZuWeqlhCaFjMmRdSxWRzATZ/OCpe2KVgRvF2pZCd67+nMiINGYiQ9spCY7MsjcT//O6KUaXQcZVkiJTdLEoSoWLsTv73h1wzSiKiSWEam5vdemIaELRZlSyIfjLL/8lrbOqX6vW7s4r9es8jiIcwTGcgg8XUIdbaEATKEh4ghd4dbTz7Lw574vWgpPPHMIvOB/fim+QQQ==</latexit> 
+
+ˆA1
+
+<latexit sha1_base64="X0oy3/HK62uGorJTCr3fwPeaAoE=">AAAB8HicbVDLTgJBEOzFF+IL9ehlIjHxRHaJQY+oF4+YyMPAhswOA0yYnd3M9JqQDV/hxYPGePVzvPk3DrAHBSvppFLVne6uIJbCoOt+O7m19Y3Nrfx2YWd3b/+geHjUNFGiGW+wSEa6HVDDpVC8gQIlb8ea0zCQvBWMb2d+64lrIyL1gJOY+yEdKjEQjKKVHrsjiun1tFfpFUtu2Z2DrBIvIyXIUO8Vv7r9iCUhV8gkNabjuTH6KdUomOTTQjcxPKZsTIe8Y6miITd+Oj94Ss6s0ieDSNtSSObq74mUhsZMwsB2hhRHZtmbif95nQQHV34qVJwgV2yxaJBIghGZfU/6QnOGcmIJZVrYWwkbUU0Z2owKNgRv+eVV0qyUvWq5en9Rqt1kceThBE7hHDy4hBrcQR0awCCEZ3iFN0c7L86787FozTnZzDH8gfP5A4vzkEI=</latexit> 
+
+ˆA2
+
+<latexit sha1_base64="c3/mhCL4MPMyHkLwACOkGPekYVM=">AAAB8HicbVDLTgJBEOzFF+IL9ehlIjHxRHbVoEfUi0dM5GFgQ2aHASbM7G5mek3Ihq/w4kFjvPo53vwbB9iDgpV0UqnqTndXEEth0HW/ndzK6tr6Rn6zsLW9s7tX3D9omCjRjNdZJCPdCqjhUoS8jgIlb8WaUxVI3gxGt1O/+cS1EVH4gOOY+4oOQtEXjKKVHjtDiun1pHveLZbcsjsDWSZeRkqQodYtfnV6EUsUD5FJakzbc2P0U6pRMMknhU5ieEzZiA5429KQKm78dHbwhJxYpUf6kbYVIpmpvydSqowZq8B2KopDs+hNxf+8doL9Kz8VYZwgD9l8UT+RBCMy/Z70hOYM5dgSyrSwtxI2pJoytBkVbAje4svLpHFW9irlyv1FqXqTxZGHIziGU/DgEqpwBzWoAwMFz/AKb452Xpx352PemnOymUP4A+fzB413kEM=</latexit> 
+
+ˆA3
+
+<latexit sha1_base64="XEPQLDlf8LmisPJZqVlZxjLz76Q=">AAAB8HicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9RD3qMYB6SLGF2MkmGzM4uM71CWPIVXjwo4tXP8ebfOEn2oIkFDUVVN91dQSyFQdf9dnIrq2vrG/nNwtb2zu5ecf+gYaJEM15nkYx0K6CGS6F4HQVK3oo1p2EgeTMY3Uz95hPXRkTqAccx90M6UKIvGEUrPXaGFNOrSfe2Wyy5ZXcGsky8jJQgQ61b/Or0IpaEXCGT1Ji258bop1SjYJJPCp3E8JiyER3wtqWKhtz46ezgCTmxSo/0I21LIZmpvydSGhozDgPbGVIcmkVvKv7ntRPsX/qpUHGCXLH5on4iCUZk+j3pCc0ZyrEllGlhbyVsSDVlaDMq2BC8xZeXSeOs7FXKlfvzUvU6iyMPR3AMp+DBBVThDmpQBwYhPMMrvDnaeXHenY95a87JZg7hD5zPH6vHkFc=</latexit> 
+
+ˆAG
+
+<latexit sha1_base64="ADVtdyO6jXWrvZhxoGqrsaoIm2A=">AAAB6nicbVBNS8NAEJ3Ur1q/qh69LBbBU0lEqseqF48V7Qe0oWy2k3bpZhN2N0IJ/QlePCji1V/kzX/jts1Bqw8GHu/NMDMvSATXxnW/nMLK6tr6RnGztLW9s7tX3j9o6ThVDJssFrHqBFSj4BKbhhuBnUQhjQKB7WB8M/Pbj6g0j+WDmSToR3QoecgZNVa6v+p7/XLFrbpzkL/Ey0kFcjT65c/eIGZphNIwQbXuem5i/Iwqw5nAaamXakwoG9Mhdi2VNELtZ/NTp+TEKgMSxsqWNGSu/pzIaKT1JApsZ0TNSC97M/E/r5ua8NLPuExSg5ItFoWpICYms7/JgCtkRkwsoUxxeythI6ooMzadkg3BW375L2mdVb1atXZ3Xqlf53EU4QiO4RQ8uIA63EIDmsBgCE/wAq+OcJ6dN+d90Vpw8plD+AXn4xu7aY10</latexit> 
+
+A1
+
+<latexit sha1_base64="bjc5UZTZ35Q9NtVaZa+e8HLqJ+g=">AAAB6nicbVDLTgJBEOzFF+IL9ehlIjHxRHaJQY+oF48Y5ZHAhswOvTBhdnYzM2tCCJ/gxYPGePWLvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaHSPJaPZpygH9GB5CFn1Fjp4bpX6RVLbtmdg6wSLyMlyFDvFb+6/ZilEUrDBNW647mJ8SdUGc4ETgvdVGNC2YgOsGOppBFqfzI/dUrOrNInYaxsSUPm6u+JCY20HkeB7YyoGeplbyb+53VSE175Ey6T1KBki0VhKoiJyexv0ucKmRFjSyhT3N5K2JAqyoxNp2BD8JZfXiXNStmrlqv3F6XaTRZHHk7gFM7Bg0uowR3UoQEMBvAMr/DmCOfFeXc+Fq05J5s5hj9wPn8AvO2NdQ==</latexit> 
+
+A2
+
+<latexit sha1_base64="5NEs4o3OLrD/dMv9Z6tcFhZvOPs=">AAAB6nicbVDLTgJBEOzFF+IL9ehlIjHxRHbVoEfUi0eM8khgQ2aHBibMzm5mZk3Ihk/w4kFjvPpF3vwbB9iDgpV0UqnqTndXEAuujet+O7mV1bX1jfxmYWt7Z3evuH/Q0FGiGNZZJCLVCqhGwSXWDTcCW7FCGgYCm8Hoduo3n1BpHslHM47RD+lA8j5n1Fjp4bp73i2W3LI7A1kmXkZKkKHWLX51ehFLQpSGCap123Nj46dUGc4ETgqdRGNM2YgOsG2ppCFqP52dOiEnVumRfqRsSUNm6u+JlIZaj8PAdobUDPWiNxX/89qJ6V/5KZdxYlCy+aJ+IoiJyPRv0uMKmRFjSyhT3N5K2JAqyoxNp2BD8BZfXiaNs7JXKVfuL0rVmyyOPBzBMZyCB5dQhTuoQR0YDOAZXuHNEc6L8+58zFtzTjZzCH/gfP4AvnGNdg==</latexit> 
+
+A3
+
+<latexit sha1_base64="bkPCR+BVj0TjYg0yRHjS0Uogkxg=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9RD3qMaB6QLGF20kmGzM4uM7NCWPIJXjwo4tUv8ubfOEn2oIkFDUVVN91dQSy4Nq777eRWVtfWN/Kbha3tnd294v5BQ0eJYlhnkYhUK6AaBZdYN9wIbMUKaRgIbAajm6nffEKleSQfzThGP6QDyfucUWOlh6vubbdYcsvuDGSZeBkpQYZat/jV6UUsCVEaJqjWbc+NjZ9SZTgTOCl0Eo0xZSM6wLalkoao/XR26oScWKVH+pGyJQ2Zqb8nUhpqPQ4D2xlSM9SL3lT8z2snpn/pp1zGiUHJ5ov6iSAmItO/SY8rZEaMLaFMcXsrYUOqKDM2nYINwVt8eZk0zspepVy5Py9Vr7M48nAEx3AKHlxAFe6gBnVgMIBneIU3RzgvzrvzMW/NOdnMIfyB8/kD3MGNig==</latexit> 
+
+AG
+
+> <latexit  sha1_base64="r8W2eYnoFQcqPN4bL6QPXfDdmDA=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69BIvgqSQi1WPRi8cK9gPaUDabTbt2sxt2J0Ip/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZemApu0PO+ncLa+sbmVnG7tLO7t39QPjxqGZVpyppUCaU7ITFMcMmayFGwTqoZSULB2uHodua3n5g2XMkHHKcsSMhA8phTglZq9Wik0PTLFa/qzeGuEj8nFcjR6Je/epGiWcIkUkGM6fpeisGEaORUsGmplxmWEjoiA9a1VJKEmWAyv3bqnlklcmOlbUl05+rviQlJjBknoe1MCA7NsjcT//O6GcbXwYTLNEMm6WJRnAkXlTt73Y24ZhTF2BJCNbe3unRINKFoAyrZEPzll1dJ66Lq16q1+8tK/SaPowgncArn4MMV1OEOGtAECo/wDK/w5ijnxXl3PhatBSefOYY/cD5/ALHpjzo=</latexit>
+> · · ·
+> <latexit  sha1_base64="r8W2eYnoFQcqPN4bL6QPXfDdmDA=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69BIvgqSQi1WPRi8cK9gPaUDabTbt2sxt2J0Ip/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZemApu0PO+ncLa+sbmVnG7tLO7t39QPjxqGZVpyppUCaU7ITFMcMmayFGwTqoZSULB2uHodua3n5g2XMkHHKcsSMhA8phTglZq9Wik0PTLFa/qzeGuEj8nFcjR6Je/epGiWcIkUkGM6fpeisGEaORUsGmplxmWEjoiA9a1VJKEmWAyv3bqnlklcmOlbUl05+rviQlJjBknoe1MCA7NsjcT//O6GcbXwYTLNEMm6WJRnAkXlTt73Y24ZhTF2BJCNbe3unRINKFoAyrZEPzll1dJ66Lq16q1+8tK/SaPowgncArn4MMV1OEOGtAECo/wDK/w5ijnxXl3PhatBSefOYY/cD5/ALHpjzo=</latexit>
+> · · ·
+
+<latexit sha1_base64="r8W2eYnoFQcqPN4bL6QPXfDdmDA=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69BIvgqSQi1WPRi8cK9gPaUDabTbt2sxt2J0Ip/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZemApu0PO+ncLa+sbmVnG7tLO7t39QPjxqGZVpyppUCaU7ITFMcMmayFGwTqoZSULB2uHodua3n5g2XMkHHKcsSMhA8phTglZq9Wik0PTLFa/qzeGuEj8nFcjR6Je/epGiWcIkUkGM6fpeisGEaORUsGmplxmWEjoiA9a1VJKEmWAyv3bqnlklcmOlbUl05+rviQlJjBknoe1MCA7NsjcT//O6GcbXwYTLNEMm6WJRnAkXlTt73Y24ZhTF2BJCNbe3unRINKFoAyrZEPzll1dJ66Lq16q1+8tK/SaPowgncArn4MMV1OEOGtAECo/wDK/w5ijnxXl3PhatBSefOYY/cD5/ALHpjzo=</latexit> 
+
+· · · 
+
+Vision-Entropy State of 
+
+<latexit sha1_base64="7CDz+hFii/hnzm/SPcG6JVj1JjA=">AAAB6HicbVDLSgNBEOyNrxhfUY9eBoMgCGFXJHoMevGYgHlAsoTZSW8yZnZ2mZkVQsgXePGgiFc/yZt/4yTZgyYWNBRV3XR3BYng2rjut5NbW9/Y3MpvF3Z29/YPiodHTR2nimGDxSJW7YBqFFxiw3AjsJ0opFEgsBWM7mZ+6wmV5rF8MOME/YgOJA85o8ZK9YteseSW3TnIKvEyUoIMtV7xq9uPWRqhNExQrTuemxh/QpXhTOC00E01JpSN6AA7lkoaofYn80On5MwqfRLGypY0ZK7+npjQSOtxFNjOiJqhXvZm4n9eJzXhjT/hMkkNSrZYFKaCmJjMviZ9rpAZMbaEMsXtrYQNqaLM2GwKNgRv+eVV0rwse5VypX5Vqt5mceThBE7hHDy4hircQw0awADhGV7hzXl0Xpx352PRmnOymWP4A+fzB3UXjLo=</latexit> 
+
++
+
+Visual Dependency Predictive Entropy Output distributions 
+
+<latexit sha1_base64="/3J7eGtsUnoZxqbV4Mtl99/Ph/I=">AAAB6HicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BL3pLwDwgWcLspDcZMzu7zMwKIeQLvHhQxKuf5M2/cZLsQRMLGoqqbrq7gkRwbVz328mtrW9sbuW3Czu7e/sHxcOjpo5TxbDBYhGrdkA1Ci6xYbgR2E4U0igQ2ApGtzO/9YRK81g+mHGCfkQHkoecUWOl+n2vWHLL7hxklXgZKUGGWq/41e3HLI1QGiao1h3PTYw/ocpwJnBa6KYaE8pGdIAdSyWNUPuT+aFTcmaVPgljZUsaMld/T0xopPU4CmxnRM1QL3sz8T+vk5rw2p9wmaQGJVssClNBTExmX5M+V8iMGFtCmeL2VsKGVFFmbDYFG4K3/PIqaV6UvUq5Ur8sVW+yOPJwAqdwDh5cQRXuoAYNYIDwDK/w5jw6L86787FozTnZzDH8gfP5A6KPjNg=</latexit> 
+
+I
+
+Token-level Reference Distributions 
+
+Reference Distribution of Unique Token Trust Region 
+
+<latexit sha1_base64="QhaWXmnGoOlgmZu6DZZxvnONEzE=">AAAB6HicbVBNS8NAEJ34WetX1aOXxSJ4KolI9Vj04rEF+wFtKJvtpl272YTdiVBCf4EXD4p49Sd589+4bXPQ1gcDj/dmmJkXJFIYdN1vZ219Y3Nru7BT3N3bPzgsHR23TJxqxpsslrHuBNRwKRRvokDJO4nmNAokbwfju5nffuLaiFg94CThfkSHSoSCUbRSA/ulsltx5yCrxMtJGXLU+6Wv3iBmacQVMkmN6Xpugn5GNQom+bTYSw1PKBvTIe9aqmjEjZ/ND52Sc6sMSBhrWwrJXP09kdHImEkU2M6I4sgsezPxP6+bYnjjZ0IlKXLFFovCVBKMyexrMhCaM5QTSyjTwt5K2IhqytBmU7QheMsvr5LWZcWrVqqNq3LtNo+jAKdwBhfgwTXU4B7q0AQGHJ7hFd6cR+fFeXc+Fq1rTj5zAn/gfP4A47uNAw==</latexit> 
+
+t
+
+<latexit sha1_base64="cK2HbqBvlKZFG3bDksCA/ItyYUw=">AAACJnicbVDLSgMxFM34rPVVdekmWETdlBkRdSOIuhB0UcGq0ClDJr3TxmYeJHfEMszXuPFX3LioiLjzU0zrLHwdCJyccy/JOX4ihUbbfrfGxicmp6ZLM+XZufmFxcrS8pWOU8WhwWMZqxufaZAiggYKlHCTKGChL+Ha7x0P/es7UFrE0SX2E2iFrBOJQHCGRvIqB27IsOv72UnuZS7CPWZn53lOXQkBbta9TNyaS8IUkxIkrW8UihKdLm55lapds0egf4lTkCopUPcqA7cd8zSECLlkWjcdO8FWxhQKLiEvu6mGhPEe60DT0IiFoFvZKGZO143SpkGszImQjtTvGxkLte6HvpkchtK/vaH4n9dMMdhvZSJKUoSIfz0UpJJiTIed0bZQwFH2DWFcCfNXyrumEo6m2bIpwfkd+S+52q45u7Xdi53q4VFRR4mskjWySRyyRw7JKamTBuHkgTyRAXmxHq1n69V6+xods4qdFfID1scnQNGmOw==</latexit> 
+
+DKL 
+
+ Pij k P 0
+
+ij 
+
+ 
+
+<latexit sha1_base64="eg+qBzZRjCuNfcqeZch9SqslLtU=">AAACHXicbVDLSsNAFJ34rPUVdelmsAgVtCRSqsuiG5cV7AOaECbTSTt2Mgkzk0IJ+RE3/oobF4q4cCP+jdM2i9p6YODMOfdy7z1+zKhUlvVjrKyurW9sFraK2zu7e/vmwWFLRonApIkjFomOjyRhlJOmooqRTiwICn1G2v7wduK3R0RIGvEHNY6JG6I+pwHFSGnJM6sXjkxCLx1Bh3LohEgNMGJpK8tgw0vp+WNWHp1Bh0X9ub9nlqyKNQVcJnZOSiBHwzO/nF6Ek5BwhRmSsmtbsXJTJBTFjGRFJ5EkRniI+qSrKUchkW46vS6Dp1rpwSAS+nEFp+p8R4pCKcehrysn68tFbyL+53UTFVy7KeVxogjHs0FBwqCK4CQq2KOCYMXGmiAsqN4V4gESCCsdaFGHYC+evExalxW7VqndV0v1mzyOAjgGJ6AMbHAF6uAONEATYPAEXsAbeDeejVfjw/icla4Yec8R+APj+xf7h6E4</latexit> 
+
+  X
+
+v2V 
+
+Pi,j (v) log Pi,j (v)
+
+Certain Uncertain aligns with the reference distribution of unique token .
+
+<latexit sha1_base64="lftq2AnHnvjUMS0QTN6CG8dzeNM=">AAAB63icdVBNSwMxEM36WetX1aOXYBE8ld0itb0VvXisYD+gXUo2zbahSXZJZoWy9C948aCIV/+QN/+N2XaFKvpg4PHeDDPzglhwA6776aytb2xubRd2irt7+weHpaPjjokSTVmbRiLSvYAYJrhibeAgWC/WjMhAsG4wvcn87gPThkfqHmYx8yUZKx5ySiCTBkCSYansVtwF8AppNOpVt4q9XCmjHK1h6WMwimgimQIqiDF9z43BT4kGTgWbFweJYTGhUzJmfUsVkcz46eLWOT63ygiHkbalAC/U1YmUSGNmMrCdksDE/PYy8S+vn0BY91Ou4gSYostFYSIwRDh7HI+4ZhTEzBJCNbe3YjohmlCw8RRtCN+f4v9Jp1rxapXa3WW5eZ3HUUCn6AxdIA9doSa6RS3URhRN0CN6Ri+OdJ6cV+dt2brm5DMn6Aec9y9PPo5x</latexit> 
+
+⌧ <latexit sha1_base64="Qw0nINYQA7J5t8Sh9G9RuvZO68k=">AAACCXicdVC7SgNBFJ2NrxhfUUubwSDEJmxCEpMuaGMjRDAPSJZldjJJxsw+mLkrxGVbG3/FxkIRW//Azr9xNomgogcGzj3nXube4wSCKzDNDyO1tLyyupZez2xsbm3vZHf32soPJWUt6gtfdh2imOAeawEHwbqBZMR1BOs4k7PE79wwqbjvXcE0YJZLRh4fckpAS3YW910CY0pEdBHbEcT5WQ0Q3eqSX8fHdjZnFuq1Sr1SxmbBnCEhpWq9bOLiQsmhBZp29r0/8GnoMg+oIEr1imYAVkQkcCpYnOmHigWETsiI9TT1iMuUFc0uifGRVgZ46Ev9PMAz9ftERFylpq6jO5M91W8vEf/yeiEMa1bEvSAE5tH5R8NQYPBxEgsecMkoiKkmhEqud8V0TCShoMPL6BC+LsX/k3apUKwWqpflXON0EUcaHaBDlEdFdIIa6Bw1UQtRdIce0BN6Nu6NR+PFeJ23pozFzD76AePtEzRTm1Q=</latexit> 
+
+Mt(zij )<latexit sha1_base64="K7phoZ3QXjUefl86G9MfI08I0Ys=">AAAB6HicbVDLSgNBEOyNrxhfUY9eBoPgxbArEj0GvXhMwDwgWcLspDcZMzu7zMwKIeQLvHhQxKuf5M2/cZLsQRMLGoqqbrq7gkRwbVz328mtrW9sbuW3Czu7e/sHxcOjpo5TxbDBYhGrdkA1Ci6xYbgR2E4U0igQ2ApGdzO/9YRK81g+mHGCfkQHkoecUWOl+kWvWHLL7hxklXgZKUGGWq/41e3HLI1QGiao1h3PTYw/ocpwJnBa6KYaE8pGdIAdSyWNUPuT+aFTcmaVPgljZUsaMld/T0xopPU4CmxnRM1QL3sz8T+vk5rwxp9wmaQGJVssClNBTExmX5M+V8iMGFtCmeL2VsKGVFFmbDYFG4K3/PIqaV6WvUq5Ur8qVW+zOPJwAqdwDh5cQxXuoQYNYIDwDK/w5jw6L86787FozTnZzDH8gfP5A3gfjLw=</latexit> 
+
+ 
+
+<latexit sha1_base64="4N4VkyXsx5RxIf9M8zh9+0ls+ag=">AAAB+nicbVDLSsNAFL3xWesr1aWbYBFclUSkuhGKblxW6AvaECbTSTt2MgkzE6XEfIobF4q49Uvc+TdO2iy09cDA4Zx7uWeOHzMqlW1/Gyura+sbm6Wt8vbO7t6+WTnoyCgRmLRxxCLR85EkjHLSVlQx0osFQaHPSNef3OR+94EISSPeUtOYuCEacRpQjJSWPLMyCJEaY8TSVual9D678syqXbNnsJaJU5AqFGh65tdgGOEkJFxhhqTsO3as3BQJRTEjWXmQSBIjPEEj0teUo5BIN51Fz6wTrQytIBL6cWXN1N8bKQqlnIa+nsyDykUvF//z+okKLt2U8jhRhOP5oSBhloqsvAdrSAXBik01QVhQndXCYyQQVrqtsi7BWfzyMumc1Zx6rX53Xm1cF3WU4AiO4RQcuIAG3EIT2oDhEZ7hFd6MJ+PFeDc+5qMrRrFzCH9gfP4ArGaUSQ==</latexit> 
+
+Tij =
+
+Reject with 99% confidence Geometric Residual 
+
+<latexit sha1_base64="bJMahMp9ooFdVqU7kjATwLwCVr8=">AAAB8nicbVDLSgMxFL1TX7W+qi7dBIvgqsyIVJdFNy4r2gdMh5JJM21oJhmSjFCGfoYbF4q49Wvc+Tdm2llo64HA4Zx7ybknTDjTxnW/ndLa+sbmVnm7srO7t39QPTzqaJkqQttEcql6IdaUM0HbhhlOe4miOA457YaT29zvPlGlmRSPZprQIMYjwSJGsLGS34+xGRPMs4fZoFpz6+4caJV4BalBgdag+tUfSpLGVBjCsda+5yYmyLAyjHA6q/RTTRNMJnhEfUsFjqkOsnnkGTqzyhBFUtknDJqrvzcyHGs9jUM7mUfUy14u/uf5qYmug4yJJDVUkMVHUcqRkSi/Hw2ZosTwqSWYKGazIjLGChNjW6rYErzlk1dJ56LuNeqN+8ta86aoowwncArn4MEVNOEOWtAGAhKe4RXeHOO8OO/Ox2K05BQ7x/AHzucPjzqRdA==</latexit> 
+
+S
+
+<latexit sha1_base64="/CQOwy8uq0TcaAJSv+V2yCGyQRI=">AAAB8nicbVDLSgMxFL1TX7W+qi7dBIvgqsyIVJdFN11WsA+YDiWTZtrQTDIkGaEM/Qw3LhRx69e482/MtLPQ1gOBwzn3knNPmHCmjet+O6WNza3tnfJuZW//4PCoenzS1TJVhHaI5FL1Q6wpZ4J2DDOc9hNFcRxy2gun97nfe6JKMykezSyhQYzHgkWMYGMlfxBjMyGYZ635sFpz6+4CaJ14BalBgfaw+jUYSZLGVBjCsda+5yYmyLAyjHA6rwxSTRNMpnhMfUsFjqkOskXkObqwyghFUtknDFqovzcyHGs9i0M7mUfUq14u/uf5qYlug4yJJDVUkOVHUcqRkSi/H42YosTwmSWYKGazIjLBChNjW6rYErzVk9dJ96ruNeqNh+ta866oowxncA6X4MENNKEFbegAAQnP8ApvjnFenHfnYzlacoqdU/gD5/MHfoORaQ==</latexit> 
+
+H
+
+<latexit sha1_base64="lftq2AnHnvjUMS0QTN6CG8dzeNM=">AAAB63icdVBNSwMxEM36WetX1aOXYBE8ld0itb0VvXisYD+gXUo2zbahSXZJZoWy9C948aCIV/+QN/+N2XaFKvpg4PHeDDPzglhwA6776aytb2xubRd2irt7+weHpaPjjokSTVmbRiLSvYAYJrhibeAgWC/WjMhAsG4wvcn87gPThkfqHmYx8yUZKx5ySiCTBkCSYansVtwF8AppNOpVt4q9XCmjHK1h6WMwimgimQIqiDF9z43BT4kGTgWbFweJYTGhUzJmfUsVkcz46eLWOT63ygiHkbalAC/U1YmUSGNmMrCdksDE/PYy8S+vn0BY91Ou4gSYostFYSIwRDh7HI+4ZhTEzBJCNbe3YjohmlCw8RRtCN+f4v9Jp1rxapXa3WW5eZ3HUUCn6AxdIA9doSa6RS3URhRN0CN6Ri+OdJ6cV+dt2brm5DMn6Aec9y9PPo5x</latexit> 
+
+⌧
+
+conditioned on 
+
+<latexit sha1_base64="7lyD+q26TZA1Oma8P4wIAfrVkKk=">AAAB7XicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BLx4jmBhIljA7mU0mmccyMyuEJf/gxYMiXv0fb/6Nk2QPmljQUFR1090VJZwZ6/vfXmFtfWNzq7hd2tnd2z8oHx61jEo1oU2iuNLtCBvKmaRNyyyn7URTLCJOH6Px7cx/fKLaMCUf7CShocADyWJGsHVSq9HL2GjaK1f8qj8HWiVBTiqQo9Erf3X7iqSCSks4NqYT+IkNM6wtI5xOS93U0ASTMR7QjqMSC2rCbH7tFJ05pY9ipV1Ji+bq74kMC2MmInKdAtuhWfZm4n9eJ7XxdZgxmaSWSrJYFKccWYVmr6M+05RYPnEEE83crYgMscbEuoBKLoRg+eVV0rqoBrVq7f6yUr/J4yjCCZzCOQRwBXW4gwY0gcAInuEV3jzlvXjv3seiteDlM8fwB97nD7NQjzs=</latexit> 
+
+Pij 
+
+<latexit sha1_base64="GTkRaa8EfCWUqpFgmh5G4bSoxrk=">AAAB7nicbVBNS8NAEJ34WetX1aOXxSJ6KolI9Vj04rGC/YA2lM120q7dbMLuRiihP8KLB0W8+nu8+W/ctjlo64OBx3szzMwLEsG1cd1vZ2V1bX1js7BV3N7Z3dsvHRw2dZwqhg0Wi1i1A6pRcIkNw43AdqKQRoHAVjC6nfqtJ1Sax/LBjBP0IzqQPOSMGiu16me9jD9OeqWyW3FnIMvEy0kZctR7pa9uP2ZphNIwQbXueG5i/Iwqw5nASbGbakwoG9EBdiyVNELtZ7NzJ+TUKn0SxsqWNGSm/p7IaKT1OApsZ0TNUC96U/E/r5Oa8NrPuExSg5LNF4WpICYm099JnytkRowtoUxxeythQ6ooMzahog3BW3x5mTQvKl61Ur2/LNdu8jgKcAwncA4eXEEN7qAODWAwgmd4hTcncV6cd+dj3rri5DNH8AfO5w8UfI9s</latexit> 
+
+P 0
+
+ij 
+
+<latexit sha1_base64="/3J7eGtsUnoZxqbV4Mtl99/Ph/I=">AAAB6HicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BL3pLwDwgWcLspDcZMzu7zMwKIeQLvHhQxKuf5M2/cZLsQRMLGoqqbrq7gkRwbVz328mtrW9sbuW3Czu7e/sHxcOjpo5TxbDBYhGrdkA1Ci6xYbgR2E4U0igQ2ApGtzO/9YRK81g+mHGCfkQHkoecUWOl+n2vWHLL7hxklXgZKUGGWq/41e3HLI1QGiao1h3PTYw/ocpwJnBa6KYaE8pGdIAdSyWNUPuT+aFTcmaVPgljZUsaMld/T0xopPU4CmxnRM1QL3sz8T+vk5rw2p9wmaQGJVssClNBTExmX5M+V8iMGFtCmeL2VsKGVFFmbDYFG4K3/PIqaV6UvUq5Ur8sVW+yOPJwAqdwDh5cQRXuoAYNYIDwDK/w5jw6L86787FozTnZzDH8gfP5A6KPjNg=</latexit> 
+
+I
+
+<latexit sha1_base64="94CCrY7pijcId3V3C1e0tYDIAAI=">AAAB6XicbVDLSgNBEOyNrxhfUY9eBoPoKeyKRI9BL3qLYh6QhDA7mU2GzM4uM71CWPIHXjwo4tU/8ubfOEn2oIkFDUVVN91dfiyFQdf9dnIrq2vrG/nNwtb2zu5ecf+gYaJEM15nkYx0y6eGS6F4HQVK3oo1p6EvedMf3Uz95hPXRkTqEccx74Z0oEQgGEUrPdyd9oolt+zOQJaJl5ESZKj1il+dfsSSkCtkkhrT9twYuynVKJjkk0InMTymbEQHvG2poiE33XR26YScWKVPgkjbUkhm6u+JlIbGjEPfdoYUh2bRm4r/ee0Eg6tuKlScIFdsvihIJMGITN8mfaE5Qzm2hDIt7K2EDammDG04BRuCt/jyMmmcl71KuXJ/UapeZ3Hk4QiO4Qw8uIQq3EIN6sAggGd4hTdn5Lw4787HvDXnZDOH8AfO5w8C540J</latexit> 
+
+I 0
+
+Mahalanobis Distance 
+
+<latexit sha1_base64="w/DdSQ4Zl2ZTZyo040A8l13uHF0=">AAAB+HicdVDLSgMxFM3UV62Pjrp0EyyCq2Fa2truim5cVrAPaMuQSdM2mskMyR2hHfolblwo4tZPceffmGkrqOiBwOGce7knx48E1+C6H1ZmbX1jcyu7ndvZ3dvP2weHbR3GirIWDUWouj7RTHDJWsBBsG6kGAl8wTr+3WXqd+6Z0jyUNzCN2CAgY8lHnBIwkmfn+wGBCUAym3sJv517dsF16rVKvVLGruMukJJStV52cXGlFNAKTc9+7w9DGgdMAhVE617RjWCQEAWcCjbP9WPNIkLvyJj1DJUkYHqQLILP8alRhngUKvMk4IX6fSMhgdbTwDeTaUz920vFv7xeDKPaIOEyioFJujw0igWGEKct4CFXjIKYGkKo4iYrphOiCAXTVc6U8PVT/D9pl5xi1alelwuNi1UdWXSMTtAZKqJz1EBXqIlaiKIYPaAn9GzNrEfrxXpdjmas1c4R+gHr7RMgZ5QT</latexit> 
+
+zij 
+
+<latexit sha1_base64="Qw0nINYQA7J5t8Sh9G9RuvZO68k=">AAACCXicdVC7SgNBFJ2NrxhfUUubwSDEJmxCEpMuaGMjRDAPSJZldjJJxsw+mLkrxGVbG3/FxkIRW//Azr9xNomgogcGzj3nXube4wSCKzDNDyO1tLyyupZez2xsbm3vZHf32soPJWUt6gtfdh2imOAeawEHwbqBZMR1BOs4k7PE79wwqbjvXcE0YJZLRh4fckpAS3YW910CY0pEdBHbEcT5WQ0Q3eqSX8fHdjZnFuq1Sr1SxmbBnCEhpWq9bOLiQsmhBZp29r0/8GnoMg+oIEr1imYAVkQkcCpYnOmHigWETsiI9TT1iMuUFc0uifGRVgZ46Ev9PMAz9ftERFylpq6jO5M91W8vEf/yeiEMa1bEvSAE5tH5R8NQYPBxEgsecMkoiKkmhEqud8V0TCShoMPL6BC+LsX/k3apUKwWqpflXON0EUcaHaBDlEdFdIIa6Bw1UQtRdIce0BN6Nu6NR+PFeJ23pozFzD76AePtEzRTm1Q=</latexit> 
+
+Mt(zij )
+
+<latexit sha1_base64="atbqp+Yxgh/VPGYdXLl9oLrpbDo=">AAACPnicbVA9SwNBFNzzM8avqKXNYhCswp1ItBGCNpaKRgO5EPY2L3F1b+/YfSfG436Zjb/BztLGQhFbSzfJ4ffAwjAzj31vglgKg6774IyNT0xOTRdmirNz8wuLpaXlUxMlmkOdRzLSjYAZkEJBHQVKaMQaWBhIOAsu9wf+2RVoIyJ1gv0YWiHrKdEVnKGV2qW6HzI8R0xvsnYqLjK6S/0AekKlsTW0uM7oMMGZTI/ziO9/aQe5Rn1Qnc+ZdqnsVtwh6F/i5aRMchy2S/d+J+JJCAq5ZMY0PTfGVso0Ci4hK/qJgZjxS9aDpqWKhWBa6fD8jK5bpUO7kbZPIR2q3ydSFhrTDwObHKxtfnsD8T+vmWB3p5UKFScIio8+6iaSYkQHXdKO0MBR9i1hXAu7K+XnTDOOtvGiLcH7ffJfcrpZ8aqV6tFWubaX11Egq2SNbBCPbJMaOSCHpE44uSWP5Jm8OHfOk/PqvI2iY04+s0J+wHn/AF2ysaA=</latexit> 
+
+zij =
+
+✓ Sij 
+
+Hij 
+
+◆
+
+Token Trustworthiness Null Hypothesis 
+
+<latexit sha1_base64="QhaWXmnGoOlgmZu6DZZxvnONEzE=">AAAB6HicbVBNS8NAEJ34WetX1aOXxSJ4KolI9Vj04rEF+wFtKJvtpl272YTdiVBCf4EXD4p49Sd589+4bXPQ1gcDj/dmmJkXJFIYdN1vZ219Y3Nru7BT3N3bPzgsHR23TJxqxpsslrHuBNRwKRRvokDJO4nmNAokbwfju5nffuLaiFg94CThfkSHSoSCUbRSA/ulsltx5yCrxMtJGXLU+6Wv3iBmacQVMkmN6Xpugn5GNQom+bTYSw1PKBvTIe9aqmjEjZ/ND52Sc6sMSBhrWwrJXP09kdHImEkU2M6I4sgsezPxP6+bYnjjZ0IlKXLFFovCVBKMyexrMhCaM5QTSyjTwt5K2IhqytBmU7QheMsvr5LWZcWrVqqNq3LtNo+jAKdwBhfgwTXU4B7q0AQGHJ7hFd6cR+fFeXc+Fq1rTj5zAn/gfP4A47uNAw==</latexit> 
+
+t
+
+<latexit sha1_base64="qB/6W8Ve10imHCyyZob060/CTBQ=">AAAB+HicbVDLSsNAFJ34rPXRqEs3g0VwVRKR6rLoxmUF+4A2hMl00o6dTMLMjdCGfokbF4q49VPc+TdO2iy09cDA4Zx7uWdOkAiuwXG+rbX1jc2t7dJOeXdv/6BiHx61dZwqylo0FrHqBkQzwSVrAQfBuoliJAoE6wTj29zvPDGleSwfYJIwLyJDyUNOCRjJtyv9iMAIIJvO/Iw/zny76tScOfAqcQtSRQWavv3VH8Q0jZgEKojWPddJwMuIAk4Fm5X7qWYJoWMyZD1DJYmY9rJ58Bk+M8oAh7EyTwKeq783MhJpPYkCM5nH1MteLv7n9VIIr72MyyQFJuniUJgKDDHOW8ADrhgFMTGEUMVNVkxHRBEKpquyKcFd/vIqaV/U3Hqtfn9ZbdwUdZTQCTpF58hFV6iB7lATtRBFKXpGr+jNmlov1rv1sRhds4qdY/QH1ucPx1qT1g==</latexit> 
+
+zij 
+
+Figure 3: Overview of the TPAE algorithm. TPAE utilizes correct rollouts to establish reference distributions of vision-entropy states of unique tokens. From a hypothesis testing perspective, TPAE then applies a trust boundary 𝜏 to quantify token-level trustworthiness based on distributional alignment. This metric is then integrated with the rollout-level advantage from GRPO. 
+
+a high H𝑖,𝑗 value indicates a state of high uncertainty, where the model identifies multiple plausible paths for the next step. 
+
+3.2.2 Visual Dependency. The token-level visual dependency mea-sures the degree of reliance on the visual input 𝐼 during the genera-tion of token 𝑜 𝑖 𝑗 [8, 33]. Formally, we define 𝑃 ′
+
+𝑖,𝑗 = 𝜋 𝜃 (· | 𝐼 ′, 𝑞, 𝑜 𝑖, < 𝑗 )
+
+as the probability distribution over the vocabulary V conditioned on a masked, non-informative version of the image 𝐼 ′. From the perspective of information gain, the visual dependency is calcu-lated as the Kullback-Leibler (KL) divergence between the original distribution 𝑃 𝑖,𝑗 and the vision-blind distribution 𝑃 ′
+
+𝑖,𝑗 :
+
+S𝑖 𝑗 := DKL 
+
+
+
+𝑃 𝑖,𝑗 ∥ 𝑃 ′
+
+𝑖,𝑗 
+
+
+
+=∑︁ 
+
+𝑣 ∈ V 
+
+𝑃 𝑖,𝑗 (𝑣 ) log 𝑃 𝑖,𝑗 (𝑣 )
+
+𝑃 ′
+
+𝑖,𝑗 (𝑣 ) (4) A high S𝑖 𝑗 value indicates that the visual input provides critical information for the prediction of token 𝑜 𝑖 𝑗 , marking it as a key mo-ment of perception-anchored reasoning. Conversely, a low S𝑖 𝑗 value suggests the model is relying primarily on linguistic knowledge or the preceding textual context to determine the next token. Following [8, 33], we implement a patch-based masking strat-egy for 𝐼 ′ at a 60% masking ratio. Specifically, 60% of the image patches are randomly sampled and masked, effectively restricting the available visual cues for visual dependency quantification. 
+
+3.3 Analysis of Multimodal Reasoning 
+
+We conduct an empirical investigation of multimodal reasoning using Qwen2.5-VL-7B-Instruct [27] across 100 questions sampled from the ViRL39K dataset [30]. By generating 128 independent trajectories per question, we establish a robust distribution consist-ing of 5,995 correct and 6,805 incorrect trajectories. We observe a clear structural divergence: correct reasoning chains are signif-icantly more concise, averaging 418.07 tokens compared to the 546.57 tokens of their incorrect counterparts. Moreover, as shown in Figure 2(a), correct reasoning chains show a higher log-frequency density in regions of high visual dependency, while incorrect trajec-tories are heavily concentrated in the minimal dependency interval. By integrating predictive entropy H𝑖 𝑗 with visual dependency 
+
+S𝑖 𝑗 , we investigate how visual grounding modulates the model’s in-ternal certainty across both correct and incorrect reasoning chains: 
+
+Insight 1: Correct reasoning chains exhibit a sharper en-tropy reduction through visual grounding. Figure 2(a) illus-trates the average entropy at varying levels of visual dependency, revealing a clear divergence in how visual information impacts model certainty. In correct trajectories, we observe a monotonic decrease in entropy as visual dependency increases, suggesting that the model successfully translates visual cues into predictive certainty. Conversely, in incorrect trajectories, entropy remains at a consistently high plateau regardless of the level of visual reliance. This divergence implies that while correct reasoning chains use visual context to effectively prune the output distribution, incorrect reasoning paths suffer from non-resolving grounding—a phenome-non where the model attends to the image but fails to extract the information required to resolve its internal uncertainty. 
+
+Insight 2: Vision-entropy misalignment pinpoints the piv-otal tokens triggering multimodal reasoning collapse. We then characterize the token-level vision-entropy state (S 𝑡 , H𝑡 ) by constructing the empirical joint distribution of visual dependency and entropy for each unique token 𝑡 across all trajectories of a given question. By establishing the distributions from correct reasoning chains as a reference baseline, we can evaluate the statistical align-ment of tokens generated in failed trajectories. Our analysis reveals that while most tokens in failed trajectories align with the reference, a critical 7.64% fall into the extreme distributional tails, deviating by more than three standard deviations from reference center. To investigate these divergent tokens, we partition them into a 3 × 3diagnostic grid, categorized by whether their predictive entropy Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+and visual dependency deviate by more than one standard deviation from the reference mean. As illustrated in Figure 2(b), over 74% of these tokens are concentrated within the upper-middle and upper-right regions of the grid. This concentration reveals a decoupling of perception and reasoning in failed trajectories, providing granular validation for the global statistics observed in Figure 2(a). To validate these statistical trends, we conduct a human eval-uation on a random subset of 200 divergent tokens, each drawn from a unique incorrect trajectory. We tasked three annotators with classifying these tokens into four distinct categories. As shown in Figure 2(c), 68.5% of these tokens are perception errors stemming from visual mis-grounding, while 18.8% are reasoning errors that misinterpret valid visual evidence during multi-step inference. Only 3.7% represent benign noise, confirming that these divergent tokens are overwhelmingly linked to reasoning failure. Further details on annotation protocol are provided in supplementary materials. Col-lectively, these findings demonstrate that distributional divergence from reference distributions is an effective indicator for localizing the pivotal moments of multimodal reasoning collapse. 
+
+4 Method 
+
+Building upon our empirical findings, we propose Token-level 
+
+Perception-grounded Advantage Estimation ( TPAE ), an algorithm designed to refine coarse, sequence-level signals of outcome-based rewards into dense, token-level supervision by coupling visual de-pendency with predictive entropy. For each question, TPAE lever-ages correct rollouts to establish reference distributions of vision-entropy states for unique tokens. TPAE then quantifies the trustwor-thiness of individual tokens by measuring their statistical alignment with these reference distributions through a hypothesis-testing per-spective. This metric is integrated directly into the rollout-level advantage computed by mainstream RL algorithms to penalize tokens deviating from the established trust region. 
+
+4.1 Vision-Entropy Distribution 
+
+For a given multimodal input (𝐼, 𝑞 ), we sample a group of 𝐺 rollouts, 
+
+{𝑜 𝑖 }𝐺 𝑖 =1, each with a corresponding rule-based, outcome-oriented reward {𝑅 𝑖 }𝐺 𝑖 =1 indicating its correctness. We divide these rollouts into a correct set 𝐷 𝑇 = {𝑜 𝑖 | 𝑅 𝑖 = 1} and an incorrect set 𝐷 𝐹 = {𝑜 𝑖 |
+
+𝑅 𝑖 = 0}. In our work, we utilize the vision-entropy distribution from correct rollouts 𝐷 𝑇 as a reference baseline to capture the optimal joint dynamics of visual grounding and predictive entropy that facilitate a correct final answer. For each unique token 𝑡 in the correct set 𝐷 𝑇 , we aggregate its observed vision-entropy states 𝑍 𝑡 = {z𝑖 𝑗 | 𝑜 𝑖 𝑗 = 𝑡, 𝑜 𝑖 ∈ 𝐷 𝑇 },where each state z𝑖 𝑗 = [S 𝑖 𝑗 , H𝑖 𝑗 ]⊤ ∈ R2 captures the token’s visual dependency S and entropy H . We then approximate the reference distribution for each unique token 𝑡 through multivariate Gaussian, i.e. 𝑃 (z | 𝑡 ) ∼ N ( 𝜇 𝑡 , Σ𝑡 ), defined as: 
+
+𝑃 (z|𝜇 𝑡 , Σ𝑡 ) = 12𝜋 √︁ |Σ𝑡 | exp 
+
+
+
+− 12 (z − 𝜇 𝑡 )⊤Σ−1 
+
+> 𝑡
+
+(z − 𝜇 𝑡 )
+
+
+
+(5) where 𝜇 𝑡 = 1 
+
+> |𝑍 𝑡 |
+
+Íz∈𝑍 𝑡 z, Σ𝑡 = 1 
+
+> |𝑍 𝑡 | − 1
+
+Íz∈𝑍 𝑡 (z − 𝜇 𝑡 )𝑇 (z − 𝜇 𝑡 ). The choice of a multivariate Gaussian is motivated by the observed uni-modal centrality of vision-entropy states in 𝐷 𝑇 (see supplementary materials for comparisons with alternative parametric models). To ensure the robustness of the token-level estimates, we com-pute the covariance matrix Σ𝑡 using the Ledoit-Wolf adaptive shrink-age approach [11]. This addresses the sample scarcity inherent to RLVR frameworks, where limited rollouts may yield unstable or singular token-level empirical estimates. Specifically, we parame-terize the estimated covariance ˆ Σ𝑡 as a convex combination of the empirical covariance Σ𝑡 and a diagonal prior Σprior  
+
+> 𝑡
+
+, as follows: ˆΣ𝑡 = (1 − 𝜆 𝑡 )Σ𝑡 + 𝜆 𝑡 Σprior  
+
+> 𝑡
+
+(6) where Σprior  
+
+> 𝑡
+
+= diag (𝜎 2 
+
+> S𝑡
+
+, 𝜎 2 
+
+> H𝑡
+
+) denotes the marginal variances of vi-sual dependency and entropy for token 𝑡 , as estimated from the cor-rect rollout set 𝐷 𝑇 . The shrinkage intensity 𝜆 𝑡 ∈ [ 0, 1] follows the optimal shrinkage principle, 𝜆 𝑡 = 3  
+
+> |𝑍 𝑡 |+ 3
+
+, which adaptively weights the prior based on the sample size |𝑍 𝑡 | [11]. Further theoretical justifications are provided in the supplementary material. 
+
+4.2 Token Trustworthiness Quantification 
+
+We quantify the trustworthiness of individual tokens by measuring their statistical alignment with the reference distribution of cor-rect reasoning paths. Formally, we frame this quantification as a hypothesis test: for a token 𝑜 𝑖 𝑗 = 𝑡 , the null hypothesis 𝐻 0 posits that its vision-entropy state z𝑖 𝑗 = [S 𝑖 𝑗 , H𝑖 𝑗 ]⊤ originates from the reference distribution 𝑃 (z|𝜇 𝑡 , Σ𝑡 ) derived from correct rollouts. To test the null hypothesis 𝐻 0, we calculate the likelihood of observing the specific vision-entropy state z𝑖 𝑗 under the reference distribution 𝑃 (z | 𝜇 𝑡 , Σ𝑡 ). For a multivariate Gaussian model, this probability density is strictly proportional to the exponentiated negative squared Mahalanobis distance [3]: 
+
+𝑃 (z𝑖 𝑗 | 𝜇 𝑡 , Σ𝑡 ) ∝ exp 
+
+
+
+− 12 M2 
+
+> 𝑡
+
+(z𝑖 𝑗 )
+
+
+
+(7) where M𝑡 (z𝑖 𝑗 ) =√︁ (z𝑖 𝑗 − 𝜇 𝑡 )⊤Σ−1 
+
+> 𝑡
+
+(z𝑖 𝑗 − 𝜇 𝑡 ) denotes the Maha-lanobis distance. A larger M𝑡 (z𝑖 𝑗 ) value corresponds to a lower likelihood that z𝑖 𝑗 aligns with the reference distribution, providing a clear statistical signal to reject the null hypothesis 𝐻 0.We employ a principled boundary 𝜏 to demarcate the trust region for 𝐻 0, leveraging the statistical properties of the Mahalanobis dis-tance. Under 𝐻 0 where z𝑖 𝑗 ∼ N ( 𝜇 𝑡 , Σ𝑡 ), the squared Mahalanobis distance strictly follows a Chi-squared distribution with two de-grees of freedom, i.e. M2 
+
+> 𝑡
+
+(z𝑖 𝑗 ) ∼ 𝜒 22 . By adopting a 99% confi-dence level, we reject 𝐻 0 if the squared Mahalanobis distance ex-ceeds the value 𝜒 22,0.99 ≈ 9.21. This threshold implies that a token’s vision-entropy state z𝑖 𝑗 is considered misaligned with the reference distribution if its deviation from the distribution center exceeds √9.21 ≈ 3.03 standard deviations, i.e., M𝑡 (z𝑖 𝑗 ) > 𝜏 = 3.03. Building upon the above derivations, we formally quantify the trustworthiness T𝑖 𝑗 of a token’s vision-entropy state as the residual distance to the established trust boundary: 
+
+T𝑖 𝑗 = 𝜏 − M 𝑡 (z𝑖 𝑗 ) (8) Within this formulation, a positive trustworthiness score ( T𝑖 𝑗 ≥ 0) confirms that the token resides safely within the 99% confidence interval of the reference distribution. Conversely, a negative score (T𝑖 𝑗 < 0) identifies a statistically significant outlier, signaling a rejection of the null hypothesis 𝐻 0 and a critical vision-entropy misalignment of token 𝑜 𝑖 𝑗 . For tokens that are absent from the MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Zhihan Zhang and Lizi Liao 
+
+reference set 𝐷 𝑇 , we assign a default trustworthiness score of zero to maintain a conservative estimation. 
+
+4.3 Token-level Advantage Estimation 
+
+We integrate the token’s trustworthiness score into the existing RLVR frameworks to refine the rollout-level advantage, effectively penalizing tokens that deviate from the established trust region. Theoretically, failing to reject 𝐻 0 indicates that the token’s vision-entropy state is statistically aligned with the reference distribution at a 99% confidence level. Since this alignment is a fundamental requirement rather than an optimization target, we exclusively im-pose a penalty on tokens that violate this requirement—specifically those for which 𝐻 0 is rejected due to M𝑡 > 𝜏 . The final token-level advantage is then defined as: ˆ𝐴 TPAE  
+
+> 𝑖 𝑗
+
+= ˆ𝐴 GRPO  
+
+> 𝑖 𝑗
+
++ sigmoid (min (0, T𝑖 𝑗 )) − 0.5 (9) where T𝑖 𝑗 = 𝜏 − M 𝑡 (z𝑖 𝑗 ) and ˆ 𝐴 GRPO  
+
+> 𝑖 𝑗
+
+is defined in Eq. 1. The sig-moid function 𝜎 (·) is applied to constraining the output range since M𝑡 ∈ [ 0, +∞) . By centering the transformation such that the penalty vanishes when T𝑖 𝑗 ≥ 0, we preserve the original advantage for all compliant tokens while providing a dense, bounded signal to suppress vision-entropy misalignment during reinforcement learn-ing. A detailed, step-by-step implementation of the entire training procedure is provided in the supplementary material. 
+
+5 Experiment 
+
+We validate the effectiveness of TPAE in advancing multimodal rea-soning by integrating it into two foundational RL algorithms across two model backbones. Our evaluation comprises a comprehensive comparative study against state-of-the-art multimodal reasoning models across seven benchmarks. Experimental results demonstrate significant performance gains attributable to TPAE over base RL algorithms, observed in both training efficiency and downstream accuracy. Furthermore, we include a sensitivity analysis on the trust boundary 𝜏 and a qualitative analysis that illustrates the precision of our method in localizing multimodal reasoning failures. 
+
+5.1 Experimental Setup 
+
+5.1.1 Models and Baselines. We validate our method using Qwen2.5-VL-7B-Instruct [27] and Qwen3-VL-8B-Instruct [28] as the base models, integrated within the standard RL algorithms GRPO and DAPO. To ensure a comprehensive comparison, we benchmark against a diverse suite of leading multimodal reasoning models: ThinkLite-VL-7B [32], OpenVLThinker-7B [5], NoisyRollout-7B [17], MM-Eureka-7B [21], Perception-R1-7B [36], VL-Rethinker-7B [30], R1-ShareVL-7B [39], PAPO-G-7B, PAPO-D-7B [33], VPPO-7B [8], and Shuffle-R1-7B [45]. Notably, all comparative baselines utilize Qwen2.5-VL-7B-Instruct as the base model. 
+
+5.1.2 Dataset, Benchmarks, and Evaluation. We train our base mod-els on the ViRL39K dataset [30], which contains 38.9k diverse multi-modal reasoning problems. We conduct a comprehensive evaluation across seven multimodal benchmarks, spanning mathematical, geo-metric, logical, and multi-discipline reasoning: MathVerse [43], We-Math [22], MathVision [31], DynaMath [46], Geo3k [20], LogicVista [37], and MMMU-Pro [41]. For MathVerse, we evaluate on the full set of 3.94k multimodal examples, excluding the text-only subset to focus on tasks requiring multimodal context. For evaluation setup, we employ an exact-match scoring protocol against ground-truth answers, which eliminates the reliance on LLM-as-a-judge systems [8, 33]. We report average accuracy@8 at an inference temperature of 1.0, using a single, fixed evaluation pipeline across all models to ensure a rigorous and fair comparison. 
+
+5.1.3 Training Details. We develop four model variants using differ-ent base RL algorithms and model backbones. Specifically, TPAE-G-Qwen2.5-7B and TPAE-D-Qwen2.5-7B are initialized from Qwen2.5-VL-7B-Instruct and trained using the GRPO and DAPO algorithms, respectively. Following the same paradigm, we extend our method to Qwen3-VL-8B-Instruct to produce TPAE-G-Qwen3-8B and TPAE-D-Qwen3-8B. The training process utilizes the VerL [25] reinforce-ment learning framework for policy optimization. Our models are trained for 2 epochs with a learning rate of 1e-6 on 8 NVIDIA Pro6000 96G GPUs. We employ a training batch size of 384, with 16 rollouts sampled per question. We set the maximum response length to 2048, and add a small entropy penalty of 0.06 to ensure training stability [8, 17, 33]. Wihin our method, we set the trust region boundary at 𝜏 = 3.03, corresponding to a 99% confidence level under the Chi-squared distribution 𝜒 22 .We provide more details of benchmark compositions, imple-mentation details and computing resources in the supplementary materials and anonymous GitHub repository. 
+
+5.2 Main Results 
+
+As illustrated in Table 1, TPAE-D-Qwen2.5-7B consistently sur-passes current state-of-the-art multimodal reasoning models across all seven multimodal benchmarks. By integrating our fine-grained perception-grounded advantage estimation into the DAPO frame-work, TPAE-D-Qwen2.5-7B attains a leading average accuracy of 48.71% over competitive baselines, outperforming Shuffle-R1-7B by 1.39% and surpassing VPPO-7B by 1.12%. Similarly, the GRPO-based variant, TPAE-G-Qwen2.5-7B, achieves an average accuracy of 47.63%, securing the second-highest performance among all mod-els sharing the same Qwen2.5-VL-7B backbone. The performance advantage of TPAE extends to the Qwen3-VL-8B series, demon-strating its robust scalability across evolving model architectures. Both TPAE-G-Qwen3-8B and TPAE-D-Qwen3-8B variants establish new performance frontiers by achieving an average accuracy of 60.62% and 61.35% respectively. The superiority of TPAE is further evidenced by its improved training dynamics relative to base RL algorithms as discussed in Section 5.3.1. 
+
+5.3 Ablation Studies 
+
+5.3.1 Comparison with Base RL Algorithm. The effectiveness of TPAE is evidenced by its superior training dynamics and down-stream performance compared with standard GRPO and DAPO im-plementations. In Figure 4, we display the training dynamics based on accuracy rewards on ViRL39K. The integration of TPAE yields accelerated initial convergence; specifically, models equipped with TPAE consistently surpass the peak accuracy of base RL algorithms while maintaining identical training configurations, including the training dataset, rollout space, and reward functions. Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 1: Main results (avg 8 acc %) across seven multimodal reasoning benchmarks. All evaluations utilize exact-match scoring on verifiable instances to ensure objective results, avoiding any LLM-as-a-judge. All comparative baselines are instantiated from the Qwen2.5-VL-7B backbone. Best performance of 7B models is marked with bold, second best with underline. Models Mathematical & Geometric Logical General Avg. MathVerse We-Math MathVision DynaMath Geo3k LogicVista MMMU-Pro 
+
+ThinkLite-VL-7B 42.50 65.17 27.34 47.44 37.77 39.15 28.53 41.13 OpenVLThinker-7B 41.39 65.63 25.90 51.41 38.60 43.85 32.33 42.73 NoisyRollout-7B 39.06 63.76 24.15 53.86 42.80 46.25 35.13 43.57 MM-Eureka-7B 44.56 64.18 27.89 49.80 39.62 47.32 32.11 43.64 Perception-R1-7B 42.99 69.05 25.42 52.84 45.19 44.32 34.36 44.88 VL-Rethinker-7B 44.80 67.70 29.86 52.26 39.89 45.64 36.44 45.23 R1-ShareVL-7B 44.49 69.81 27.87 53.24 42.62 46.81 34.81 45.66 PAPO-G-7B 44.82 66.79 27.76 52.82 40.25 46.07 36.63 45.02 PAPO-D-7B 45.32 68.30 28.36 55.83 44.11 46.70 36.34 46.42 Shuffle-R1-7B 45.67 69.76 29.24 54.49 47.90 47.54 36.65 47.32 VPPO-7B 46.43 70.01 30.48 57.08 45.63 46.26 37.23 47.59 TPAE-G-Qwen2.5-7B 45.50 69.07 30.02 56.59 46.73 47.20 38.27 47.63 TPAE-D-Qwen2.5-7B 47.15 71.70 30.56 57.39 48.14 48.55 37.45 48.71 
+
+TPAE-G-Qwen3-8B 54.61 80.44 47.55 66.88 66.31 59.93 48.61 60.62 TPAE-D-Qwen3-8B 55.14 81.10 48.28 66.70 68.18 61.07 48.95 61.35 
+
+Table 2: Performance (avg 8 acc %) comparison of multimodal reinforcement learning with ( w/ ) and without ( w/o ) TPAE. Models MathVerse We-Math MathVision DynaMath Geo3k LogicVista MMMU-Pro Avg. 
+
+Qwen2.5-VL-7B 28.53 46.13 18.51 45.20 36.23 42.51 25.64 34.68 + GRPO w/o TPAE 42.42 65.88 27.27 51.12 42.12 43.71 34.53 43.86 + GRPO w/ TPAE 45.50 69.07 30.02 56.59 46.73 47.20 38.27 47.63 
+
++ DAPO w/o TPAE 44.22 66.18 27.14 53.12 43.11 45.86 35.19 44.97 + DAPO w/ TPAE 47.15 71.70 30.56 57.39 48.14 48.55 37.45 48.71 
+
+Qwen3-VL-8B 40.98 65.58 27.15 60.40 53.83 51.48 33.86 47.61 + GRPO w/o TPAE 52.79 77.32 44.92 64.48 63.39 59.10 46.24 58.32 + GRPO w/ TPAE 54.61 80.44 47.55 66.88 66.31 59.93 48.61 60.62 
+
++ DAPO w/o TPAE 53.08 78.30 45.44 65.06 64.35 58.98 46.76 58.85 + DAPO w/ TPAE 55.14 81.10 48.28 66.70 68.18 61.07 48.95 61.35 Table 3: Ablation study on the trust boundary 𝜏 based on TPAE-G-Qwen2.5-7B. Configuration MathVerse We-Math MathVision DynaMath Geo3k LogicVista MMMU-Pro Avg. 
+
+𝜏 = 2.45 45.15 67.99 29.30 55.72 45.74 46.76 38.09 46.96 
+
+𝜏 = 3.26 45.42 68.84 29.80 55.83 46.80 46.84 37.87 47.34 
+
+𝜏 = 3.03 45.50 69.07 30.02 56.59 46.73 47.20 38.27 47.63 
+
+The integration of TPAE also yields consistent improvements in downstream performance across all benchmarks and model back-bones. As shown in Table 2, incorporating TPAE within the DAPO framework leads to average accuracy gains of 3.74% on Qwen2.5-VL-7B and 2.50% on Qwen3-VL-8B compared to their respective base RL baselines. Similarly, TPAE-integrated GRPO optimization achieves improvements of 3.77% on the 7B variant and 2.30% on the 8B vari-ant. Together, these results suggest that our perception-grounded advantage estimation facilitates a more efficient convergence to-ward superior reasoning capabilities. 
+
+5.3.2 Sensitivity of Trust Boundary 𝜏 . We perform a sensitivity analysis on the hyperparameter 𝜏 in Eq. 8, which determines the trust region for detecting token-level vision-entropy misalignment relative to the reference distributions. These experiments are con-ducted on Qwen2.5-VL-7B-Instruct utilizing GRPO as the base RL algorithm. We compare our default 𝜏 = 3.03, representing a 99% MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Zhihan Zhang and Lizi Liao Training Accuracy Reward Steps 50 100 150 200 0.85 0.80 0.65 00.70 0.75 Steps 50 100 150 200 0.85 0.80 0.65 00.70 0.75 Steps 50 100 150 200 00.75 0.35 0.55 0.65 0.45 Steps 50 100 150 200 00.75 0.35 0.55 0.65 0.45 TPAE-G-Qwen2.5-7B GRPO-Qwen2.5-7B TPAE-D-Qwen2.5-7B DAPO-Qwen2.5-7B TPAE-D-Qwen3-8B DAPO-Qwen3-8B TPAE-G-Qwen3-8B GRPO-Qwen3-8B 
+
+Figure 4: Comparison of RLVR training dynamics on accuracy rewards. Solid lines denote running averages with a window size of 20. TPAE achieves consistently faster learning on both GRPO and DAPO across two model backbones. Trustworthiness Question: Image: Token-level <think>\nTo solve for the measure of ∠CBO in the given circle                                                                                                                             
+
+> ⊙O, we need to follow these steps: 1. Identify the given information and properties: -The radius OA is perpendicular to the chord BC. -∠ADC =25^\circ. 2. Use the property of the angle subtended by achord: -Since OA is perpendicular to BC, it bisects BC into two equal segments. This means that ∠AOB (the central angle subtended by the chord BC) is twice the measure of ∠ADC. Therefore, ∠AOB =2\times 25^\circ =50^\circ. 3. Determine the measure of ∠CBO: -Since OA is aradius and BC is achord, ∠CBO is an inscribed angle that subtends the same arc as the central angle ∠AOB. The measure of an inscribed angle is half the measure of the central angle that subtends the same arc. -Therefore, ∠CBO =\frac{1}{2} \times 50^\circ =25^\circ. \n</think>\n\boxed{25}.<im_end>
+
+In the circle ⊙O, the radius OA is perpendicular to the chord BC, and ∠ADC = 25°. What is the measure of ∠CBO? 
+
+Answer: 40 
+
+> 0.0 <-3.0 -1.0 -2.0 -0 .5-1.5 -2.5
+> 0.0 2.0 1.0 3.0 0.5 1.5 2.5
+
+Figure 5: Qualitative analysis of token-level trustworthiness in a failed reasoning trajectory. Dark red highlights successfully localize the pivotal triggers of multimodal reasoning collapse, demonstrating the effectiveness of our TPAE algorithm. 
+
+confidence level, against a more permissive 𝜏 = 2.45 at 95% confi-dence and a more stringent 𝜏 = 3.26 at 99.5% confidence. As shown in Table 3, the default setting 𝜏 = 3.03 yields the highest accuracy on six out of seven benchmarks. While increasing the threshold to 
+
+𝜏 = 3.26 results in a slight decrease in average accuracy to 47.34%, a more permissive threshold of 𝜏 = 2.45 leads to a more notable degradation to 46.96%. These results suggest that a 95% confidence level is insufficiently rigorous for isolating tokens responsible for reasoning failures. Conversely, our choice of 𝜏 = 3.03 provides a more effective filtering mechanism that precisely targets tokens responsible for multimodal reasoning failures. 
+
+5.4 Qualitative Analysis 
+
+We provide a qualitative analysis in Figure 5 to illustrate the token-level trustworthiness defined in Eq. 8. Tokens with high untrustwor-thiness are highlighted in dark red and are concentrated at visually-hallucinated reasoning steps. The reasoning collapse begins when the model erroneously identifies ∠𝐴𝑂𝐵 as the central angle subtend-ing the arc 𝐵𝐶 . By failing to recognize that ∠𝐴𝑂𝐵 actually subtends arc 𝐴𝐵 , the model establishes an incorrect geometric association with ∠𝐴𝐷𝐶 . This is compounded when the model incorrectly treats 
+
+∠𝐶𝐵𝑂 as an inscribed angle rather than an interior angle of the isosceles triangle △𝑂𝐵𝐶 . Notably, the final output syntax, including the boxed terminal, also exhibits elevated untrustworthiness [26]. 
+
+6 Conclusion 
+
+In this paper, we pioneer an exploration of multimodal reinforce-ment learning through the lens of token-level vision-entropy dy-namics. Our preliminary study reveals that the joint distribution of visual dependency and predictive entropy establishes an effec-tive indicator for multimodal reasoning collapse. Leveraging this insight, we propose Token-level Perception-grounded Advantage 
+
+Estimation ( TPAE ), a novel algorithm that derives fine-grained advantages by statistically aligning a token’s vision-entropy state with the reference distribution observed in correct reasoning chains. TPAE not only establishes a new state-of-the-art across a diverse suite of multimodal benchmarks but also substantially accelerates convergence throughout the RL process. We believe TPAE repre-sents a pioneering step toward perception-aware policy optimiza-tion, establishing a theoretically grounded approach for scaling the reasoning capabilities of MLLMs within the RLVR frameworks. Reinforcing Multimodal Reasoning via Token-Level Perception-Grounded Advantage Estimation MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Acknowledgments 
+
+This research is supported by the National Research Foundation, Singapore under its National Large Language Models Funding Ini-tiative (AISG Award No: AISG-NMLP-2024-002). This research is also supported by the Ministry of Education, Singapore, under its AcRF Tier 2 Funding (Proposal ID: T2EP20123-0052). Any opin-ions, findings, conclusions, or recommendations expressed in this material are those of the author(s) and do not reflect the views of the National Research Foundation or the Ministry of Education, Singapore. 
+
+References 
+
+[1] Jinze Bai, Shuai Bai, Shusheng Yang, Shijie Wang, Sinan Tan, Peng Wang, Junyang Lin, Chang Zhou, and Jingren Zhou. 2023. Qwen-VL: A Frontier Large Vision-Language Model with Versatile Abilities. ArXiv abs/2308.12966 (2023). https: //api.semanticscholar.org/CorpusID:263875678 [2] Hardy Chen, Haoqin Tu, Fali Wang, Hui Liu, Xianfeng Tang, Xinya Du, Yuyin Zhou, and Cihang Xie. 2025. SFT or RL? An Early Investigation into Training R1-Like Reasoning Large Vision-Language Models. Transactions on Machine Learning Research (2025). https://openreview.net/forum?id=wZI5qkQeDF [3] R. De Maesschalck, D. Jouan-Rimbaud, and D.L. Massart. 2000. The Mahalanobis distance. Chemometrics and Intelligent Laboratory Systems 50, 1 (2000), 1–18. doi:10.1016/S0169-7439(99)00047-7 [4] DeepSeek-AI. 2025. DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning. arXiv:2501.12948 [cs.CL] https://arxiv.org/abs/2501. 12948 [5] Yihe Deng, Hritik Bansal, Fan Yin, Nanyun Peng, Wei Wang, and Kai-Wei Chang. 2025. OpenVLThinker: Complex Vision-Language Reasoning via Iterative SFT-RL Cycles. In The Thirty-ninth Annual Conference on Neural Information Processing Systems . https://openreview.net/forum?id=gfX1nqBKtu [6] Kaixuan Fan, Kaituo Feng, Haoming Lyu, Dongzhan Zhou, and Xiangyu Yue. 2025. SophiaVL-R1: Reinforcing MLLMs Reasoning with Thinking Reward. arXiv:2505.17018 [cs.CV] https://arxiv.org/abs/2505.17018 [7] Yue Fan, Xuehai He, Diji Yang, Kaizhi Zheng, Ching-Chen Kuo, Yuting Zheng, Xinze Guan, and Xin Eric Wang. 2025. GRIT: Teaching MLLMs to Think with Images. In The Thirty-ninth Annual Conference on Neural Information Processing Systems . https://openreview.net/forum?id=RW3cHh3HgY [8] Siyuan Huang, Xiaoye Qu, Yafu Li, Yun Luo, Zefeng He, Daizong Liu, and Yu Cheng. 2026. Spotlight on Token Perception for Multimodal Reinforcement Learning. In The Fourteenth International Conference on Learning Representations .https://openreview.net/forum?id=bRA4lVWJVQ [9] Wenxuan Huang, Bohan Jia, Shaosheng Cao, Zheyu Ye, Fei zhao, Zhe Xu, Yao Hu, and Shaohui Lin. 2026. Vision-R1: Incentivizing Reasoning Capability in Multimodal Large Language Models. In The Fourteenth International Conference on Learning Representations . https://openreview.net/forum?id=UZIjskfbfU [10] Wenxuan Huang, Bohan Jia, Zijie Zhai, Shaosheng Cao, Zheyu Ye, Fei Zhao, Zhe Xu, Xu Tang, Yao Hu, and Shaohui Lin. 2026. Vision-R1: Incentivizing Reasoning Capability in Multimodal Large Language Models. arXiv:2503.06749 [cs.CV] https://arxiv.org/abs/2503.06749 [11] Olivier Ledoit and Michael Wolf. 2004. A well-conditioned estimator for large-dimensional covariance matrices. Journal of Multivariate Analysis 88 (2004), 365–411. https://api.semanticscholar.org/CorpusID:17238653 [12] Sicong Leng, Jing Wang, Jiaxi Li, Hao Zhang, Zhiqiang Hu, Boqiang Zhang, Yuming Jiang, Hang Zhang, Xin Li, Lidong Bing, Deli Zhao, Wei Lu, Yu Rong, Aixin Sun, and Shijian Lu. 2025. MMR1: Enhancing Multimodal Reasoning with Variance-Aware Sampling and Open Resources. arXiv:2509.21268 [cs.CV] https://arxiv.org/abs/2509.21268 [13] Junnan Li, Dongxu Li, Caiming Xiong, and Steven C. H. Hoi. 2022. BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Un-derstanding and Generation. In International Conference on Machine Learning .https://api.semanticscholar.org/CorpusID:246411402 [14] Zicheng Lin, Tian Liang, Jiahao Xu, Qiuzhi Liu, Xing Wang, Ruilin Luo, Chufan Shi, Siheng Li, Yujiu Yang, and Zhaopeng Tu. 2025. Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability. In 
+
+Forty-second International Conference on Machine Learning . https://openreview. net/forum?id=fnz1g18EdI [15] Ziyi Lin, Chris Liu, Renrui Zhang, Peng Gao, Longtian Qiu, Han Xiao, Han Qiu, Chen Lin, Wenqi Shao, Keqin Chen, Jiaming Han, Siyuan Huang, Yichi Zhang, Xuming He, Hongsheng Li, and Yu Qiao. 2023. SPHINX: The Joint Mixing of Weights, Tasks, and Visual Embeddings for Multi-modal Large Language Models. arXiv:2311.07575 [cs.CV] https://arxiv.org/abs/2311.07575 [16] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual In-struction Tuning. In Thirty-seventh Conference on Neural Information Processing Systems . https://openreview.net/forum?id=w0H2xGHlkw [17] Xiangyan Liu, Jinjie Ni, Zijian Wu, Chao Du, Longxu Dou, Haonan Wang, Tianyu Pang, and Michael Qizhe Shieh. 2025. NoisyRollout: Reinforcing Visual Reason-ing with Data Augmentation. In The Thirty-ninth Annual Conference on Neural Information Processing Systems . https://openreview.net/forum?id=9zD2i7YRot [18] Yuqi Liu, Tianyuan Qu, Zhisheng Zhong, Bohao PENG, Shu Liu, Bei Yu, and Jiaya Jia. 2026. VisionReasoner: Unified Reasoning-Integrated Visual Perception via Reinforcement Learning. In The Fourteenth International Conference on Learning Representations . https://openreview.net/forum?id=QoDOwjsbAq [19] Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. 2024. MathVista: Evaluating Mathematical Reasoning of Foundation Models in Visual Contexts. In International Conference on Learning Representations ,B. Kim, Y. Yue, S. Chaudhuri, K. Fragkiadaki, M. Khan, and Y. Sun (Eds.), Vol. 2024. 23439–23554. https://proceedings.iclr.cc/paper_files/paper/2024/file/ 663bce02a0050c4a11f1eb8a7f1429d3-Paper-Conference.pdf [20] Pan Lu, Ran Gong, Shibiao Jiang, Liang Qiu, Siyuan Huang, Xiaodan Liang, and Song-Chun Zhu. 2021. Inter-GPS: Interpretable Geometry Problem Solving with Formal Language and Symbolic Reasoning. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th Interna-tional Joint Conference on Natural Language Processing (Volume 1: Long Papers) ,Chengqing Zong, Fei Xia, Wenjie Li, and Roberto Navigli (Eds.). Association for Computational Linguistics, Online, 6774–6786. doi:10.18653/v1/2021.acl-long.528 [21] Fanqing Meng, Lingxiao Du, Zongkai Liu, Zhixiang Zhou, Quanfeng Lu, Daocheng Fu, Tiancheng Han, Botian Shi, Wenhai Wang, Junjun He, Kaipeng Zhang, Ping Luo, Yu Qiao, Qiaosheng Zhang, and Wenqi Shao. 2025. MM-Eureka: Exploring the Frontiers of Multimodal Reasoning with Rule-based Reinforcement Learning. arXiv:2503.07365 [cs.CV] https://arxiv.org/abs/2503.07365 [22] Runqi Qiao, Qiuna Tan, Guanting Dong, MinhuiWu MinhuiWu, Chong Sun, Xiaoshuai Song, Jiapeng Wang, Zhuoma GongQue, Shanglin Lei, YiFan Zhang, Zhe Wei, Miaoxuan Zhang, Runfeng Qiao, Xiao Zong, Yida Xu, Peiqing Yang, Zhimin Bao, Muxi Diao, Chen Li, and Honggang Zhang. 2025. We-Math: Does Your Large Multimodal Model Achieve Human-like Mathematical Reasoning?. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar (Eds.). Association for Computational Linguistics, Vienna, Austria, 20023–20070. doi:10.18653/v1/2025.acl-long.983 [23] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. 2017. Proximal Policy Optimization Algorithms. ArXiv abs/1707.06347 (2017). https://api.semanticscholar.org/CorpusID:28695052 [24] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. 2024. DeepSeek-Math: Pushing the Limits of Mathematical Reasoning in Open Language Models. arXiv:2402.03300 [cs.CL] https://arxiv.org/abs/2402.03300 [25] Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng, Haibin Lin, and Chuan Wu. 2025. HybridFlow: A Flexible and Efficient RLHF Framework. In Proceedings of the Twentieth European Conference on Computer Systems (Rotterdam, Netherlands) (EuroSys ’25) . Association for Computing Machinery, New York, NY, USA, 1279–1297. doi:10.1145/3689031. 3696075 [26] Wei Sun, Wen Yang, Pu Jian, Qianlong Du, Fuwei Cui, Shuo Ren, and Jiajun Zhang. 2025. KTAE: A Model-Free Algorithm to Key-Tokens Advantage Estimation in Mathematical Reasoning. In The Thirty-ninth Annual Conference on Neural Information Processing Systems . https://openreview.net/forum?id=yqQVRNdmKJ [27] Qwen Team. 2025. Qwen2.5-VL. https://qwenlm.github.io/blog/qwen2.5-vl/ [28] Qwen Team. 2025. Qwen3 Technical Report. arXiv:2505.09388 [cs.CL] https: //arxiv.org/abs/2505.09388 [29] Shengbang Tong, Ellis Brown, Penghao Wu, Sanghyun Woo, Manoj Midde-pogu, Sai Charitha Akula, Jihan Yang, Shusheng Yang, Adithya Iyer, Xichen Pan, Austin Wang, Rob Fergus, Yann LeCun, and Saining Xie. 2024. Cambrian-1: A Fully Open, Vision-Centric Exploration of Multimodal LLMs. In Advances in Neural Information Processing Systems , A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang (Eds.), Vol. 37. Curran Associates, Inc., 87310–87356. https://proceedings.neurips.cc/paper_files/paper/2024/file/ 9ee3a664ccfeabc0da16ac6f1f1cfe59-Paper-Conference.pdf [30] Haozhe Wang, Chao Qu, Zuming Huang, Wei Chu, Fangzhen Lin, and Wenhu Chen. 2025. VL-Rethinker: Incentivizing Self-Reflection of Vision-Language Models with Reinforcement Learning. In The Thirty-ninth Annual Conference on Neural Information Processing Systems . https://openreview.net/forum?id= 4oYxzssbVg [31] Ke Wang, Junting Pan, Weikang Shi, Zimu Lu, Houxing Ren, Aojun Zhou, Mingjie Zhan, and Hongsheng Li. 2024. Measuring multimodal mathematical reasoning with the MATH-vision dataset. In Proceedings of the 38th International Conference on Neural Information Processing Systems (Vancouver, BC, Canada) (NIPS ’24) .Curran Associates Inc., Red Hook, NY, USA, Article 3014, 75 pages. [32] Xiyao Wang, Zhengyuan Yang, Chao Feng, Hongjin Lu, Linjie Li, Chung-Ching Lin, Kevin Lin, Furong Huang, and Lijuan Wang. 2025. SoTA with Less: MCTS-Guided Sample Selection for Data-Efficient Visual Reasoning Self-Improvement. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Zhihan Zhang and Lizi Liao 
+
+In The Thirty-ninth Annual Conference on Neural Information Processing Systems .https://openreview.net/forum?id=PHu9xJeAum [33] Zhenhailong Wang, Xuehang Guo, Sofia Stoica, Haiyang Xu, Hongru WANG, Hyeonjeong Ha, Xiusi Chen, Yangyi Chen, Ming Yan, Fei Huang, and Heng Ji. 2026. Perception-Aware Policy Optimization for Multimodal Reasoning. In 
+
+The Fourteenth International Conference on Learning Representations . https: //openreview.net/forum?id=izbBqTL8vb [34] Jiaer Xia, Yuhang Zang, Peng Gao, Sharon Li, and Kaiyang Zhou. 2025. Visionary-R1: Mitigating Shortcuts in Visual Reasoning with Reinforcement Learning. arXiv:2505.14677 [cs.CV] https://arxiv.org/abs/2505.14677 [35] Tong Xiao, Xin Xu, Zhenya Huang, Hongyu Gao, Quan Liu, Qi Liu, and Enhong Chen. 2025. Perception-R1: Advancing Multimodal Reasoning Capabilities of MLLMs via Visual Perception Reward. arXiv:2506.07218 [cs.LG] https://arxiv. org/abs/2506.07218 [36] Tong Xiao, Xin Xu, Zhenya Huang, Hongyu Gao, Quan Liu, Qi Liu, and Enhong Chen. 2026. Perception-R1: Advancing Multimodal Reasoning Capabilities of MLLMs via Visual Perception Reward. In The Fourteenth International Conference on Learning Representations . https://openreview.net/forum?id=KttCXdjj4w [37] Yijia Xiao, Edward Sun, Tianyu Liu, and Wei Wang. 2024. LogicVista: Multimodal LLM Logical Reasoning Benchmark in Visual Contexts. arXiv:2407.04973 [cs.AI] https://arxiv.org/abs/2407.04973 [38] Yi Yang, Xiaoxuan He, Hongkun Pan, Xiyan Jiang, Yan Deng, Xingtao Yang, Haoyu Lu, Dacheng Yin, Fengyun Rao, Minfeng Zhu, Bo Zhang, and Wei Chen. 2025. R1-Onevision: Advancing Generalized Multimodal Reasoning through Cross-Modal Formalization. In Proceedings of the IEEE/CVF International Confer-ence on Computer Vision (ICCV) . 2376–2385. [39] Huanjin Yao, Qixiang Yin, Jingyi Zhang, Min Yang, Yibo Wang, Wenhao Wu, Fei Su, Li Shen, Minghui Qiu, Dacheng Tao, and Jiaxing Huang. 2025. R1-ShareVL: Incentivizing Reasoning Capabilities of Multimodal Large Language Models via Share-GRPO. In The Thirty-ninth Annual Conference on Neural Information Processing Systems . https://openreview.net/forum?id=kMPII4XbKC [40] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, YuYue, Weinan Dai, Tiantian Fan, Gaohong Liu, Juncai Liu, LingJun Liu, Xin Liu, Haibin Lin, Zhiqi Lin, Bole Ma, Guangming Sheng, Yuxuan Tong, Chi Zhang, Mofan Zhang, Ru Zhang, Wang Zhang, Hang Zhu, Jinhua Zhu, Jiaze Chen, Jiangjie Chen, Chengyi Wang, Hongli Yu, Yuxuan Song, Xiangpeng Wei, Hao Zhou, Jingjing Liu, Wei-Ying Ma, Ya-Qin Zhang, Lin Yan, Yonghui Wu, and Mingxuan Wang. 2025. DAPO: An Open-Source LLM Reinforcement Learning System at Scale. In 
+
+The Thirty-ninth Annual Conference on Neural Information Processing Systems .https://openreview.net/forum?id=2a36EMSSTp [41] Xiang Yue, Tianyu Zheng, Yuansheng Ni, Yubo Wang, Kai Zhang, Shengbang Tong, Yuxuan Sun, Botao Yu, Ge Zhang, Huan Sun, Yu Su, Wenhu Chen, and Graham Neubig. 2025. MMMU-Pro: A More Robust Multi-discipline Multimodal Understanding Benchmark. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar (Eds.). Association for Computational Linguistics, Vienna, Austria, 15134–15186. doi:10. 18653/v1/2025.acl-long.736 [42] Jingyi Zhang, Jiaxing Huang, Huanjin Yao, Shunyu Liu, Xikun Zhang, Shijian Lu, and Dacheng Tao. 2025. R1-VL: Learning to Reason with Multimodal Large Lan-guage Models via Step-wise Group Relative Policy Optimization. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) . 1859–1869. [43] Renrui Zhang, Dongzhi Jiang, Yichi Zhang, Haokun Lin, Ziyu Guo, Pengshuo Qiu, Aojun Zhou, Pan Lu, Kai-Wei Chang, Yu Qiao, Peng Gao, and Hongsheng Li. 2024. MATHVERSE: Does Your Multi-modal LLM Truly See the Diagrams in Visual Math Problems?. In Computer Vision – ECCV 2024: 18th European Conference, Milan, Italy, September 29–October 4, 2024, Proceedings, Part VIII (Milan, Italy). Springer-Verlag, Berlin, Heidelberg, 169–186. doi:10.1007/978-3-031-73242-3_10 [44] Zhihan Zhang, Yixin Cao, and Lizi Liao. 2025. XFinBench: Benchmarking LLMs in Complex Financial Problem Solving and Reasoning. In Findings of the Association for Computational Linguistics: ACL 2025 , Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar (Eds.). Association for Computational Linguistics, Vienna, Austria, 8715–8758. doi:10.18653/v1/2025.findings-acl.457 [45] Linghao Zhu, Yiran Guan, Dingkang Liang, Jianzhong Ju, Zhenbo Luo, Bin Qin, Jian Luan, Yuliang Liu, and Xiang Bai. 2026. Shuffle-R1: Efficient RL frame-work for Multimodal Large Language Models via Data-centric Dynamic Shuffle. arXiv:2508.05612 [cs.LG] https://arxiv.org/abs/2508.05612 [46] Chengke Zou, Xingang Guo, Rui Yang, Junyu Zhang, Bin Hu, and Huan Zhang. 2025. DynaMath: A Dynamic Visual Benchmark for Evaluating Mathematical Reasoning Robustness of Vision Language Models. In International Conference on Learning Representations , Y. Yue, A. Garg, N. Peng, F. Sha, and R. Yu (Eds.), Vol. 2025. 48337–48383. https://proceedings.iclr.cc/paper_files/paper/2025/file/ 78b248ea6f627431bba5029d92be8a3d-Paper-Conference.pdf
