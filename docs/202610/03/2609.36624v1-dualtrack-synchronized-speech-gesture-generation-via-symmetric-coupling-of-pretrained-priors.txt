@@ -1,0 +1,258 @@
+Title: DualTrack: Synchronized speech-gesture generation via symmetric coupling of pretrained priors
+
+URL Source: https://arxiv.org/pdf/2609.36624v1
+
+Published Time: Wed, 30 Sep 2026 00:50:22 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+## DUALTRACK: SYNCHRONIZED SPEECH–GESTURE GENERATION VIA SYMMETRIC COUPLING OF PRETRAINED PRIORS 
+
+## Yuanzhuo Hu 1, Zehan Liu 2, Xiaoyi Qin 2, Ming Li 1,∗
+
+> 1
+
+## The Chinese University of Hong Kong, Shenzhen, China 
+
+> 2
+
+## X Square Robot 
+
+ABSTRACT 
+
+Joint speech–gesture synthesis must coordinate two modalities despite limited paired data. Existing approaches often lack bidirectional interaction, have limited language coverage, or simplify body and finger representations. We present Dual-Track 1, which couples pretrained speech and motion priors on a shared 12.5 Hz timeline. Causal adapters exchange previous-packet information, while current-state fusion coordinates the streams before they separately complete sixteen-codebook packets. We evaluate 43 BEAT2 recordings in four languages, with speakers held out from joint training and validation. On the shared English/Spanish inputs, without speech or motion prefixes, DualTrack achieves lower word error rate and full-motion Fréchet Gesture Distance, higher beat consistency and speech naturalness than the evaluated GELINA baseline. 
+
+Index Terms — Speech–gesture synthesis, pretrained mo-tion priors, multimodal generation, text-to-speech generation 
+
+1. INTRODUCTION 
+
+Conversational avatars and robots need speech and gestures that express the same intent and follow a shared rhythm. Progress in text-to-speech [1], text-to-motion [2], and speech-driven gesture synthesis [3] has brought this goal closer. In human communication, speech and gestures are closely coordinated [4, 5]. Cascaded pipelines, however, capture only one direction of this relationship, letting speech guide motion without feedback [6]. Unified methods have explored diffusion [7], flow matching [8], and interleaved token pre-diction [9]. These approaches do not combine bidirectional cross-modal interaction with parallel prediction of temporally aligned packets at each autoregressive step. Aligned speech–motion corpora offer less data and diver-sity than large unimodal datasets [10, 3, 4]. GELINA [9] uses speech pretraining but learns gesture sequence modeling from paired BEAT2 data; it has limited supported languages, and its evaluated motion representation excludes fingers [9]. MAGI [4] transfers unimodal knowledge through synthetic 
+
+> Submitted to ICASSP 2027
+> *Corresponding author. Email: mingli369@cuhk.edu.cn
+> 1Code and checkpoints:https://github.com/Yuanzhuo2021/DualTrack
+
+pairs, which may not fully capture natural speech–gesture re-lationships [4]. We directly couple independently pretrained speech and motion generators, retaining multilingual speech capabilities alongside motion dynamics and fine-grained body and finger articulation. Joint adaptation can then use limited paired data primarily to learn cross-modal coordination. We introduce DualTrack, coupling pretrained speech and motion generators on a shared 12.5 Hz packet clock. Residual adapters exchange previous-packet information bidirection-ally, and Tick Fusion coordinates current speech and motion-semantic states before generating motion and speech packets in parallel. DualTrack generates natural, high-quality speech and expressive gestures with fine-grained finger movements, keeping speech and motion closely synchronized. Our contribution is (i) We propose DualTrack, a joint au-toregressive framework that connects independently pretrained speech and motion generators through temporally aligned 16-code packets, combining bidirectional interaction with par-allel prediction across modalities. (ii) We demonstrate high-quality, multi-language speech and fine-grained body and fin-ger motion generation, with generalization to unseen speak-ers. (iii) We show that residual adapters and Tick Fusion improve speech–gesture rhythmic alignment, motion diversity, and speech naturalness. 
+
+2. RELATED WORK Unified speech and gesture synthesis. Speech-driven meth-ods generate gestures from available audio [11, 12, 13, 3]; joint synthesis additionally generates speech. Diff-TTSG [7] uses separate diffusion pathways, whereas Match-TTSG [8] models concatenated speech and motion features with flow matching [7, 8]. GELINA combines speech pretraining with interleaved speech–gesture tokens; its autoregressive backbone retains one motion quantization level and uses a flow-matching decoder to recover detail [9]. DualTrack couples two indepen-dently pretrained temporal generators through their states and histories, with neither current packet serving as a prerequisite for the other. 
+
+Hierarchical discrete priors. T2M-GPT [14], Mo-tionGPT [2], and MoMask [15] use discrete motion codes; arXiv:2609.36624v1 [cs.AI] 29 Sep 2026 Tick Fusion Talker AR Backbone Tick Fusion  Talker AR Backbone 
+
+> Residual Adaptor
+> Residual Adaptor ...
+
+... Motion Tokenizer Decoder Full-packet 
+
+> Temporal
+> Encoder ... 1 Semantic + 15 Kinematic Codebooks 01215 Semantic
+> Temporal
+
+MotionPrior Qwen3 
+
+TTS Motion Head Motion Head .. 
+
+(a) Motion Tokenization 
+
+(b) MotionPrior ... 
+
+> Motion Feature X
+
+(C) DualTrack Overview Speech Head Speech Head ... ... .. .. .. Speech Codec Decoder ... TEXT 
+
+> +（Spk Emb ）Semantic
+> VQ Kinematic
+> RVQ
+> Motion Packet zq0 q1 q2 q15 Semantic
+> Predictor Depth
+> Predictor ... qt-1 0qt-1 1qt-1 2qt-1 15 qt15 qt0qt1qt2qt-1 0’qt-1 1’qt-1 2’’qt-1 15 qt0’qt1qt2qt15 ’’’qt-1 0
+
+qt-1 1qt-1 2qt-1 15 qt0qt1qt2qt15 Fig. 1 . The overview of DualTrack (a) Adapt the SeMoCo-based tokenizer with one semantic and fifteen kinematic codebooks. (b) Freeze the tokenizer and pretrain MotionPrior’s temporal and depth predictors. (c) Couple MotionPrior and Qwen3-TTS through causal history exchange and Tick Fusion. Each stream predicts sixteen codes per 80 ms packet. SeMoCo assigns separate codebooks to semantics and kine-matics [16]. Audio codecs provide multicodebook represen-tations [17], while Moshi and Qwen3-TTS separate temporal prediction from codebook completion [18, 1]. DualTrack re-tains a temporal model and depth predictor for each modality and learns residual connections between the two streams. 
+
+3. METHODS 3.1. Data Preparation 
+
+We use release910k [19] and BONES-SEED [20] for large-scale human motion and diverse motion-captured activities, together with BEAT2 [3], which provides paired speech and motion across multiple languages. All motions are standard-ized to the 77-joint SOMA skeleton and represented as 499-dimensional UMR features at 25 fps. For BEAT2, we retarget the original SMPL-X motion sequences to SOMA, resample them to 25 fps, and extract the corresponding UMR499 fea-tures. We follow the dataset-specific partitions for release910k and BONES-SEED. To limit speaker-specific overlap in both speech and motion, we partition BEAT2 into nineteen train-ing, three validation, and three test speakers, with no speaker shared across subsets 2. All recordings from the same speaker remain in one subset, and temporal windows are extracted only after partitioning. 
+
+> 2
+
+Validation speakers: 6_carla, 9_miranda, and 23_hailing. Test speakers: 13_lu, 15_carlos, and 25_goto. Train speakers: the remaining 19 speakers 
+
+3.2. SeMoCo Tokenizer 
+
+We adapt SeMoCo [16] to 499-dimensional UMR499 body and finger motion at 25 Hz. A shared convolutional encoder with stride two maps normalized motion to a 512-dimensional latent 
+
+z. Two parallel branches quantize semantic and kinematic information, respectively: 
+
+ˆz = Qsem (z) + Qkin (z), (1) where each branch includes its input and output projections. The semantic branch uses a single vector quantizer, while the kinematic branch uses a 15-level residual quantizer, with 1,024 entries per codebook. Residual subtraction is confined to the kinematic branch. The summed embeddings are decoded into motion, while the quantization indices form a motion packet 
+
+mt = ( q0 
+
+> t
+
+, q 1 
+
+> t
+
+, q 2 
+
+> t
+
+. . . , q 15  
+
+> t
+
+) at 12.5 Hz. Here, q0 
+
+> t
+
+is the semantic code and q1 
+
+> t
+
+, q 2 
+
+> t
+
+, . . . , q 15  
+
+> t
+
+are the 15 kinematic codes. We first adapt the tokenizer on BONES-SEED and BEAT2, then continue training with release910k added, using 64-frame windows sampled equally from each dataset. Training com-bines motion reconstruction, kinematic regularization, and commitment losses. We retain the checkpoint with the lowest validation reconstruction MSE and freeze the tokenizer and normalization statistics. 
+
+3.3. MotionPrior 
+
+We introduce MotionPrior, an autoregressive model over dis-crete motion packets produced by the frozen tokenizer. Atwo-layer semantic transformer encodes past semantic codes, while a four-layer full-history transformer encodes complete past packets, both using up to 150 packets of history. Their output states, hmt and hft , are combined as 
+
+vt = RMSNorm 
+
+
+
+hft + Wshmt
+
+
+
+, (2) where Ws is a learned linear projection. At each time step, a factorized semantic predictor first decides whether to retain the previous semantic code or switch to a different code. If a switch is selected, it predicts a new code q0 
+
+> t
+
+from the remain-ing entries. A three-layer Depth GPT then generates the 15 kinematic codes q1 
+
+> t
+
+, q 2 
+
+> t
+
+, . . . , q 15  
+
+> t
+
+sequentially, with each predic-tion conditioned on vt and all preceding codes in the current packet, including the semantic code. All transformers have a hidden width of 768. We pretrain MotionPrior on motion-only sequences from the training splits of release910k, BONES-SEED, and BEAT2 described in Section 3.1. We sample these datasets with proba-bilities of 87.5%, 6.25%, and 6.25%, respectively, for 761,853 updates to learn a general motion prior through next-packet prediction. We then adapt the model to the BEAT2 motion distribution for an additional 100,000 updates, linearly increas-ing the BEAT2 sampling probability to 80% and assigning the remaining sampling probability to release910k. 
+
+3.4. DualTrack 
+
+We initialize the speech and motion streams from Qwen3-TTS 3 [1] and MotionPrior. Given text and an optional speaker embedding c, the streams generate speech packets 
+
+st = ( q′0 
+
+> t
+
+, . . . , q ′15  
+
+> t
+
+) and motion packets mt = ( q0 
+
+> t
+
+, . . . , q 15  
+
+> t
+
+)
+
+at a shared rate of 12.5 Hz. The packets are decoded into audio and motion at their respective sampling rates. Residual adapters inject the previous motion packet into the speech input and the previous speech packet into both motion temporal inputs. These cross-stream history inputs are zero at BOS. Text information reaches the motion stream through the speech stream. Tick Fusion then couples the cur-rent speech state hst and motion-semantic state hmt :
+
+rt = SiLU( Wf [LN( hst ); LN( hmt )] + bf ) ,
+
+˜hst = hst + W out  
+
+> s
+
+rt, ˜hmt = hmt + W out  
+
+> m
+
+rt. (3) All adapter and fusion output projections are initialized to zero. The fused states drive the packet predictors. The motion full-history state bypasses Tick Fusion and is combined with 
+
+˜hmt to condition the motion depth predictor. Neither stream conditions on the other stream’s current output codes, allow-ing parallel packet prediction across modalities. Each stream completes its own packet autoregressively, and both completed packets provide context for the next tick. Training combines weighted speech and motion token cross-entropies with speech replay and distillation. Only the 
+
+> 3Qwen/Qwen3-TTS-12Hz-0.6B-Base
+
+coupling modules are trained for the first 400 updates. Subse-quent updates train the speech-to-motion adapter, the motion output projection of Tick Fusion, and the top two blocks and output normalization layers of each motion temporal trans-former. The motion-to-speech adapter and the shared and speech-facing components of Tick Fusion are then frozen. Af-ter warm-up, half of the paired examples use generated motion histories spanning up to 8 ticks initially and 16 ticks later, while retaining recorded speech histories and ground-truth tar-gets. The pretrained speech model, motion packet predictors, motion embeddings, and codecs remain frozen. 
+
+4. EXPERIMENTS 4.1. Evaluation Protocol 
+
+We evaluate the intersection of our held-out test speakers and the official BEAT2 test set, comprising 43 recordings: 22 En-glish, 9 Chinese, 6 Japanese, and 6 Spanish. Each reference window lasts 7.68 s, and generation starts from native BOS without a motion prefix. DualTrack and GELINA use text only; DualTrack † additionally uses a speaker embedding from a five-second reference taken from another recording of the same speaker. Both DualTrack variants use the same check-point across languages. Direct comparisons with GELINA use the 28 English/Spanish inputs supported by its text tokenizer. Generation uses FP32 with TF32 disabled, batch size one, shared per-recording seeds. 
+
+Metrics. We compute full/body FGD [21] with the frozen GELINA/EMAGE encoder [9, 3], centered 240-frame win-dows, and repeat-last padding. Body FGD zeros finger rotation-6D features [22]. DualTrack motion follows UMR499 →
+
+SOMA [23] → SMPL-X [24] through official inverse fitting; representation conversion, retargeting, and resampling intro-duce residual error. Body/full L1 diversity measures tempo-ral motion variation; values closer to ground truth are pre-ferred. Beat Consistency is computed over the full overlap-ping duration of the audio and generated motion. We score Whisper-large-v3 [25] transcripts with unclipped WER for English/Spanish and CER for Chinese/Japanese. NISQA-TTS [26] predicts speech naturalness (NMOS). 
+
+4.2. Evaluation 
+
+On the shared English/Spanish inputs (Table 1), DualTrack† lowers English WER from GELINA’s 18.09% to 3.45% and raises NMOS from 2.709 to 3.830. Full FGD falls from 7.513 to 6.889; full diversity moves from 2.651 to 11.499 toward GT 16.085. On six Spanish recordings, WER falls from 215.09% to 0.00%, and Full/Body FGD decreases from 9.850/3.451 to 8.560/3.247. Text-only DualTrack gives English WER 2.89% and Full FGD 7.345. Chinese/Japanese CER is 2.10%/4.56% without a speaker embedding and 1.66%/4.73% with one, with-out a supported GELINA comparison. Full-motion scores also reflect GELINA’s lack of finger articulation [9]. Table 1 . Speech and gesture generation of Gelina and DualTrack on BEAT2 test subsets. 
+
+Gesture Speech Language Model N FGD Full ↓ FGD Body ↓ BC ↑ Div-Body Div-Full WER/CER(%) ↓ NMOS ↑
+
+English Ground truth 22 0.000 0.000 0.442 4.671 16.085 39.34 2.972 Gelina 22 7.513 1.952 0.341 2.651 2.651 18.09 2.709 DualTrack 22 7.346 (5.436) 1.586 (0.882) 0.606 3.497 10.277 2.89 3.847 
+
+DualTrack † 22 6.889 (5.436) 1.573 (0.882) 0.567 3.570 11.499 3.45 3.830 Chinese Ground truth 9 0.000 0.000 0.526 4.668 16.781 5.91 2.771 Gelina 0/9 – – – – – – –DualTrack 9 9.446 (5.688) 2.139 (0.654) 0.625 3.787 10.502 2.10 3.932 DualTrack † 9 8.969 (5.688) 1.924 (0.654) 0.626 3.303 10.273 1.66 4.229 
+
+Japanese Ground truth 6 0.000 0.000 0.309 3.191 13.662 10.06 3.769 Gelina 0/6 – – – – – – –DualTrack 6 7.874 (4.801) 2.103 (0.999) 0.553 3.982 11.732 4.56 3.954 DualTrack † 6 7.832 (4.801) 2.170 (0.999) 0.474 2.956 9.151 4.73 3.987 
+
+Spanish Ground truth 6 0.000 0.000 0.495 5.220 17.106 10.10 2.818 Gelina 6 9.850 3.451 0.416 2.626 2.626 215.09 2.757 DualTrack 6 9.539 (5.647) 3.222 (1.391) 0.638 3.908 10.567 0.00 4.307 
+
+DualTrack † 6 8.560 (5.647) 3.247 (1.391) 0.629 3.287 9.456 0.00 4.081 
+
+† adds a speaker embedding; unmarked DualTrack and Gelina are text-only. Parenthesized FGD values report motion reconstruction through the frozen tokenizer on the same test subset and are excluded from ranking. Bold/underline: best/second-best generated scores per language; ties share ranks. N : recordings; –: unavailable/unreported. WER: English/Spanish; CER: Chinese/Japanese.BC represents for beat consistency. 
+
+Table 2 . Ablation results on the complete test split (136 record-ings). Div. denotes full-body motion diversity. BC denotes beat consistency 
+
+Model Full FGD ↓ BC ↑ Div. NMOS ↑
+
+Full DualTrack 5.7175 0.5653 10.582 3.885 
+
+w/o residual+fusion 5.9637 0.5394 10.015 3.619 
+
+Ablation Study. Table 2 compares the full model with the variant disabling both history exchange and current-tick fusion. The full model achieves lower full-body FGD, higher beat consistency, and higher predicted speech naturalness. Its full-body motion diversity is also closer to the matched ground truth, supporting the joint contribution of these components to motion generation and speech naturalness. 
+
+User Study. We conducted a subjective evaluation of speech naturalness, motion naturalness, and speech–gesture synchrony using audio-only, motion-only, and audio-visual stimuli, respectively (Figure 2). A total of 15 Participants rated Human, GELINA, and DualTrack outputs on a five-point scale, with model identities hidden and candidate order randomized. For each task, we retained five participants who completed all 28 shared samples (22 English + 6 Spanish). DualTrack outperforms GELINA in all three tasks. 
+
+Conversion-matched reference. A separate diagnostic passes unquantized GT UMR499 features through the same SOMA-to-SMPL-X conversion as archived FP32 DualTrack †
+
+outputs. On the 28 English/Spanish recordings, pooled Human GELINA DualTrack 012345     
+
+> Mean Opinion Score (MOS)
+> 3.757 3.486 3.779
+> Speech Naturalness
+> Human GELINA DualTrack 3.679 3.336 3.429
+> Motion Naturalness
+> Human GELINA DualTrack 3.807 3.093 3.443
+> Speech–Gesture Synchrony
+
+Fig. 2 . Subjective evaluation results. Error bars indicate ±1
+
+standard deviation across participant-level mean scores. Full/Body FGD is 2.956/1.186 against this converted GT, versus 6.693/1.693 against native GT. Converted GT itself has Full/Body FGD 3.750/0.602 against native GT. Despite the discrepancies introduced by conversion, DualTrack still achieves strong performance against native ground truth. 
+
+5. CONCLUSION AND FUTURE IMPROVEMENTS 
+
+DualTrack couples pretrained speech and motion priors through bidirectional history exchange and current-state fu-sion. On shared English/Spanish inputs, it achieves higher predicted speech naturalness, lower FGD for full-body motion including fingers, and stronger speech–gesture beat alignment than GELINA, supporting more coordinated speech and ges-ture generation. Its causal packet interface provides a natural basis for streaming generation. Future work will build on this structure with incremental decoding and conversions, aiming to enable low-latency, real-time speech and gesture synthesis. 6. ACKNOWLEDGMENTS 
+
+The authors used OpenAI GPT-6-Astra to improve the gram-mar and wording. LLM was used solely for language-related improvements. All AI-assisted content was reviewed and ap-proved by authors. The authors take full responsibility for the final manuscript. 
+
+7. REFERENCES 
+
+[1] Hangrui Hu, Xinfa Zhu, Ting He, Dake Guo, Bin Zhang, Xiong Wang, et al., “Qwen3-TTS Technical Report,” arXiv preprint arXiv:2601.15621 , 2026. [2] Biao Jiang, Xin Chen, Wen Liu, Jingyi Yu, Gang Yu, and Tao Chen, “MotionGPT: Human Motion as a Foreign Language,” in Adv. Neural Inf. Process. Syst. , 2023. [3] Haiyang Liu, Zihao Zhu, Giorgio Becherini, Yichen Peng, Mingyang Su, You Zhou, Xuefei Zhe, Naoya Iwamoto, Bo Zheng, and Michael J. Black, “EMAGE: Towards Unified Holistic Co-Speech Gesture Generation via Expressive Masked Audio Gesture Modeling,” in Proc. IEEE/CVF CVPR , 2024, pp. 1144–1154. [4] Shivam Mehta, Anna Deichler, Jim O’Regan, Birger Moëll, Jonas Beskow, Gustav Eje Henter, et al., “Fake It to Make It: Using Synthetic Data to Remedy the Data Shortage in Joint Mul-timodal Speech-and-Gesture Synthesis,” in Proc. IEEE/CVF CVPR Workshops , 2024, pp. 1952–1964. [5] Adam Kendon, “Gesture,” Annual review of anthropology , vol. 26, no. 1, pp. 109–128, 1997. [6] Siyang Wang, Simon Alexanderson, Joakim Gustafson, Jonas Beskow, Gustav Eje Henter, and Éva Székely, “Integrated speech and gesture synthesis,” in Proc. ACM ICMI . 2021, pp. 177–185, ACM. [7] Shivam Mehta, Siyang Wang, Simon Alexanderson, Jonas Beskow, Éva Székely, and Gustav Eje Henter, “Diff-TTSG: Denoising probabilistic integrated speech and gesture synthesis,” in Proc. ISCA SSW , 2023, pp. 150–156. [8] Shivam Mehta, Ruibo Tu, Simon Alexanderson, Jonas Beskow, Éva Székely, and Gustav Eje Henter, “Unified speech and gesture synthesis using flow matching,” in Proc. IEEE ICASSP ,2024. [9] Téo Guichoux, Théodor Lemerle, Shivam Mehta, Jonas Beskow, Gustav Eje Henter, Laure Soulier, et al., “Gelina: Unified Speech and Gesture Synthesis via Interleaved Token Prediction,” in Proc. IEEE ICASSP , 2026, pp. 16122–16126. [10] Haiyang Liu, Zihao Zhu, Naoya Iwamoto, Yichen Peng, Zhengqing Li, You Zhou, et al., “BEAT: A Large-Scale Se-mantic and Emotional Multi-Modal Dataset for Conversational Gestures Synthesis,” in Proc. ECCV , 2022. [11] Taras Kucherenko, Patrik Jonell, Sanne van Waveren, Gus-tav Eje Henter, Simon Alexanderson, Iolanda Leite, et al., “Ges-ticulator: A Framework for Semantically-Aware Speech-Driven Gesture Generation,” in Proc. ACM ICMI , 2020. [12] Youngwoo Yoon, Bok Cha, Joo-Haeng Lee, Minsu Jang, Jaeyeon Lee, Jaehong Kim, et al., “Speech Gesture Gener-ation from the Trimodal Context of Text, Audio, and Speaker Identity,” ACM Transactions on Graphics , vol. 39, no. 6, 2020. [13] Lingting Zhu, Xian Liu, Xuanyu Liu, Rui Qian, Ziwei Liu, and Lequan Yu, “Taming Diffusion Models for Audio-Driven Co-Speech Gesture Generation,” in Proc. IEEE/CVF CVPR , 2023, pp. 10544–10553. [14] Jianrong Zhang, Yangsong Zhang, Xiaodong Cun, Yong Zhang, Hongwei Zhao, Hongtao Lu, et al., “Generating Human Motion from Textual Descriptions with Discrete Representations,” in 
+
+Proc. IEEE/CVF CVPR , 2023, pp. 14730–14740. [15] Chuan Guo, Yuxuan Mu, Muhammad Gohar Javed, Sen Wang, and Li Cheng, “MoMask: Generative Masked Modeling of 3D Human Motions,” in Proc. IEEE/CVF CVPR , 2024, pp. 1900–1910. [16] Tianlv Huang, Hetian Guo, Ziyi Cai, Song Wang, Yanping Zhang, Zipei Fan, et al., “SeMoCo: A Semantic-First Mo-tion Codec for Motion Language Modeling,” arXiv preprint arXiv:2608.24334 , 2026. [17] Alexandre Défossez, Jade Copet, Gabriel Synnaeve, and Yossi Adi, “High Fidelity Neural Audio Compression,” arXiv preprint arXiv:2210.13438 , 2022. [18] Alexandre Défossez, Laurent Mazaré, Manu Orsini, Amélie Royer, Patrick Pérez, Hervé Jégou, et al., “Moshi: a speech-text foundation model for real-time dialogue,” arXiv preprint arXiv:2410.00037 , 2024. [19] “SOMA UMR Release v260717 T2M 910k (realigned),” Hug-ging Face dataset repository. https://huggingface.co/ datasets/poisonousID/release-910k-new , Ac-cessed: September 22, 2026. [20] Bones Studio, “BONES-SEED: Skeletal everyday embodi-ment dataset,” Hugging Face dataset repository. https:// huggingface.co/datasets/bones-studio/seed ,Accessed: September 22, 2026. [21] Martin Heusel, Hubert Ramsauer, Thomas Unterthiner, Bern-hard Nessler, and Sepp Hochreiter, “GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash Equilibrium,” in Adv. Neural Inf. Process. Syst. , 2017. [22] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li, “On the Continuity of Rotation Representations in Neural Networks,” in Proc. IEEE/CVF CVPR , 2019. [23] Jun Saito, Jiefeng Li, Michael de Ruyter, Miguel Guerrero, Edy Lim, Ehsan Hassani, et al., “SOMA: Unifying Parametric Human Body Models,” arXiv preprint arXiv:2603.16858 , 2026. [24] Georgios Pavlakos, Vasileios Choutas, Nima Ghorbani, Timo Bolkart, Ahmed A. A. Osman, Dimitrios Tzionas, et al., “Ex-pressive Body Capture: 3D Hands, Face, and Body from a Single Image,” in Proc. IEEE/CVF CVPR , 2019. [25] Alec Radford, Jong Wook Kim, Tao Xu, Greg Brockman, Chris-tine McLeavey, and Ilya Sutskever, “Robust speech recognition via large-scale weak supervision,” in Proc. ICML , 2023, pp. 28492–28518. [26] Gabriel Mittag, Babak Naderi, Assmaa Chehadi, and Sebas-tian Möller, “NISQA: A deep CNN-self-attention model for multidimensional speech quality prediction with crowdsourced datasets,” in Proc. Interspeech , 2021, pp. 2127–2131.

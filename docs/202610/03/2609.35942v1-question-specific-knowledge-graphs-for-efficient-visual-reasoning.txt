@@ -1,0 +1,724 @@
+Title: Question-Specific Knowledge Graphs for Efficient Visual Reasoning
+
+URL Source: https://arxiv.org/pdf/2609.35942v1
+
+Published Time: Wed, 30 Sep 2026 00:14:20 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Question-Specific Knowledge Graphs for Efficient Visual Reasoning 
+
+Ting-Chih Chen 1, Emile van Krieken, Shujian Yu, Filip Ilievski 
+
+Vrije Universiteit Amsterdam 
+
+> 1
+
+t.c.chen@vu.nl 
+
+Abstract 
+
+Recent work in visual question answering has shown that vision-language models can exhibit strong reasoning capabil-ities by translating visual inputs into textual representations. The effectiveness of this translation depends on how well vi-sual details are retained; models need to surface and align both explicit and implicit knowledge sufficient to support rea-soning, without introducing spurious assumptions. Existing methods that leverage detailed image captions introduce vi-sual details unrelated to the reasoning task, inflating input token counts and increasing computational cost. To address these challenges, we propose VisKG , a reinforcement learning (RL) framework in which models learn to translate visual con-tent into question-specific knowledge graph (KG) representa-tions. This process filters out perceptual noise while preserv-ing the entity-relation structure needed for chain-of-thought reasoning, following the principle of minimum sufficient in-formation. To ensure stable RL post-training, VisKG adopts Group reward-Decoupled Normalization Policy Optimization (GDPO). In addition, we strengthen the supervision stage with negative rationale samples, exposing the model to incorrect reasoning paths before RL post-training. Experimental results across science, mathematics, and general visual understanding benchmarks show that VisKG achieves performance compa-rable to or better than baselines, while requiring fewer tokens than caption-based representations. Moreover, training VisKG with GDPO improves accuracy by 2% over its GRPO-trained counterpart on average. These results suggest that KG repre-sentations are a promising approach for supporting multi-step reasoning and open up future work on adaptively selecting the most suitable representation for a given task. 
+
+1 Introduction 
+
+Visual question answering (VQA) tasks require joint under-standing of visual content and language to produce accu-rate answers. As questions become more complex, requiring multi-step inference, relational reasoning, or world knowl-edge (Tran et al. 2025), the challenge shifts from what a model knows to how effectively it integrates visual percep-tion, linguistic understanding, and commonsense knowledge into coherent reasoning. For example, to answer the question in Figure 1, one needs to combine information from the ques-tion itself, visual information about the spatial configuration of the angles, and relevant mathematical background knowl-edge. Vision-language models (VLMs) have emerged as a paradigm for VQA tasks, leveraging world knowledge ac-quired through large-scale text corpora (Zhang et al. 2024a) to reason over questions that demand rich contextual under-standing (Chen et al. 2023). However, visual content, linguis-tic input, and background knowledge are not expressed in a shared representation, making it difficult for VLMs to align the three into coherent reasoning (Deng et al. 2026). A natural approach to bridge vision and language is to convert visual inputs into textual representations, enabling VLMs to reason over linguistic inputs (Wu, Hu, and Mooney 2019; Özdemir and Akagündüz 2024). A state-of-the-art (SOTA) method is Vision-SR1 (Li et al. 2026), which aims to generate the image caption sufficient for answering the question without referring back to the image. To achieve this without external visual supervision, Vision-SR1 uses a two-rollout setting, decomposing reasoning into a visual and a language stage and applying a multi-reward RL objective that jointly optimizes the caption and the subsequent answer. However, captions are free-form text: they have no explicit mechanism for isolating which entities and relations are rel-evant to a given question, so irrelevant content cannot be selectively discarded. A knowledge graph (KG), by contrast, provides a structure in which visual entities and relations can be explicitly aligned with linguistic and background knowl-edge, while irrelevant nodes are pruned and the needed for reasoning is preserved (Su et al. 2024). We argue that effective RL post-training for VQA hinges on three interlocking design choices: the representation given to the model, the algorithm used to optimize it, and the su-pervision signal used to shape it. Existing RL-based VQA methods, including Vision-SR1, fall short on all three. First, on representation, captions lack question-guided informa-tion selection . Even when captions are optimized to align with the question, achieving this in free-form text is difficult in practice, often resulting in long captions that favor com-pleteness over minimality. An ideal representation retains only what is necessary to answer the question, a principle known as minimum sufficient information (Tishby, Pereira, and Bialek 2000). Yet, neither the caption format nor the prior training objectives enforce minimality, so captions tend to-ward completeness rather than question-specific relevance. Second, Group Relative Policy Optimization (GRPO) (Shao et al. 2024) has become the de facto optimization algorithm for RL post-training, underlying many SOTA methods (Shen arXiv:2609.35942v1 [cs.CL] 28 Sep 2026 As shown in figure, what is                                         
+
+> the measure of ∠ACD?
+> A: 20 °B: 30 °C: 40 °D: 70 °
+> Question
+> KG Representation
+> Because AB is a diameter , A, O, and B lie on a straight line, so the
+> central angle ∠AOB is 180° . Given that ∠DOB=140° . Since D lies
+> on the same semicircle as A, the remaining central angle is: ∠AOD =
+> ∠AOB-∠DOB=180°-140°=40° . The central angle ∠AOD and the arc
+> AD have the same measure, so arc AD=40° . The angle ∠ACD is an
+> inscribed angle that intercepts arc AD . An inscribed angle is half
+> the measure of its intercepted arc, therefore: ∠ACD= 40°/2=20°. AB
+> C
+> D
+> O
+> 140 °
+> Positive Rationale
+> Line AB is diameter
+> Because AB is a diameter , points A, O, and B lie on a straight line,
+> so the central angle ∠AOB is 180°. Given that ∠DOB = 140° , the
+> remaining central angle for the arc adjacent to A is determined by
+> ∠AOD = 40° . The central angle ∠AOD corresponds to the measure
+> of arc AD, so arc AD = 40°. The target angle ∠ACD is an inscribed
+> angle that intercepts the same arc AD, and according to the
+> inscribed angle theorem , an inscribed angle is half the measure of
+> its intercepted arc, therefore: ∠ACD = 40° / 2 = 20°. This confirms
+> that option A is the correct answer, while the option C is incorrect
+> because it mistakenly represents the measure of the central angle
+> ∠AOD rather than the inscribed angle ∠ACD , failing to apply the
+> step of halving the central angle to reach the correct value.
+> Negative Rationale
+> Ocenter
+> is
+> ∠DOB 140 °
+> has
+
+Figure 1: For a question-image VQA pair, VisKG generates a KG representation of the relevant visual content. Then, it produces KG-grounded CoT reasoning, illustrated with both a positive and a negative rationale. et al. 2025; Zhu et al. 2026). However, GRPO is susceptible to reward collapse under heterogeneous advantage distribu-tions (Liu et al. 2026), undermining the stable convergence these methods depend on for reliable reasoning. Third, on the supervision signal, Supervised Fine-Tuning (SFT) pro-vides only positive supervision, exposing models to correct reasoning traces but not common reasoning errors . Thus, models learn to reproduce correct patterns without under-standing why plausible alternatives are wrong, leaving them prone to confident but flawed reasoning under distribution shift (Tian et al. 2026). These limitations compound one an-other: an uncontrolled representation exposes VLMs to task-irrelevant signals, an unstable algorithm prevents the models from learning reliably even from a good representation, and a positive supervision signal alone leaves the model without a signal for what to avoid, limiting its ability to generalize. To address these limitations, we propose VisKG, an RL-based training framework for VQA that replaces image inputs with KG representations, as shown in Figure 1. Our contri-butions target each of the three design choices above: (1) on representation , we propose VisKG, a novel method to represent visual content as question-specific KG for reason-ing; (2) on algorithm , we adopt a GDPO-based (Liu et al. 2026) training formulation, deriving for the first time an op-timization scheme that yields more stable RL optimization across diverse VQA tasks; and (3) on supervision , we enrich SFT training with negative rationales that expose VLMs to common reasoning failures before RL post-training, improv-ing robustness across VQA benchmarks. 
+
+2 Related Work 
+
+Efficient Visual Representations for VQA. Efficient vi-sual representations aim to reduce redundancy by replac-ing raw pixels with language-aligned intermediates (Teney, Liu, and van Den Hengel 2017; Ziaeefard and Lecue 2020): image/dense captioning generates textual scene de-scriptions (Salaberria et al. 2023; Ge et al. 2024), while region-level features and object lists extract salient seman-tic units (Kim and Bansal 2019; Hudson and Manning 2019; Khan, Breslin, and Curry 2022), often further com-pressed via token-compression and visual-summarization techniques (Chen et al. 2024a; Lyu et al. 2025; Fang et al. 2026). Yet, such task-agnostic summarization exposes mod-els to redundant details, reinforcing shortcuts rather than grounding answers in question-relevant evidence (Kanani, Saha, and Bhattacharyya 2020; Liu, Zhang, and Liu 2025). VisKG instead uses KG representations optimized to capture minimal and sufficient reasoning signals, yielding a repre-sentation aligned with the evidence the question requires. 
+
+RL Post-Training in VLMs. Recent work has adopted RL for post-training VLMs to align outputs with task-level rewards, reducing the reliance on expensive supervised signals and improving generalization to out-of-distribution tasks (Tan et al. 2025a). Vision-R1 (Xia et al. 2025) addresses shortcut reliance by enforcing explicit image interpretation before reasoning via GRPO-based RL. VIDEOP2R (Jiang et al. 2025) and Vision-SR1 (Li et al. 2026) factorize reason-ing in the visual perception and language reasoning stages, using self-generated captions as a reward signal to reinforce both visual grounding and downstream reasoning. Within this caption-based RL paradigm, advantage estimation pro-vides a relative quality signal for sampled outputs, letting the model distinguish higher- from lower-value trajectories and encouraging more deliberate, reward-aligned reason-ing (Park and Han 2023). Despite GRPO’s promising results, its optimization dynamics can be sensitive to such variabil-ity. GDPO was recently introduced as a more robust alterna-tive, improving stability through better variance control and baseline conditioning; however, it has only been explored in single-modality reasoning and remains unexamined for VQA. We adopt GDPO as VisKG’s optimization framework to explore whether it enables stable and effective reasoning. Before RL post-training, SFT remains mandatory to equip VLMs with the base capability needed for reward-driven optimization to be effective (Yu et al. 2025b). However, ex-isting SFT stage supervision focuses only on positive ratio-nales, leaving models without explicit exposure to their own reasoning failures (Islam, Aridhi, and Smail-Tabbone 2022; Nguyen and Fang 2024; Ding and Zhang 2026). We comple-ment positive with negative rationales in our SFT dataset for a stronger initialization before RL post-training. 
+
+3 Methodology 
+
+This section presents the VisKG framework for training VLMs: we describe the training procedure under a two-rollout setting (§3.1), formalize the advantage score com-putation in GDPO (§3.2), introduce SFT preprocessing en-riched with negative rationales (§3.3), and provide a theo-retical interpretation grounded in the information bottleneck principle showing how the KG representations approximate minimally sufficient task information (§3.4). We consider a VLM πθ that produces an answer a to a question q about an image i by reasoning directly over the i. Rather than reasoning directly over i, our goal is to train πθ to derive a question-specific KG g that captures the information needed to answer q without access to i, and to produce an answer a′ from g instead. Concretely, g should Answer Reward   
+
+> Format Reward
+> (e.g., "What is the
+> object?")
+> IMAGE
+> QUESTION
+> Policy VLM
+> OUTPUT -
+> OUTPUT -
+> Minimality Reward
+> Sufficiency Reward
+> INPUT
+> Standard Rollout
+> KG-based Rollout
+> KG input
+> Legend
+
+Figure 2: Overview of the VisKG training framework. The framework consists of two rollouts: standard rollout (black solid line) and KG-based rollout (black dashed line). In the standard rollout, the model generates information in a predefined format given an image and a question, and receives an answer reward and a format reward. In the KG-based rollout, the model generates a reasoning trace and final answer conditioned on the KG and the question, and receives a minimality reward and a sufficiency reward. The total reward is computed as the sum of all rewards from both rollouts and is used to update the VLM. retain only the entities and relations relevant to q, discarding details that do not contribute to answering the q. This reflects the principle of minimum sufficient information: g should be enough to omit task-irrelevant content, while still preserving the reasoning-critical structure required for πθ to correctly predict a′, matching the ground-truth answer a∗.
+
+3.1 VisKG Training Framework 
+
+We train the policy model πθ to generate structured responses comprising four components: an image description d, a KG representation g, a CoT reasoning trace t, and an answer 
+
+a. These components are serialized using markup tags to explicitly separate perceptual grounding, intermediate rea-soning, and answer generation. For each training instance 
+
+Q = {i, q, a ∗}, we perform two rollouts of the same πθ
+
+within a single training step, as shown in Figure 2. 
+
+Standard Rollout. The model receives the full multimodal input and generates a structured response Sfull ∼ πθ (· | i, q ),where Sfull = ( d, g, t, a ). We evaluate both the correctness of the answers and the validity of the format. The answer reward and format reward are defined as: 
+
+rans (a, a ∗) = 
+
+1, a = a∗,
+
+0, otherwise ,rfmt (Sfull ) = 
+
+1, tags appear in order ,
+
+0, otherwise ,
+
+(1) The answer reward follows the same design as Vision-SR1. However, the format reward differs: while Vision-SR1 only enforces a caption and reasoning structure, VisKG addition-ally requires a <KG> tag between the description and reason-ing stages, ensuring that the model explicitly grounds its rea-soning in a structured KG representation. The standard roll-out reward is then defined as: rfull = rans (a, a ∗) + rfmt (Sfull ).
+
+KG-based Rollout. The KG g is a subset of the set of all possible relational triples, g ⊆ { (ei, r k, e j ) | i, j ∈ I e, k ∈Ir }, where Ie is the index set over entities and Ir is the index set over relations. Here, ei, e j denote visual or textual entities extracted from the image-question context, and rk
+
+represents a semantic relation between them. The model is then re-prompted with the generated KG g (shown as the blue dashed block within Sfull in Figure 2) together with the ques-tion q. While g is a set of entity-relation triples, we serialize it as plain text rather than using a graph encoder. For example, a triple such as (angle A, has, angle B) is serialized as the plain-text string “(angle A has angle B)” before being tokenized, as illustrated in Figure 1. This produces a KG-based rollout 
+
+Skg = ( t, a ′) ∼ πθ (· | g, q ), where t is the CoT reasoning trace and a′ is the answer derived from g. If a′ is correct, the KG is considered sufficient for answering the question. We evaluate the KG along two dimensions: minimality , which measures the compactness of g, and sufficiency , which as-sesses whether g preserves the information necessary for correct reasoning. Unlike Vision-SR1, which implicitly en-courages sufficiency through self-reward but does not penal-ize verbosity, VisKG explicitly optimizes both dimensions as separate reward components. We operationalize these di-mensions as reward components, as defined below. 
+
+Minimality Reward. KG complexity is normalized with respect to the mean KG length in the training corpus. Specif-ically, let |g| denote the number of tokens in the serialized KG, i.e., when g is linearized as a sequence of triples prior to being input to the model. The normalized length is: norm_len (g) = |g|
+
+Lref 
+
+, Lref = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+|gj |, (2) where gj is the serialized KG of the j-th sample in the SFT dataset (see §6.2), yielding norm_len (g) ≈ 1 for average-length KGs. The minimality reward penalizes unnecessarily long KGs. With this penalty, the model can first learn to construct a valid KG before being pressured to compress it: 
+
+rminl = rans (a′, a ∗)1 + λ(t) · norm_len (g) , (3) The constant 1 in the denominator ensures numerical stabil-ity when norm_len (g) = 0 ; without it, an empty generated KG would cause the denominator to vanish, yielding an un-defined reward signal. The penalty strength λ(t) is annealed during training as: 
+
+λ(t) = λmax · min 
+
+
+
+1, tTwarmup 
+
+
+
+, (4) where t is the current training step, Twarmup is the number of warmup steps, and λmax is the maximum value of the penalty coefficient λ(t). λ(t) increases linearly from 0 to λmax over the first Twarmup steps so the model first learns to generate g
+
+before the length penalty begins to shape its behavior. 
+
+Sufficiency Reward. The answer reward rans acts as a sufficiency signal, directly assessing whether the generated KG preserves sufficient information to recover the answer a∗.The KG-based reward is defined as rkg = rminl +
+
+rans (a′, a ∗), where a′ denotes the answer predicted from the KG alone. The overall reward is rtotal = rfull + rkg .
+
+3.2 Advantage Computation in GDPO 
+
+Summing all reward components and normalizing the aggre-gated score, as in GRPO, is known to cause training instabil-ity in multi-reward settings: a single shared denominator lets the largest-scale reward dominate the pooled deviation, and negative covariance between components can suppress that same denominator toward zero, amplifying noise into dispro-portionately large advantages (Liu et al. 2026). GDPO avoids both failure modes with decoupled normalization : each re-ward stream is normalized against its own statistics before being combined, then rescaled at the batch level. For a fixed prompt i and reward k, the values across the G rollouts in that group form a stream, normalized by 
+
+A(i,j ) 
+
+> k
+
+= r(i,j ) 
+
+> k
+
+− μ(r(i, ·) 
+
+> k
+
+)
+
+σ(r(i, ·) 
+
+> k
+
+) + ϵ , A(i,j ) 
+
+> sum
+
+= Pnk=1 A(i,j ) 
+
+> k
+
+,
+
+ˆA(i,j ) 
+
+> sum
+
+= A(i,j ) 
+
+> sum
+
+− μbatch 
+
+σbatch + ϵ ,
+
+(5) where μ(r(i, ·) 
+
+> k
+
+) and σ(r(i, ·) 
+
+> k
+
+) are that stream’s own mean and standard deviation, μbatch and σbatch are computed over 
+
+A(i,j ) 
+
+> sum
+
+across the mini-batch, and ϵ is a small constant guard-ing against near-zero variance in any single stream. Because each stream is normalized only by its own statistics, no com-ponent’s scale can dominate another’s, and cross-component cancellation can no longer suppress the shared denominator, resolving both failure modes above; a stream that is itself near-constant within a group (e.g., a format reward that is uniformly 1) is instead stabilized by the ϵ term. GDPO then rescales A(i,j ) 
+
+> sum
+
+at the batch level to keep the signal stable independent of n. The resulting advantages are combined using a curriculum weight that gradually increases the influ-ence of the KG-based reward as training progresses, reusing the same annealed penalty strength λ(t) from Eq. (4) so that the shift toward the KG-based advantage tracks the same warmup schedule that phases in the length penalty: 
+
+˜Ak = wfull (t) ˆAfull  
+
+> k
+
++ wkg (t) ˆAkg  
+
+> k
+
+,wkg (t) = λ(t)
+
+λmax 
+
+, wfull (t) = 1 − wkg (t), (6) where ˆAfull  
+
+> k
+
+and ˆAkg  
+
+> k
+
+are the batch-normalized advantages, and 
+
+˜Ak is the advantage used in the policy update. wkg (t) = 0 
+
+during the initial phase where the length penalty is inactive, and both mechanisms reach full strength together at t =
+
+Twarmup . Appendix 6.1 shows the full procedure. 
+
+3.3 SFT Preprocessing 
+
+Before RL training, we initialize πθ with an SFT stage, fol-lowing Chu et al. (2025), who show that while RL generalizes better to out-of-distribution settings, SFT is still needed first to stabilize the model’s output format, making it a necessary prerequisite for effective RL. The SFT stage serves two objectives. The first is to instill compliance with VisKG’s structured output format, ensuring well-formed responses before RL begins. The second, and a novel addition in our method, is to strengthen the model’s reasoning prior by fine-tuning πθ on both positive and nega-tive rationale samples: positive rationales provide the correct reasoning trace leading to the right answer, while negative ra-tionales identify why an incorrect answer fails and where the reasoning goes wrong. This supervision exposes the model to a wider range of reasoning trajectories than standard positive-only SFT regimes, which strengthens the reasoning prior for RL post-training. The SFT dataset construction are provided in §4.1 and Appendix 6.2. 
+
+3.4 Theoretical Interpretation 
+
+The objective used in our framework is to learn to gen-erate a KG that is both sufficient to answer the question and minimal in the information it requires. Our solution can be interpreted from an information bottleneck (IB) per-spective (Tishby, Pereira, and Bialek 2000), which provides a principled penalty that jointly encourages sufficiency and minimality: 
+
+g∗ ∈ arg max 
+
+> G
+
+Iinf (G; A | Q) − βIB · Iinf (G; I | Q), (7) where βIB > 0 is the regularization coefficient, g∗ is the minimal sufficient KG representation that preserves the reasoning-critical content required for correct answer predic-tion, I denotes the image, Q the question, G the KG, A the answer, and Iinf (· ; ·) denotes mutual information. The first term, Iinf (G; A | Q), captures sufficiency , requiring G to re-tain the information necessary to predict the correct answer. In practice, this is approximated by the sufficiency reward from the KG-based rollout. The second term, Iinf (G; I | Q),enforces minimality , encouraging G to discard visual infor-mation that is not required once the answer is determined, given the question. We approximate this term using the min-imality reward from the KG-based rollout, which penalizes KG length as a proxy for unneeded information: a longer KG is more likely to encode visual content beyond what the question requires, as illustrated in Figure 3. Figure 3: Illustration of the information bottleneck objective for KG generation. Sufficiency (left) maximizes Iinf (G; A):the optimal G retains nodes carrying mutual information with the answer (green), while gray nodes contribute little to prediction. Minimality (right) minimizes Iinf (G; I | Q):
+
+G discards gray nodes encoding question-irrelevant image information, keeping only the green nodes needed for rea-soning. 
+
+4 Experiments 
+
+4.1 Implementation Details 
+
+We construct a novel PN-Rationales dataset derived from a randomly selected 9K subset of the Vision-SR1-47K dataset (Li et al. 2026), covering three domains: general vi-sual reasoning, mathematics, and scientific knowledge. For each sample, we prompt Qwen3-VL-32B-Instruct (Yang et al. 2025) with structured prompts to generate an image descrip-tion, a question-specific KG, and a CoT rationale for each answer option, with InternVL3-78B (Chen et al. 2024b) serv-ing as a verifier to determine answer correctness and ensure data quality. For a sample with k answer options, this yields a positive rationale, corresponding to the CoT for the correct option, and k − 1 negative rationales, corresponding to the CoT for each incorrect option. To implement VisKG, we adopt Qwen2.5-VL-7B-Instruct (Bai et al. 2025) and Qwen3-VL-8B-Instruct (Yang et al. 2025) as base models. We first train the model via SFT on the PN-Rationales dataset. After SFT training, we opti-mize the model using GDPO for one epoch on the full Vision-SR1-47K dataset (Li et al. 2026), during which the policy model sequentially generates an image description, KG, CoT reasoning, and the final answer. Reusing Vision-SR1-47K enables direct comparison with Vision-SR1. Training hyper-parameters are in Appendix 6.3. 
+
+4.2 Experimental Setup 
+
+We evaluate VisKG in two domains: general visual under-standing and multimodal mathematical reasoning. For gen-eral visual understanding, we use MMMU-Pro (Yue et al. 2025) and the cognition subset of MME (Fu et al. 2023), both of which stress cross-modal reasoning over raw percep-tual recognition. For mathematical reasoning, we use Math-Verse (Zhang et al. 2024b), whose diagram-centric, multi-variant design isolates genuine visual grounding from lan-guage priors. For MMMU-Pro and MathVerse, we report accuracy. For MME, we report the cognition score, defined as the sum of ACC and ACC+: ACC measures question-level correctness, while ACC+ requires both questions paired with an image to be answered correctly, penalizing inconsistent reasoning. Further evaluation details are in Appendix 6.4.                                           
+
+> Baselines
+> Method Backbone MMMU-Pro MathVerse
+> Vision-R1 Qwen2.5-VL-3B 34.9 57.3
+> Visionary-R1 Qwen2.5-VL-7B 27.4 45.0 Perception-R1 Qwen2.5-VL-3B-Inst. 36.8 52.1 Vision-SR1 Qwen2.5-VL-3B 40.8 45.8 Qwen2.5-VL-7B 40.7 54.5
+> KG-based rollout inference
+> Backbone Setting MMMU-Pro MathVerse
+> Qwen2.5-VL-7B-Inst. ZS / ZS + GDPO 24.5 / 28.3 37.9 / 40.8 SFT (n/p/b) 27.8 / 32.6 / 33.4 37.7 / 41.3 / 43.7 SFT (n/p/b) + GRPO 33.8 / 37.1 / 38.6 43.9 / 47.8 / 54.1 VisKG (SFT (n/p/b) + GDPO) 32.5 / 38.1 / 38.7 47.1 / 53.8 / 54.2
+> Qwen3-VL-8B-Inst. ZS / ZS + GDPO 29.7 / 30.8 46.1 / 48.5 SFT (n/p/b) 29.6 / 31.4 / 33.4 42.4 / 46.3 / 45.9 SFT (n/p/b) + GRPO 35.2 / 36.1 / 37.4 46.0 / 51.2 / 52.1 VisKG (SFT (n/p/b) + GDPO) 37.2 / 39.7 / 39.1 48.1 / 54.2 / 53.7
+
+Table 1: Performance under different settings on MMMU-Pro and MathVerse. ZS denotes zero-shot inference. n, p, and b represent SFT using negative rationale samples, positive rationale samples, and both negative and positive rationale samples, respectively. We compare VisKG against four baselines spanning dis-tinct visual grounding strategies. Vision-R1 (Huang et al. 2025) applies group-based RL with answer-correctness re-wards and no explicit grounding mechanism, serving as a grounding-free reference. Perception-R1 (Yu et al. 2025a) extends this with pre-extracted visual annotations, represent-ing annotation-based grounding under privileged supervi-sion. Visionary-R1 (Xia et al. 2025) is a caption-based RL method producing outputs in a caption–reason–answer for-mat. Vision-SR1 (Li et al. 2026) is a two-rollout GRPO framework trained on Vision-SR1-47K, where the second rollout conditions on a generated image description. 
+
+4.3 Results and Discussion 
+
+How does the KG representation perform on VQA tasks compared to baselines? As shown in Table 1, VisKG achieves performance comparable to the baselines across both benchmarks. On MMMU-Pro, VisKG outper-forms Vision-R1, Perception-R1, and Visionary-R1, and trails Vision-SR1 by only a small margin. A similar pat-tern holds on MathVerse, where VisKG remains competi-tive with Vision-R1 and Vision-SR1 despite using a more compact representation. Notably, VLMs can effectively an-swer VQA tasks using a variety of intermediate representa-tions, though no single representation is universally optimal across domains; nevertheless, VisKG shows that a compact structure can match less compact alternatives while offer-ing substantial efficiency gains. We exclude MME from this comparison: the top-performing entries on the MME leader-board are predominantly closed-source models with undis-closed architectures and training data, making any compari-son against them uninformative rather than merely difficult. Restricting our evaluation to MMMU-Pro and MathVerse ensures that reported gains reflect genuine methodological Backbone Setting Commonsense Reasoning Numerical Calculation Text Translation Code Reasoning Cog. Score 
+
+ACC ACC+ ACC ACC+ ACC ACC+ ACC ACC+ 
+
+KG-based rollout inference 
+
+Qwen2.5-VL-7B-Inst. ZS 47.14 20 85 75 77.5 55 47.5 35 442.14 ZS + GDPO 47.5 19 82.5 73 77.5 51 47.5 32 430 SFT (n) 61.43 22.86 72.5 45 95 90 57.5 15 459.29 SFT (p) 62.14 25.71 82.5 65 87.5 75 60 20 477.85 SFT (b) 64.29 32.86 82.5 70 95 90 57.5 20 512.15 SFT (n) + GRPO 62.37 43.77 87.5 75 87.3 74 63 35 527.94 SFT (p) + GRPO 69.22 42 80 65 93.2 91 65.2 36 541.62 SFT (b) + GRPO 70 49.12 90 85 88.2 83 71.23 50 586.55 VisKG (SFT (n) + GDPO) 65.43 41.26 84 70 90 81 68 44 543.69 VisKG (SFT (p) + GDPO) 63.19 34.71 92 88 92 90 67.3 39 566.2 VisKG (SFT (b) + GDPO) 66.44 41.43 93 85 92.1 87 72.5 52 589.47 
+
+Qwen3-VL-8B-Inst. ZS 46.43 31.43 75 65 67.5 35 70 55 445.36 ZS + GDPO 48 27 78.12 71 74.7 56 48.2 32 435.02 SFT (n) 64.29 37.14 85 70 47.5 0 72.5 50 426.43 SFT (p) 67.86 48.57 87.5 80 45 0 80 60 468.93 SFT (b) 78.57 61.43 95 90 87.5 75 87.5 75 650 SFT (n) + GRPO 63.55 36.71 80 60 42.5 20 62.8 38 403.56 SFT (p) + GRPO 68.16 52.44 85 84 43 10 85 72 499.6 SFT (b) + GRPO 74.98 65.1 95 90 92.5 85 92.5 85 680.08 VisKG (SFT (n) + GDPO) 82.47 65.38 90 80 83.1 65 86.4 75 627.35 VisKG (SFT (p) + GDPO) 83.1 72.4 88 85 82.8 67 91 85 654.3 VisKG (SFT (b) + GDPO) 79.3 65.82 95 90 92.3 85 92.3 85 684.72 
+
+Table 2: Performance on the MME cognition subset under different training settings. ZS denotes zero-shot inference. n, p, and b denote SFT with negative rationales, positive rationales, and both negative and positive rationales, respectively.                                                           
+
+> MMMU-Pro
+> Backbone Setting Acc. (Cap.) Acc. (KG) Avg. Cap. Len. Avg. KG Len.
+> Qwen2.5-VL-7B-Inst. SFT (n) + GDPO 31.4 32.5 105 84 SFT (p) + GDPO 36.2 38.1 115 105 SFT (b) + GDPO 37.9 38.7 120 106 Qwen3-VL-8B-Inst. SFT (n) + GDPO 28.6 37.2 112 82 SFT (p) + GDPO 39.7 39.7 114 99 SFT (b) + GDPO 39.4 39.1 116 102
+> MathVerse
+> Backbone Setting Acc. (Cap.) Acc. (KG) Avg. Cap. Len. Avg. KG Len.
+> Qwen2.5-VL-7B-Inst. SFT (n) + GDPO 45.3 47.1 127 92 SFT (p) + GDPO 47.5 53.8 120 112 SFT (b) + GDPO 54.8 54.2 140 106 Qwen3-VL-8B-Inst. SFT (n) + GDPO 46.7 48.1 108 96 SFT (p) + GDPO 52.4 54.2 107 105 SFT (b) + GDPO 53.1 53.7 123 100
+
+Table 3: Inference cost evaluation on MMMU-Pro and Math-Verse under the KG-based rollout setting. Avg. Cap. Len. and Avg. KG Len. denote the average length of the caption and KG intermediate representation, respectively. differences rather than opaque, unreproducible advantages. Detailed results for the standard rollout and qualitative ex-amples of VisKG inference are provided in Appendix 7.1 and 7.2, respectively. 
+
+What is the impact of SFT training on negative rationales on reasoning robustness? We compare training settings and backbones. In Table 1, Qwen2.5-VL-7B-Instruct consis-tently follows SFT(b) > SFT(p) > SFT(n) across SFT-only, GDPO, and GRPO. Qwen3-VL-8B-Instruct, however, breaks this ordering under GDPO on MMMU-Pro and under both GDPO and SFT-only on MathVerse. In Table 2, both back-bones consistently follow SFT(b) > SFT(p) > SFT(n) across all settings. These results suggest that negative rationales improve reasoning robustness over positive-only supervision, though this effect weakens in larger, more reasoning-capable models. 
+
+To what extent does the IB-inspired reward formula-tion in GDPO improve reward stability during training relative to GRPO? As shown in Table 1, we compare VisKG’s performance across different settings when trained with GDPO versus GRPO. GDPO-trained models outper-form their GRPO-trained counterparts in nearly all settings, with only a single exception. Overall, training VisKG with GDPO improves accuracy by 2 percentage points over its GRPO-trained counterpart on average. A consistent pattern emerges in Table 2, where every GDPO-trained setting out-performs its GRPO-trained counterpart. To further assess whether GDPO yields more stable RL training, we compare reward trajectories collected under the standard rollout and KG-based rollout for both GRPO and GDPO, as shown in Figure 4. The results reveal a clear advantage for GDPO: models trained with GDPO update stably throughout the entire RL training process, whereas GRPO-trained rewards deteriorate sharply toward the end of training in most settings, with only a few configurations showing partial recovery. This comparison indicates: GDPO produces more stable RL training than GRPO across both rollout settings. We hypothesize that this stability gain stems from GDPO’s decoupled normalization, which yields more distinct advantage scores during updates; we leave isolat-ing this factor from GDPO’s other design choices to future ablation studies. The training reward curves for Qwen3-VL-8B-Instruct are provided in Appendix 7.3. 
+
+How does substituting KG representation with short im-age description in the SFT stage affect downstream task performance and input token efficiency? To assess the necessity of the KG representation, we replace it with a short image caption, generated using the same method as the PN-Figure 4: Training reward curves of Qwen2.5-VL-7B-Instruct under standard and KG-based rollouts. The green and gray lines correspond to GDPO and GRPO, respectively. Top, middle, and bottom panels show models initialized with SFT on both rationales, positive rationales only, and negative rationales only, respectively. Rationales dataset construction, during both the SFT and RL stages, keeping the rest of the VisKG framework unchanged. Table 3 reports results in the KG-based rollout setting. The accuracy remains comparable between the two representa-tions, while KG is on average 16% shorter in generated output length. These findings suggest that the KG variant achieves performance comparable to a short caption while remaining a more efficient intermediate representation for reasoning. 
+
+Inference cost and KG question-specificity are analyzed in Appendix 7.4 and 7.5, respectively. 
+
+5 Conclusion and Future Work 
+
+We presented VisKG, an RL framework that trains VLMs to generate a question-specific KG representation as an inter-mediate reasoning structure for VQA. VisKG filters out ir-relevant content and retains only the entity-relation structure necessary for reasoning. To improve reasoning robustness, we perform SFT on both positive and negative rationales. For RL post-training, VisKG adopts GDPO, marking its first application to multimodal VQA, which yields more stable training and a 2% average accuracy gain over GRPO. VisKG achieves performance comparable to or better than baselines across science, mathematics, and general visual understand-ing benchmarks with fewer tokens than caption-based rep-resentations, establishing structured visual grounding as an efficient intermediate representation for VQA. While VisKG demonstrates the effectiveness of KG-based representations for VQA, several limitations remain. First, the downstream reasoning is not fully reliable : VisKG focuses on generating a question-specific KG representation but does not explicitly govern how this representation is used during CoT reasoning, so answer quality still largely depends on the backbone VLM’s own reasoning capability, and the same KG can yield very different performance across VLMs. Second, VisKG is inherently biased toward entity-relation-centric questions : since the KG mainly captures entities and their relationships, it offers limited benefit for VQA instances that do not follow this pattern. Future work will address both issues by explicitly coupling the KG with the reasoning pro-cess, e.g., via training objectives that condition CoT on spe-cific KG components, and by exploring adaptive represen-tation selection that chooses among KG, caption, or hybrid representations depending on the question type. References 
+
+Bai, S.; Chen, K.; Liu, X.; Wang, J.; Ge, W.; Song, S.; Dang, K.; Wang, P.; Wang, S.; Tang, J.; Zhong, H.; Zhu, Y.; Yang, M.; Li, Z.; Wan, J.; Wang, P.; Ding, W.; Fu, Z.; Xu, Y.; Ye, J.; Zhang, X.; Xie, T.; Cheng, Z.; Zhang, H.; Yang, Z.; Xu, H.; and Lin, J. 2025. Qwen2.5-VL Technical Report. arXiv preprint arXiv:2502.13923 .Chen, J.; Ye, L.; He, J.; Wang, Z.-Y.; Khashabi, D.; and Yuille, A. 2024a. Efficient large multi-modal models via visual context compression. Advances in neural information processing systems , 37: 73986–74007. Chen, Y.; Hu, H.; Luan, Y.; Sun, H.; Changpinyo, S.; Rit-ter, A.; and Chang, M.-W. 2023. Can Pre-trained Vision and Language Models Answer Visual Information-Seeking Questions? In Bouamor, H.; Pino, J.; and Bali, K., eds., 
+
+Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , 14948–14968. Singapore: Association for Computational Linguistics. Chen, Z.; Wu, J.; Wang, W.; Su, W.; Chen, G.; Xing, S.; Zhong, M.; Zhang, Q.; Zhu, X.; Lu, L.; et al. 2024b. Internvl: Scaling up vision foundation models and aligning for generic visual-linguistic tasks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,24185–24198. Chu, T.; Zhai, Y.; Yang, J.; Tong, S.; Xie, S.; Schuurmans, D.; Le, Q. V.; Levine, S.; and Ma, Y. 2025. SFT Memorizes, RL Generalizes: A Comparative Study of Foundation Model Post-training. In Forty-second International Conference on Machine Learning .Deng, J.; Wu, Z.; Huo, H.; and Xu, G. 2026. A Comprehen-sive Survey of Knowledge-Based Visual Question Answer-ing Systems: The Lifecycle of Knowledge in Visual Rea-soning Task. IEEE Transactions on Knowledge and Data Engineering .Ding, Y.; and Zhang, R. 2026. Sherlock: Self-correcting reasoning in vision-language models. Advances in Neural Information Processing Systems , 38: 101638–101672. Fang, Z.; Lyu, P.; Zhang, C.; Lu, G.; Yu, J.; and Pei, W. 2026. Prune Redundancy, Preserve Essence: Vision Token Compression in VLMs via Synergistic Importance-Diversity. 
+
+arXiv preprint arXiv:2603.09480 .Fu, C.; Chen, P.; Shen, Y.; Qin, Y.; Zhang, M.; Lin, X.; Yang, J.; Zheng, X.; Li, K.; Sun, X.; et al. 2023. Mme: A comprehensive evaluation benchmark for multimodal large language models. arXiv preprint arXiv:2306.13394 .Ge, Y.; Zeng, X.; Huffman, J. S.; Lin, T.-Y.; Liu, M.-Y.; and Cui, Y. 2024. Visual fact checker: Enabling high-fidelity detailed caption generation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recog-nition , 14033–14042. Huang, W.; Jia, B.; Zhai, Z.; Cao, S.; Ye, Z.; Zhao, F.; Xu, Z.; Tang, X.; Hu, Y.; and Lin, S. 2025. Vision-r1: Incentivizing reasoning capability in multimodal large language models. 
+
+arXiv preprint arXiv:2503.06749 .Hudson, D.; and Manning, C. D. 2019. Learning by ab-straction: The neural state machine. Advances in neural information processing systems , 32. Islam, M. K.; Aridhi, S.; and Smail-Tabbone, M. 2022. Neg-ative sampling and rule mining for explainable link predic-tion in knowledge graphs. Knowledge-Based Systems , 250: 109083. Jiang, Y.; Wang, Y.; Zhao, R.; Parag, T.; Chen, Z.; Liao, Z.; and Unnikrishnan, J. 2025. VIDEOP2R: Video Un-derstanding from Perception to Reasoning. arXiv preprint arXiv:2511.11113 .Kanani, C. S.; Saha, S.; and Bhattacharyya, P. 2020. Improv-ing diversity and reducing redundancy in paragraph captions. In 2020 International Joint Conference on Neural Networks (IJCNN) , 1–8. IEEE. Khan, M. J.; Breslin, J. G.; and Curry, E. 2022. Expressive scene graph generation using commonsense knowledge in-fusion for visual understanding and reasoning. In European Semantic Web Conference , 93–112. Springer. Kim, H.; and Bansal, M. 2019. Improving visual question answering by referring to generated paragraph captions. In 
+
+Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics , 3606–3612. Li, Z.; Yu, W.; Huang, C.; Liang, Z.; Liu, R.; Liu, F.; Chen, J.; Yu, D.; Boyd-Graber, J. L.; Mi, H.; and Yu, D. 2026. Vision-SR1: Self-Rewarding Vision-Language Model via Reasoning Decomposition and Multi-Reward Policy Optimization. In 
+
+The Fourteenth International Conference on Learning Rep-resentations .Liu, S.-Y.; Dong, X.; Lu, X.; Diao, S.; Belcak, P.; Liu, M.; Chen, M.-H.; Yin, H.; Wang, Y.-C. F.; Cheng, K.-T.; Choi, Y.; Kautz, J.; and Molchanov, P. 2026. GDPO: Group reward-Decoupled Normalization Policy Optimization for Multi-reward RL Optimization. arXiv:2601.05242. Liu, Z.; Zhang, X.; and Liu, J. 2025. Task-Specific Infor-mation Decomposition for End-to-End Dense Video Cap-tioning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 16524–16536. Lyu, W.; Hu, Q.; Qi, K.; Shi, Z.; Huang, W.; Gupta, S.; and Chen, C. 2025. Efficient whole slide pathology vqa via token compression. arXiv preprint arXiv:2507.14497 .Nguyen, T.-K.; and Fang, Y. 2024. Diffusion-based negative sampling on graphs for link prediction. In Proceedings of the ACM Web Conference 2024 , 948–958. Özdemir, Ö.; and Akagündüz, E. 2024. Enhancing Visual Question Answering through Question-Driven Image Cap-tions as Prompts. In 2024 IEEE/CVF Conference on Com-puter Vision and Pattern Recognition Workshops (CVPRW) ,1562–1571. Park, J.; and Han, S. 2023. Reinforcement learning with mul-timodal advantage function for accurate advantage estimation in robot learning. Engineering Applications of Artificial In-telligence , 126: 107019. Salaberria, A.; Azkune, G.; Lopez de Lacalle, O.; Soroa, A.; and Agirre, E. 2023. Image captioning for effective use of language models in knowledge-based visual question an-swering. Expert Systems with Applications , 212: 118669. Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Zhang, M.; Li, Y.; Wu, Y.; and Guo, D. 2024. DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models. Shen, H.; Liu, P.; Li, J.; Fang, C.; Ma, Y.; Liao, J.; Shen, Q.; Zhang, Z.; Zhao, K.; Zhang, Q.; Xu, R.; and Zhao, T. 2025. Vlm-r1: A stable and generalizable r1-style large vision-language model. arXiv preprint arXiv:2504.07615 .Su, Y.; Zhang, J.; Song, Y.; and Zhang, T. 2024. PipeNet: Question Answering with Semantic Pruning over Knowledge Graphs. In Bollegala, D.; and Shwartz, V., eds., Proceedings of the 13th Joint Conference on Lexical and Computational Semantics (*SEM 2024) , 360–371. Mexico City, Mexico: Association for Computational Linguistics. Tan, S.; Dou, K.; Zhao, Y.; and Krähenbühl, P. 2025a. Inter-active post-training for vision-language-action models. arXiv preprint arXiv:2505.17016 .Tan, Z.; Geng, H.; Yu, X.; Zhang, M.; Wan, G.; Zhou, Y.; He, Q.; Xue, X.; Zhou, H.; Fan, Y.; et al. 2025b. Scaling behaviors of llm reinforcement learning post-training: An empirical study in mathematical reasoning. arXiv preprint arXiv:2509.25300 .Teney, D.; Liu, L.; and van Den Hengel, A. 2017. Graph-structured representations for visual question answering. In 
+
+Proceedings of the IEEE conference on computer vision and pattern recognition , 1–9. Tian, X.; Ma, M.; Xu, B.; Lyu, N.; Li, W.; Dong, H.; Chu, Z.; Wang, Y.; and Shen, H. 2026. Learning from Mistakes: Negative Reasoning Samples Enhance Out-of-Domain Gen-eralization. arXiv preprint arXiv:2601.04992 .Tishby, N.; Pereira, F. C.; and Bialek, W. 2000. The infor-mation bottleneck method. arXiv preprint physics/0004057 .Tran, D. T.; Tran, T.-K.; Hauswirth, M.; and Le Phuoc, D. 2025. Reasonvqa: A multi-hop reasoning benchmark with structural knowledge for visual question answering. In Pro-ceedings of the IEEE/CVF International Conference on Com-puter Vision , 18793–18803. Wu, J.; Hu, Z.; and Mooney, R. 2019. Generating Question Relevant Captions to Aid Visual Question Answering. In Ko-rhonen, A.; Traum, D.; and Màrquez, L., eds., Proceedings of the 57th Annual Meeting of the Association for Computa-tional Linguistics , 3585–3594. Florence, Italy: Association for Computational Linguistics. Xia, J.; Zang, Y.; Gao, P.; Li, S.; and Zhou, K. 2025. Visionary-r1: Mitigating shortcuts in visual reasoning with reinforcement learning. arXiv preprint arXiv:2505.14677 .Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Yu, E.; Lin, K.; Zhao, L.; Yin, J.; Wei, Y.; Peng, Y.; Wei, H.; Sun, J.; Han, C.; Ge, Z.; et al. 2025a. Perception-r1: Pioneering perception policy with reinforcement learning. 
+
+arXiv preprint arXiv:2504.07954 .Yu, Y.; He, L.; Lu, S.; Sheng, L.; Xu, Y.; Wang, Y.; Guo, K.; Cheng, J.; Wang, M.; Xie, Q.; et al. 2025b. Reassessing the Role of Supervised Fine-Tuning: An Empirical Study in VLM Reasoning. arXiv preprint arXiv:2512.12690 .Yue, X.; Zheng, T.; Ni, Y.; Wang, Y.; Zhang, K.; Tong, S.; Sun, Y.; Yu, B.; Zhang, G.; Sun, H.; et al. 2025. Mmmu-pro: A more robust multi-discipline multimodal understanding benchmark. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 15134–15186. Zhang, J.; Huang, J.; Jin, S.; and Lu, S. 2024a. Vision-language models for vision tasks: A survey. IEEE transac-tions on pattern analysis and machine intelligence , 46(8): 5625–5644. Zhang, R.; Jiang, D.; Zhang, Y.; Lin, H.; Guo, Z.; Qiu, P.; Zhou, A.; Lu, P.; Chang, K.-W.; Qiao, Y.; et al. 2024b. Math-verse: Does your multi-modal llm truly see the diagrams in visual math problems? In European Conference on Com-puter Vision , 169–186. Springer. Zhu, Y.; Wang, X.; Ding, K.; Wang, Y.; Fan, B.; and Xiang, S. 2026. WikiSeeker: Rethinking the Role of Vision-Language Models in Knowledge-Based Visual Question Answering. 
+
+arXiv preprint arXiv:2604.05818 .Ziaeefard, M.; and Lecue, F. 2020. Towards knowledge-augmented visual question answering. In Proceedings of the 28th International Conference on Computational Linguis-tics , 1863–1873. 6 Appendix 
+
+6.1 GDPO Optimization 
+
+For each input Q = {i, q }, where i is the image and q is the question, we sample K candidate responses from the current policy: 
+
+SQ = {s1, . . . , s K }, sk ∼ πθ (· | Q). (8) Here, sk denotes the standard rollout response. For each 
+
+sk we additionally generate a KG-conditioned response 
+
+skg ,k ∼ πθ (· | gk, q ), where gk is the KG produced dur-ing the standard rollout. 
+
+Per-stream group-wise normalization. Each standard rollout sample is evaluated under both reward streams, yield-ing rfull ,k and rkg ,k . We normalize each reward stream inde-pendently within the group of K samples: 
+
+ˆAfull  
+
+> k
+
+= rfull ,k − μfull 
+
+σfull , ˆAkg  
+
+> k
+
+= rkg ,k − μkg 
+
+σkg , (9) where μ· and σ· are the mean and standard deviation com-puted over the K samples within the group. This decoupled normalization preserves fine-grained distinctions between re-ward combinations. 
+
+Curriculum-weighted combination. The normalized ad-vantages are combined using a curriculum weight that gradu-ally increases the influence of the KG-based reward as train-ing progresses. We reuse the same annealed penalty strength 
+
+λ(t) from Eq. (4) as the driver of this curriculum, so that the shift toward the KG-based advantage tracks the same warmup schedule that phases in the length penalty: 
+
+˜Ak = wfull (t) ˆAfull  
+
+> k
+
++ wkg (t) ˆAkg  
+
+> k
+
+,wkg (t) = λ(t)
+
+λmax 
+
+, w full (t) = 1 − wkg (t), (10) where the weights are set per training step according to the 
+
+λ-curriculum. The weights satisfy wfull (t) + wkg (t) = 1 at every step. 
+
+Batch-wise advantage normalization. Per-stream nor-malization ensures that the two reward signals are on a comparable scale before weighting; batch-wise normaliza-tion then stabilizes the magnitude of the final advantage re-gardless of how many reward streams are combined. 
+
+Ak = ˜Ak − ¯˜A
+
+˜σ + ε , ¯˜A = 1
+
+K
+
+> K
+
+X
+
+> j=1
+
+˜Aj ,
+
+˜σ =
+
+vuut 1
+
+K
+
+> K
+
+X
+
+> j=1
+
+ ˜Aj − ¯˜A
+
+2
+
+,
+
+(11) where Ak is the final scalar advantage, ˜Ak is the curriculum-weighted advantage of the k-th, K is the number of sampled responses per group, ¯˜A is the group mean of ˜Ak, ˜σ is the group standard deviation of ˜Ak, and ε is a small constant for numerical stability. 
+
+Policy objective. We optimize the policy using the clipped surrogate objective from GDPO. Let πθold denote the behavior policy used to sample sk. The per-token probability ratio is: 
+
+ρk,τ (θ) = πθ (sk,τ | Q, s k,<τ )
+
+πθold (sk,τ | Q, s k,<τ ) , (12) where τ indexes tokens in the response, sk,<τ is the generated prefix up to step τ , and Tk = |sk| is the response length. The per-sample clipped objective is: 
+
+Jk(θ) = 1
+
+TkTkX 
+
+> τ=1
+
+min 
+
+
+
+ρk,τ (θ) Ak, ˜ρk,τ (θ) Ak
+
+
+
+,
+
+˜ρk,τ (θ) = clip  ρk,τ (θ), 1 − ε, 1 + ε,
+
+(13) where ε is the clipping threshold. A KL-divergence penalty is added to keep the updated policy close to a fixed reference policy πref , approximated as the difference in sequence log-probabilities: 
+
+cKL k = log πθ (sk | Q) − log πref (sk | Q), (14) where the sequence log-probability is length-normalized: 
+
+log πθ (sk | Q) = 1
+
+TkTkX 
+
+> τ=1
+
+log πθ (sk,τ | Q, s k,<τ ). (15) 
+
+Final loss. The per-sample loss combines the clipped sur-rogate objective with the KL penalty: 
+
+Lk(θ) = −J k(θ) + β · cKL k, (16) where β controls the strength of KL regularization. The final objective averages over all N = B · K samples in the batch: 
+
+LGDPO (θ) = 1
+
+N
+
+> B
+
+X
+
+> b=1
+> K
+
+X
+
+> k=1
+
+h
+
+−J b,k (θ) + β · cKL b,k 
+
+i
+
+, (17) where B is the batch size and K is the number of rollouts per input. 
+
+Parameter update. Parameters are updated via gradient descent with gradient-norm clipping: 
+
+θ ← θ − ηt · ∇θ LGDPO (θ)max 
+
+
+
+1, ∥∇ θ LGDPO (θ)∥2
+
+gmax 
+
+ , (18) where ηt is the learning rate at training step t and gmax is the gradient-norm clipping threshold. 
+
+6.2 PN-Rationales Dataset 
+
+In this section, we present the prompts used to generate SFT training data for the PN-Rationales dataset and the detailed dataset statistics. All prompts are provided in Figure 5 and 6 for clarity and reproducibility. Figure 7 shows examples of positive and negative rationale samples. To construct high-quality supervision signals, we design structured prompts that guide the model to produce three types of outputs: (i) detailed image descriptions, (ii) question-specific KG, and (iii) both positive and negative CoT rationales. These prompts are carefully formulated to enforce consistency in format and to encourage the extraction of semantically meaningful and minimally sufficient information. The dataset statistics are presented in Table 4. Image Description Prompt Template   
+
+> You are tasked with analyzing an image to generate a comprehensive and detailed description that can
+> support accurate reasoning and answer derivation.
+> Carefully examine the image and produce a self-contained description. This description must be sufficiently
+> detailed to allow a reader to infer all relevant information without viewing the image directly. Include all
+> observable elements such as objects, colors, sizes, positions, text, numbers, spatial relationships, and
+> background details. Enclose this description within <observation></observation> tags.
+
+## KG Generation Prompt Template 
+
+> Question: {Question} Description: {Description}
+> You are tasked with analyzing a question and its corresponding image description to construct a knowledge
+> graph that contains only the minimum sufficient information required to answer the question.
+> First, carefully review the provided description and identify only the entities and relationships that are directly
+> relevant to answering the question. Extract concise (entity, relationship, entity) tuples, ensuring that no
+> redundant or unrelated information is included. The selected tuples must be sufficient for someone to derive
+> the correct answer without needing access to the original description or image. Enclose all extracted tuples
+> within <KG></KG> tags. The required output format is:
+> <KG> (entity, relationship, entity), (entity, relationship, entity), ...</KG>
+
+Figure 5: Prompts used to generate image description and KG. 
+
+6.3 Training Hyperparameters 
+
+We train πθ using LoRA with rank r = 16 , scaling factor 
+
+αLoRA = 32 , and dropout 0.05 , applied on top of the SFT-initialized backbones. The RL optimizer uses a learning rate of 5 × 10 −7 with gradient-norm clipping at gmax = 1 .0 and mixed-precision training in bf16 . For each training ques-tion, we sample K = 4 rollouts, with a maximum of 1,024 
+
+new tokens per rollout for the standard rollout and KG-based rollout. The sampling is performed at temperature 0.7. The batch size is B = 20 questions per step, and the training runs for 1 epoch over the dataset. The KG length reference is set to Lref = 74 .8 tokens, pre-computed from the dataset. The length penalty is annealed via the λ-curriculum with 
+
+λmax = 1 .0 and a warmup ratio of 0.3, i.e., λ(t) reaches its maximum at 30% of the total training steps. The KL regu-larization coefficient is β = 0 .1, and the clipping threshold in the GDPO surrogate objective is εclip = 0 .2. The refer-ence policy πref is the frozen SFT checkpoint, which is fixed throughout RL training. All experiments use flash_attn 
+
+and gradient checkpointing, and are run on a single NVIDIA H100 (80GB) GPU with 1 node and 1 worker, with seed 42. Training one experimental setting takes approximately 4 days of wall-clock time. 
+
+6.4 Benchmarks and Metrics Details 
+
+We evaluate model performance across two domains: (i) gen-eral visual understanding and (ii) multimodal mathematical reasoning. 
+
+General Visual Understanding. We evaluate on MMMU-Pro (Yue et al. 2025) and MME (cogni-tion) (Fu et al. 2023). MMMU-Pro is a challenging benchmark that assesses cross-modal reasoning and subject-specific knowledge, presenting each question with ten candidate choices. In addition, it includes a vision-only setting in which all textual content is rendered directly within images, demanding robust visual comprehension in the absence of explicit linguistic cues. MME evaluates multimodal models across a broad spectrum of perception and cognition tasks, encompassing fine-grained visual understanding, optical character recognition, and common-sense reasoning, among others. We focus specifically on the cognition subset, which targets higher-order capabilities such as logical inference and numerical reasoning, rather than the perception subset, which evaluates low-level visual recognition skills such as object existence and attribute detection. Since KG representations are designed to capture relational and semantic structure rather than raw perceptual Positive Rationale Generation Prompt Template 
+
+> Question: {Question} KG: {KG} Correct Answer: {Answer}
+> You are tasked with analyzing a question, a corresponding knowledge graph, and the correct answer to
+> generate a clear and logically consistent reasoning trace.
+> First, carefully examine the knowledge graph tuples and identify how they relate to the question. Then,
+> construct a step-by-step reasoning process that explicitly references the relevant tuples. Where necessary,
+> incorporate appropriate background knowledge to bridge gaps and ensure the reasoning is complete. Your
+> reasoning should form a coherent logical chain that clearly demonstrates how the information from the
+> knowledge graph, combined with general knowledge, leads to the correct answer. Enclose the entire
+> reasoning process within <reasoning></reasoning> tags. The required output format is:
+> <reasoning> step-by-step reasoning here </reasoning>
+
+## Negative Rationale Generation Prompt Template 
+
+Question: {Question} KG: {KG} Incorrect Answer: {Wrong_Answer} Correct Answer: {Answer} 
+
+You are tasked with analyzing a question, a corresponding knowledge graph, an incorrect answer, and the 
+
+correct answer to produce a clear and logically grounded reasoning trace explaining why the incorrect 
+
+answer is wrong. 
+
+First, carefully examine the knowledge graph tuples and determine how they relate to the question. Then, 
+
+construct a step-by-step reasoning process that explicitly references the relevant tuples. Identify where the 
+
+incorrect answer fails by highlighting any missing information, incorrect assumptions, or misinterpretations of 
+
+the knowledge graph. Where necessary, incorporate appropriate background knowledge to clarify why the 
+
+incorrect reasoning is flawed and how the correct answer is properly supported. Your explanation should 
+
+clearly contrast the incorrect and correct conclusions, demonstrating how the available information leads to 
+
+the correct answer. Enclose the entire reasoning process within <reasoning></reasoning>  tags. The 
+
+required output format is: 
+
+<reasoning> step-by-step explanation here </reasoning> Figure 6: Prompts used to generate both positive and negative CoT rationales. details, the perception subset is less informative for eval-uating the quality of KG-based reasoning. The cognition subset, by contrast, requires the model to integrate multiple visual cues simultaneously, providing a rigorous testbed for assessing whether the generated KG supplies structured evidence that is both sufficient and non-redundant. 
+
+Multimodal Mathematical Reasoning. We evaluate on MathVerse (Zhang et al. 2024b), a benchmark com-prising diagram-centric problems presented across six vi-sual–textual variants. These variants are carefully designed to decouple reliance on visual inputs from language pri-ors, thereby enabling a fine-grained assessment of whether a model’s reasoning process is genuinely grounded in visual evidence rather than superficial textual patterns. This prop-erty makes MathVerse particularly well-suited to probing the practical utility of the KG generated by our method. 
+
+Evaluation Metrics. For MMMU-Pro and MathVerse, we report accuracy as the primary evaluation metric. For MME, we report the cognition score, defined as the sum of ACC and ACC+. Each image in MME is paired with two binary (yes/no) questions. ACC measures performance at the ques-tion level, computing the proportion of individually correct responses. ACC+ is a stricter image-level metric, award-ing credit only when both questions for a given image are answered correctly, thus penalizing inconsistent reasoning across question pairs. Together, ACC and ACC+ provide complementary views of model performance: ACC captures overall response correctness, while ACC+ assesses whether the model has genuinely understood the visual content rather than arriving at correct answers by chance. NEGATIVE RATIONALE 
+
+POSITIVE RATIONALE 
+
+Q: What type of 
+
+content does the 
+
+website advertised 
+
+in the background 
+
+provide? 
+
+A. movies 
+
+B. blogs 
+
+C. social media 
+
+D. music          
+
+> The question asks about the type of content provided by the website advertised in the background. The KG includes the tuple (WLMI 92.9,
+> website, "929wlmi.com") , indicating that the website belongs to the radio station WLMI 92.9 . Another tuple, (WLMI 92.9, broadcasts,
+> music), explicitly states that the station broadcasts music . Additionally, (WLMI 92.9, has_tagline, "ing's Greatest Hits!") suggests that
+> the station focuses on popular music, likely from past decades. Given that radio stations typically extend their content online through their
+> websites—especially music-focused stations—it is reasonable to infer that the website "929wlmi.com" provides music-related content, such
+> as streaming, playlists, or song information. Therefore, the correct answer is D. music.
+> The incorrect answer A. movies is wrong because it misinterprets the content provided by the website advertised in the background.
+> According to the KG, (WLMI 92.9, broadcasts, music) directly states that the radio station WLMI 92.9 broadcasts music . Additionally,
+> (WLMI 92.9, has_tagline, "ing's Greatest Hits!") suggests that the station focuses on popular music , likely from past decades, which
+> aligns with music broadcasting . The station’s website is listed as (WLMI 92.9, has_website, "929wlmi.com"), which would typically
+> serve as an extension of the radio station’s content, offering music-related information, streaming, playlists, and possibly artist news —
+> all related to music, not movies. There is no mention in the KG of movies, film content, or any related media. The incorrect answer ignores
+> the explicit connection to music and misattributes the website’s purpose to movies, which is unsupported by any evidence in the KG or
+> general knowledge about radio station websites. Therefore, the correct answer is D. music, as the KG and context clearly indicate music is
+> the primary content type.
+> WLMI 92.9
+> ing's Greatest Hits!
+> 929 wlmi.com
+> music
+> broadcasts
+> has tagline
+> has website
+
+# KG Figure 7: Positive and negative rationales derived from a question-specific KG. CoT reasonings are generated for both the correct answer and an incorrect answer. 
+
+7 Ablation Experiments 
+
+7.1 Standard Rollout Experimental Results 
+
+We further conduct inference under the standard rollout set-ting. In Table 5, standard rollout inference consistently out-performs KG-based rollout inference, and VisKG outper-forms the baselines in several settings, most notably under SFT(b) + GDPO with Qwen3-VL-8B-Instruct. In Table 7, the same pattern holds: standard rollout again outperforms KG-based rollout. 
+
+7.2 VisKG Inference Examples 
+
+Figure 8 shows qualitative examples of VisKG inference. 
+
+7.3 Training reward curves of Qwen3-VL-8B-Instruct 
+
+Reward trajectories collected under the standard rollout and KG-based rollout with GRPO and GDPO are further com-pared for Qwen3-VL-8B-Instruct, as shown in Figure 9. This comparison reveals a different pattern from that observed in Figure 4. For the Qwen2.5-VL-7B-Instruct backbone, GDPO exhibits more stable RL training than GRPO, since GRPO’s rewards deteriorate toward the end of training. In contrast, the results in Figure 9 show that GRPO and GDPO achieve comparably stable RL training. We attribute this difference to the larger number of parameters in Qwen3-VL-8B-Instruct, which appears to mitigate the instability otherwise observed with GRPO. This observation is consistent with findings re-ported in (Tan et al. 2025b), suggesting that models with more parameters tend to exhibit more stable RL training. While GRPO’s instability risk appears to diminish at larger parameter scales, GDPO maintains stable RL training across model scales, indicating that its stability does not depend on model size. 
+
+7.4 Cost Experiment 
+
+We further investigate the performance and cost of the VisKG training framework on the MME cognition subset, comparing inference using image captions versus KG representations, as shown in Table 6. The results show that cognition scores are Source Pos. Neg. 
+
+General Visual Reasoning 
+
+TabMWP ( ?) 794 185 OpenSpaces ( ?) 737 136 Spacellava ( ?) 531 405 ChartQA ( ?) 263 –A-OKVQA ( ?) 193 529 PlotQA ( ?) 170 –DVQA ( ?) 159 –FigureQA ( ?) 99 101 IconQA ( ?) 96 158 MapQA ( ?) 48 49 
+
+Subtotal 3,090 1,563 
+
+Math 
+
+Super-CLEVR ( ?) 384 –UniGeo ( ?) 366 1,002 CLEVR-Math ( ?) 363 –GeoQA+ ( ?) 225 610 Geometry3K ( ?) 174 518 GEOS ( ?) 14 42 
+
+Subtotal 1,526 2,172 
+
+Science Knowledge 
+
+PMC-VQA ( ?) 257 752 ScienceQA ( ?) 223 486 AI2D ( ?) 187 601 TQA ( ?) 171 501 VQA-RAD ( ?) 19 19 
+
+Subtotal 857 2,359 Total 5,473 6,094 Total samples: 11,567 
+
+Table 4: PN-Rationales dataset statistics. Pos. and Neg. de-note the number of positive and negative rationale samples per source. “–” indicates the source does not appear in that split. similar between the two representations, with no clear trend favoring either intermediate representation. In terms of cost, however, the average caption length exceeds the average KG length by approximately 20% in token count. 
+
+7.5 Analysis of KG Question-Specificity 
+
+Table 8 reports the triples overlap ratio and cognition score on the MME cognition subset, measuring how question-specific the generated KGs are. The overlap ratio is the proportion of shared triples between KGs generated from the same im-age under two different questions; a lower ratio indicates more question-specific generation. Across both backbones, SFT-only models consistently show higher overlap ratios and lower cognition scores than their GDPO- or GRPO-trained counterparts, indicating that SFT alone yields KGs with sub-stantial redundant, question-agnostic content. RL training consistently lowers the overlap ratio while raising cognition score, showing that it pushes the model away from generic, 
+
+Method Backbone MMMU-Pro MathVerse 
+
+Baselines 
+
+Vision-R1 Qwen2.5-VL-3B 34.9 57.3 
+
+Visionary-R1 Qwen2.5-VL-7B 27.4 45.0 Perception-R1 Qwen2.5-VL-3B-Inst. 36.8 52.1 Vision-SR1 Qwen2.5-VL-3B 40.8 45.8 Qwen2.5-VL-7B 40.7 54.5 
+
+Standard rollout inference 
+
+Qwen2.5-VL-7B-Inst. ZS / ZS + GDPO 34.2 / 37.9 49.2 / 50.7 SFT (n/p/b) 30.6 / 31.5 / 32.7 41.2 / 45.7 / 46.1 SFT (n/p/b) + GRPO 34.8 / 35.9 / 38.6 47.8 / 52.6 / 54.5 
+
+SFT (n/p/b) + GDPO 35.9 / 39.7 / 40.1 48.7 / 54.2 / 54.3 Qwen3-VL-8B-Inst. ZS / ZS + GDPO 35.1 / 39.9 49.7 / 51.8 SFT (n/p/b) 31.2 / 32.7 / 32.9 42.6 / 45.9 / 46.7 SFT (n/p/b) + GRPO 33.8 / 36.9 / 38.6 48.9 / 49.2 / 54.3 SFT (n/p/b) + GDPO 35.1 / 39.7 / 41.7 48.7 / 54.1 / 54.8 
+
+KG-based rollout inference 
+
+Qwen2.5-VL-7B-Inst. ZS / ZS + GDPO 24.5 / 28.3 37.9 / 40.8 SFT (n/p/b) 27.8 / 32.6 / 33.4 37.7 / 41.3 / 43.7 SFT (n/p/b) + GRPO 33.8 / 37.1 / 38.6 43.9 / 47.8 / 54.1 SFT (n/p/b) + GDPO 32.5 / 38.1 / 38.7 47.1 / 53.8 / 54.2 
+
+Qwen3-VL-8B-Inst. ZS / ZS + GDPO 29.7 / 30.8 46.1 / 48.5 SFT (n/p/b) 29.6 / 31.4 / 33.4 42.4 / 46.3 / 45.9 SFT (n/p/b) + GRPO 35.2 / 36.1 / 37.4 46.0 / 51.2 / 52.1 SFT (n/p/b) + GDPO 37.2 / 39.7 / 39.1 48.1 / 54.2 / 53.7 
+
+Table 5: Performance under different settings on MMMU-Pro and MathVerse. ZS denotes zero-shot inference. n, p, and b represent SFT using negative rationale samples, positive rationale samples, and both negative and positive rationale samples, respectively.                              
+
+> Backbone Method Cog. Score (Cap.) Cog. Score (KG) Avg. Cap. Len. Avg. KG Len.
+> Qwen2.5-VL-7B-Inst. SFT (n) + GDPO 544.78 543.69 70 52 SFT (p) + GDPO 568.92 566.2 56 57 SFT (b) + GDPO 585.28 589.47 89 62 Qwen3-VL-8B-Inst. SFT (n) + GDPO 621.94 627.35 67 50 SFT (p) + GDPO 649.48 654.3 55 60 SFT (b) + GDPO 683.73 684.72 80 55
+
+Table 6: Inference cost on the MME cognition subset under the KG-based rollout setting. Avg. Cap./KG Len.: average length of the generated caption/KG intermediate representa-tion. Cog. Score (Cap./KG): cognition score obtained from the caption/KG representation. overlapping KG content toward question-specific KGs that improve reasoning performance. Backbone Setting Commonsense Reasoning Numerical Calculation Text Translation Code Reasoning Cog. Score 
+
+ACC ACC+ ACC ACC+ ACC ACC+ ACC ACC+ 
+
+Standard rollout inference 
+
+Qwen2.5-VL-7B-Inst. ZS 80 60 77.5 55 95 90 87.5 75 620 ZS+GDPO 80.71 64.29 95 90 75 55 87.5 80 627.5 
+
+SFT (n) 78.54 57.2 73.2 47 92 84 87.1 71 590.04 SFT (p) 79.29 58.57 75 50 95 90 87.5 75 610.36 SFT (b) 80 60 75 50 95 90 87.5 75 612.5 SFT (n) + GRPO 52.4 7.6 65 43 52.5 5 55 17 297.5 SFT (p) + GRPO 75 60 60 27 62.5 29 52.5 20 386 SFT (b) + GRPO 80.2 68.3 92.5 85 85 70 67.5 40 588.5 SFT (n) + GDPO 80 60 77.5 54 95 87 87.5 71 612 SFT (p) + GDPO 80.28 59.4 77 50 95 88 85 76 610.68 SFT (b) + GDPO 80.24 61 77.5 52 91 90 87.5 75 614.24 Qwen3-VL-8B-Inst. ZS 82.14 67.14 72.5 60 87.5 75 95 90 629.28 ZS+GDPO 85 72.5 87.5 75 87.5 75 95 90 667.5 SFT (n) 81 70.43 82 70 81 68 91.2 82 625.63 SFT (p) 85 72.86 85 70 85 70 92.5 85 645.36 SFT (b) 85 72.86 87.5 75 85 70 95 90 660.36 SFT (n) + GRPO 80.65 64.8 70 60 20 0 33 17 345.45 SFT (p) + GRPO 74.92 63.9 55 23.5 85 65 62 43 472.32 SFT (b) + GRPO 86.38 75.61 90 74 85 70 97.5 95 673.49 SFT (n) + GDPO 84 72.8 83.18 70.4 82 69 91.37 82.5 635.25 SFT (p) + GDPO 85 73.67 86.38 72 86.2 73 93.78 83 653.03 SFT (b) + GDPO 85 73.19 88.2 75 87.3 75 95 90 668.69 
+
+KG-based rollout inference 
+
+Qwen2.5-VL-7B-Inst. ZS 47.14 20 85 75 77.5 55 47.5 35 442.14 ZS + GDPO 47.5 19 82.5 73 77.5 51 47.5 32 430 SFT (n) 61.43 22.86 72.5 45 95 90 57.5 15 459.29 SFT (p) 62.14 25.71 82.5 65 87.5 75 60 20 477.85 SFT (b) 64.29 32.86 82.5 70 95 90 57.5 20 512.15 SFT (n) + GRPO 62.37 43.77 87.5 75 87.3 74 63 35 527.94 SFT (p) + GRPO 69.22 42 80 65 93.2 91 65.2 36 541.62 SFT (b) + GRPO 70 49.12 90 85 88.2 83 71.23 50 586.55 VisKG (SFT (n) + GDPO) 65.43 41.26 84 70 90 81 68 44 543.69 VisKG (SFT (p) + GDPO) 63.19 34.71 92 88 92 90 67.3 39 566.2 VisKG (SFT (b) + GDPO) 66.44 41.43 93 85 92.1 87 72.5 52 589.47 
+
+Qwen3-VL-8B-Inst. ZS 46.43 31.43 75 65 67.5 35 70 55 445.36 ZS + GDPO 48 27 78.12 71 74.7 56 48.2 32 435.02 SFT (n) 64.29 37.14 85 70 47.5 0 72.5 50 426.43 SFT (p) 67.86 48.57 87.5 80 45 0 80 60 468.93 SFT (b) 78.57 61.43 95 90 87.5 75 87.5 75 650 SFT (n) + GRPO 63.55 36.71 80 60 42.5 20 62.8 38 403.56 SFT (p) + GRPO 68.16 52.44 85 84 43 10 85 72 499.6 SFT (b) + GRPO 74.98 65.1 95 90 92.5 85 92.5 85 680.08 VisKG (SFT (n) + GDPO) 82.47 65.38 90 80 83.1 65 86.4 75 627.35 VisKG (SFT (p) + GDPO) 83.1 72.4 88 85 82.8 67 91 85 654.3 VisKG (SFT (b) + GDPO) 79.3 65.82 95 90 92.3 85 92.3 85 684.72 
+
+Table 7: Performance on the MME cognition subset under different training settings. ZS denotes zero-shot inference. n, p, and b denote SFT with negative rationales, positive rationales, and both negative and positive rationales, respectively. Figure 8: Qualitative examples of VisKG inference, comparing results obtained using the KG intermediate representation and the image caption. Each example shows the input image and question, the generated intermediate representation (KG and caption), and the resulting model answer. Figure 9: Training reward curves of Qwen3-VL-8B-Instruct under standard and KG-based rollouts. The green and gray lines correspond to GDPO and GRPO, respectively. Top, middle, and bottom panels show models initialized with SFT on both rationales, positive rationales only, and negative rationales only, respectively. Backbone Method Triples Overlap Ratio (Avg.) Cog. Score 
+
+Qwen2.5-VL-7B-Inst. SFT (n) 29.68% 459.29 SFT (n) + GRPO 26.78% 527.94 SFT (n) + GDPO 23.19% 543.69 
+
+SFT (p) 27.92% 477.85 SFT (p) + GRPO 18.40% 541.62 SFT (p) + GDPO 22.95% 566.2 
+
+SFT (b) 28.42% 512.15 SFT (b) + GRPO 22.81% 586.55 SFT (b) + GDPO 26.70% 589.47 
+
+Qwen3-VL-8B-Inst. SFT (n) 27.41% 426.43 SFT (n) + GRPO 12.60% 403.56 SFT (n) + GDPO 18.39% 627.35 
+
+SFT (p) 28.92% 468.93 SFT (p) + GRPO 26.44% 499.6 SFT (p) + GDPO 28.51% 654.3 
+
+SFT (b) 29.48% 650 SFT (b) + GRPO 29.10% 680.08 SFT (b) + GDPO 28.59% 684.72 
+
+Table 8: Triples overlap ratio and cognition score on the MME cognition subset, measuring the question-specificity of generated KG.
