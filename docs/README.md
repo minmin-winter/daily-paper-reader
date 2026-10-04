@@ -6,73 +6,51 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-10-03
-- 运行时间：2026-10-03 22:12:29 UTC
+- 最新运行日期：2026-10-04
+- 运行时间：2026-10-04 22:27:16 UTC
 - 运行状态：成功
-- 本次总论文数：17
-- 精读区：3
-- 速读区：14
+- 本次总论文数：10
+- 精读区：0
+- 速读区：10
 
 ### 今日简报（AI）
-今日从17篇中精读3篇、速读14篇，重点聚焦统一多模态模型的训练优化与多轮视听推理。  
-最值得看的是两篇8.0分精读：用互对抗自训练+演化数据提升统一多模态模型，以及从位置级梯度冲突出发做位置感知调制。  
-普通读者可优先读这两篇精读；若关注应用，再速览7.0分的OmniSeek原生工具集成多轮视听推理。
-- 详情：[/202610/03/README](/202610/03/README)
+今日速读10篇多模态模型研究，精读挂零，焦点集中在统一多模态模型的训练与表征优化。最值得看的是对抗自训练与演化数据（7.0）以及位置解析的梯度冲突与位置感知调制（7.0），都在解决统一模型训练中的核心矛盾。普通读者可优先从这两篇入手，理解多模态模型为何“顾此失彼”。
+- 详情：[/202610/04/README](/202610/04/README)
 
 ### 精读区论文标签
-1. [Mutually Adversarial Self-Training with Evolving Data for Unified Multimodal Models](/202610/03/2609.36224v1-mutually-adversarial-self-training-with-evolving-data-for-unified-multimodal-models)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：统一多模态模型的对抗自训练后训练框架
-2. [Beyond Layers: Position-Resolved Gradient Conflict and Position-Aware Modulation for Unified Multimodal Models](/202610/03/2609.38485v1-beyond-layers-position-resolved-gradient-conflict-and-position-aware-modulation-for-unified-multimodal-models)  
-   标签：评分：8.0/10、query:balanced-mml
-   evidence：缓解统一多模态模型中理解与生成的梯度冲突
-3. [Multimodal Flow: Unified Flow Modeling of Language and Vision in Embedding Spaces](/202610/03/2609.40362v1-multimodal-flow-unified-flow-modeling-of-language-and-vision-in-embedding-spaces)  
-   标签：评分：8.0/10、query:unified-mm
-   evidence：共享流主干统一连续建模语言与视觉的统一架构
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [OmniSeek: Native Tool Integration for Multi-turn Audio-Visual Reasoning](/202610/03/2610.02181v1-omniseek-native-tool-integration-for-multi-turn-audio-visual-reasoning)  
+1. [Mutually Adversarial Self-Training with Evolving Data for Unified Multimodal Models](/202610/04/2609.36224v1-mutually-adversarial-self-training-with-evolving-data-for-unified-multimodal-models)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：统一多模态模型的后训练框架
+2. [Beyond Layers: Position-Resolved Gradient Conflict and Position-Aware Modulation for Unified Multimodal Models](/202610/04/2609.38485v1-beyond-layers-position-resolved-gradient-conflict-and-position-aware-modulation-for-unified-multimodal-models)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：统一多模态模型理解与生成冲突的位置感知调制
+3. [Rethinking Multi-Image Re-Representation in Multi-Image Understanding](/202610/04/2609.39363v1-rethinking-multi-image-re-representation-in-multi-image-understanding)  
    标签：评分：7.0/10、query:mm-reasoning
-   evidence：动态选择看或听以进行多轮音视频推理
-2. [Revisit to Segment: Working Memory Distillation for Reasoning Segmentation](/202610/03/2609.34863v2-revisit-to-segment-working-memory-distillation-for-reasoning-segmentation)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：面向推理分割的工作记忆蒸馏
-3. [Question-Specific Knowledge Graphs for Efficient Visual Reasoning](/202610/03/2609.35942v1-question-specific-knowledge-graphs-for-efficient-visual-reasoning)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：将视觉输入转为问题特定知识图谱以支持视觉推理
-4. [DualTrack: Synchronized speech-gesture generation via symmetric coupling of pretrained priors](/202610/03/2609.36624v1-dualtrack-synchronized-speech-gesture-generation-via-symmetric-coupling-of-pretrained-priors)  
+   evidence：多图理解需要在推理中组织跨图像视觉证据
+4. [Query, Align, and Distill: Navigation-Aware Cross-Modal Interaction for Efficient Vision-and-Language Navigation](/202610/04/2609.33097v1-query-align-and-distill-navigation-aware-cross-modal-interaction-for-efficient-vision-and-language-navigation)  
    标签：评分：6.0/10、query:native-multi
-   evidence：共享时间线上预训练语音与动作先验的对称耦合融合
-5. [OmniRoute: Mapping Temporal Semantic Evidence to Audio-Visual Token Budgets for Efficient Omnimodal Large Language Models](/202610/03/2609.37052v1-omniroute-mapping-temporal-semantic-evidence-to-audio-visual-token-budgets-for-efficient-omnimodal-large-language-models)  
+   evidence：将可导航视觉证据与语言指令对齐的跨模态交互
+5. [ConvCue: Complementary Visual Inductive Biases for Vision-Language Models](/202610/04/2609.34196v1-convcue-complementary-visual-inductive-biases-for-vision-language-models)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：用冻结CNN特征增强VLM视觉表示以提升细粒度视觉推理
+6. [Joint and Cross-Modal Video-Audio Generation and Editing: A Unified Formulation and Design Taxonomy](/202610/04/2609.34381v1-joint-and-cross-modal-video-audio-generation-and-editing-a-unified-formulation-and-design-taxonomy)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：面向全模态大模型的音视频token预算分配
-6. [Codebook-Guided Cross-Modal Knowledge Distillation for Structurally Heterogeneous Features](/202610/03/2609.37243v2-codebook-guided-cross-modal-knowledge-distillation-for-structurally-heterogeneous-features)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：对齐结构异构模态特征的跨模态蒸馏
-7. [Video-RSI: Recursive Self-Improvement of Video Understanding Agents via Harness Evolution](/202610/03/2609.37950v1-video-rsi-recursive-self-improvement-of-video-understanding-agents-via-harness-evolution)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：通过主动视频调查实现视频理解智能体的递归自我改进
-8. [Imagine3D-LLM: Teaching MLLMs to Imagine 3D Scenes Before Answering](/202610/03/2609.38177v1-imagine3d-llm-teaching-mllms-to-imagine-3d-scenes-before-answering)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：融合多视角与三维几何特征进行多模态推理
-9. [When Integral Meets Decomposition: A Signal-Level Self-Supervised Feature Decompose Paradigm for Multi-Modal Image Fusion](/202610/03/2609.39004v1-when-integral-meets-decomposition-a-signal-level-self-supervised-feature-decompose-paradigm-for-multi-modal-image-fusion)  
+   evidence：音视频联合生成的统一形式化
+7. [Multimodal Target Speaker Extraction: Towards Unified Speaker Cues Across Modalities](/202610/04/2609.35613v1-multimodal-target-speaker-extraction-towards-unified-speaker-cues-across-modalities)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：基于共性与模态特有特征分解的多模态图像融合
-10. [OP-CAD: On-Policy Clean-Audio Distillation for Robust Audio-Visual Reasoning](/202610/03/2609.39150v1-op-cad-on-policy-clean-audio-distillation-for-robust-audio-visual-reasoning)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：通过特权自蒸馏实现噪声下的鲁棒音视频推理
-11. [Mutual Equilibrium: Multimodal Representation Learning through Reciprocal Feedback](/202610/03/2609.39456v1-mutual-equilibrium-multimodal-representation-learning-through-reciprocal-feedback)  
+   evidence：目标说话人提取中跨模态统一说话人线索
+8. [Text-Video Retrieval via Multi-Dimensional Saliency Assessment and Granularity-Aware Query Decomposition](/202610/04/2609.38949v1-text-video-retrieval-via-multi-dimensional-saliency-assessment-and-granularity-aware-query-decomposition)  
    标签：评分：6.0/10、query:native-multi
-   evidence：相互反馈架构，耦合两种不同模态的嵌入
-12. [Spike-driven Vision-Language-Action Model](/202610/03/2609.39514v1-spike-driven-vision-language-action-model)  
+   evidence：通过学习联合嵌入空间连接视觉与文本模态
+9. [Spherical Interpolation for Backward-Compatible Multimodal Representations](/202610/04/2609.39836v1-spherical-interpolation-for-backward-compatible-multimodal-representations)  
    标签：评分：6.0/10、query:native-multi
-   evidence：多模态视觉-语言-动作模型的端到端直接训练
-13. [CoVisco: Codec-Native Vision Encoder with Native Token Compression for Unified Image-Video Understanding](/202610/03/2609.39924v1-covisco-codec-native-vision-encoder-with-native-token-compression-for-unified-image-video-understanding)  
+   evidence：在共享归一化嵌入空间中对齐跨模态表征
+10. [EWAM: Emergent Depth-Wise Specialization in a Unified Embodied Model -- From Semantic Understanding through Visual Foresight to Action](/202610/04/2609.39973v1-ewam-emergent-depth-wise-specialization-in-a-unified-embodied-model----from-semantic-understanding-through-visual-foresight-to-action)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：面向统一图像视频理解的原生编码器
-14. [PRISM: A Category-Theoretic Framework for Measuring and Refining Multimodal Analogies](/202610/03/2610.01383v1-prism-a-category-theoretic-framework-for-measuring-and-refining-multimodal-analogies)  
-   标签：评分：6.0/10、query:mm-reasoning
-   evidence：度量与优化多模态类比中的跨模态关系对齐
+   evidence：统一具身模型中非对称联合注意力平衡各专家
 
 
 <div class="dpr-home-promo-card">
