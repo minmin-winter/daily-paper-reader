@@ -1,0 +1,420 @@
+Title: Kinematics-Induced Multimodal 3D Human Pose Estimation with Subject-Level Privacy
+
+URL Source: https://arxiv.org/pdf/2610.02943v1
+
+Published Time: Mon, 05 Oct 2026 00:47:32 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# KINEMATICS -I NDUCED MULTIMODAL 3D H UMAN POSE 
+
+# ESTIMATION WITH SUBJECT -L EVEL PRIVACY 
+
+Kaushik Bhargav Sivangi 
+
+Bio-AIm Lab School of Computing Science University of Glasgow 2836578s@student.gla.ac.uk 
+
+Fani Deligianni 
+
+Bio-AIm Lab School of Computing Science University of Glasgow fani.deligianni@glasgow.ac.uk 
+
+## ABSTRACT 
+
+Multimodal 3D Human Pose Estimation (3D HPE) combines complementary information from RGB, LiDAR, and mmWave radar, but models trained on correlated observations from the same individuals, raise privacy risks overlooked by record level analysis. We present a unified framework for multimodal 3D HPE that couples kinematics-induced sensor fusion with subject level privacy auditing and private training. First, our multimodal model aligns modality specific joint representation, injects skeletal structure and adaptively aggregates complementary sensor evidence for accurate pose prediction. Second, we formulate a black-box subject membership inference attack for 3D HPE, complemented by an empirical pointwise maximal leakage analysis, which characterizes how individual attack score outcomes change inference about the membership outcome. Third, we instantiate user-level differential privacy via Action Temporal Stratification, a population weighted within-subject sampling strategy that enforces action and temporal coverage. We evaluate our framework on the MM-Fi dataset across three diverse experimental protocols. Source-code will be released upon acceptance. 
+
+## 1 Introduction 
+
+Three dimensional human pose estimation (3D HPE) is a central problem in computer vision, supporting applications in healthcare monitoring, rehabilitation, sports analysis, and human computer interaction. The majority of existing approaches operate on RGB video, benefiting from large scale image datasets and mature two stage pipelines that detect 2D keypoints before lifting them into 3D space [1, 2, 3, 4, 5, 6, 7, 8, 9], with more recent methods incorporating temporal convolutions, transformers, kinematic priors, and diffusion based refinement [10, 11, 12, 13, 14, 15]. However, RGB model deployment remains limited in unconstrained settings such as hospitals and assisted living environments due to performance degradation under occlusions, poor illumination, viewpoint variations and privacy-concerns. [2, 16]. Because no single modality is reliable across all conditions, multimodal systems combining RGB, LiDAR, and millimeter-wave radar have emerged to leverage their complementary strengths [17, 18, 19]. However, effectively inte-grating these heterogeneousness modalities remains challenging. It requires resolving the differing feature distributions and noise characteristics of RGB, LiDAR, and radar into a common semantic space, while retaining the complementary, modality-specific evidence each sensor provides [20, 21, 17, 19]. A second, underexplored, concern in this setting is privacy. Human pose data captured through RGB, LiDAR, or radar can be linked back to individual subjects, yet the computer vision community has repeatedly been shown to overlook or mischaracterize this risk [22, 23, 24]. Differential privacy (DP) provides a principled and mathematically grounded framework [25] but applying it to visual prediction tasks via DP stochastic gradient descent (DP-SGD) incurs substantial utility loss [26, 27, 28, 29]. Moreover, standard record-level DP protects individual samples but not the repeated participation of a subject across many records. This is especially problematic for LiDAR and radar-based human motion, whose four-dimensional spatio-temporal sequences are strongly correlated across frames from the same subject, so record-level guarantees can substantially understate an individual’s true privacy risk [30, 31]. Despite growing interest in both multimodal pose estimation and privacy preserving learning, the two problems have largely been studied in isolation. Audits of what a trained multimodal pose model reveals about its subjects remain arXiv:2610.02943v1 [cs.CV] 2 Oct 2026 Running Title for Header scarce, with prior privacy risk analysis in this space typically framed as membership or attribute inference under record level assumptions [32, 28]. This leaves open the question of how to design a multimodal pose estimation framework whose privacy is assessed and enforced at the level of the subject rather than the observation, and whether the resulting protection can be quantified beyond aggregate membership accuracy. In this work, we present a unified framework that couples kinematics induced multimodal fusion with subject level privacy auditing and private training for 3D-HPE. Our contributions are threefold: i) First, we introduce a kinematics-induced fusion module featuring a dual-track design with adaptive gating that aligns modality-specific joint represen-tations from RGB, LiDAR, and radar, and injects skeletal structure through fixed anatomical connectivity combined with learned joint dependencies. It adaptively aggregates the resulting evidence into a shared representation that outperforms each individual modality and achieves state-of-the-art performance. ii) Second, we formulate a black box subject level membership inference attack tailored to the regression nature of HPE and complement it with an empirical pointwise maximal leakage analysis incorporating Dirichlet smoothing [33], which characterizes how individual attack outcomes shift an adversary’s belief about subject membership, offering a finer grained view of leakage than threshold based attack metrics alone. iii) Third, we instantiate differential privacy at the subject rather than the sample level, coupled with private quantile-based adaptive clipping , following the general user level formulation of [31] and the correlated sampling perspective of [30]. Furthermore, we introduce Action Temporal Stratification , a population weighted within subject sampling strategy that preserves an unbiased subject gradient while enforcing coverage across actions and time. 
+
+## 2 Related Work 
+
+2.1 3D HPE using multimodal sensors 
+
+RGB based 3D HPE has become a central research direction in computer vision, largely driven by the availability of large scale image and video datasets and well established 2D pose detectors. Early approaches typically adopted a two-stage pipeline: first detecting 2D keypoints, then lifting these 2D poses into 3D space[3, 4, 5, 6, 7, 8, 9], with recent work using temporal convolutions, transformers, kinematic priors, and diffusion models to model spatial-temporal pose structure [10, 11, 12, 13, 14, 15]. Despite strong benchmark performance, RGB-based methods remain sensitive to occlusion, illumination, resolution, viewpoint changes, and scene clutter because they do not directly observe 3D geometry. LiDAR and mmWave Radar have been explored as complementary sensing modalities for 3D HPE. LiDAR provides explicit 3D geometry and illumination invariance, enabling long-range markerless motion capture and robust 3D HPE from point clouds [34, 35, 36, 37]. However, LiDAR point clouds of humans are often sparse, incomplete, and sensitive to distance, self-occlusion, and sensor placement. mmWave Radar offers additional advantages under poor lighting and partial occlusion, and has been used for skeletal pose estimation, mesh recovery, diffusion-based pose estimation, and multi-view sensing [38, 39, 40, 41, 42]. Yet Radar point clouds remain extremely sparse, noisy, and anatomically coarse compared with RGB and LiDAR observations. Multimodal 3D HPE aims to combine these complementary cues for improved robustness and accuracy. Prior work has explored RGB-LiDAR pose estimation and multimodal human sensing datasets such as mRI and MM-Fi, which provide synchronized sensor streams for evaluating individual modalities and fusion strategies [17, 18, 19]. However, most multimodal systems require multiple sensors during inference, increasing hardware cost, calibration complexity, synchronization overhead, and deployment constraints. This motivates teacher-student settings in which a multimodal teacher learns from complementary sensors during training, while a single-modality student performs efficient inference using only one available sensor. 
+
+2.2 Privacy-preservation in computer vision 
+
+Growing evidence indicates that privacy preservation within computer vision community has frequently been ignored or misunderstood [24, 23]. The field has largely relied on fragmented, improvised anonymization techniques lacking formal guarantees. Rigorous alternatives such as differential privacy (DP) offer mathematical bounds, yet applying standard DP stochastic gradient descent to visual prediction tasks incurs a substantial utility loss [26]. Vision models suffer due to severe long-tail class imbalance that amplifies noise on minority classes, ie. rare poses, high dimensionality that reduces the signal-to-noise ratio of the gradient vectors [29, 27], and continuous pixel values that create non-smooth loss landscapes violating Lipschitz continuity [29]. Consequently, DP-SGD performance relies critically on loss smoothness, dimensionality, and clipping calibration [43, 28]. Furthermore, it has been increasingly recognized that standard record level DP is insufficient when training data contains strong temporal correlations or multi sample contributions from individual subjects [30, 31, 44]. This concern 2Running Title for Header 
+
+Figure 1: Overall framework of the proposed privacy aware multimodal 3D HPE method. RGB, LiDAR, and mmWave radar keypoint representations are integrated through the kinematics induced fusion module to predict the 3D pose. The model is trained on Action Temporal Stratified Subject level DP, while the final model is attacked through subject membership inference and empirical pointwise maximal leakage. is particularly acute for LiDAR and Radar based human motion signatures, which are inherently four dimensional spatio-temporal point cloud sequences, with each subject contributing frames exhibiting substantial temporal autocorrelation. This paradigm requires user level, rather than sample level, privacy protection, using advanced mechanisms such as correlated sampling to handle structured per-user dependencies [30]. 
+
+## 3 Methodology 
+
+3.1 Overall Architecture 
+
+The proposed architecture employs a heterogeneous modality specific encoders followed by a kinematics induced multimodal fusion module for 3D HPE. We utilize heterogeneous backbones to extract modality-specific joint rep-resentations: a DSTFormer-based encoder for RGB derived 2D keypoint sequences, and PointTransformerV2-based encoders for LiDAR and Radar point clouds. The modality specific representations are subsequently integrated through our kinematics induced fusion module for multimodal 3D HPE. This module uniquely maintains a modality specific joint representations together with shared fusion tokens, refining modality specific features through skeletal priors while simultaneously updating the shared representation through adaptive gating. This hierarchical design allows modality contributions to vary across anatomical joints and input samples through joint wise adaptive fusion weights. To preserve articulated structure, learnable joint queries are processed by a transformer-based keypoint head to produce one token for each of the J = 17 body joints [45]. The multimodal model predicts the final 3D pose from these joint tokens using a regression head. The overall architecture is given in Figure 1. 
+
+3.2 Fusion Module 
+
+To effectively integrate LiDAR, Radar, and RGB modalities, we design a kinematics-induced fusion module that operates in three levels: modality alignment, kinematic-token fusion, and joint-wise aggregation. This architecture preserves modality-specific characteristics while progressively extracting a shared representation consistent across sensors and aware of skeletal constraints. 3Running Title for Header 
+
+Modality Alignment: The three modalities exhibit different feature distributions due to their sensing mechanisms. LiDAR captures geometric structure, Radar offers sparse but robust measurements in any environment, and RGB provides rich visual and motion cues. Fusing these heterogeneous features can lead to unstable optimization and poor cross-modal agreement. We address this through a lightweight alignment stage that performs cross-modal calibration. Let FL, F R, F I ∈ RJ×D denote the features extracted from LiDAR, Radar and RGB derived keypoint backbone where 
+
+J is the number of joints and D is the feature dimension. We append a learnable modality embedding em to each stream and apply multi-headed attention (MHA) jointly across the three modalities at each joint location which is given as: 
+
+˜Fm = Fm + em, m ∈ L, R, I 
+
+[XL, X R, X I ] = [ FL, F R, F I ] + M HA ([ ˜FL, ˜FR, ˜FI ]) (1) This interaction encourages the three streams to align at identical anatomical locations, allowing each modality to incorporate complementary evidence before the primary fusion stage. 
+
+Kinematic Injection and Dual Track Design: Post alignment, we employ a dual track design that maintains modality specific joint features alongside shared fusion tokens. The modality specific joint features retain local evidence from each sensor, while the shared tokens accumulate information that is jointly supported across all modalities. Within each stream, joint features are first refined via a kinematic propagation mechanism based on the human skeleton structure. Let Xm ∈ RJ×D denote the modality specific joint features for modality m. Based on [14], we define a modality dependent affinity matrix by combining the fixed skeletal adjacency Aske with a learnable residual adjacency ˆAm. This is then symmetrized to encode both known anatomical connectivity and learned long-range joint dependencies. We specifically update the kinematic refinement with the shared token which overall constitutes to calculating a gating coefficient. Formally, 
+
+Am = (Aske + ˆAm) + ( Aske + ˆAm)T
+
+2
+
+Gm = σ(M LP ([ Xm; S])) 
+
+Hm = Xm + Am(Gm ⊙ Xm)
+
+(2) where S is the initialized shared token ( S ∈ RK×D ), Gm is an adaptive gating coefficient. This allows each modality to refine its joint representation in a structure-aware manner. Moreover, the gate is adjusted by current shared representation, implying the amount of kinematic refinement is not fixed and adapts according the cross-modal fusion state of the sample. The modality specific features are then fused at each joint through adaptive weights. The model predicts per-joint fusion coefficients from the features themselves, allowing the contribution of each modality to vary across body parts and samples. This is given as: 
+
+F = X
+
+> m
+
+αm ⊙ Hm; X
+
+> m
+
+αm = 1 (3) where the fusion weights αm are produced by a lightweight MLP followed by softmax across modalities. This enables the contribution of each modality to adapt across anatomical joints and input samples. The shared fusion tokens S are updated by attending to the fused representation 
+
+S′ = S + M HA (S, F, F ) (4) The shared tokens act as a cross-modal information pool. Since it receives information from fused anatomical representation, it gradually accumulates the consensus level information. The shared tokens are then fed back to each modality stream through cross-attention given as: 
+
+∆m = M HA (Hm, S ′, S ′)
+
+X′ 
+
+> m
+
+= Xm + Ψ([ Hm, F, ∆m]) (5) where Ψ( ·) denotes MLP layer. This ensures each of the modality-specific feature are more informative and cross-modally aware. We finally obtain the modality specific joint features X′
+
+> m
+
+, together with shared token S′. A final 4Running Title for Header joint-wise weighted fusion is then applied to produce the final fused representation: 
+
+Ff inal = X
+
+> m∈L,R,I
+
+αf inal m ⊙ X′ 
+
+> m
+
+(6) This final representation summarizes the complementary strengths of the three modalities while preserving the anatomi-cal consistency through kinematic refinement. 
+
+3.3 Action Temporal Stratified Subject-Level Differential Privacy 
+
+Multi-modal human pose dataset contain many observations contributed by the same subject, including temporally overlapping windows within individual actions. A record level DP mechanism that treats each temporal window as an independent privacy unit protects the inclusion or removal of one window, but does not directly protect the inclusion or removal of a subject’s complete contribution. Towards this, we instantiate subject level differential privacy where we treat each subject’s entire records as the privacy unit following the general user wise formulation of [31] and prior user level private training with multiple samples per user [30]. For our setting, all the multi-modal pose windows belonging to one subject constitute a single privacy unit. 
+
+Subject-level Neighborhood: Let the training dataset consist of N subjects, 
+
+D =
+
+> N
+
+]
+
+> s=1
+
+Ds, Ds = {zs, 1, . . . , z s,M s }, (7) where zs,i denotes one multimodal pose window and Ms is the number of available windows for subject s. Two datasets are neighbors if they differ by the complete contribution of one subject. 
+
+D′ = D \ D s. (8) 
+
+Differential Privacy: A randomized training mechanism M satisfies subject-level (ϵ, δ )-differential privacy if, for every neighboring D, D′ and measurable output set O,
+
+Pr[ M(D) ∈ O ] ≤ eϵ Pr[ M(D′) ∈ O ] + δ. (9) This is the standard differential privacy definition [25], with neighborhood specialized to complete subject removal rather than removal of a single pose window. 
+
+Subject-wise private gradient: At private optimization step t, each of the N subject slots is included independently with probability ρ,
+
+It,s ∼ Bernoulli( ρ), St = {s : It,s = 1 }. (10) This constitutes Poisson sampling at the protected subject level. For each sampled subject, K pose windows are used to construct one subject-gradient estimate gt,s and clipping is applied only after this within subject aggregation [31], where multiple records belonging to a sampled user are first averaged into one user contribution. The resulting subject vector is clipped once with a global ℓ2 bound Ct,
+
+¯gt,s = gt,s min 
+
+
+
+1, Ct
+
+∥gt,s ∥2
+
+
+
+, ∥¯gt,s ∥2 ≤ Ct. (11) The privatized aggregate is 
+
+egt = 1
+
+ρN 
+
+" X
+
+> s∈S t
+
+¯gt,s + σg Ctξt
+
+#
+
+, ξt ∼ N (0 , I ), (12) where ρN is the public expected number of sampled subjects. Since subsequent optimizer operations depend only on privatized gradients, they are post-processing of the private mechanism [25]. To avoid manual tuning of this hyperparameter, we adapt the private quantile-based adaptive clipping mechanism from [46] to complete subject gradients, as detailed in Appendix ?? .5Running Title for Header 
+
+Why stratify windows within a subject? Uniform within-subject sampling provides an unbiased estimate of a subject’s mean gradient, but pose sequences exhibit substantial semantic and temporal redundancy. With a finite record budget K, a random draw may therefore over-represent a frequently occurring action or a short temporal region while missing other behaviors of the same subject. Such heterogeneous sampling can increase stochastic-gradient variance, motivating stratified sampling in stochastic optimization [47, 48]. For fixed parameters θ, let the complete pre-clipping gradient of subject s be 
+
+μs(θ) = 1
+
+Ms
+
+X
+
+> z∈D s
+
+∇θ ℓ(θ; z). (13) Our goal is to approximate μs(θ) using only K ≪ Ms windows without changing the intended complete subject mean gradient. We therefore partition Ds by action and temporal position and construct the population-weighted estimator 
+
+gATS  
+
+> s
+
+=
+
+> Hs
+
+X
+
+> h=1
+
+Ms,h 
+
+Ms
+
+gs,h , (14) where Ms,h is the population of stratum h and gs,h is its sampled mean gradient. As proven in Appendix ?? (Lemma 1), population weighting ensures an unbiased pre-clipping subject gradient in expectation, enforcing robust action and temporal coverage without altering the true subject mean. In particular, 
+
+EgATS  
+
+> s
+
+| D s, θ  = μs(θ), (15) Thus, ATS changes how the within subject sampling budget is allocated, rather than changing the intended pre clipping gradient in expectation. A formal derivation of this result is provided in Appendix ?? .
+
+Action Temporal Stratification (ATS): For subject s, we partition the legal windows into disjoint and exhaustive strata, 
+
+Ds =
+
+> Hs
+
+]
+
+> h=1
+
+Ds,h , Ms,h = |D s,h |,
+
+> Hs
+
+X
+
+> h=1
+
+Ms,h = Ms. (16) Strata are constructed using action identity and chronological position within each action. In practice, we first allocate sampling slots across non-empty actions and subsequently divide each action sequence into contiguous temporal bins. Let As be the number of non-empty actions for subject s. We reserve one sampling slot for every action and distribute the remaining Rs = K − As slots approximately in proportion to proportion to the number of windows in each action. For an action a containing Ms,a windows, define 
+
+qs,a = Rs
+
+Ms,a 
+
+Ms
+
+, ns,a = 1 + ⌊qs,a ⌋ + ∆ s,a , (17) where ∆s,a ∈ { 0, 1} is assigned to actions with the largest fractional remainders such that P 
+
+> a
+
+ns,a = K. Windows within each action are sorted chronologically and divided into contiguous temporal bins according to allocated number of slots ns,a .More generally, suppose ns,h ≥ 1 samples are drawn uniformly from stratum h, with 
+
+> Hs
+
+X
+
+> h=1
+
+ns,h = K. (18) The mean gradient within the sampled stratum is 
+
+gs,h = 1
+
+ns,h ns,h 
+
+X
+
+> j=1
+
+∇θ ℓ(θ; Zs,h,j ), (19) where Zs,h,j is sampled uniformly from Ds,h . Our Action Temporal Stratified estimator is 
+
+gATS  
+
+> s
+
+=
+
+> Hs
+
+X
+
+> h=1
+
+Ms,h 
+
+Ms
+
+gs,h . (20) Equivalently, every selected draw from stratum h receives weight 
+
+ws,h,j = Ms,h 
+
+Msns,h 
+
+. (21) 6Running Title for Header Population weighting allows us to enforce action and temporal coverage without assigning disproportionate objective weight to smaller strata. Importantly, ATS modifies only the construction of the pre-clipping subject gradient. The resulting vector is still clipped once at the subject level as in Eq.11. Consequently, its contribution remains bounded by 
+
+Ct, while the outer Bernoulli subject sampling and Gaussian mechanism remain unchanged. Appendix ?? (Proposition 1) formally establishes that replacing uniform sampling with ATS does not alter the outer subject-level privacy accounting or require modifications to our Rényi differential privacy composition. For fixed ρ, effective noise multiplier σ, total private steps T ,δ, and adaptive clipping configuration, ATS uses the same subject level privacy accounting as random within subject sampling. We provide the formal privacy argument in Appendix ?? . We adapt private adaptive subject level clipping following [46]; σg in Eq.12 denotes the resulting gradient-noise multiplier after jointly accounting for the private clipping-count query. We use Rényi differential privacy to compose the repeated sampled gaussian mechanisms [49]. The complete adaptive-clipping derivation, noise calibration are provided in Appendix ?? .
+
+3.4 Subject Level Membership Inference and Pointwise Maximal Leakage 
+
+We evaluate membership evidence using the same subject-level units from private training. While membership inference measures whether an adversary can distinguish training from non training subjects, pointwise maximal leakage (PML) characterizes how individual score outcomes shift membership beliefs. 
+
+Threat model and membership experiment: Following the privacy game formulation of [50] and the subject membership setting from [51], let Str denote the subjects included in the main training pool and define indicator as 
+
+Bs = 1{s ∈ S tr }. (22) Membership only denotes inclusion in the training dataset. The attacker has prediction only access to the fixed final model fθT and Q query windows from the target subject, together with the 3D pose annotations. The adversary does not have access to model parameters, gradients, intermediate features, or metadata that would reveal any membership. This is a ground truth aware black-box threat model. Membership labels are defined externally by the experiment split and are never obtained from the trained checkpoint. 
+
+Subject level membership score: As 3D HPE is a regression problem, we use prediction error as the membership inference signal[52, 32]. For each query window i, we compute the MPJPE error ei to derive the subject-level membership inference score SQ:
+
+SQ(s) = − 1
+
+Q
+
+> Q
+
+X
+
+> i=1
+
+ei (23) For each subject, the Q queried windows produce a score where a higher value corresponds to a lower pose error and stronger membership evidence under this attack. We use subject level ROC-AUC as the primary threshold independent metric. For threshold-based evaluation, we define ˆBs = 1 {SQ(s) ≥ τ }, where τ is selected by stratified subject level cross fitting using balanced accuracy on remaining folds. 
+
+Empirical Pointwise Maximal Leakage: While MIA measures how well the attack scores distinguish about the membership class, PML measures the increase in inference confidence of the adversary associated with that particular outcome. We define the audit game with a balanced membership prior as P (B = 0) = P (B = 1) = 1 /2 [33]. Since 
+
+SQ is continuous, we use a small set of fixed score boundaries, and this is declared independently of the evaluated scores, to obtain the discrete evidence variable Y ∈ { 0, . . . , H − 1}. Let nb,h be the number of subjects with membership label b and let score lie in bin h, and Nb = P 
+
+> h
+
+nb,h . To prevent zero probability estimates in small subject setting, we use Dirichlet-1/2 smoothing: 
+
+ˆpb(h) = nb,h + 12
+
+Nb + H
+
+> 2
+
+. (24) For the balanced binary membership bit, the PML[33] definition specializes as: 
+
+ℓ(B → h) = log 2 max {ˆp0(h), ˆp1(h)}
+
+ˆp0(h) + ˆ p1(h) , 0 ≤ ℓ(B → h) ≤ log 2 . (25) A value of zero denotes that the observed outcome does not change the balanced membership belief, whereas log 2
+
+corresponds to complete disclosure of the membership variable. As smoothing assigns positive probability even to bins unobserved in both classes, the primary empirical summary takes the maximum only over bins containing at least one observed subject. 7Running Title for Header                                                                                                                         
+
+> Model Modality Random Cross-Environment Cross-Subject MPJPE ↓PA-MPJPE ↓MPJPE ↓PA-MPJPE ↓MPJPE ↓PA-MPJPE ↓
+> Protocol 3: All Activities
+> Existing Methods
+> MM-Fi [19] RGB 279.0 81.2 288.6 84.1 285.3 81.9 MM-Fi [19] LiDAR 92.5 61.5 303.8 133.0 103.8 61.5 MM-Fi [19] Radar 117.0 57.3 161.6 73.7 129.7 60.0 MM-Fi [19] RGB+LiDAR 87.5 59.8 192.1 89.6 104.6 62.1 X-Fi [20] RGB 93.9 60.3 ––––X-Fi [20] LiDAR 167.1 103.2 ––––X-Fi [20] Radar 127.4 69.8 ––––X-Fi [20] RGB+LiDAR 93.0 59.7 ––––X-Fi [20] RGB+Radar 88.8 57.3 ––––X-Fi [20] LiDAR+Radar 109.8 63.4 ––––X-Fi [20] RGB+LiDAR+Radar 88.4 57.2 ––––
+> Our Implementations
+> PointTransformerV2 LiDAR 46.24 36.13 60.70 40.12 55.28 38.21 PointTransformerV2 Radar 61.09 45.27 78.42 58.58 61.80 47.11 DSTFormer RGB 44.34 32.84 63.30 48.03 48.70 36.87 Fusion RGB+LiDAR+Radar 38.88 29.45 49.89 40.03 37.65 26.04
+
+Table 1: Comparison on Protocol 3 using all activities. Lower MPJPE and PA-MPJPE indicate better performance. 
+
+bℓ obs  
+
+> max
+
+= max  
+
+> h:n0,h +n1,h >0
+
+ℓ(B → h). (26) This is empirical estimate for the specified MIA and is not to be interpreted as a formal guarantee. 
+
+## 4 Experimental Results 
+
+4.1 Results 4.1.1 Effect of Multimodal Fusion 
+
+The main experimental setup is described in Appendix 6. As shown in Table 1, under protocol 3, which considers all activities, the proposed fusion model achieves the lowest MPJPE scores across all three evaluation splits. Compared with the strongest unimodal implementation in each split, fusion reduces MPJPE by 5.46mm, under random split, 10.81mm under cross environment split and 11.05mm under cross subject split. The larger improvements under cross environment and cross subject settings suggest that combining complementary information from RGB, LiDAR, and Radar is particularly beneficial under distribution shifts. Results for protocols 1 and 2 are provided in Appendix 6.2, while additional modality ablations and comparisons with a BeV based fusion model are presented in Appendix 6.3, 6.4 respectively. 
+
+4.1.2 ATS Subject Level DP and Attack inference 
+
+Table 2 demonstrates the subject-level privacy-utility tradeoff. Stronger DP suppresses membership evidence: ϵ = 1 
+
+yields near chance ROC-AUC and zero empirical PML at a sever utility cost. As ϵ increases pose accuracy improves alongside attack distinguishability. The non-private model ( ϵ = ∞) achieves the best MPJPE but also the strongest membership signal, with 7 out of the 8 held out subjects falling in the higher error half of the attack scores. With only 8 subjects held-out, only the non-private model and ϵ = 200 are individually distinguishable from chance. PML changes more coarsely than ROC-AUC as it relies on discretized score outcomes. 8Running Title for Header                       
+
+> ϵMPJPE (mm) ↓ROC-AUC Empirical PML (nats)
+> 11081.32 0.48 0.0 16 314.85 0.59 0.14 64 278.58 0.64 0.14 100 269.86 0.65 0.29 200 247.72 0.73 0.29
+> ∞37.65 0.83 0.44
+
+Table 2: Privacy–utility and empirical leakage results under the MM-Fi Protocol 3 cross-subject setting. Each row corresponds to a subject-level differentially private model trained at the indicated privacy budget ϵ and non-dp baseline is also provided. MPJPE measures 3D pose estimation utility, ROC-AUC measures subject-membership discrimination, and empirical PML characterizes leakage in the corresponding membership-evidence channel. Lower MPJPE and PML are better, while ROC-AUC closer to 0.5 indicates weaker membership distinguishability. 
+
+## 5 Conclusion 
+
+In this work we present a framework for multimodal 3D human pose estimation that combines kinematics-induced fusion with subject-level DP training, and empirical membership inference. Overall, our fusion model improves the pose accuracy over individual modalities. The proposed Action Temporal Stratification constructs population-weighted subject gradients, while membership inference and PML provide complementary evidence of model privacy. The results show utility degradation under subject-level DP, particularly at stricter privacy budgets. Our evaluation is limited to the predefined MM-Fi split of subjects with eight non-member subjects. Future work should investigate more effective private adaptation techniques and evaluate on broader subject cohorts. 
+
+## References 
+
+[1] Ching-Hang Chen and Deva Ramanan. 3D Human Pose Estimation = 2D Pose Estimation + Matching . In 2017 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 5759–5767, Los Alamitos, CA, USA, July 2017. IEEE Computer Society. [2] Bowen Dang, Xi Zhao, Bowen Zhang, and He Wang. Reconstructing 3d human pose from rgb-d data with occlusions. In Computer Graphics Forum , volume 42, page e14982. Wiley Online Library, 2023. [3] Mengshi Qi, Weijian Li, Zhengyuan Yang, Yunhong Wang, and Jiebo Luo. Attentive relational networks for mapping images to scene graphs. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 3957–3966, 2019. [4] Mengshi Qi, Yunhong Wang, Annan Li, and Jiebo Luo. Stc-gan: Spatio-temporally coupled generative adversarial networks for predictive scene parsing. IEEE Transactions on Image Processing , 29:5420–5430, 2020. [5] Mengshi Qi, Yunhong Wang, Annan Li, and Jiebo Luo. Sports video captioning via attentive motion representation and group relationship modeling. IEEE Transactions on Circuits and Systems for Video Technology , 30(8):2617– 2633, 2019. [6] Mengshi Qi, Jie Qin, Yu Wu, and Yi Yang. Imitative non-autoregressive modeling for trajectory forecasting and imputation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 12736–12745, 2020. [7] Gyeongsik Moon, Ju Yong Chang, and Kyoung Mu Lee. Camera distance-aware top-down approach for 3d multi-person pose estimation from a single rgb image. In Proceedings of the IEEE/CVF international conference on computer vision , pages 10133–10142, 2019. [8] Tom Wehrbein, Marco Rudolph, Bodo Rosenhahn, and Bastian Wandt. Probabilistic monocular 3d human pose estimation with normalizing flows. In Proceedings of the IEEE/CVF international conference on computer vision ,pages 11199–11208, 2021. [9] Georgios Pavlakos, Xiaowei Zhou, Konstantinos G Derpanis, and Kostas Daniilidis. Coarse-to-fine volumetric prediction for single-image 3d human pose. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 7025–7034, 2017. [10] Dario Pavllo, Christoph Feichtenhofer, David Grangier, and Michael Auli. 3d human pose estimation in video with temporal convolutions and semi-supervised training. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 7753–7762, 2019. 9Running Title for Header [11] Ce Zheng, Sijie Zhu, Matias Mendieta, Taojiannan Yang, Chen Chen, and Zhengming Ding. 3d human pose estimation with spatial and temporal transformers. In Proceedings of the IEEE/CVF international conference on computer vision , pages 11656–11665, 2021. [12] Jinlu Zhang, Zhigang Tu, Jianyu Yang, Yujin Chen, and Junsong Yuan. Mixste: Seq2seq mixed spatio-temporal encoder for 3d human pose estimation in video. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 13232–13242, 2022. [13] Wentao Zhu, Xiaoxuan Ma, Zhaoyang Liu, Libin Liu, Wayne Wu, and Yizhou Wang. Motionbert: A unified perspective on learning human motion representations. In Proceedings of the IEEE/CVF international conference on computer vision , pages 15085–15099, 2023. [14] Jihua Peng, Yanghong Zhou, and PY Mok. Ktpformer: Kinematics and trajectory prior knowledge-enhanced transformer for 3d human pose estimation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 1123–1132, 2024. [15] Wenkang Shan, Zhenhua Liu, Xinfeng Zhang, Zhao Wang, Kai Han, Shanshe Wang, Siwei Ma, and Wen Gao. Diffusion-based 3d human pose estimation with multi-hypothesis aggregation. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 14761–14771, 2023. [16] Yanni Yang, Pengfei Hu, Jiaxing Shen, Haiming Cheng, Zhenlin An, and Xiulong Liu. Privacy-preserving human activity sensing: A survey. High-Confidence Computing , 4(1):100204, 2024. [17] Michael Fürst, Shriya TP Gupta, René Schuster, Oliver Wasenmüller, and Didier Stricker. Hperl: 3d human pose estimation from rgb and lidar. In 2020 25th International Conference on Pattern Recognition (ICPR) , pages 7321–7327. IEEE, 2021. [18] Sizhe An, Yin Li, and Umit Ogras. mri: Multi-modal 3d human pose estimation dataset using mmwave, rgb-d, and inertial sensors. Advances in neural information processing systems , 35:27414–27426, 2022. [19] Jianfei Yang, He Huang, Yunjiao Zhou, Xinyan Chen, Yuecong Xu, Shenghai Yuan, Han Zou, Chris Xiaoxuan Lu, and Lihua Xie. Mm-fi: Multi-modal non-intrusive 4d human dataset for versatile wireless sensing. Advances in Neural Information Processing Systems , 36:18756–18768, 2023. [20] Xinyan Chen and Jianfei Yang. X-fi: A modality-invariant foundation model for multimodal human sensing. In 
+
+International Conference on Learning Representations , volume 2025, pages 97378–97397, 2025. [21] Yujeong Chae, Hyeonseong Kim, and Kuk-Jin Yoon. Towards Robust 3D Object Detection with LiDAR and 4D Radar Fusion in Various Weather Conditions . In 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 15162–15172, Los Alamitos, CA, USA, June 2024. IEEE Computer Society. [22] Li Chen. Understanding the efficacy, reliability and resiliency of computer vision techniques for malware detection and future research directions. arXiv preprint arXiv:1904.10504 , 2019. [23] Michele Baldassini, Francesco Pistolesi, and Beatrice Lazzerini. Don’t call it privacy-preserving or human-centric pose estimation if you don’t measure privacy. In NeurIPS 2025 Position Paper Track , 2025. [24] Xingchen Zhang and Zixian Zhao. More effort is needed to protect pedestrian privacy in the era of ai. In NeurIPS 2025 Position Paper Track , 2025. [25] Cynthia Dwork and Aaron Roth. The algorithmic foundations of differential privacy. Foundations and trends® in theoretical computer science , 9(3-4):211–487, 2014. [26] Aditya Golatkar, Alessandro Achille, Yu-Xiang Wang, Aaron Roth, Michael Kearns, and Stefano Soatto. Mixed differential privacy in computer vision. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2022. [27] Yingxue Zhou, Steven Wu, and Arindam Banerjee. Bypassing the ambient dimension: Private {sgd} with gradient subspace identification. In International Conference on Learning Representations , 2021. [28] Kaushik Bhargav Sivangi, Paul Henderson, and Fani Deligianni. Differentially private 2d human pose estimation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , Denver, Colorado, USA, 2026. [29] Huang Fang, Xiaoyun Li, Chenglin Fan, and Ping Li. Improved convergence of differential private SGD with gradient clipping. In The Eleventh International Conference on Learning Representations , 2023. [30] Badih Ghazi, Ravi Kumar, and Pasin Manurangsi. User-level differentially private learning via correlated sampling. 
+
+Advances in Neural Information Processing Systems , 34:20172–20184, 2021. [31] Lynn Chua, Badih Ghazi, Yangsibo Huang, Pritish Kamath, Ravi Kumar, Daogao Liu, Pasin Manurangsi, Amer Sinha, and Chiyuan Zhang. Mind the privacy unit! user-level differential privacy for language model fine-tuning. 
+
+arXiv preprint arXiv:2406.14322 , 2024. 10 Running Title for Header [32] Umang Gupta, Dimitris Stripelis, Pradeep K Lam, Paul Thompson, Jose Luis Ambite, and Greg Ver Steeg. Membership inference attacks on deep regression models for neuroimaging. In Medical Imaging with Deep Learning , pages 228–251. PMLR, 2021. [33] Sara Saeidian, Giulia Cervia, Tobias J Oechtering, and Mikael Skoglund. Pointwise maximal leakage. IEEE Transactions on Information Theory , 2023. [34] Jialian Li, Jingyi Zhang, Zhiyong Wang, Siqi Shen, Chenglu Wen, Yuexin Ma, Lan Xu, Jingyi Yu, and Cheng Wang. Lidarcap: Long-range marker-less 3d human motion capture with lidar point clouds. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 20502–20512, 2022. [35] Jingyi Zhang, Qihong Mao, Siqi Shen, Chenglu Wen, Lan Xu, and Cheng Wang. Lidarcapv2: 3d human pose estimation with human–object interaction from lidar point clouds. Pattern Recognition , 156:110848, 2024. [36] Xiaoqi An, Lin Zhao, Chen Gong, Jun Li, and Jian Yang. Pre-training a density-aware pose transformer for robust lidar-based 3d human pose estimation. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 39, pages 1755–1763, 2025. [37] Jingxiao Zheng, Xinwei Shi, Alexander Gorban, Junhua Mao, Yang Song, Charles R Qi, Ting Liu, Visesh Chari, Andre Cornman, Yin Zhou, et al. Multi-modal 3d human pose estimation with 2d weak supervision in autonomous driving. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pages 4478–4487, 2022. [38] Arindam Sengupta, Feng Jin, Renyuan Zhang, and Siyang Cao. mm-pose: Real-time human skeletal posture estimation using mmwave radars and cnns. IEEE sensors journal , 20(17):10032–10044, 2020. [39] Hongfei Xue, Yan Ju, Chenglin Miao, Yijiang Wang, Shiyang Wang, Aidong Zhang, and Lu Su. mmmesh: Towards 3d real-time dynamic human mesh construction using millimeter-wave. In Proceedings of the 19th annual international conference on mobile systems, applications, and services , pages 269–282, 2021. [40] Junqiao Fan, Jianfei Yang, Yuecong Xu, and Lihua Xie. Diffusion model is a good pose estimator from 3d rf-vision. In European Conference on Computer Vision , pages 1–18. Springer, 2024. [41] Jaeho Choi, Soheil Hor, Shubo Yang, and Amin Arbabian. Mvdoppler-pose: Multi-modal multi-view mmwave sensing for long-distance self-occluded human walking pose estimation. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 27750–27759, 2025. [42] Bing Zhu, Zixin He, Weiyi Xiong, Guanhua Ding, Tao Huang, and Wei Xiang. Probradarm3f: mmwave radar-based human skeletal pose estimation with probability map guided multi-format feature fusion. IEEE Transactions on Aerospace and Electronic Systems , 2025. [43] Jonathan Lebensold, Doina Precup, and Borja Balle. On the privacy of selection mechanisms with gaussian noise. In International Conference on Artificial Intelligence and Statistics , pages 1495–1503. PMLR, 2024. [44] Yusuke Kawamoto and Takao Murakami. Local obfuscation mechanisms for hiding probability distributions. In Kazue Sako, Steve Schneider, and Peter Y. A. Ryan, editors, Computer Security – ESORICS 2019 , 2019. [45] Yanjie Li, Shoukui Zhang, Zhicheng Wang, Sen Yang, Wankou Yang, Shu-Tao Xia, and Erjin Zhou. Tokenpose: Learning keypoint tokens for human pose estimation. In 2021 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 11293–11302, 2021. [46] Galen Andrew, Om Thakkar, Brendan McMahan, and Swaroop Ramaswamy. Differentially private learning with adaptive clipping. Advances in neural information processing systems , 34:17455–17466, 2021. [47] Peilin Zhao and Tong Zhang. Accelerating minibatch stochastic gradient descent using stratified sampling. arXiv preprint arXiv:1405.3080 , 2014. [48] Yucheng Lu, Youngsuk Park, Lifan Chen, Yuyang Wang, Christopher De Sa, and Dean Foster. Variance reduced training with stratified sampling for forecasting models. In International Conference on Machine Learning , pages 7145–7155. PMLR, 2021. [49] Ilya Mironov. Rényi differential privacy. In 2017 IEEE 30th computer security foundations symposium (CSF) ,pages 263–275. IEEE, 2017. [50] Ahmed Salem, Giovanni Cherubin, David Evans, Boris Köpf, Andrew Paverd, Anshuman Suri, Shruti Tople, and Santiago Zanella-Béguelin. Sok: Let the privacy games begin! a unified treatment of data inference privacy in machine learning. In 2023 IEEE Symposium on Security and Privacy (SP) , pages 327–345. IEEE, 2023. [51] Anshuman Suri, Pallika Kanani, Virendra J Marathe, and Daniel W Peterson. Subject membership inference attacks in federated learning. arXiv preprint arXiv:2206.03317 , 2022. 11 Running Title for Header [52] Samuel Yeom, Irene Giacomelli, Matt Fredrikson, and Somesh Jha. Privacy risk in machine learning: Analyzing the connection to overfitting. In 2018 IEEE 31st computer security foundations symposium (CSF) , pages 268–282. IEEE, 2018. [53] Xiaoyang Wu, Yixing Lao, Li Jiang, Xihui Liu, and Hengshuang Zhao. Point transformer v2: Grouped vector attention and partition-based pooling. Advances in Neural Information Processing Systems , 35:33330–33342, 2022. [54] Hengshuang Zhao, Li Jiang, Jiaya Jia, Philip HS Torr, and Vladlen Koltun. Point transformer. In Proceedings of the IEEE/CVF international conference on computer vision , pages 16259–16268, 2021. [55] Jia Gong, Lin Geng Foo, Zhipeng Fan, Qiuhong Ke, Hossein Rahmani, and Jun Liu. Diffpose: Toward more reliable 3d pose estimation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 13041–13051, 2023. [56] Mengshi Qi, Jiaxuan Peng, Xianlin Zhang, and Huadong Ma. Towards balanced multi-modal learning in 3d human pose estimation. arXiv preprint arXiv:2501.05264 , 2025. [57] Yuzhe Ji, Yijie Chen, Liuqing Yang, Rui Ding, Meng Yang, and Xinhu Zheng. Vexkd: The versatile integration of cross-modal fusion and knowledge distillation for 3d perception. Advances in Neural Information Processing Systems , 37:125608–125634, 2024. 
+
+## 6 Appendix 
+
+6.1 Experimental Setup Dataset and Implementation: We utilize MM-Fi [19], a comprehensive multimodal dataset designed for non-intrusive 4D human sensing. The dataset comprises over 320K synchronized frames across five modalities: RGB, depth, LiDAR, mmWave Radar, and WiFi CSI over 40 subjects. It encompasses 27 action categories, consisting of 14 daily activities and 13 rehabilitation activities. We specifically use LiDAR, Radar and RGB modalities for our experiments. MM-Fi is particularly challenging for Radar human pose estimation due to its sparse Radar point clouds containing fewer than 100 points per frame compared to other benchmarks. To test the robustness of our approach, we adopt the dataset’s three standard splits: random split, cross-subject split, and cross-environment split across all three protocols. We implement all our models on two NVIDIA RTX 4090 GPUs. We use PointTransformerV2 [53] as backbone for LiDAR and Radar point clouds while DSTFormer [13] serves as backbone for RGB based model. Additionally, in the RGB setting we follow the two stage pipeline of generating 3D pose from 2D estimates. MM-Fi dataset consists of 2D keypoints in prior extracted from HRNet-48 backbone and we leverage this. We use Adam optimizer for our experiments with a batch size of 32. The total epochs are set to 50. The learning rate is set to 1e-3 which is then multiplied by 0.1 after 40 epochs. We report Mean Per Joint Position Error (MPJPE) and Procrustes-aligned MPJPE (PA-MPJPE), following the standard 3D HPE evaluation protocols. Private models are evaluated only on MM-Fi protocol 3 under cross subject split with 32 training subjects treated as members and 8 held out subjects treated as non members. We train for T = 2000 private steps with subject sampling probability ρ = 0 .25 , δ = 10 −5, andK = 64 ATS selected windows per sampled subject. 12 Running Title for Header 
+
+6.2 Additional results of fusion method on Protocol 1 and 2 
+
+Model Modality Random Cross-Environment Cross-Subject MPJPE ↓ PA-MPJPE ↓ MPJPE ↓ PA-MPJPE ↓ MPJPE ↓ PA-MPJPE ↓
+
+Protocol 1: Daily Activities 
+
+Existing Methods 
+
+Point Transformer [54, 40] Radar 73.09 55.60 88.28 68.79 75.96 58.70 DiffPose [55, 40] Radar 73.44 56.83 86.35 66.87 70.31 54.12 mmDiff [40] Radar 65.26 50.35 82.73 63.87 65.62 50.23 MM-Fi [19] Radar 109.8 55.6 166.2 73.9 128.4 58.7 MM-Fi [19] RGB 263.3 80.0 276.6 83.0 267.7 81.2 MM-Fi [19] LiDAR 98.1 65.2 192.3 100.4 110.1 66.2 MM-Fi [19] RGB+LiDAR 94.3 63.9 159.6 84.5 109.4 65.8 Balanced Multimodal [56] Radar 102.89 52.21 – – – –Balanced Multimodal [56] RGB 63.61 35.75 – – – –Balanced Multimodal [56] LiDAR 66.95 45.70 – – – –Balanced Multimodal [56] RGB+LiDAR 52.93 34.96 – – – –Balanced Multimodal [56] RGB+Radar 63.04 35.74 – – – –Balanced Multimodal [56] LiDAR+Radar 66.85 45.11 – – – –
+
+Our Implementations 
+
+PointTransformerV2 LiDAR 47.60 38.73 66.68 47.68 52.47 39.02 PointTransformerV2 Radar 61.65 49.42 83.27 60.55 62.14 46.12 DSTFormer RGB 54.10 41.84 63.38 47.04 56.06 43.59 Fusion RGB+LiDAR+Radar 40.60 32.91 55.62 42.53 45.38 34.98 Protocol 2: Rehabilitation Activities 
+
+Existing Methods 
+
+MM-Fi [19] RGB 291.6 83.6 301.5 85.3 304.3 82.6 MM-Fi [19] LiDAR 94.9 60.4 186.0 103.5 103.9 60.3 MM-Fi [19] Radar 124.3 55.3 168.0 73.0 142.2 57.4 MM-Fi [19] RGB+LiDAR 90.1 58.9 153.5 87.1 103.5 60.2 
+
+Our Implementations 
+
+PointTransformerV2 LiDAR 42.76 32.97 61.01 46.43 41.79 32.43 PointTransformerV2 Radar 59.76 44.93 81.04 63.07 58.66 43.94 DSTFormer RGB 41.59 32.70 54.93 41.38 42.51 33.02 Fusion RGB+LiDAR+Radar 38.64 30.67 53.00 39.64 41.39 29.97 
+
+Table 3: Comparison on Protocol 1 (Daily Activities) and Protocol 2 (Rehabilitation Activities). Lower MPJPE and PA-MPJPE indicate better performance. 13 Running Title for Header 14 Running Title for Header  
+
+> 6.3 Bimodal Ablations
+
+# Protocol Split Bimodal Fusion MPJPE ↓ PA-MPJPE ↓
+
+# Protocol 1: Daily Activities 
+
+# P1 Random RGB+LiDAR 42.24 34.02 P1 Random RGB+Radar 46.17 35.69 P1 Random LiDAR+Radar 44.89 34.02 P1 Cross-Environment RGB+LiDAR 55.68 42.68 P1 Cross-Environment RGB+Radar 60.91 44.73 P1 Cross-Environment LiDAR+Radar 58.66 45.04 P1 Cross-Subject RGB+LiDAR 47.69 36.21 P1 Cross-Subject RGB+Radar 48.60 36.44 P1 Cross-Subject LiDAR+Radar 49.28 36.93 
+
+# Protocol 2: Rehabilitation Activities 
+
+# P2 Random RGB+LiDAR 41.66 31.96 P2 Random RGB+Radar 42.80 32.68 P2 Random LiDAR+Radar 42.11 33.41 P2 Cross-Environment RGB+LiDAR 52.15 39.83 P2 Cross-Environment RGB+Radar 52.39 39.88 P2 Cross-Environment LiDAR+Radar 57.62 43.84 P2 Cross-Subject RGB+LiDAR 42.73 32.26 P2 Cross-Subject RGB+Radar 43.33 33.13 P2 Cross-Subject LiDAR+Radar 43.80 34.01 
+
+# Protocol 3: All Activities 
+
+# P3 Random RGB+LiDAR 41.96 33.50 P3 Random RGB+Radar 44.29 34.16 P3 Random LiDAR+Radar 43.21 34.07 P3 Cross-Environment RGB+LiDAR 54.47 41.37 P3 Cross-Environment RGB+Radar 55.86 42.42 P3 Cross-Environment LiDAR+Radar 67.03 49.71 P3 Cross-Subject RGB+LiDAR 45.89 34.72 P3 Cross-Subject RGB+Radar 47.48 35.74 P3 Cross-Subject LiDAR+Radar 45.83 35.97 
+
+> Table 4: Bimodal fusion ablation on MM-Fi across the three activity protocols and evaluation splits. Results are reported for RGB+LiDAR, RGB+Radar, and LiDAR+Radar combinations. MPJPE and PA-MPJPE are reported in millimeters; lower is better. 15
+
+Running Title for Header 
+
+6.4 Comparison with BeV fusion                
+
+> Split Method MPJPE (mm) ↓
+> Random BEV Baseline 67.03 Random Our Fusion 43.21
+> Cross-Environment BEV Baseline 73.37 Cross-Environment Our Fusion 67.03
+> Cross-Subject BEV Baseline 56.44 Cross-Subject Our Fusion 45.83
+
+Table 5: Comparison with the BEV-based fusion baseline [57] on MM-Fi Protocol 3 using the LiDAR+Radar bimodal setting across the random, cross-environment, and cross-subject splits. MPJPE is reported in millimeters; lower is better. 16
