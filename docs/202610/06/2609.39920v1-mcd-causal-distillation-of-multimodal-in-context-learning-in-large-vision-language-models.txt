@@ -1,0 +1,700 @@
+Title: MCD: Causal Distillation of Multimodal In-Context Learning in Large Vision-Language Models
+
+URL Source: https://arxiv.org/pdf/2609.39920v1
+
+Published Time: Thu, 01 Oct 2026 01:58:17 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# MCD: Causal Distillation of Multimodal In-Context Learning in Large Vision-language Models 
+
+Yanshu Li 1, Jiaqian Li 1, Canran Xiao 1, Xi Xiao 2, Tianyang Wang 2, Yongtai Liu 3
+
+> 1
+
+Brown University, 2University of Alabama at Birmingham, 3Hanyang University  
+
+> Correspondence: yanshu_li1@brown.edu
+
+Abstract 
+
+Large vision-language models (LVLMs) ex-hibit strong multimodal in-context learning (ICL) capabilities, yet this ability degrades sub-stantially as model size decreases. Knowledge distillation offers a natural way to bridge this gap, but existing methods primarily align out-put distributions or hidden representations di-rectly. Such alignment teaches the student what the teacher predicts without revealing which ev-idence in the complex context causally supports that prediction. Consequently, a student can im-itate the teacher’s answer while continuing to rely on language priors, prompt structure, or other spurious cues. To address this limitation, we introduce Multimodal Causal Distillation 
+
+(MCD), a distillation framework that transfers how a strong teacher uses multimodal evidence during ICL. MCD uses structure-preserving to-ken interventions to identify and verify causal evidence, then transfers how the teacher re-sponds when that evidence is retained or re-moved. This design connects distillation to the causal patterns by which the model uses contextual evidence during multimodal ICL. Experiments across three LVLM families and seven benchmarks show that MCD improves student performance by 7.23 points on aver-age and outperforms vanilla distillation by 4.68 points, while further analyses confirm the gen-eralizability of these gains. 
+
+1 Introduction 
+
+Large vision-language models (LVLMs) have demonstrated remarkable capabilities in multi-modal understanding and reasoning tasks (Liu et al., 2023). An increasingly salient capability is multi-modal in-context learning (ICL), in which a model answers a query using a small set of interleaved image-text demonstrations provided in the prompt (Jiang et al., 2024). It provides a flexible way of adapting a general-purpose LVLM to diverse tasks at inference time. Its effectiveness, how-ever, depends strongly on model scale (Zhang et al., 2023). Larger LVLMs can integrate the query with relevant evidence across multiple demonstrations, whereas smaller models are more susceptible to spurious cues such as language priors and prompt formatting (Zheng et al., 2025). Prior work has sought to improve multimodal ICL through prompt configuration, but its effectiveness remains con-strained by the model’s intrinsic capabilities (Li et al., 2024b; Zhang et al., 2023). Thus, strong-to-weak knowledge distillation of-fers a better approach to narrowing this capabil-ity gap by transferring the behavior of a powerful teacher to a compact student (Hinton et al., 2015). Most existing distillation methods supervise the stu-dent by matching the teacher’s output distribution. However, in multimodal ICL with complex context, this pointwise constraint leaves a critical ambiguity unresolved (Xu et al., 2024). The same answer may arise from integrating task-relevant contextual ev-idence or exploiting superficial correlations, such as textual biases, demonstration order, and output-format regularities. Consequently, a weak student may match the teacher on training prompts with-out learning how the teacher uses provided context. Another paradigm distills intermediate attention patterns to provide finer-grained supervision (Kim et al., 2025), but incurs substantial costs on multi-image prompts and introduces additional training instability in multimodal ICL. To develop a distillation method tailored to mul-timodal ICL, we study this problem from a causal perspective. Given a query and in-context demon-strations, the model must combine the task spec-ified by the query with mechanism-relevant evi-dence from the demonstrations. This motivates structure-preserving interventions that modify se-mantic content and measure the resulting output changes. Causal evidence should preserve the teacher’s prediction when retained and substan-tially alter it when removed, providing supervi-sion unavailable from the original prompt alone. 1arXiv:2609.39920v1 [cs.CV] 30 Sep 2026 However, identifying such evidence without anno-tations or exhaustive token removal is challeng-ing (Li et al., 2026b), particularly for multi-image prompts, while arbitrary replacements may con-found semantic effects with structural corruption. To this end, we propose Multimodal Causal Distillation (MCD), which transfers how a strong teacher causally uses multimodal evidence during ICL. MCD first separates prompt structure from content-bearing text and visual tokens, then applies attribute-matched replacements that preserve each token’s functional or spatial position while altering its semantics. It uses teacher gradients to identify query and demonstration evidence supporting the teacher’s answer and verifies this evidence through complementary interventions that retain or remove the selected tokens. Valid evidence should preserve the teacher’s prediction when retained and induce a larger output change when removed. MCD trans-fers both behaviors to the student, thereby teach-ing evidence sufficiency and causal dependence without requiring mechanism annotations or atten-tion alignment. Extensive experiments with three LVLM families and seven benchmarks demonstrate MCD’s superior performance, validating its effec-tiveness and generality. Our main contributions can be summarized as follows: • We propose Multimodal Causal Distillation (MCD), the first distillation framework that formulates multimodal ICL from a causal per-spective and transfers how a strong teacher causally uses multimodal evidence, moving beyond output-only alignment. • MCD combines structure-preserving token in-terventions, gradient-based evidence discov-ery, and retain-remove verification to effec-tively transfer both evidence sufficiency and causal dependence to the student. • Extensive experiments across three LVLM families and seven benchmarks show that MCD improves student performance by 7.23 on average and outperforms vanilla distillation by 4.68, confirming the generality of causal supervision for multimodal ICL. 
+
+2 Related Works 
+
+Multimodal in-context learning (ICL). Recent LVLMs have evolved into general-purpose sys-tems capable of complex multimodal tasks (Amini et al., 2025). One key capability is multimodal ICL, which enables models to infer visual ground-ing rules, output formats, and input-output map-pings from a few examples without parameter up-dates (Baldassini et al., 2024; Sun et al., 2024). However, multimodal ICL remains unstable, espe-cially in smaller models that often rely on textual cues or superficial structural patterns rather than the multimodal context (Li et al., 2026a; Chen et al., 2025a; Xu et al., 2025a; Zheng et al., 2025). Ex-isting approaches primarily optimize prompt con-figuration and therefore provide limited improve-ments to the model’s underlying reasoning capabil-ities (Yang et al., 2024; Fu et al., 2025). 
+
+Knowledge distillation. Knowledge distillation transfers knowledge from strong teachers to com-pact students (Hinton et al., 2015; Gu et al., 2024; Ko et al., 2024) and has recently been extended from LLMs to LVLMs (Wang et al., 2023). Ex-isting methods often model fine-grained interac-tions between visual and textual tokens (Zhou et al., 2026a). Align-KD aligns cross-modal atten-tion (Feng et al., 2025), and LLaVA-KD introduces relational distillation (Cai et al., 2025b). Mean-while, CompoDistill attempts to leverage LVLM’s internal attention distributions (Kim et al., 2025). Align-TI (Chen et al., 2026) combines both strate-gies to capture multiple forms of token interac-tions. However, their reliance on the teacher’s at-tention maps may not faithfully capture the causal dependencies. Among LLM distillation methods, LeaF (Guo et al., 2026) moves beyond attention by using interventions to expose teacher–student gradient differences and reveal token interactions. It is effective on long-context text tasks, but its reliance on pruning-based interventions limits its applicability to multimodal ICL. 
+
+3 Method 
+
+3.1 Overview 
+
+We propose Multimodal Causal Distillation 
+
+(MCD), illustrated in Fig. 1, to transfer how a strong teacher uses multimodal ICL evidence to a smaller student. We first motivate MCD from a causal perspective in Section 3.2. We then discover mechanism-bearing evidence through structure-preserving interventions in Section 3.3 and verify it using retain-remove tests in Section 3.4. Finally, we transfer evidence sufficiency and causal depen-dence in Section 3.5 and integrate them with super-vised learning and output distillation in Section 3.6. 2Causal evidence discovery   
+
+> What is the main feature of this image? A sailboat.
+> What is the main feature of this image?
+> ICL prompt (1-shot ICD+query)
+> tokenizer image processor
+> ……
+> �
+> �
+> ……
+> �
+
+Causal effect verification Causal behavior distillation               
+
+> ……
+> Teacher Model
+> gated replacement
+> �
+> ……
+> Top-r evidence E
+> back forward
+> token-wise scores ���
+> �� �
+> �� �
+> structrual token ICD visual token ICD text token query visual token query text token
+> full output
+> Retain E Remove E Teacher Model
+> JS w=1
+> JS
+> JS difference
+> Drop − Keep
+> Positive score Top ρ
+> MCD loss
+> w=0
+> Base only
+> keep drop full full
+> Prediction recovery Response matching
+> Student Model
+> Retain E
+> full keep
+> －Student Model
+> Remove E
+> �drop full full drop
+> －－==－L₁L₁
+> Ground truth + Vanilla KD + λ ×MCD loss
+
+Figure 1: Overview of the proposed Multimodal Causal Distillation (MCD) framework. 
+
+3.2 Preliminaries and Motivation 3.2.1 Vanilla Vision-language Distillation 
+
+LVLMs considered in this work follow a widely adopted architecture consisting of a vision encoder, a projector, and an LLM backbone. As discussed in Section 2, such models are susceptible to modality bias and sensitive to prompt formatting at smaller scales, leading to substantial deficiencies in multi-modal reasoning. These deficiencies become more pronounced in multimodal ICL, which requires complex cross-modal interactions. Formally, the input x of multimodal ICL comprises n in-context demonstrations (ICDs) and a query sample, 
+
+x = [ C; q] = 
+
+h
+
+{(Ii, T i)}ni=1 ; ( ˆI, ˆT )
+
+i
+
+, (1) where each ICD contains an image Ii and a text segment Ti composed of a question and its answer label. The query contains an image ˆI and an unla-beled question ˆT . At inference time, the LVLM is expected to use the task-relevant external knowl-edge, output format, and input-output mappings conveyed by the ICDs (Li et al., 2025) to infer the answer to the query sample. We refer to this unob-served information as the latent task mechanism .Given the substantial gap in multimodal ICL capability observed between large-scale LVLMs and their smaller counterparts from the same fam-ily (Chen et al., 2025b; Zong et al., 2025), distilla-tion provides a natural way to improve small-scale LVLMs. Let the large-scale teacher define an out-put distribution PT , and let P θS denote the distribu-tion of a student parameterized by θ. For a training sample (x, y) drawn from D, define PT,k = PT (· | 
+
+x, y<k ) and P θS,k = P θS (· | x, y<k ). Vanilla out-put distillation minimizes 
+
+Ldis (θ) = E(x,y)∼D 
+
+"
+
+1
+
+L
+
+> L
+
+X
+
+> k=1
+
+DKL 
+
+
+
+PT,k P θS,k 
+
+#
+
+,
+
+(2) where y<k denotes the ground-truth prefix before the k-th decoding step and L is the answer length. It enables the student to imitate the output behavior of a stronger teacher. However, alignment only at the output level provides insufficient supervi-sion for the student to learn how to exploit complex cross-modal semantics, thereby limiting its general-ization. To address this limitation, we first conduct a causal analysis of multimodal ICL. 
+
+3.2.2 A Causal View of Multimodal ICL 
+
+Given a prompt [C; q], an LVLM must interpret the mechanism indicated by q using the mechanism evidence conveyed by C. This inference process entails a causal dependence: the mechanisms con-veyed by the query and ICDs jointly shape the model state and its prediction, while prompt struc-ture and modality bias can provide competing paths to the output. To make these dependencies explicit, we formulate multimodal ICL inference with the causal graph in Fig. 2. For a model M ∈ { T, S },the inference relations are 
+
+HM = fM (Zq, Z C , A),PM (Y | x) = pM (Y | HM ). (3) Here Zq and ZC summarize the latent task mecha-nism indicated by the query and the evidence con-veyed by the ICDs. Their joint effect on HM rep-resents the model’s mechanism-conditioned use of the prompt, while A captures structural and modal-ity cues induced by prompt construction. This graph allows us to distinguish the causal pathways underlying multimodal ICL. An inter-vention m replaces selected query or ICD content upstream of Zq and ZC while preserving A. The resulting output change provides a measure of how strongly the model’s prediction depends on the in-tervened content. In contrast, Eq. (2) aligns the teacher and student only on the observed prompt. 3ICDs 
+
+> C
+> Query
+> q
+> ICD mechanism
+> ZC
+> Query mechanism
+> Zq
+> Joint mechanism context
+> (Zq, ZC)
+> Structure and bias
+> A
+> Teacher state
+> HT
+> Teacher output
+> PT(Y)
+> Student state
+> HS
+> Student output
+> PS(Y)
+> Intervention
+> m
+
+Figure 2: Causal graph of multimodal ICL inference. The query and ICDs provide complementary mechanism evidence and jointly shape the model state. 
+
+A weak student may match the teacher’s answer while still relying on spurious biases. Thus, effec-tive distillation should transfer the teacher’s causal response to mechanism-bearing evidence in addi-tion to its observed output distribution. To this end, we propose MCD, which employs interventions derived from the causal relations. 
+
+3.3 Causal Evidence Discovery 
+
+First, we intervene on the token-level semantics of q and C in Fig. 2. We partition the input prompt into structural tokens and candidate tokens 
+
+U(x) = {uj }Nj=1 . Structural tokens comprise the template tokens required to execute the prompt and remain unchanged under all interventions. Candi-date tokens comprise the content-bearing text and projected visual tokens from both the ICDs and the query. Thus, N is determined by the prompt rather than set as a hyperparameter. For each candidate token uj , we record attributes used to select its replacement, as detailed in Appendix B. During preprocessing, each prompt x is ran-domly paired with another training example x0
+
+that has the same prompt layout, and this pairing is reused across all training epochs. For each uj , we select the token u0 
+
+> j
+
+from x0 with the corresponding attributes. Let eM,j and bM,j denote the model-specific embeddings of uj and u0 
+
+> j
+
+, respectively. A scalar gate defines 
+
+eeM,j (mj ) = bM,j +mj (eM,j −bM,j ), M ∈ { T, S }.
+
+(4) Setting mj = 1 retains the original token, while 
+
+mj = 0 replaces it. The teacher and student use the same original and replacement tokens but encode them with their own input modules. Thus, the inter-vention changes the token content while preserving the structural and positional properties specified by its attributes, thereby avoiding the introduction of additional biases. In terms of Fig. 2, it changes the inputs to Zq and ZC while keeping the structural factors represented by A.We next identify which candidate tokens causally contribute to the teacher’s predictions in multimodal ICL. The teacher first receives the original prompt and generates a response yT =(yT, 1, . . . , y T,L T ), where LT denotes the response length. We keep this response and its prefixes fixed when evaluating all interventions and define the teacher score as            
+
+> sT(x;m) = 1
+> LTLTX
+> k=1
+> log PT
+>  yT,k |x,yT,<k ;m.(5)
+
+To score all candidate tokens with one backward pass, we sample α ∼ U (0 , 1) and set every gate to 
+
+α. The importance of uj is 
+
+aT (j) = ∂s T (x; m)
+
+∂m j m=α1
+
+=  eT,j − bT,j 
+
+⊤∇eeT,j sT
+
+ x; α1.
+
+(6) A larger aT (j) indicates a stronger local increase in the teacher score when uj moves from its replace-ment toward its original content at the sampled interpolation point. We rank the candidate tokens by this score and select 
+
+E = Top mE {j : aT (j) > 0}Nj=1 ,mE = max {1, ⌊rN ⌋} , 0 < r < 1. (7) where r is the fixed fraction of candidate tokens retained as evidence. Examples with E = ∅ are not eligible for causal-effect verification and are assigned w(x) = 0 . The causal role of E is verified next through discrete interventions. 
+
+3.4 Causal Effect Verification 
+
+The gradient score indicates which tokens support the teacher locally, but it does not by itself establish that these tokens determine the teacher’s prediction. We therefore evaluate two complementary prompt variants. The retain-evidence variant keeps the tokens in E and replaces every other candidate token. The remove-evidence variant replaces the tokens in E and keeps every other candidate token. Their gate vectors are            
+
+> mKj=1[j∈E], m Dj= 1 −1[j∈E], m Fj= 1 ,(8)
+
+where F denotes the original prompt, K the retain-evidence prompt, and D the remove-evidence 4prompt. Structural tokens remain unchanged in all three prompt settings. For v ∈ { F, K, D }, let 
+
+P vT,k = PT
+
+ · | x, yT,<k ; mv . (9) We measure whether E is sufficient and necessary for the teacher using Jensen–Shannon divergence: 
+
+dkeep  
+
+> T
+
+= 1
+
+LTLTX
+
+> k=1
+
+DJS 
+
+ P FT,k P KT,k 
+
+ , (10) 
+
+ddrop  
+
+> T
+
+= 1
+
+LTLTX
+
+> k=1
+
+DJS 
+
+ P FT,k P DT,k 
+
+ . (11) A small dkeep  
+
+> T
+
+means that E alone preserves the teacher’s prediction, while a large ddrop  
+
+> T
+
+means that removing E changes it. Because both quantities are measured using the same bounded divergence, we combine them directly as follows: 
+
+cT = ddrop  
+
+> T
+
+− dkeep  
+
+> T
+
+. (12) We retain the top fraction ρ of training examples with cT > 0 and assign them w(x) = 1 . All remaining examples receive w(x) = 0 and use only the standard supervised terms. Thus, causal supervision is applied only when retaining the se-lected tokens reproduces the full teacher response more faithfully than removing them. These veri-fied tokens provide an operational link to the la-tent mechanism because they carry the query and ICD semantics that the teacher actually uses, as evidenced by the causal changes in its prediction when these tokens are intervened upon. 
+
+3.5 Causal Behavior Distillation 
+
+For each accepted example, MCD teaches the stu-dent two behaviors established by the verification step. First, the student should recover the teacher’s full-prompt prediction when only E is retained. Second, removing E should change the student pre-diction in the same way that it changes the teacher prediction. We evaluate both models on the fixed teacher-generated prefixes. To reduce offline storage, we retain the union of the teacher’s top Kcache output tokens under F
+
+and D at each decoding step and aggregate the remaining probability mass into a single tail en-try. We apply the same deterministic aggregation to the student distributions. Let ¯P vM,k denote the resulting distribution for model M ∈ { T, S } and prompt variant v ∈ { F, K, D }. This representa-tion exactly preserves the total probability mass assigned to the cached support and the aggregated tail, providing a memory-efficient approximation to the corresponding full-vocabulary losses. Con-ventional distillation probabilities are stored in the same form using a separate support constructed at the ground-truth prefixes. We define the change caused by removing E:
+
+∆M,k = ¯P FM,k − ¯P DM,k . (13) Using this causal change, we define two causal distillation terms as follows: 
+
+ℓkeep ,k = 12 ¯P FT,k − ¯P KS,k 1 , (14) 
+
+ℓeffect ,k = 14 ∥∆T,k − ∆S,k ∥1 . (15) The first term transfers evidence sufficiency. The second transfers the teacher’s causal response to removing that evidence. Both terms lie in [0 , 1] .We combine them to obtain the core MCD loss: 
+
+LMCD = w(x)2LTLTX
+
+> k=1
+
+(ℓkeep ,k + ℓeffect ,k ) . (16) Computing both terms for every accepted ex-ample would require three student evaluations on teacher-generated prefixes: one each for F , K,and D. We reduce this cost by sampling z ∼
+
+Bernoulli(1 /2) and optimizing 
+
+bLMCD = w(x)
+
+LTLTX
+
+> k=1
+
+[z ℓ keep ,k + (1 − z) ℓeffect ,k ] .
+
+(17) When z = 1 , the student is evaluated only on K.When z = 0 , it is evaluated on F and D. Therefore, 
+
+Ez
+
+h bLMCD 
+
+i
+
+= LMCD , (18) and each accepted example needs an average of 1.5
+
+student evaluations on teacher-generated prefixes. 
+
+3.6 Training Objective and Efficiency 
+
+The overall training objective combines supervised learning, vanilla distillation, and causal distillation: 
+
+L = Lsup + Ldis + λ bLMCD , (19) where Lsup is the ground-truth cross-entropy and 
+
+Ldis is defined in Eq. (2). The loss coefficient λ
+
+controls the contribution of MCD to the overall 5training objective. After distillation, the student can reason more effectively over token-level evidence during multimodal ICL inference, improving its ability to utilize complex cross-modal context. All teacher generations, verification scores, and output distributions are computed once and cached before student training. MCD operates only on input embeddings and output distributions and re-quires no alignment of attention matrices. Thus, it can be applied to diverse model architectures, such as backbones with linear attention. 
+
+4 Experiments 
+
+4.1 Setup Training data. To construct a high-quality train-ing set for MCD, we first include all samples from three benchmarks specifically designed to evalu-ate multimodal ICL: VL-ICL (Zong et al., 2025), TrueMICL (Chen et al., 2025b), and SMMILE (Rieff et al., 2025). In their few-shot instances, LVLMs cannot answer the query without first ex-tracting sufficient task information from the cor-responding ICDs. We then use TACO (Li et al., 2025) to construct additional multimodal few-shot prompts from HatefulMemes (Kiela et al., 2020), MME-RealWorld (Zhang et al., 2025), BlindTest (Rahmanzadehgervi et al., 2024), VisuLogic (Xu et al., 2025b), and GQA (Hudson and Manning, 2019), further expanding the training set to 90K prompts. Finally, we remove duplicate prompts and retain only those for which the teacher correctly an-swers the query given the original prompt, resulting in 60K training examples. Among these prompts, 80% contain four ICDs, 10% contain eight ICDs, and 5% each contain one and two ICDs. 
+
+Models and benchmarks. We evaluate MCD across three LVLM families: LLaVA-OneVision (Li et al., 2024a), Qwen3-VL (Bai et al., 2025), and Qwen3.5 (Team, 2026). Within each family, MCD distills multimodal ICL capabilities from a larger teacher into a smaller student using official few-shot templates. We evaluate on benchmarks sufficiently out of distribution from the training data so that performance gains reflect causal ICL behavior instead of knowledge transfer alone. We evaluate on VQAv2 (Goyal et al., 2017), VizWiz (Gurari et al., 2018), MMStar (Chen et al., 2024), MathVision (Wang et al., 2024), MDK12 (Zhou et al., 2026b), MMIQ (Cai et al., 2025a), and LogicVista (Xiao et al., 2024). VQAv2 and VizWiz are widely used to evaluate multi-modal ICL, while the remaining five benchmarks are frequently adopted in recent evaluations of state-of-the-art LVLMs. For benchmarks with predefined training and test splits, we use the training split as the ICD pool and the test split as the query set. For benchmarks without predefined splits, we partition the samples into ICD and query sets at a ratio of 6:4. We use TACO to configure the ICD sequences, and all main experiments are conducted in the four-shot setting. 
+
+Baselines. Following standard evaluation proto-cols for knowledge distillation, we report the perfor-mance of the teacher, the student before and after MCD, and the student trained with vanilla distilla-tion. Since no prior distillation method specifically targets multimodal ICL, we compare MCD with recent methods for general LVLM distillation that can be directly applied to multi-image settings, in-cluding LLaVA-KD (Cai et al., 2025b), CompoDis-till (Kim et al., 2025), and Align-TI (Chen et al., 2026). For Qwen3.5, the attention-based objectives in Align-TI are applied only to full-attention layers, while CompoDistill is not applied to this model. 
+
+Implementation details. We train each model for three epochs using a customized Hugging Face Trainer. We freeze the vision encoder and perform full-parameter supervised fine-tuning on all remain-ing modules. We set the batch size to 32, λ to 1.0, 
+
+r to 0.25, ρ to 0.5, and Kcache to 128. During eval-uation, the teacher and student within each model family use greedy decoding with identical infer-ence settings. Given the instability of multimodal ICL, we report the average results over three differ-ent random seeds in the main experiments. 
+
+4.2 Main results 
+
+As shown in Table 1, MCD achieves the best stu-dent performance on every benchmark, with aver-age scores of 47.95, 58.22, and 66.38 for LLaVA-OneVision, Qwen3-VL, and Qwen3.5, respectively. These results improve upon the original students by 5.42, 6.77, and 9.50 points. Across the three fam-ilies, MCD also outperforms Vanilla KD by 3.46 to 6.06 points and the strongest specialized base-line, Align-TI, by 1.47 to 2.16 points. Its advan-tage over Align-TI is particularly pronounced on challenging benchmarks with larger gaps between teacher and student performance, averaging 2.29 points compared with 0.68 points on the remaining benchmarks. This pattern suggests that transferring 6Model Family Model / Method VQAv2 VizWiz MMStar MathVision MDK12 MMIQ LogicVista Avg. LLaVA-OneVision Teacher (72B) 83.61 71.87 61.05 27.32 46.57 28.03 32.14 50.08 Student (7B) 78.00 63.32 51.17 17.52 38.78 23.21 25.74 42.53 +Vanilla KD 81.29 67.42 52.38 18.46 40.17 24.17 27.53 44.49 +LLaVA-KD 82.61 69.23 54.73 18.77 41.33 24.14 28.95 45.68 +CompoDistill 81.57 69.45 53.19 17.95 40.63 23.81 28.42 45.00 +Align-TI 82.74 69.89 55.26 20.47 41.73 26.42 28.86 46.48 +MCD (Ours) 82.95 70.17 57.17 22.67 44.82 27.38 30.46 47.95                                                                                                         
+
+> Qwen3-VL Teacher (32B) 87.24 77.78 76.62 63.28 53.81 37.86 62.48 65.58 Student (2B) 81.47 70.92 58.90 39.14 40.75 29.36 39.63 51.45 +Vanilla KD 83.72 75.28 63.27 39.92 42.07 30.46 41.10 53.69 +LLaVA-KD 83.96 75.61 65.45 42.17 45.29 31.28 43.34 55.30 +CompoDistill 83.56 75.42 63.37 41.04 45.60 30.39 41.31 54.38 +Align-TI 84.28 76.27 65.64 43.50 47.43 33.62 43.71 56.35 +MCD (Ours) 85.31 77.04 67.26 46.27 50.32 36.24 45.09 58.22
+> Qwen3.5 (non-thinking) Teacher (27B) 92.75 81.63 84.12 78.53 63.25 49.29 71.37 74.42 Student (2B) 84.62 75.27 68.35 42.70 49.23 30.61 47.38 56.88 +Vanilla KD 85.46 76.35 71.50 49.42 53.28 33.42 52.83 60.32 +LLaVA-KD 87.79 78.21 74.29 55.26 55.62 36.71 54.92 63.26 +Align-TI 88.74 78.00 76.01 57.35 56.97 37.25 55.25 64.22 +MCD (Ours) 89.27 79.24 78.75 58.47 58.53 40.17 60.24 66.38
+
+Table 1: Four-shot performance of different models on seven multimodal benchmarks. Bold denotes the best student result within each model family. Avg. denotes the average score across all seven benchmarks. 
+
+the teacher’s causal dependence on mechanism-bearing evidence becomes increasingly valuable as contextual reasoning grows more complex. Overall, MCD delivers larger gains on reasoning-intensive tasks while maintaining strong performance on gen-eral visual question answering. Its improvements across all three model families further demonstrate its applicability to LVLMs with different parameter scales and attention architectures. 
+
+4.3 Ablation Study 
+
+We conduct ablation studies and analyses on Qwen3.5 and Qwen3-VL and report results aver-aged across the two model families. 
+
+Robustness across ICL configurations. We first examine whether the improvement of MCD trans-fers across different ICL prompt configurations. For each query, we ablate both the number of ICDs and the ICD retrieval strategy. To vary the number of ICDs, we additionally construct 1, 2, and 8-shot prompts. To vary retrieval quality, we use random sampling, text-based CLIP similarity (T-CLIP), and joint image-text CLIP similarity (M-CLIP), which generally produce prompts of increasing quality (Li et al., 2024b). Fig. 3 reports the average scores over the seven benchmarks for the original student, Vanilla KD, and MCD. MCD maintains substantial gains over both baselines across diverse configu-rations, with its performance further improving as Random T-CLIP M-CLIP TACO      
+
+> ICD selection
+> 45 50 55 60
+> Accuracy
+> (a) ICD Selection
+> 1248
+> Number of shots
+> (b) Shot Number
+> Student Vanilla KD MCD
+
+Figure 3: Performance under (a) different ICD selection strategies and (b) numbers of ICDs. 
+
+prompt quality increases. The comparisons jointly evaluate robustness to the quantity and quality of in-context evidence, demonstrating the broad appli-cability of MCD across diverse user requirements. 
+
+Contributions of causal supervision. We next isolate the two causal objectives and the verifica-tion procedure. We compare full MCD with its variants that remove either ℓkeep or ℓeffect or dis-able causal-effect verification while retaining both objectives. As shown in Table 2, MCD scores 66.34 on average, dropping to 64.89 without ℓkeep ,64.36 without ℓeffect , and 63.47 without verification. The complementary drops indicate that recovering the teacher prediction from retained evidence and matching its response to evidence removal capture different aspects of causal behavior, with the latter contributing more strongly to reasoning-intensive 7Variant VQAv2 MMStar MathVision LogicVista Avg. Vanilla KD 84.59 67.39 44.67 46.97 60.91 Full MCD 87.29 73.01 52.37 52.67 66.34                  
+
+> w/o ℓkeep 86.85 71.65 49.83 51.23 64.89 w/o ℓeffect 86.52 71.26 49.25 50.42 64.36 w/o Verification 85.87 70.49 48.02 49.49 63.47
+
+Table 2: Ablation of the causal objectives and verifica-tion procedure.                          
+
+> Variant VQAv2 MMStar MathVision LogicVista Avg. Random evidence 84.93 68.52 47.27 48.33 62.26 Attention-based evidence 86.51 71.08 49.89 50.86 64.59 Unrestricted replacement 86.34 70.49 48.56 50.00 63.85 Full MCD 87.29 73.01 52.37 52.67 66.34
+
+Table 3: Ablation of causal evidence discovery. 
+
+tasks. The larger degradation without verification further shows that causal supervision is most effec-tive when the selected evidence induces a reliable teacher response, motivating MCD to verify inter-ventions before transferring them to the student. 
+
+Design of causal evidence discovery. We then ablate teacher-gradient ranking and attribute-matched replacement in Table 3. Replacing gradi-ent ranking with random or attention-based selec-tion reduces the average score from 66.34 to 62.26 and 64.59, respectively, while unrestricted replace-ment yields 63.85. The substantial degradation under random selection confirms that the effective-ness of causal supervision depends on identifying content that meaningfully affects the teacher pre-diction, while the remaining gap of attention-based selection indicates that teacher-response gradients provide a more direct signal of this dependence. The decline caused by unrestricted replacement fur-ther shows the need to preserve the functional and spatial roles of intervened tokens, allowing the mea-sured output change to be attributed to semantic evidence rather than unintended prompt corruption. 
+
+4.4 Analysis Causal behavior transfer. We analyze whether MCD transfers the teacher’s response to inter-ventions rather than only its full-prompt predic-tion. On held-out prompts excluded from evidence screening and training, we apply the same teacher-discovered evidence and replacements to the origi-nal student, Vanilla KD, and MCD. We measure the evidence-sufficiency error Ekeep , causal-response error Eeffect , and Pearson correlation between teacher and student removal effects, as detailed in Appendix D.1. As shown in Fig. 4(a), the original student obtains (0 .25 , 0.11 , 0.39) and Vanilla KD Student Vanilla KD MCD         
+
+> 0.0 0.1 0.2 0.3
+> Causal error
+> 0.25 0.21 0.14 0.11 0.10 0.07
+> (a) Causal behavior transfer
+> keep effect Corr.
+> 0% 50% 100% VQAv2 MMStar Math Vision Logic Vista
+> 19 14 26 27
+> 26 32 32 26
+> 21 28 23 24
+> 34 26 19 23
+> (b) Evidence composition
+> ICD Vis. ICD Text Query Vis. Query Text
+> 0.3 0.5 0.7
+> Correlation
+> 0.39 0.45 0.68
+
+Figure 4: Causal behavior transfer and composition of verified evidence. (a) Evidence-sufficiency error, causal-response error, and Pearson correlation for the original student, Vanilla KD, and MCD. Lower errors and higher correlation indicate closer behavior to the teacher. (b) Composition of verified evidence across four benchmarks. 
+
+improves these values to (0 .21 , 0.10 , 0.45) . MCD further reaches (0 .14 , 0.07 , 0.68) , reducing Ekeep 
+
+and Eeffect by 33 .3% and 30 .0% relative to Vanilla KD while increasing the correlation by 0.23 . These results show that MCD more faithfully reproduces the teacher’s response to evidence interventions and its relative strength across examples. 
+
+Composition of causal evidence. We further an-alyze how verified evidence is distributed across ICD visual, ICD text, query visual, and query text tokens on four representative benchmarks. For each benchmark, we aggregate the fraction of selected tokens from each source and visualize the resulting distribution as a horizontal percentage stacked bar in Fig. 4(b). Query tokens account for 55% and 
+
+54% of the evidence on VQAv2 and MMStar, re-spectively, whereas ICD tokens constitute 58% on MathVision. LogicVista exhibits a nearly balanced division between ICD and query evidence at 52% 
+
+and 48% . Across modalities, textual evidence is more prominent on VQAv2 and MMStar ( 60% and 
+
+58% ), while MathVision and LogicVista maintain nearly even visual–textual compositions. These shifts show that the verified evidence adapts to the task-specific use of the query and ICDs rather than following a fixed source or modality allocation. We provide an efficiency analysis and a failure case study in Appendix D. 
+
+5 Conclusion 
+
+This paper introduced MCD, a framework that transfers multimodal ICL capabilities from large-scale LVLMs to smaller LVLMs within the same family. MCD identifies and verifies mechanism-bearing evidence through token-level interventions, then transfers its sufficiency and causal influence 8to the student. Experiments across three LVLM families and seven benchmarks demonstrate con-sistent improvements over original student models and existing distillation methods. MCD advances the development of compact LVLMs with stronger multimodal reasoning capabilities. 
+
+Limitations 
+
+MCD is currently applied within a single LVLM family, where the teacher and student share the same tokenizer and image processor. This assump-tion ensures that the token-level interventions used for causal evidence discovery and verification refer to comparable input units in both models, so that the retained and removed evidence carries a con-sistent meaning throughout the distillation pipeline. Although same-family distillation is a common setting in prior LVLM distillation work, extend-ing MCD to cross-family teachers and students, in which tokenization schemes and visual encoders differ, would substantially broaden the range of teacher-student pairs to which our framework ap-plies and represents an important future direction. A second direction concerns the scope of multi-modal scenarios considered in this work. Our ex-periments focus on standard few-shot ICL prompts with a moderate number of ICDs and a single question-answering query. Extending MCD to more general and complex multi-image regimes, including long-context ICL with many interleaved images, tool-augmented multimodal agents, and settings that require interleaved image-text chain-of-thought (CoT) reasoning, is a natural next step. Such extensions would allow the causal supervision provided by MCD to support emerging paradigms such as think-with-image reasoning, where the model must iteratively inspect, reason about, and integrate multiple visual pieces of evidence. 
+
+References 
+
+Hadi Amini, Md Jueal Mia, Yasaman Saadati, Ahmed Imteaj, Seyedsina Nabavirazavi, Urmish Thakker, Md Zarif Hossain, Awal Ahmed Fime, and SS Iyen-gar. 2025. Distributed llms and multimodal large lan-guage models: A survey on advances, challenges, and future directions. arXiv preprint arXiv:2503.16585 .Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, and 1 others. 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 .Folco Bertini Baldassini, Mustafa Shukor, Matthieu Cord, Laure Soulier, and Benjamin Piwowarski. 2024. What makes multimodal in-context learning work? In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , pages 1539– 1550. Huanqia Cai, Yijun Yang, and Winston Hu. 2025a. MM-IQ: Benchmarking human-like abstraction and reasoning in multimodal models. arXiv preprint arXiv:2502.00698 .Yuxuan Cai, Jiangning Zhang, Haoyang He, Xinwei He, Ao Tong, Zhenye Gan, Chengjie Wang, Zhucun Xue, Yong Liu, and Xiang Bai. 2025b. Llava-kd: A frame-work of distilling multimodal large language models. In Proceedings of the IEEE/CVF International Con-ference on Computer Vision , pages 239–249. Lin Chen, Jinsong Li, Xiaoyi Dong, Pan Zhang, Yuhang Zang, Zehui Chen, Haodong Duan, Jiaqi Wang, Yu Qiao, Dahua Lin, and 1 others. 2024. Are we on the right way for evaluating large vision-language models? Advances in Neural Information Processing Systems , 37:27056–27087. Lin Chen, Xiaoke Zhao, Kun Ding, Weiwei Feng, Changtao Miao, Zili Wang, Wenxuan Guo, Ying Wang, Kaiyuan Zheng, Bo Zhang, and 1 others. 2026. Beyond next-token alignment: Distilling multimodal large language models via token interactions. arXiv preprint arXiv:2602.09483 .Shuo Chen, Zhen Han, Bailan He, Jianzhe Liu, Mark Buckley, Yao Qin, Philip Torr, Volker Tresp, and Jin-dong Gu. 2025a. Can multimodal large language models truly perform multimodal in-context learn-ing? In 2025 IEEE/CVF Winter Conference on Ap-plications of Computer Vision (WACV) , pages 6000– 6010. IEEE. Shuo Chen, Jianzhe Liu, Zhen Han, Yan Xia, Daniel Cremers, Philip Torr, Volker Tresp, and Jindong Gu. 2025b. True multimodal in-context learning needs attention to the visual context. arXiv preprint arXiv:2507.15807 .Qianhan Feng, Wenshuo Li, Tong Lin, and Xing-hao Chen. 2025. Align-kd: Distilling cross-modal alignment knowledge for mobile vision-language large model enhancement. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition , pages 4178–4188. Honghao Fu, Yuan Ouyang, Kai-Wei Chang, Yiwei Wang, Zi Huang, and Yujun Cai. 2025. Contextnav: Towards agentic multimodal in-context learning. 
+
+arXiv preprint arXiv:2510.04560 .Yash Goyal, Tejas Khot, Douglas Summers-Stay, Dhruv Batra, and Devi Parikh. 2017. Making the v in vqa matter: Elevating the role of image understanding in visual question answering. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 6904–6913. 
+
+9Yuxian Gu, Li Dong, Furu Wei, and Minlie Huang. 2024. Minillm: Knowledge distillation of large language models. In The twelfth international conference on learning representations .Yiju Guo, Wenkai Yang, Zexu Sun, Ning Ding, Zhiyuan Liu, and Yankai Lin. 2026. Learning to focus: Causal attention distillation via gradient-guided token prun-ing. Advances in Neural Information Processing Systems , 38:24921–24948. Danna Gurari, Qing Li, Abigale J Stangl, Anhong Guo, Chi Lin, Kristen Grauman, Jiebo Luo, and Jeffrey P Bigham. 2018. Vizwiz grand challenge: Answering visual questions from blind people. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 3608–3617. Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. 2015. Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 .Drew A. Hudson and Christopher D. Manning. 2019. GQA: A new dataset for real-world visual reason-ing and compositional question answering. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 6700–6709. Yixing Jiang, Jeremy Irvin, Ji Hun Wang, Muham-mad Ahmed Chaudhry, Jonathan H Chen, and An-drew Y Ng. 2024. Many-shot in-context learning in multimodal foundation models. arXiv preprint arXiv:2405.09798 .Douwe Kiela, Hamed Firooz, Aravind Mohan, Vedanuj Goswami, Amanpreet Singh, Pratik Ringshia, and Davide Testuggine. 2020. The hateful memes chal-lenge: Detecting hate speech in multimodal memes. In Advances in Neural Information Processing Sys-tems , volume 33, pages 2611–2624. Jiwan Kim, Kibum Kim, Sangwoo Seo, and Chanyoung Park. 2025. Compodistill: Attention distillation for compositional reasoning in multimodal llms. arXiv preprint arXiv:2510.12184 .Jongwoo Ko, Sungnyun Kim, Tianyi Chen, and Se-Young Yun. 2024. Distillm: Towards streamlined distillation for large language models. arXiv preprint arXiv:2402.03898 .Bo Li, Yuanhan Zhang, Dong Guo, Renrui Zhang, Feng Li, Hao Zhang, Kaichen Zhang, Peiyuan Zhang, Yanwei Li, Ziwei Liu, and 1 others. 2024a. Llava-onevision: Easy visual task transfer. arXiv preprint arXiv:2408.03326 .Li Li, Jiawei Peng, Huiyi Chen, Chongyang Gao, and Xu Yang. 2024b. How to configure good in-context sequence for visual question answering. In 
+
+2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 26700–26710. IEEE. Yanshu Li, Jianjiang Yang, Zhennan Shen, Ligong Han, Haoyan Xu, and Ruixiang Tang. 2026a. Catp: Con-textually adaptive token pruning for efficient and en-hanced multimodal in-context learning. In Proceed-ings of the AAAI Conference on Artificial Intelligence ,volume 40, pages 6619–6627. Yanshu Li, Jianjiang Yang, Ziteng Yang, Bozheng Li, Ligong Han, Hongyang He, Zhengtao Yao, Yingjie Victor Chen, Songlin Fei, Dongfang Liu, and 1 others. 2026b. Make lvlms focus: Context-aware attention modulation for better multimodal in-context learning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pages 6610–6618. Yanshu Li, Jianjiang Yang, Tian Yun, Pinyuan Feng, Jinfa Huang, and Ruixiang Tang. 2025. Taco: En-hancing multimodal in-context learning via task mapping-guided sequence configuration. In Proceed-ings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 736–763. Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual instruction tuning. Advances in neural information processing systems , 36:34892– 34916. Pooyan Rahmanzadehgervi, Logan Bolton, Moham-mad Reza Taesiri, and Anh Totti Nguyen. 2024. Vi-sion language models are blind. In Computer Vision – ACCV 2024 , volume 15476 of Lecture Notes in Computer Science , pages 293–309. Springer. Melanie Rieff, Maya Varma, Ossian Rabow, Subathra Adithan, Julie Kim, Ken Chang, Hannah Lee, Nidhi Rohatgi, Christian Bluethgen, Mohamed Muneer, Jean-Benoit Delbrouck, and Michael Moor. 2025. SMMILE: An expert-driven benchmark for multi-modal medical in-context learning. In Advances in Neural Information Processing Systems , volume 38. Quan Sun, Yufeng Cui, Xiaosong Zhang, Fan Zhang, Qiying Yu, Yueze Wang, Yongming Rao, Jingjing Liu, Tiejun Huang, and Xinlong Wang. 2024. Gener-ative multimodal models are in-context learners. In 
+
+Proceedings of the IEEE/CVF conference on com-puter vision and pattern recognition , pages 14398– 14409. Qwen Team. 2026. Qwen3.5: Accelerating productivity with native multimodal agents. Ke Wang, Junting Pan, Weikang Shi, Zimu Lu, Houx-ing Ren, Aojun Zhou, Mingjie Zhan, and Hongsheng Li. 2024. Measuring multimodal mathematical rea-soning with MATH-Vision dataset. In Advances in Neural Information Processing Systems , volume 37. Tiannan Wang, Wangchunshu Zhou, Yan Zeng, and Xin-song Zhang. 2023. Efficientvlm: Fast and accurate vision-language models via knowledge distillation and modal-adaptive pruning. In Findings of the As-sociation for Computational Linguistics: ACL 2023 ,pages 13899–13913. 
+
+10 Yijia Xiao, Edward Sun, Tianyu Liu, and Wei Wang. 2024. LogicVista: Multimodal LLM logical reason-ing benchmark in visual contexts. arXiv preprint arXiv:2407.04973 .Nan Xu, Fei Wang, Sheng Zhang, Hoifung Poon, and Muhao Chen. 2025a. From introspection to best practices: Principled analysis of demonstrations in multimodal in-context learning. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Lin-guistics: Human Language Technologies (Volume 1: Long Papers) , pages 3299–3324. Shilin Xu, Xiangtai Li, Haobo Yuan, Lu Qi, Yunhai Tong, and Ming-Hsuan Yang. 2024. Llavadi: What matters for multimodal large language models distil-lation. arXiv preprint arXiv:2407.19409 .Weiye Xu, Jiahao Wang, Weiyun Wang, Zhe Chen, Wen-gang Zhou, Aijun Yang, Lewei Lu, Houqiang Li, Xi-aohua Wang, Xizhou Zhu, Wenhai Wang, Jifeng Dai, and Jinguo Zhu. 2025b. VisuLogic: A benchmark for evaluating visual reasoning in multi-modal large language models. arXiv preprint arXiv:2504.15279 .Xu Yang, Yingzhe Peng, Haoxuan Ma, Shuo Xu, Chi Zhang, Yucheng Han, and Hanwang Zhang. 2024. Lever lm: configuring in-context sequence to lever large vision language models. Advances in Neural Information Processing Systems , 37:100341–100368. Yifan Zhang, Huanyu Zhang, Haochen Tian, Chaoyou Fu, Shuangqing Zhang, Junfei Wu, Feng Li, Kun Wang, Qingsong Wen, Zhang Zhang, Liang Wang, and Rong Jin. 2025. MME-RealWorld: Could your multimodal LLM challenge high-resolution real-world scenarios that are difficult for humans? In 
+
+The Thirteenth International Conference on Learn-ing Representations .Yuanhan Zhang, Kaiyang Zhou, and Ziwei Liu. 2023. What makes good examples for visual in-context learning? Advances in Neural Information Process-ing Systems , 36:17773–17794. Xu Zheng, Chenfei Liao, Yuqian Fu, Kaiyu Lei, Yuan-huiyi Lyu, Lutao Jiang, Bin Ren, Jialei Chen, Jiawen Wang, Chengxin Li, and 1 others. 2025. Mllms are deeply affected by modality bias. arXiv preprint arXiv:2505.18657 .Haoyi Zhou, Shuo Li, Tianyu Chen, Qi Song, Chonghan Gao, and Jianxin Li. 2026a. Towards long-window anchoring in vision-language model distillation. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pages 28955–28963. Pengfei Zhou, Xiaopeng Peng, Fanrui Zhang, Zhaopan Xu, Jiaxin Ai, Yansheng Qiu, Wangbo Zhao, Jiajun Song, Chuanhao Li, Weidong Tang, Zhen Li, Hao-quan Zhang, Zizhen Li, Xiaofeng Mao, Yukang Feng, Jianwen Sun, Kai Wang, Xiaojun Chang, Wenqi Shao, and 2 others. 2026b. MDK12-Bench: A multi-discipline benchmark for evaluating reasoning in mul-timodal large language models. In Proceedings of the AAAI Conference on Artificial Intelligence , vol-ume 40, pages 28982–28990. Yongshuo Zong, Ondrej Bohdal, and Timothy Hospedales. 2025. Vl-icl bench: The devil in the details of multimodal in-context learning. In Inter-national Conference on Learning Representations ,volume 2025, pages 100058–100100. 
+
+A Experimental Setups 
+
+A.1 Training Details 
+
+We train each model for three epochs using the AdamW optimizer with a learning rate of 2 × 10 −5,a batch size of 32, cosine decay, and linear warmup. The maximum sequence length is set to 4,096. All experiments are conducted on eight NVIDIA H200 GPUs. The training data are detailed below. 
+
+VL-ICL. VL-ICL is a benchmark specifically designed to evaluate the multimodal ICL capabil-ity of LVLMs. Unlike conventional multimodal benchmarks that mainly probe single-image under-standing, its few-shot instances are constructed so that the query cannot be answered without first ex-tracting task information from the accompanying ICDs. It covers a diverse set of subtasks includ-ing fine-grained visual concept induction, image-to-text rule discovery, visual-textual binding, and interactive multi-image reasoning, forcing models to infer the underlying task specification, output format, and input-output mapping from the ICDs rather than from the query alone. 
+
+TrueMICL. TrueMICL is a benchmark that iso-lates genuine multimodal ICL from spurious short-cut learning. It rewrites conventional few-shot tasks so that language priors, prompt formatting, and ICD ordering are insufficient to answer the query, and correct predictions require jointly grounding vi-sual content in the ICDs and the query. The bench-mark spans multiple task types with tightly con-trolled ICD-query pairs, enabling a faithful mea-surement of how well an LVLM integrates cross-modal evidence. Thus, its instances serve as high-quality supervision for training procedures that tar-get evidence-driven multimodal ICL behavior. 
+
+SMMILE. SMMILE is an expert-driven bench-mark for multimodal medical in-context learning. It contains few-shot cases curated by clinical ex-perts across a range of medical imaging modali-ties and diagnostic tasks, with each query paired with ICDs that convey the intended reasoning pat-tern rather than lexical shortcuts. The benchmark 11 emphasizes fine-grained visual features, domain-specific terminology, and multi-step clinical reason-ing, all of which cannot be inferred from the query image alone. As a domain-specific complement to general-purpose ICL benchmarks, SMMILE probes whether LVLMs can extract and reuse spe-cialized visual evidence provided in ICDs. 
+
+HatefulMemes. HatefulMemes is a multimodal classification benchmark for detecting hateful con-tent in internet memes. Each sample pairs an im-age with an overlaid caption, and the label depends jointly on both modalities: many instances are "be-nign confounders" whose text or image alone is innocuous but whose combination becomes hate-ful. This construction penalizes unimodal shortcuts and forces models to reason about the interaction between visual and textual cues. 
+
+MME-RealWorld. MME-RealWorld is a large-scale multimodal benchmark composed of high-resolution real-world images and expert-annotated questions across a broad range of practical scenar-ios, such as autonomous driving, remote sensing, monitoring, and document understanding. Each question is carefully written to require detailed vi-sual perception and fine-grained reasoning, and the answers cannot be inferred from language pri-ors alone. The benchmark stresses realistic image conditions, spatial precision, and domain-specific knowledge simultaneously. 
+
+BlindTest. BlindTest is a diagnostic benchmark that exposes systematic failures of LVLMs on tasks that would be trivial for a sighted human, such as counting overlapping shapes, identifying inter-sections between lines, or tracing simple paths. Each item consists of a synthetic image and a short question targeting a single, precisely defined vi-sual property. The benchmark deliberately avoids linguistic complexity so that any error can be at-tributed to visual perception rather than reasoning. 
+
+VisuLogic. VisuLogic is a benchmark that eval-uates visual logical reasoning through structured diagram-based problems, including quantitative reasoning, spatial reasoning, positional reasoning, attribute reasoning, and stylistic reasoning. Each item presents a set of figures arranged as an anal-ogy or a rule-completion task, and answering it re-quires inferring an abstract transformation from the visual context alone. Because textual descriptions are minimal, the benchmark is largely immune to language-prior shortcuts. 
+
+GQA. GQA is a large-scale visual question an-swering benchmark built on scene graphs derived from real-world images. Its questions are gener-ated from compositional templates that explicitly target object recognition, attribute prediction, spa-tial relations, and multi-step reasoning, and each question is paired with a functional program spec-ifying the reasoning steps required. This design yields controlled difficulty and reduced language bias compared with earlier VQA datasets, and it enables fine-grained analysis of model behavior across reasoning types. 
+
+A.2 Benchmarks 
+
+In this section, we introduce the seven multimodal benchmarks used in our experiments. For each benchmark, we adopt its official accuracy metric. 
+
+VQAv2. VQAv2 is a large-scale visual question answering benchmark that pairs natural images with open-ended questions covering object recog-nition, attribute prediction, counting, and common-sense reasoning. Each question is balanced with a complementary image that produces a different an-swer, mitigating language priors and forcing mod-els to attend to visual content. Its scale, coverage, and adversarial balancing make it a standard bench-mark for evaluating general visual-language com-petence. In the multimodal ICL setting, VQAv2 is widely adopted to test whether models can leverage a small set of ICDs to align their answers with the expected format and reasoning pattern. 
+
+VizWiz. VizWiz is a visual question answering benchmark collected from blind users, where each question is spoken about a photograph taken by the user. The resulting images often contain motion blur, poor framing, or occlusion, and questions may be ambiguous or even unanswerable. This distri-bution shift makes VizWiz substantially more chal-lenging than curated benchmarks and demanding of robust cross-modal grounding. It is commonly used to assess whether LVLMs can generalize be-yond clean web imagery, and, in ICL evaluation, whether ICDs help models handle noisy inputs and abstain when necessary. 
+
+MMStar. MMStar is a vision-indispensable mul-timodal benchmark carefully filtered to remove samples that can be answered from text alone. Each question spans six core capabilities, includ-ing coarse and fine-grained perception, instance reasoning, logical reasoning, science and technol-12 ogy, and mathematics, ensuring that predictions depend on the accompanying image. The samples are hand-verified to avoid data leakage from com-mon pretraining corpora. Its emphasis on genuine visual grounding makes MMStar a strong probe of multimodal reasoning, and it is frequently used in recent evaluations of state-of-the-art LVLMs to distinguish visually competent models from those relying on language priors. 
+
+MathVision. MathVision is a benchmark for evaluating mathematical reasoning grounded in im-ages, covering geometry, algebra, combinatorics, and other topics drawn from competition-level problems. Each instance consists of a diagram to-gether with a formal problem statement, requiring the model to interpret visual structure and combine it with symbolic manipulation. The benchmark spans multiple difficulty levels and problem types, providing a stringent test of visual-mathematical reasoning. It is widely used to evaluate the higher-order reasoning ability of LVLMs, particularly whether models can move beyond surface recogni-tion to perform structured, multi-step derivations conditioned on visual input. 
+
+MDK12. MDK12 is a multi-discipline bench-mark for evaluating reasoning in multimodal large language models across K-12 subjects. Its ques-tions are drawn from real curricula and standard-ized examinations, and each item combines textual descriptions with diagrams, figures, or tables that are essential to the answer. The benchmark empha-sizes long-tail domain knowledge and structured reasoning rather than perceptual pattern matching. Its breadth across disciplines makes it a demand-ing testbed for measuring whether LVLMs possess the integrated visual, linguistic, and knowledge-based reasoning skills expected of general-purpose multimodal systems. 
+
+MMIQ. MMIQ is a multimodal intelligence-quotient benchmark that adapts classical IQ-test-style problems into vision-language tasks. Items in-clude visual analogies, pattern completion, spatial reasoning, and abstract rule induction, each requir-ing the model to infer latent transformations from a small set of visual elements. Because the ques-tions rely on abstract, non-verbal patterns rather than world knowledge, MMIQ is largely resistant to shortcuts based on textual priors. It is frequently used to evaluate the abstract and analogical reason-ing capabilities of LVLMs, complementing bench-marks that emphasize perception or factual recall. 
+
+LogicVista. LogicVista is a benchmark for eval-uating logical reasoning grounded in visual inputs. It covers deductive, inductive, and abductive rea-soning across categories such as syllogisms, propo-sitional logic, spatial logic, and diagrammatic rea-soning, with each instance providing a visual scene or figure together with a logical question. Answers cannot be obtained from either the image or the text in isolation, requiring genuine multimodal integra-tion. Its focused design targets a capability that is often underrepresented in general multimodal benchmarks, making it a useful probe of whether LVLMs can perform structured logical inference over visual evidence. 
+
+A.3 Baselines 
+
+In this section, we introduce the three baseline methods used in our experiments. For methods that perform distillation in multiple stages, we ap-ply only distillation fine-tuning (DFT) and omit subsequent supervised fine-tuning (SFT) to ensure a fair comparison. 
+
+LLaVA-KD. LLaVA-KD extends standard out-put distillation with relational distillation tailored to LVLMs. In addition to matching the teacher’s output distribution, it aligns pairwise relations be-tween hidden states across samples and modalities, encouraging the student to reproduce the teacher’s overall representation geometry. This relational ob-jective is intended to capture cross-modal structure that pointwise alignment omits. 
+
+CompoDistill. CompoDistill focuses on improv-ing the compositional reasoning capability of LVLMs by distilling intermediate attention distri-butions from the teacher to the student. It aligns attention maps over image and text tokens at se-lected layers, providing finer-grained supervision than output-only distillation. This design encour-ages the student to reproduce the teacher’s token-interaction pattern rather than merely its final pre-dictions. CompoDistill is included as a representa-tive attention-based distillation baseline. 
+
+Align-TI. Align-TI is a recent LVLM distilla-tion method that combines cross-modal alignment and attention distribution matching to capture di-verse token interactions. It transfers alignment be-tween textual queries and visual tokens while also aligning the teacher’s attention patterns across se-lected layers, aiming to reproduce both the seman-13 tic and structural aspects of the teacher’s forward pass. It represents the current state of the art among attention-based distillation approaches for LVLMs and, in this work, is adapted to multi-image ICL prompts. 
+
+B Attribute-matched Replacement 
+
+For each prompt x, we sample a different training example x0 as the source of replacement content. The replacement example is selected once during preprocessing using a deterministic seed derived from the identifier of x and is reused throughout training. For a text token uj , we define its attributes by its prompt role, textual field, and within-field position. The prompt role indicates whether the token belongs to an ICD or the query, while the textual field distinguishes an ICD question, an ICD answer, and the query question. If the token is the t-th token of a field containing L tokens, its position is normalized as pj = ( t + 0 .5) /L . We select u0 
+
+> j
+
+from the same role and textual field in x0
+
+with the closest normalized position. When several tokens are equally close, one is selected determinis-tically, and an identical token is skipped whenever another valid replacement is available. For a pro-jected visual token, the attributes consist of its ICD or query role and its normalized spatial coordinates. Specifically, a token at row h and column w of an 
+
+H × W visual-token grid is assigned coordinates 
+
+(( h + 0 .5) /H, (w + 0 .5) /W ). Its replacement is taken from the corresponding image role in x0 at the nearest normalized grid location, which reduces to the same row and column when the two grids have identical sizes. For ICD content, the replace-ment ICD in x0 is sampled uniformly from its ICDs and then used consistently for all tokens belonging to the same original ICD. If the selected example does not contain a valid token with the required role or field, another example is sampled instead of relaxing the matching constraints. The replacement changes only the input embedding at the original token position, leaving sequence length, structural tokens, image boundaries, positional indices, and the attention mask unchanged. For teacher and student models, the same replacement token iden-tity or replacement image location is used, but its embedding bM,j is independently produced by the embedding and visual projection modules of model 
+
+M ∈ { T, S }.
+
+C Additional Ablation Study 
+
+C.1 Sensitivity to Hyperparameters 
+
+We study the three hyperparameters that control the coverage, reliability, and strength of causal su-pervision. The evidence ratio r determines the fraction of candidate tokens selected as evidence, the verification ratio ρ determines the fraction of highest-scoring prompts retained after causal-effect verification, and λ weights the MCD loss relative to conventional supervision. We vary one hyper-parameter at a time while fixing the others to their default values, r = 0 .25 , ρ = 0 .50 , and λ = 1 .0.Fig. 5 reports Qwen3-VL and LLaVA-OneVision separately and the default points correspond to their main results of 58 .22 and 47 .95 .For the evidence ratio, increasing r from 0.10 
+
+to 0.25 improves Qwen3-VL from 57 .13 to 58 .22 
+
+and LLaVA-OneVision from 45 .72 to 47 .95 . In-creasing it further to 0.50 reduces the scores to 
+
+57 .62 and 47 .10 . Selecting too few tokens can omit complementary query and ICD information, an effect that is particularly pronounced for LLaVA-OneVision, whereas selecting too many introduces weakly relevant content and reduces the contrast between the retain-evidence and remove-evidence prompts. The verification sweep follows a similar single-peak pattern. Moving ρ from 0.10 to 0.50 
+
+raises the two scores from 56 .82 and 46 .92 to 58 .22 
+
+and 47 .95 , while retaining 75% of prompts lowers them to 57 .41 and 47 .50 . This result reflects the trade-off between retaining sufficient causal super-vision and excluding prompts with weak interven-tion effects. Finally, increasing λ from 0.25 to 1.0
+
+steadily improves Qwen3-VL from 57 .02 to 58 .22 
+
+and LLaVA-OneVision from 46 .93 to 47 .95 . Both model families exhibit consistent trends, support-ing the default configuration as a balanced choice for evidence coverage, verification reliability, and objective strength. MCD also remains robust across different hyperparameter settings. 
+
+C.2 Scope of Causal Supervision 
+
+We next determine whether the improvements arise from one dominant modality or prompt compo-nent. We restrict evidence discovery and interven-tion to text tokens, visual tokens, ICD tokens, or query tokens, producing Text-only, Vision-only, ICD-only, and Query-only variants. Each variant uses the same selection ratio within its eligible can-didate set, while the original prompt and standard distillation objective remain unchanged. Table 4 14 0.1 0.25 0.5 
+
+r
+
+> 45 50 55
+> Avg. accuracy (%)
+
+(a) Evidence ratio    
+
+> 0.1 0.25 0.5 0.75
+
+ρ
+
+> 45 50 55
+
+(b) Verification ratio    
+
+> 0.25 0.5 0.75 1
+
+λ
+
+> 45 50 55
+
+(c) Loss weight    
+
+> MCD (Qwen3-VL) MCD (LLaVA-OV) Vanilla KD (Qwen3-VL) Vanilla KD (LLaVA-OV)
+
+Figure 5: Sensitivity of MCD to three hyperparameters: evidence retention ratio r, verification threshold ρ, and causal loss weight λ. Results are averaged across the seven evaluation benchmarks. Dashed lines denote Vanilla KD as reference.                               
+
+> Variant VQAv2 MMStar MathVision LogicVista Avg. Text-only 86.79 70.62 51.18 51.20 64.95 Vision-only 85.72 69.85 50.83 50.54 64.24 ICD-only 85.94 70.50 50.79 50.76 64.50 Query-only 86.45 70.28 51.31 51.42 64.87 Full MCD 87.29 73.01 52.37 52.67 66.34
+
+Table 4: Ablation of the modality and ICL prompt com-ponent receiving causal supervision. 
+
+shows that Text-only and Vision-only obtain aver-age scores of 64.95 and 64.24, respectively, while ICD-only and Query-only obtain 64.50 and 64.87. The stronger Text-only result reflects the impor-tance of questions and ICD answers for identifying the task mapping, while the remaining improve-ment of Vision-only confirms that the causal signal is not reducible to language patterns. Query-only performs better than ICD-only because the query directly specifies the prediction target, yet both re-main below full MCD at 66.34. The combined result therefore indicates that effective multimodal ICL depends on jointly transferring visual and tex-tual evidence from both the ICDs and the query, matching the causal pathway that motivates MCD. 
+
+C.3 Decomposition of Evidence Verification 
+
+The main experiments establish the benefit of ver-ification as a whole. We further examine whether its retain-evidence and remove-evidence measure-ments provide complementary information. To control the amount of causal training data, all veri-fied variants accept the same proportion ρ of exam-ples. Retain-only ranks examples by the similarity between the full and retain-evidence predictions, Remove-only ranks them by the divergence caused by evidence removal, and Joint verification uses their difference as defined in the main method. Ta-Variant VQAv2 MMStar MathVision LogicVista Avg. No verification 85.87 70.49 48.02 49.49 63.47 Retain-only 86.35 71.33 49.58 51.64 64.73 Remove-only 86.51 71.67 50.25 52.20 65.16 Joint verification 87.29 73.01 52.37 52.67 66.34 
+
+Table 5: Decomposition of the evidence verification criterion. All verified variants retain the same proportion of training examples. 
+
+ble 5 shows that both one-sided criteria improve upon the unverified setting, with Remove-only reaching 65.16 and Retain-only reaching 64.73. Neither criterion alone matches the 66.34 achieved by Joint verification. Retention alone may select evidence that reproduces the answer but is behav-iorally redundant, while removal alone may favor destructive perturbations that do not preserve suffi-cient task information. Their combination requires the same evidence to be sufficient when retained and influential when removed, providing a stricter operational test of the teacher’s causal dependence and explaining the benefit of the two-sided verifi-cation design. 
+
+C.4 Robustness to Replacement Sampling 
+
+Because MCD constructs interventions using a ran-domly selected matched replacement example, we test whether its result depends on one favorable replacement assignment. For Fixed-K, we inde-pendently sample K matched replacement exam-ples during preprocessing and average their teacher attributions and intervention responses before se-lecting and verifying the evidence. We addition-ally consider epoch-wise resampling, which draws one new replacement for every training epoch and recomputes the corresponding teacher metadata. Table 6 reports the average score under each set-15 Sampling strategy VQAv2 MMStar MathVision LogicVista Avg. Fixed-1 (default) 87.29 73.01 52.37 52.67 66.34 Fixed-2 87.14 73.13 52.31 53.12 66.43 Fixed-4 87.42 72.79 52.72 53.20 66.53      
+
+> Epoch-wise resampling 86.69 72.31 51.22 51.45 65.42
+
+Table 6: Robustness to replacement sampling. Fixed-K
+
+averages teacher signals from K independently sampled matched replacements. 
+
+ting. Increasing K from one to four changes the average score by only 0.19, while teacher pre-processing grows approximately linearly because each additional replacement requires another set of attribution and intervention computations. The changes on individual benchmarks are also small, with Fixed-4 improving over Fixed-1 by at most 0.53 points. In contrast, epoch-wise resampling reaches 65.42, which is 0.92 points below the fixed default, with larger drops on MathVision and Log-icVista. Thus, changing the causal target across epochs particularly disrupts tasks that require multi-step use of the ICDs. These results show that MCD is insensitive to the fixed replacement assignment and support Fixed-1 as the best balance between performance and preprocessing cost. 
+
+D Additional Analysis 
+
+D.1 Metrics for Causal Behavior Transfer 
+
+Let H denote the held-out prompt set. For each 
+
+x ∈ H , we use the evidence set Ex discovered by the teacher to construct the same full, retain-evidence, and remove-evidence prompts for every evaluated student. All models are evaluated on the fixed teacher-generated answer eyT and its pre-fixes. Let Lx be its length and let ¯P vM,k denote the distribution of model M for prompt variant 
+
+v ∈ { F, K, D } using the sparse support and tail aggregation defined in Section 3.5. For an evalu-ated student M , we compute                      
+
+> eM
+> keep (x) = 12Lx
+> LxX
+> k=1
+> ¯PFT,k −¯PKM,k 1
+> ,(20)
+> eM
+> effect (x) = 14Lx
+> LxX
+> k=1
+> ( ¯PFT,k −¯PDT,k )−( ¯PFM,k −¯PDM,k )1
+> (21)
+
+The reported errors average these quantities over the held-out set, EM 
+
+> keep
+
+= |H| −1 P 
+
+> x
+
+eM
+
+> keep
+
+(x)
+
+and EM 
+
+> effect
+
+= |H| −1 P 
+
+> x
+
+eM
+
+> effect
+
+(x). To measure whether the student preserves variation in the strength of the teacher’s intervention response, we define the removal effect 
+
+rM (x) = 1
+
+Lx
+
+> Lx
+
+X
+
+> k=1
+
+DJS 
+
+  ¯P FM,k ¯P DM,k 
+
+ (22) and report the Pearson correlation                
+
+> Corr( T, M ) = 1
+> ZTZM
+> X
+> x∈H
+>  rT(x)−μT
+>   rM(x)−μM
+> ,
+> (23)
+> ZJ=
+> " X
+> x∈H
+>  rJ(x)−μJ
+> 2
+> #1/2
+> , J ∈ { T, M }.
+> (24)
+
+D.2 Efficiency Analysis 
+
+Here, we report model evaluations because the three model families use different decoder kernels and model-parallel layouts. This gives a repro-ducible comparison that is independent of device utilization. Let FT denote one teacher-forced eval-uation of a complete prompt–answer sequence, Bin 
+
+> T
+
+the backward pass required only for the gradient with respect to the input embeddings, and FS one student evaluation. On the fixed 60K-example train-ing set, Vanilla KD preprocesses one FT per ex-ample. MCD additionally evaluates the interpo-lated prompt, its input gradient, and the retain- and remove-evidence prompts. Its one-time teacher cost is therefore 4FT + Bin  
+
+> T
+
+per example when the full-prompt distribution produced during cor-rectness screening is reused. The teacher is then removed from training. At each epoch, the conven-tional loss uses one FS . An accepted example uses one additional FS for the keep objective or two for the effect objective with equal probability. Hence, the expected student cost is 
+
+1 + ¯ a 12 (1) + 12 (2)  = 1 + 1 .5¯ a (25) evaluations per example and epoch. With the real-ized acceptance rate ¯a = 0 .5, MCD uses 1.75 FS
+
+per epoch, or 5.25 FS over three epochs, compared with 3FS for Vanilla KD. The prompt variants are evaluated sequentially, so this increase affects total computation but does not multiply peak activation memory. We further calculate cache storage from the rep-resentation used by the loss. With K = Kcache ,a Vanilla-KD distribution stores K uint32 token indices, K BF16 probabilities, and one BF16 tail mass, requiring 6K + 2 bytes per answer token. For an accepted MCD example, the union of the full- and remove-prompt supports contains at most 16 Method Teacher processing Teacher in training Student evals./epoch Student evals./3 epochs Cache (GiB) Inference cost Vanilla KD FT once No 1.00 FS 3.00 FS 0.34 1.00 ×                       
+
+> LLaVA-KD FT/epoch Yes 1.00 FS3.00 FS–1.00 ×
+> Align-TI FT/epoch Yes 2.00 FS6.00 FS–1.00 ×
+> MCD 4FT+Bin
+> Tonce No 1.75 FS5.25 FS0.80 †1.00 ×
+
+† Excludes the compact evidence mask, whose exact size is PDi=1 ⌈Ni/8⌉ bytes. A dash indicates that the original online-teacher implementation does not use an offline teacher cache. 
+
+Table 7: Algorithmic efficiency on the fixed 60K-example training set. Counts are per example; the three-epoch column includes only student evaluations. Cache values use Kcache = 128 , ¯L = 8 , and ¯a = 0 .5. Inference cost is normalized by the original student. 
+
+Case type Concrete multimodal ICL scenario Why the case is challenging Potential extension Coherence-sensitive intervention OCR strings, diagram labels, or relational statements must remain consistent with nearby visual content. A structurally matched replacement creates an implausible local image-text pair and induces a response unrelated to the target mechanism. Use context-conditioned replacements that preserve local semantic consistency. Teacher uncertainty Low-quality images, rare mechanisms, or open-ended questions admit uncertain or multiple valid predictions. Evidence rankings and removal effects change across valid teacher responses, or the prompt is removed by correctness screening. Use multi-response or ensemble verification to marginalize over acceptable teacher predictions. 
+
+Table 8: Representative challenging cases and potential extensions of MCD in multimodal ICL. 
+
+2K indices, and two BF16 distributions are stored on this union. This adds at most 16 K + 4 bytes per answer token. For D examples with mean answer length ¯L, the total distribution cache is therefore 
+
+Ccache ≤ D ¯L(6 K + 2) + ¯ a(16 K + 4)  bytes .
+
+(26) For D = 60 ,000 , K = 128 , ¯a = 0 .5, and ¯L = 8 ,this is 0.80 GiB; the bit-packed evidence masks add PDi=1 ⌈Ni/8⌉ bytes. Table 7 summarizes the result. MCD has a larger one-time teacher cost than output KD, but avoids a teacher in the training loop and remains lighter in student evaluations than the two-evaluation token-interaction objective. All methods retain the unmodified student architecture and consequently have identical deployment cost. 
+
+D.3 Failure Case Study 
+
+To delineate the current scope of MCD, we examine representative prompts that remain challenging af-ter distillation and summarize two recurring scenar-ios in Table 8. First, structural matching does not guarantee semantic plausibility. Replacing an OCR string, diagram label, or relational statement with a position-matched token from another example can break local image-text consistency, so part of the output change may reflect an off-manifold prompt rather than removal of the intended mechanism evi-dence. The verification procedure filters many such cases, while a replacement model conditioned on local visual and textual context could provide more precise interventions. Second, MCD inherits un-certainty from the teacher. For low-quality VizWiz images, rare task mechanisms, or open-ended ques-tions with multiple valid answers, the selected ev-idence can vary with the teacher response even when several predictions are acceptable. Correct-ness and causal-effect screening already reduce this noise, while multi-response or ensemble verifica-tion could further preserve useful supervision when several teacher predictions are reasonable. These cases do not affect the inference cost or general applicability of MCD, but identify two promising directions for making its causal supervision more context-aware and uncertainty-aware. 17

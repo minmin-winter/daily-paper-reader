@@ -6,51 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-10-04
-- 运行时间：2026-10-04 22:27:16 UTC
+- 最新运行日期：2026-10-06
+- 运行时间：2026-10-06 01:24:07 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：0
-- 速读区：10
+- 本次总论文数：13
+- 精读区：4
+- 速读区：9
 
 ### 今日简报（AI）
-今日速读10篇多模态模型研究，精读挂零，焦点集中在统一多模态模型的训练与表征优化。最值得看的是对抗自训练与演化数据（7.0）以及位置解析的梯度冲突与位置感知调制（7.0），都在解决统一模型训练中的核心矛盾。普通读者可优先从这两篇入手，理解多模态模型为何“顾此失彼”。
-- 详情：[/202610/04/README](/202610/04/README)
+今日精读4篇、速读9篇，共梳理13篇多模态学习前沿进展。最值得关注的是满分论文《Balancing Multimodal Learning via Functional Progress》提出的功能进展平衡思路，以及梯度冲突与统一多模态模型理解—生成权衡的系列审计研究。建议普通读者优先从"如何让多模态模型理解与生成能力不互相拖累"这一主线入手理解。
+- 详情：[/202610/06/README](/202610/06/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Balancing Multimodal Learning via Functional Progress](/202610/06/2610.03035v1-balancing-multimodal-learning-via-functional-progress)  
+   标签：评分：10.0/10、query:balanced-mml
+   evidence：缓解多模态优化中的模态不平衡
+2. [Beyond Layers: Position-Resolved Gradient Conflict and Position-Aware Modulation for Unified Multimodal Models](/202610/06/2609.38485v1-beyond-layers-position-resolved-gradient-conflict-and-position-aware-modulation-for-unified-multimodal-models)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：统一多模态模型中位置分辨的梯度冲突与位置感知调制
+3. [Recursive Self-Improvement in Unified Multimodal Models](/202610/06/2610.03002v1-recursive-self-improvement-in-unified-multimodal-models)  
+   标签：评分：8.0/10、query:unified-mm
+   evidence：同时理解与生成文本和图像的统一多模态模型
+4. [Architecture-Dependent Fusion Pathways in MLLMs](/202610/06/2610.03289v1-architecture-dependent-fusion-pathways-in-mllms)  
+   标签：评分：8.0/10、query:native-multi
+   evidence：对比拼接式与原生多模态架构中的融合路径分析
 
 ### 速读区论文标签
-1. [Mutually Adversarial Self-Training with Evolving Data for Unified Multimodal Models](/202610/04/2609.36224v1-mutually-adversarial-self-training-with-evolving-data-for-unified-multimodal-models)  
+1. [Mutually Adversarial Self-Training with Evolving Data for Unified Multimodal Models](/202610/06/2609.36224v1-mutually-adversarial-self-training-with-evolving-data-for-unified-multimodal-models)  
    标签：评分：7.0/10、query:unified-mm
-   evidence：统一多模态模型的后训练框架
-2. [Beyond Layers: Position-Resolved Gradient Conflict and Position-Aware Modulation for Unified Multimodal Models](/202610/04/2609.38485v1-beyond-layers-position-resolved-gradient-conflict-and-position-aware-modulation-for-unified-multimodal-models)  
+   evidence：面向统一多模态模型的强化学习后训练框架
+2. [Does Gradient Conflict Predict the Understanding--Generation Trade-off? A Controlled Audit of Conflict-Metric Validity in Unified Multimodal Models](/202610/06/2609.38465v1-does-gradient-conflict-predict-the-understanding--generation-trade-off-a-controlled-audit-of-conflict-metric-validity-in-unified-multimodal-models)  
    标签：评分：7.0/10、query:unified-mm
-   evidence：统一多模态模型理解与生成冲突的位置感知调制
-3. [Rethinking Multi-Image Re-Representation in Multi-Image Understanding](/202610/04/2609.39363v1-rethinking-multi-image-re-representation-in-multi-image-understanding)  
-   标签：评分：7.0/10、query:mm-reasoning
-   evidence：多图理解需要在推理中组织跨图像视觉证据
-4. [Query, Align, and Distill: Navigation-Aware Cross-Modal Interaction for Efficient Vision-and-Language Navigation](/202610/04/2609.33097v1-query-align-and-distill-navigation-aware-cross-modal-interaction-for-efficient-vision-and-language-navigation)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：将可导航视觉证据与语言指令对齐的跨模态交互
-5. [ConvCue: Complementary Visual Inductive Biases for Vision-Language Models](/202610/04/2609.34196v1-convcue-complementary-visual-inductive-biases-for-vision-language-models)  
+   evidence：统一多模态模型中理解与生成的梯度冲突度量
+3. [Synchronous Multi-view Neural Diffusion](/202610/06/2609.39019v1-synchronous-multi-view-neural-diffusion)  
+   标签：评分：7.0/10、query:unified-mm
+   evidence：利用互补性与一致性的同步多视图融合
+4. [MCD: Causal Distillation of Multimodal In-Context Learning in Large Vision-Language Models](/202610/06/2609.39920v1-mcd-causal-distillation-of-multimodal-in-context-learning-in-large-vision-language-models)  
+   标签：评分：6.0/10、query:balanced-mml
+   evidence：减少多模态模型对语言先验与虚假线索依赖的蒸馏方法
+5. [PhysVista: Benchmarking Physical Intelligence in VLMs via a Perception-Reasoning-Assessment Loop](/202610/06/2610.00559v1-physvista-benchmarking-physical-intelligence-in-vlms-via-a-perception-reasoning-assessment-loop)  
    标签：评分：6.0/10、query:mm-reasoning
-   evidence：用冻结CNN特征增强VLM视觉表示以提升细粒度视觉推理
-6. [Joint and Cross-Modal Video-Audio Generation and Editing: A Unified Formulation and Design Taxonomy](/202610/04/2609.34381v1-joint-and-cross-modal-video-audio-generation-and-editing-a-unified-formulation-and-design-taxonomy)  
+   evidence：面向视觉语言模型多模态推理的基准
+6. [AVSD-Scenes: A Dataset for Audio-Visual Description of Urban Scenes](/202610/06/2610.01861v1-avsd-scenes-a-dataset-for-audio-visual-description-of-urban-scenes)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：融合两种模态信息的音视频数据集
+7. [GAANet: Global-guided Asymmetric Attention Network for Audio-Visual Speech Separation](/202610/06/2610.02752v1-gaanet-global-guided-asymmetric-attention-network-for-audio-visual-speech-separation)  
+   标签：评分：6.0/10、query:balanced-mml
+   evidence：非对称多尺度融合，区别对待不同模态
+8. [Seeing, Saying, but Not Using: From Reportable Spatial Facts to Usable States in Multimodal Large Language Models](/202610/06/2610.02876v1-seeing-saying-but-not-using-from-reportable-spatial-facts-to-usable-states-in-multimodal-large-language-models)  
+   标签：评分：6.0/10、query:mm-reasoning
+   evidence：多模态大模型空间状态构建与使用的基准研究
+9. [Toward Omni Multimodal Graph Foundation Model: A Topology-Driven Binding Approach](/202610/06/2610.02881v1-toward-omni-multimodal-graph-foundation-model-a-topology-driven-binding-approach)  
    标签：评分：6.0/10、query:unified-mm
-   evidence：音视频联合生成的统一形式化
-7. [Multimodal Target Speaker Extraction: Towards Unified Speaker Cues Across Modalities](/202610/04/2609.35613v1-multimodal-target-speaker-extraction-towards-unified-speaker-cues-across-modalities)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：目标说话人提取中跨模态统一说话人线索
-8. [Text-Video Retrieval via Multi-Dimensional Saliency Assessment and Granularity-Aware Query Decomposition](/202610/04/2609.38949v1-text-video-retrieval-via-multi-dimensional-saliency-assessment-and-granularity-aware-query-decomposition)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：通过学习联合嵌入空间连接视觉与文本模态
-9. [Spherical Interpolation for Backward-Compatible Multimodal Representations](/202610/04/2609.39836v1-spherical-interpolation-for-backward-compatible-multimodal-representations)  
-   标签：评分：6.0/10、query:native-multi
-   evidence：在共享归一化嵌入空间中对齐跨模态表征
-10. [EWAM: Emergent Depth-Wise Specialization in a Unified Embodied Model -- From Semantic Understanding through Visual Foresight to Action](/202610/04/2609.39973v1-ewam-emergent-depth-wise-specialization-in-a-unified-embodied-model----from-semantic-understanding-through-visual-foresight-to-action)  
-   标签：评分：6.0/10、query:unified-mm
-   evidence：统一具身模型中非对称联合注意力平衡各专家
+   evidence：将异构模态绑定到统一共享表示空间
 
 
 <div class="dpr-home-promo-card">
