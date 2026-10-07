@@ -1,0 +1,1987 @@
+Title: Synchronous Multi-view Neural Diffusion
+
+URL Source: https://arxiv.org/pdf/2609.39019v1
+
+Published Time: Thu, 01 Oct 2026 00:57:04 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Synchronous Multi-view Neural Diffusion 
+
+# Yongquan Shi 
+
+Fujian Normal University Fuzhou, China Fuzhou University, Fuzhou, China losparksayoji@outlook.com 
+
+# Weijun Huang 
+
+Fuzhou University Fuzhou, China weijunhuang22@gmail.com 
+
+# Yueyang Pi 
+
+Fuzhou University Fuzhou, China piyueyangcc@163.com 
+
+# Wendi Zhao 
+
+Fuzhou University Fuzhou, China 241010030@fzu.edu.cn 
+
+# Yiqing Shi ✉
+
+Fujian Normal University Fuzhou, China 417shelly@gmail.com 
+
+# Shiping Wang 
+
+Fuzhou University Fuzhou, China shipingwangphd@163.com 
+
+## Abstract 
+
+Multi-view learning seeks to learn more comprehensive represen-tations by exploiting the complementarity and consistency across diverse modalities or views. However, existing multi-view fusion strategies treat intra- and inter-view fusion as independent stages, without simultaneously considering the evolution within views and the dependency across views. Such an asynchronous fusion para-digm inevitably constrains cross-view interactions due to conflict-ing view-specific structural inductive biases. As a result, informa-tion flow is prone to distortion and compression along intermediate pathways, confining the model to learn within a restricted solution space. To address this, we propose Synchronous Multi-view Neural Diffusion (SynMDiff), which conceptualizes the multi-view feature space as a unified dynamical system driven by a diffusion process. By modeling the diffusion flow across arbitrary dyadic feature in-teractions in a joint space, SynMDiff enables the concurrent and adaptive intra- and inter-view information fusion. While a direct implementation of this synchronized mechanism incurs prohibitive computational costs, we further introduce an energy-based topo-logical sampling strategy and an Ego-Net style centralized training architecture, ensuring both efficiency and scalability during learn-ing and inference. Due to its conceptual elegance and computational efficacy, evaluations on real-world datasets demonstrate that Syn-MDiff outperforms the baselines by a large margin 1.
+
+## CCS Concepts 
+
+• Computing methodologies → Semi-supervised learning settings ; Neural networks .
+
+## Keywords 
+
+Multi-view Learning, Graph Neural Networks, Neural Diffusion. 
+
+ACM Reference Format: 
+
+Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi, and Ship-ing Wang. 2026. Synchronous Multi-view Neural Diffusion. In Proceedings of the 34th ACM International Conference on Multimedia (MM ’26), November 
+
+> 1Code is available at https://github.com/LosparkSayoji/SynMDiff.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3835714
+
+10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 18 pages. https://doi.org/10.1145/3767308.3835714 
+
+## 1 Introduction 
+
+In real-world scenarios, entities are represented in diverse modali-ties and can be characterized by features from various views. Typical examples include multi-angle camera arrays in autonomous driving [17], text-video pairs in multimedia retrieval [19], and multi-omics profiles in AI-driven drug discovery [44]. As a pivotal paradigm, multi-view learning aims to integrate information from diverse views, capturing their inherent consistency and complementarity to yield a more comprehensive representation than any single view can provide [3, 11, 31, 50, 57]. In practice, the relationships between views are often non-linear and higher-order, posing formidable chal-lenges in modeling these intricate inter-view correlations across heterogeneous feature spaces. Surprisingly, an in-depth and principled exploration of multi-view fusion strategies has been largely overlooked. Existing multi-view fusion methods [28, 38, 43] typically rely on independent encoders to extract features from different views, followed by post-hoc intra-instance fusion of the resulting representations via learned scalar weights ( e.g. , attention scores). In this way, intra- and inter-view fusion are separated into two independent stages, forming a view-decoupled asynchronous fusion paradigm. We provide an intuitive illustration of this architecture in Fig. 1(a). However, despite its conceptual simplicity and ease of imple-mentation, this asynchronous fusion strategy substantially limits the expressive power of the model, as inter-view interactions are inevitably influenced by the structural inductive biases imposed within each view. More specifically, within such an asynchronous fusion framework, interactions between arbitrary cross-view fea-ture pairs are not explicitly modeled but are instead decomposed into a two-stage process involving intra-view and inter-view oper-ations. As a result, cross-view information must propagate through indirect pathways, where it is prone to distortion or compression due to bottleneck effects [42]. This constitutes an inherently con-strained information flow, reflecting structural limitations imposed along the interaction paths. Consider a simple yet critical scenario: even if sample 𝑖 in view 𝑣 is strongly correlated with sample 𝑗 in view 𝑢 , if samples 𝑖 and 𝑗 within view 𝑢 are weakly correlated or even unrelated, then sample 𝑖 in view 𝑣 can hardly access informa-tion from sample 𝑗 through sample 𝑖 in view 𝑢 . More critically, such        
+
+> 1arXiv:2609.39019v1 [cs.LG] 30 Sep 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang. (a)
+> (b)
+> Target
+> Cross-instance Integration
+> View v
+> View u
+> Stage 1
+> View-Independent Evolution
+> View 1
+> View 2
+> View 𝑉
+> View 1
+> View 2
+> View 𝑉
+> View-Joint Evolution & Fusion
+> View v
+> View u
+> Direct
+> Weak
+> Correlation
+> Stage 2
+> Instance-wise
+> Fusion
+> Strong
+> Correlation
+> Indirect
+
+Figure 1: Comparison of two multi-view fusion paradigms. (a) The two-stage asynchronous paradigm does not explicitly model cross-view interactions. Conflicts among view-specific structural inductive biases can therefore distort information flow along intermediate pathways. (b) The proposed syn-chronous paradigm jointly models intra-view and inter-view fusion, enabling direct interactions between arbitrary views. 
+
+structural conflicts are prevalent in real-world multi-view settings involving heterogeneous data. To address these limitations, we propose Syn chronous Multi-view Neural Diff usion (SynMDiff), a novel framework that refor-mulates joint multi-view feature evolution through the lens of continuous-time ordinary differential equations. Inspired by diffu-sion dynamics, SynMDiff explicitly models arbitrary pairwise fea-ture interactions as adaptive diffusion flows in a unified multi-view space, thereby enabling concurrent intra- and inter-view fusion while mitigating the influence of view-specific inductive biases. This unified formulation allows information to propagate directly across views without relying on view-specific intermediate representa-tions or predefined interaction pathways. Despite its theoretical appeal, a direct implementation of synchronous diffusion incurs prohibitive computational overhead. To address this, we generalize the diffusion process to model information propagation over a com-plete graph and introduce an energy-based topological sampling mechanism to prune redundant interactions and optimize diffusion pathways. Furthermore, we design an Ego-Net -style centralized architecture [14], enabling SynMDiff to achieve efficient training and inference in large-scale scenarios. Our main contributions are summarized below: 
+
+• We propose synchronous multi-view neural diffusion to mit-igate the influence of view-specific inductive biases when modeling cross-view interactions. 
+
+• To alleviate the computational overhead, we develop a topo-logical sampling strategy with a centralized training archi-tecture for efficient deployment. 
+
+• Extensive experiments on real-world datasets across diverse multi-view scenarios demonstrate the effectiveness of the proposed method. 
+
+## 2 Related Work 2.1 Multi-view Learning 
+
+There are numerous studies dedicated to facilitating the feature fusion within multi-view settings. Early efforts in this field used lin-ear weighting mechanisms [40] or learned adaptive scalar weights [15, 34] to balance the importance of different views. To bridge the gap between disparate feature spaces, several approaches pro-jected multi-view data into a unified low-dimensional subspace via linear transformations [54] or captured intricate patterns through non-linear subspace learning [49]. Beyond shallow mappings, Xu et al. [52] incorporate a set of shared parameters alongside view-specific independent encoders to extract cross-view consistencies. Some research also explored multi-stage training paradigms [51] to refine the coordination between disparate views. Recently, a burgeoning trend has focused on integrating graph-based models into multi-view frameworks, demonstrating their superior capac-ity to capture consistency and complementarity via topological structures. Following the graph-based co-training paradigm of Li et al. [22], subsequent work has focused on constructing unified topologies for multi-view data [5, 6, 29, 56], with extensions toward interpretability [48] and deeper architectures [38]. These meth-ods either model different views independently or learn a shared subspace, neglecting the dynamic cross-view interactions. Recently, the latest works [21, 28] have attempted to incorporate global attention mechanisms to capture fine-grained interactions within multi-view data. However, these methods still follow a two-stage asynchronous fusion paradigm, where the modeled cross-view interactions are inevitably influenced by view-specific structural inductive biases. 
+
+## 2.2 Neural Diffusion Models 
+
+Several recent efforts explore diffusion-based learning, where con-tinuous dynamics serve as an inductive bias for representation learning [26, 27]. Most of these works formulate models based on continuous diffusion processes governed by Partial Differential Equations (PDEs) [4, 9, 41] or develop novel frameworks from a diffusive perspective [2, 12]. In these settings, diffusion is typically interpreted as feature-level interaction or characterized as informa-tion propagation over graphs via geometric properties [53]. Our work follows the trajectory of PDE-inspired modeling, where the key originality lies in: (i) we introduce neural diffusion flows to efficiently model intricate cross-view interactions among heteroge-neous features in multi-view data; (ii) we propose a synchronous diffusion mechanism that enables the concurrent fusion of intra-and inter-view features. To the best of our knowledge, this is the first attempt to formulate the multi-view feature space as a unified dynamical system, allowing intra- and inter-view interactions to be captured in a fully synchronized manner. 
+
+## 3 Preliminary 
+
+We start by studying the diffusion process in a system Ω, which is typically assumed to be a Riemannian manifold [37]. Informally, the diffusion process describes the movement of mass from regions of higher to lower concentration. Consider 𝑥 (𝑡 ) : Ω → [ 0, ∞) 
+
+as a family of scalar-valued functions representing temperature  
+
+> 2Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil
+
+distributions, and let 𝑥 (𝑝, 𝑡 ) denote the temperature at point 𝑝 ∈ Ω
+
+at time 𝑡 . The heat diffusion process is described by the following partial differential equation with boundary conditions [4]: 
+
+𝜕𝑥 (𝑝, 𝑡 )
+
+𝜕𝑡 = div [𝑆 (𝑝, 𝑥 (𝑝, 𝑡 ), 𝑡 )∇ 𝑥 (𝑝, 𝑡 )] ,
+
+s. t. 𝑥 (𝑝, 0) = 𝑥 0 (𝑝 ), 𝑡 ≥ 0.
+
+(1) Here, 𝑥 0 (·) denotes the initial temperature distribution, and 𝑆 (·) 
+
+is the concentration-dependent diffusion coefficient. The gradient operator ∇ measures the local temperature variations that drives the flow, while the divergence operator div (·) aggregates the heat flux at each point. To account for more practical scenarios, we consider a discrete data space X with 𝑁 instances, Eq. (1) can be further written as 
+
+𝜕 x𝑖 (𝑡 )
+
+𝜕𝑡 =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S𝑖 𝑗 (X(𝑡 ))( x𝑗 (𝑡 ) − x𝑖 (𝑡 )) , (2) where feature discrepancies between instances are interpreted as temperature variations. Such a discrete diffusion process can serve as a relational inductive bias [8], encouraging the model to exploit information across instances. To solve Eq. (2), a commonly approach is to employ the explicit forward Euler scheme, which yields 
+
+x(𝑡 +1) 
+
+> 𝑖
+
+= 1 − 𝜏 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑡 )
+
+> 𝑖 𝑗
+
+!
+
+x(𝑡 ) 
+
+> 𝑖
+
++ 𝜏 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑡 ) 
+
+> 𝑖 𝑗
+
+x(𝑡 ) 
+
+> 𝑗
+
+. (3) According to [46], for any 𝜏 ∈ ( 0, 1), the above numerical iteration is guaranteed to converge. In this context, Eq. (3) provides a basic formulation for the diffusion process in discrete feature spaces. 
+
+## 4 Method 4.1 Rethinking the Decoupled Paradigm in Multi-view Fusion 
+
+For a multi-view feature space X = {X(𝑣 ) ∈ R𝑁 ×𝐷 (𝑣 )
+
+}𝑉 𝑣 =1 com-prising 𝑉 views and 𝑁 instances, prevalent fusion strategies first process each view with independent encoders, followed by instance-wise aggregation ( e.g. , learned scalar weights or attention scores), forming a widely adopted paradigm in recent studies [28, 38, 43]. For analytical clarity, we consider a single interaction step here. In this context, a unified representation Z ∈ R𝑁 ×𝐷 is obtained by fusing multi-view features, formulated as 
+
+Z = F
+
+
+
+𝑓 𝜃 1 (X(1) ), 𝑓 𝜃 2 (X(2) ), . . . , 𝑓 𝜃 𝑉 (X(𝑉 ) )
+
+
+
+, (4) where F (·) denotes the fusion operator and 𝑓 𝜃 𝑣 (·) is a view-specific transformation parameterized by 𝜃 𝑣 . Since distinct views are iso-lated during feature extraction, with intra- and inter-view informa-tion flow being sequentially staged, we characterize this paradigm as View-Decoupled Fusion. Definition 1. (View-Decoupled Fusion) A multi-view fusion strat-egy constitutes View-Decoupled Fusion adhering to the following op-erator factorization: 
+
+• View-Independent Evolution. The latent transformation 𝑓 𝜃 𝑣 is independent of the state of any external view 𝑢 :
+
+𝜕𝑓 𝜃 𝑣 (X(𝑣 ) 
+
+> 𝑖
+
+)
+
+𝜕 X(𝑢 )
+
+> 𝑗
+
+= 0, ∀𝑢 ≠ 𝑣, ∀( 𝑖, 𝑗 ). (5) 
+
+• Intra-instance View Integration. Cross-view synergy is confined to point-wise mapping over co-indexed fibers: 
+
+z𝑖 = F
+
+
+
+𝑓 𝜃 1 (x(1) 
+
+> 𝑖
+
+), . . . , 𝑓 𝜃 𝑉 (x(𝑉 ) 
+
+> 𝑖
+
+)
+
+
+
+. (6) Although this paradigm offers architectural intuitiveness and ease of implementation, it is intrinsically a post-hoc hierarchical strat-egy. Formally, cross-view interactions are not explicitly modeled; instead, they are implicitly factorized into a two-stage procedure in-volving intra-view propagation followed by cross-view alignment: 
+
+𝑔 (𝑥 (𝑣 ) 
+
+> 𝑖
+
+, 𝑥 (𝑢 ) 
+
+> 𝑗
+
+) ≈ 𝜙 
+
+h
+
+𝜓 1 (𝑥 (𝑢 ) 
+
+> 𝑖
+
+, 𝑥 (𝑢 ) 
+
+> 𝑗
+
+),𝜓 2 (𝑥 (𝑢 ) 
+
+> 𝑖
+
+, 𝑥 (𝑣 ) 
+
+> 𝑖
+
+)
+
+i
+
+. (7) Here, 𝑔 (· , ·) denotes the ideal cross-view interaction; 𝜓 1 (· , ·) cap-tures intra-view propagation, 𝜓 2 (· , ·) models cross-view alignment between co-indexed samples, and 𝜙 (· , ·) aggregates these compo-nents to produce the final approximation. Evidently, such an ap-proximation significantly limits the expressive power of the model, causing the learned cross-view interactions to be highly suscep-tible to conflicting view-specific structural inductive biases, and leading to distortion or compression of information flow along the intermediate pathways. Transcending this decoupling paradigm, our core idea is to treat all views as a unified whole rather than as independent components, thereby directly and explicitly modeling 
+
+𝑔 (· , ·) and formulating a Global Coupled Fusion. Definition 2. (Global Coupled Fusion) For any instance 𝑖 , a multi-view fusion strategy constitutes Global Coupled Fusion if it is charac-terized by the following properties: 
+
+• View-Joint Evolution. The latent transformations 𝑓 𝜃 𝑣 exhibit inter-view dependencies: 
+
+𝜕𝑓 𝜃 𝑣 (X(𝑣 ) 
+
+> 𝑖
+
+)
+
+𝜕 X(𝑢 )
+
+> 𝑗
+
+≠ 0, ∀( 𝑢, 𝑣 ), ∀( 𝑖, 𝑗 ). (8) 
+
+• Cross-instance View Interaction. View integration is able to capture inter-sample dependencies: 
+
+z𝑖 = F
+
+> 𝑉
+
+Ø
+
+> 𝑣 =1
+
+{𝑓 𝜃 𝑣 (x(𝑣 ) 
+
+> 1
+
+), . . . , 𝑓 𝜃 𝑣 (x(𝑣 ) 
+
+> 𝑁
+
+)} 
+
+!
+
+. (9) Following Definition 2, we next present a diffusion-based formu-lation for modeling arbitrary pairwise feature interactions in the multi-view space. 
+
+## 4.2 Synchronous Multi-view Neural Diffusion 
+
+Recalling Eq. (2), feature interactions can be effectively modeled through the lens of diffusion dynamics [46]. In previous studies [28], the multi-view diffusion process is interpreted as 
+
+𝜕 x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+𝜕𝑡 =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣 ) 
+
+> 𝑖 𝑗
+
+(𝑡 )( x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )) +
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+P𝑣𝑢 (𝑡 )( x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )) ,
+
+(10) where P𝑣𝑢 (𝑡 ) ∈ R denotes a scalar fusion coefficient between the 
+
+𝑣 -th and the 𝑢 -th views for instance 𝑖 at time 𝑡 . Evidently, this formulation constitutes a View-Decoupled Fusion paradigm, which we term asynchronous multi-view diffusion.  
+
+> 3MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang.
+
+Proposition 1. The asynchronous multi-view diffusion described in Eq. (10) constitutes a View-Decoupled Fusion paradigm. 
+
+The proof is given in Appendix A.1 . In contrast, we aim to con-struct a diffusion mechanism that operates across views and sam-ples simultaneously, as formalized in Definition 2. Specifically, at each time step, the feature of instance 𝑖 in the 𝑣 -th view not only participates within the intra-view diffusion, but also contributes as part of the entire multi-view space: 
+
+𝜕 x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+𝜕𝑡 =
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+𝛼 (𝑢 ) (𝑡 ) · D (𝑢 ) 
+
+> 𝑖
+
+(X( 𝑡 )) , (11) where 𝛼 (𝑢 ) is the trade-off coefficient across views, D (𝑢 ) 
+
+> 𝑖
+
+(·) denotes the diffusion operator of instance 𝑖 , which acts on the global state of the multi-view feature space X and quantifies the information flow contributed by all instances from view 𝑢 . By further expanding 
+
+D (𝑢 ) 
+
+> 𝑖
+
+(·) , we can obtain a diffusion formulation analogous to Eq. (2): 
+
+𝜕 x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+𝜕𝑡 =
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+𝛼 (𝑢 ) (𝑡 )
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )( x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )) . (12) We refer to this formulation as synchronous multi-view diffusion. Here, S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 ) represents a dual-coupling weight spanning across both views and instances, which quantifies the influence of the 𝑗 -th instance in view 𝑢 on the 𝑖 -th instance in view 𝑣 . Such mechanism facilitates concurrent intra- and inter-view information propaga-tion, effectively establishing a global receptive field across the entire multi-view joint space. Naturally, this synchronous multi-view dif-fusion mechanism represents a Global Coupled Fusion paradigm. Proposition 2. The synchronous multi-view diffusion character-ized by Eq. (12) constitutes a Global Coupled Fusion. 
+
+The proof is given in Appendix A.2 . In this context, we can fur-ther characterize the relationship between the synchronous and asynchronous diffusion mechanisms. Corollary 1. The asynchronous multi-view diffusion in Eq. (10) 
+
+can be regarded as a restricted case of the synchronous multi-view diffusion Eq. (12) .
+
+See Appendix A.3 for the proof. Similar to Eq. (3), we can employ the forward Euler scheme to numerically solve Eq. (12): 
+
+x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 +1) =
+
+"
+
+1−𝜏 
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+𝛼 (𝑢 ) (𝑡 )
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )
+
+#
+
+x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )+ 𝜏 
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+𝛼 (𝑢 ) (𝑡 )
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ).
+
+(13) Typically, the diffusion coefficient here can be efficiently parame-terized via an attention mechanism [4]: 
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 ) = softmax ©«
+
+(W𝐾 x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )) TW𝑄 x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 )
+
+𝑑 𝑘 
+
+ª®¬
+
+, (14) where W𝐾 and W𝑄 are learned matrices, and 𝑑 𝑘 is a hyperparam-eter determining the dimension of W𝐾 . However, a direct imple-mentation of Eq. (13) incurs 𝑂 (𝑉 2𝑁 2) computational and mem-ory complexity, as it requires storing a dense coefficient matrix and performing exhaustive interactions over the multi-view space. This quadratic scaling poses a significant scalability bottleneck for large-scale applications, a challenge also observed in [28] 2. In the following subsections, we will detail the strategies to address these computational hurdles. 
+
+## 4.3 Energy-based Topological Sampling 
+
+In practice, the diffusion process in discrete feature space can be generalized to information propagation over a complete graph G
+
+[12], where the diffusivity coefficient S serves as a fully connected adjacency matrix. In this way, the forward process induced by Eq. (13) admits a graph neural network (GNN)-style formulation 3:
+
+x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 + 1) = UPD 
+
+
+
+AGG 𝑉 ,𝑁 𝑢 =1,𝑗 =1
+
+
+
+x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ); S𝑣,𝑢 𝑖,𝑗 (𝑡 )
+
+ 
+
+, (15) where UPD (·) denotes an update function typically comprising a linear transformation followed by a non-linear activation, while AGG (·) represents a global aggregation operator. In this light, the diffusion process in Eq. (12) can be further interpreted as a gradi-ent flow that minimizes the Dirichlet energy over the view-joint complete graph G [10] 4:min E (X ; G) = 12∑︁ (𝑣,𝑖 )∑︁ (𝑢,𝑗 )
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+∥x(𝑣 ) 
+
+> 𝑖
+
+− x(𝑢 ) 
+
+> 𝑗
+
+∥2. (16) Here, the energy functional E (· , ·) characterizes the global smooth-ness of the multi-view feature space. By penalizing discrepancies between instance features, it adaptively assigns coupling weights S
+
+to drive the system toward a global consensus, where individual fibers are aligned through the diffusion flow. Crucially, this min-imization objective reveals that the system encourages diffusion among similar instances while suppressing it between dissimilar ones, which directly aligns with the homophily principle [32]. How-ever, for a complete graph, there always exist feature pairs with significant discrepancies that are assigned near-zero diffusivity co-efficients. Consequently, G inevitably introduces noise and deviates markedly from the desired oracle topology G∗5. Such theoretical insight motivates us to identify and retain informative edges, purg-ing non-essential noise, narrowing the gap between the sampled topology and the oracle graph, and improving diffusion efficiency: ˆS = S ⊙ M(𝜃 ), M(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝜃 ) =
+
+(1, 𝑠 (x(𝑣 ) 
+
+> 𝑖
+
+, x(𝑢 ) 
+
+> 𝑗
+
+) ≥ 𝜃, 
+
+0, 𝑠 (x(𝑣 ) 
+
+> 𝑖
+
+, x(𝑢 ) 
+
+> 𝑗
+
+) < 𝜃 . (17) Here, M(𝜃 ) denotes the sparsity-indicating matrix, and 𝑠 (· , ·) acts as a similarity measure, which can be easily obtained from typical 
+
+geometric priors , such as Euclidean distance or cosine similarity. By performing diffusion flow modeling on the resulting sparse ˆ S,the space complexity is reduced from 𝑂 (𝑁 2𝑉 2) to 𝑂 (𝐸 ), where 
+
+𝐸 denotes the number of edges after truncation. Essentially, the truncation process in Eq. (17), which minimizes the Dirichlet en-ergy in Eq. (16), corresponds to maximum likelihood estimation within a Gaussian Markov Random Field [39]. From this statistical                             
+
+> 2A detailed analysis of the computational cost is provided in Appendix B .
+> 3Applying forward Euler discretization to this ODE yields X(𝑘 +1)=(I−Δ𝑡 L)X(𝑘 ),which corresponds to a GNN-style neighborhood aggregation step.
+> 4Specifically, for E ( X)=12Tr (X⊤LX ), we have ∇XE ( X)=LX . Therefore, the diffusion equation 𝜕 X
+> 𝜕𝑡 =−LX =−∇ XE ( X)is its negative gradient flow, which monotonically decreases the Dirichlet energy toward its minimum.
+> 5The oracle graph G∗denotes an ideal, label-driven topology where an edge exists between two instances if and only if they share the same label, and is zero otherwise. 4Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil
+
+perspective, we can further derive an upper bound on the structural consistency error between the truncated adjacency matrix ˆ 𝑆 and the oracle adjacency matrix 𝑆 ∗ derived from G∗.Theorem 1. (Support Recovery Guarantee) Let S∗ denote the ad-jacency matrix induced by the oracle topology G∗, and let ˆS be the truncated adjacency matrix obtained via Eq. (17) . Under the incoher-ence condition 6, the probability of structural mismatch between ˆS and 
+
+S∗ is bounded as 
+
+P
+
+
+
+supp ( ˆS) ≠ supp (S∗)
+
+
+
+≤ ( 𝑁𝑉 )2 exp  −𝐶𝐷𝜃 2  . (18) The proof is deferred to Appendix A.4 . Here, 𝐶 > 0 is a constant, 
+
+𝐷 denotes the feature dimensionality, 𝜃 characterizes the discrimi-native gap of the similarity measure in Eq. (17), and supp (·) denotes the support set defining the connectivity of the induced topology. Theorem 1 indicates that as the feature dimensionality 𝐷 increases, the probability of structural mismatch decays exponentially, thereby providing strong theoretical justification and practical performance guarantees for our sampling strategy. 
+
+## 4.4 Efficient Training with Ego-Net Style Architecture 
+
+According to the synchronous diffusion mechanism in Eq. (12), a dual-traversal over the multi-view instance space is required, which incurs prohibitive computational overhead. To address this bottle-neck, we develop a centralized fusion architecture. Specifically, we introduce virtual anchors to bridge the features of individual instances across different views: 
+
+T𝑖 = {( h𝑖 , x(𝑣 ) 
+
+> 𝑗
+
+) | 𝑣 ∈ 1, . . . , 𝑉 , 𝑗 ∈ N (𝑣 ) 
+
+> 𝑖
+
+}, (19) where h𝑖 is the virtual anchor acts as a proxy to aggregate and relay information across views, N (𝑣 ) 
+
+> 𝑖
+
+denotes the neighbors for instance 𝑖 
+
+within view 𝑣 , which is governed by the sparsity-indicating matrix 
+
+M(𝜃 ) defined in Eq. (17), and T𝑖 comprises the centralized connec-tivity pattern that facilitates cross-view information exchange. This can be viewed as the construction of an Ego-Net [14] style architec-ture for each instance. Through Eq. (19), features of any instance across different views are flowed through virtual anchors, trans-forming the time-consuming cross-view traversal interactions into a centralized paradigm. Consequently, such strategy allows us to train the model efficiently with linear time complexity relative to the number of instances 𝑁 by using batch processing. In this way, the synchronized multi-view diffusion process described by Eq. (12) can be expressed in the following form: 
+
+𝜕 h𝑖 (𝑡 )
+
+𝜕𝑡 =
+
+> 𝑉
+
+∑︁ 
+
+> 𝑣 =1
+
+𝛼 (𝑣 ) (𝑡 )∑︁   
+
+> 𝑗 ∈ N (𝑣 )
+> 𝑖
+
+T (𝑣 ) 
+
+> 𝑖,𝑗
+
+(x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ) − h𝑖 (𝑡 )) , (20) where T (𝑣 ) 
+
+> 𝑖,𝑗
+
+denotes the diffusion intensity between neighbor 𝑗 in 
+
+𝑣 -th view and the virtual anchor h𝑖 . Similar to Eq. (13), we can 
+
+> 6In practice, the incoherence condition is generally satisfied, as the intrinsic semantic features of distinct categories tend to be sufficiently decorrelated.
+
+obtain the final forward diffusion form: 
+
+h𝑖 (𝑡 + 1) =
+
+
+
+1 − 𝜏 
+
+> 𝑉
+
+∑︁ 
+
+> 𝑣 =1
+
+𝛼 (𝑣 ) (𝑡 )∑︁   
+
+> 𝑗 ∈ N (𝑣 )
+> 𝑖
+
+T (𝑣 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )
+
+
+
+h𝑖 (𝑡 )+ 𝜏 
+
+> 𝑉
+
+∑︁ 
+
+> 𝑣 =1
+
+𝛼 (𝑣 ) (𝑡 )∑︁   
+
+> 𝑗 ∈ N (𝑣 )
+> 𝑖
+
+T (𝑣 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ).
+
+(21) Through Eq. (21), the features of each instance across diverse views propagate through the virtual anchors adaptively. 7 More impor-tantly, this framework enables the proposed synchronous diffusion mechanism to achieve efficient and scalable information propaga-tion in large-scale scenarios, as demonstrated in subsequent experi-ments. The algorithmic procedure of the proposed framework is provided in Appendix C .
+
+## 5 Empirical Studies 
+
+We evaluate the proposed SynMDiff across diverse scenarios, in-cluding multi-omics cancer subtyping, heterogeneous graph node classification, and general multi-view classification. All experiments are repeated five times with different random seeds and their means and standard deviations are reported. 
+
+Datasets. To comprehensively assess the generalization capabil-ity of SynMDiff, we conduct extensive evaluations across three representative multi-view learning scenarios. Specifically, for multi-omics cancer subtyping, we employ five widely used cancer co-horts: BRCA, LGG, UCEC, GBMLGG, and TCGA. For heterogeneous graph node classification, our evaluation incorporates several well-established benchmarks, including FreeBase, DBLP, IMDB, Yelp, and AMiner. For general multi-view classification, we utilize eight commonly used datasets: Scene15, YouTube, MITIndoor, HW, IAPR, Animals, Caltech, and ESPGame. Additionally, we examine the scalability of SynMDiff in large-scale settings using four datasets: NoisyMNIST, YTF, CIFAR-10, and VGGFace. Detailed statistics are summarized in Appendix D.1 .
+
+Compared Methods. For multi-omics cancer subtyping, we com-pare SynMDiff against several state-of-the-art baselines, including SVM, Random Forest, DeepMO [25], MOGONET [44], MoGCN [23], Moanna [30], and MOSGAT [47]. For heterogeneous graph learn-ing, we benchmark with GCN [20], HAN [45], DMGI [35], IGNN [13], MRGCN [18], SSDCM [33], MHGCN [55], AMOGCN [7], and HMGE [1]. For general multi-view scenarios, we evaluate with Co-GCN [22], PDMF [51], LGCN-FF [6], ECMGD [28], TUNED [16], KAMSSM [24], and CoGFormer [21]. Detailed descriptions of all baseline methods are provided in Appendix D.2 .
+
+Experimental Settings. All compared methods use the default parameters as specified in their original papers. For the proposed SynMDiff, we adopt fixed network hyperparameters. Specifically, we use a 512-dimensional linear layer to align the dimensions of the multi-view data. The number of attention heads is set to 4, with the attention layer dimension set to 128 and the feed-forward network    
+
+> 7After the diffusion process, we directly feed the resulting virtual-anchor representa-tions hinto a simple linear classifier to obtain class predictions. 5MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang.
+
+Table 1: Classification results (mean% ± std%) on cancer subtype datasets. Best and second-best results are highlighted in red and blue, respectively. “OOM” indicates out-of-memory errors. 
+
+Method BRCA LGG UCEC GBMLGG TCGA Macro-F1 Micro-F1 Macro-F1 Micro-F1 Macro-F1 Micro-F1 Macro-F1 Micro-F1 Macro-F1 Micro-F1 SVM 43.6 ± 0.0 70.2 ± 0.0 60.0 ± 0.0 60.0 ± 0.0 28.0 ± 0.0 72.5 ± 0.0 39.4 ± 0.0 52.0 ± 0.0 61.4 ± 0.0 68.0 ± 0.0 RF 68.8 ± 0.0 80.2 ± 0.0 49.6 ± 0.0 49.8 ± 0.0 28.7 ± 0.0 72.5 ± 0.0 47.0 ± 0.0 54.6 ± 0.0 52.0 ± 0.0 67.0 ± 0.0 DeepMO 76.4 ± 4.9 81.4 ± 2.1 63.7 ± 3.8 64.2 ± 3.1 53.8 ± 1.9 80.2 ± 3.1 51.1 ± 2.2 53.5 ± 2.4 64.6 ± 6.9 73.0 ± 6.9 MOGONET 58.9 ± 2.6 71.6 ± 1.5 61.8 ± 2.4 62.3 ± 1.8 43.7 ± 0.6 75.4 ± 1.9 43.6 ± 2.7 49.2 ± 1.5 38.5 ± 0.4 42.1 ± 0.7 MoGCN 55.3 ± 0.7 73.6 ± 0.4 33.8 ± 0.0 51.1 ± 0.0 28.0 ± 0.0 71.6 ± 0.0 41.5 ± 8.4 53.0 ± 6.3 66.7 ± 0.4 73.9 ± 0.4 Moanna 69.9 ± 2.0 77.5 ± 1.8 60.8 ± 1.9 61.3 ± 1.8 53.4 ± 2.0 81.6 ± 2.2 48.1 ± 3.0 53.1 ± 4.9 51.7 ± 2.3 58.7 ± 2.2 MOSGAT 57.8 ± 5.3 73.0 ± 3.2 55.0 ± 2.9 58.5 ± 1.3 52.3 ± 4.1 82.1 ± 1.9 46.7 ± 1.5 49.6 ± 1.2 OOM OOM SynMDiff 81.4 ± 1.5 85.2 ± 0.8 62.5 ± 0.6 63.1 ± 0.7 55.0 ± 0.4 85.2 ± 0.5 52.7 ± 1.1 56.1 ± 1.0 70.7 ± 0.5 78.0 ± 0.3 
+
+Table 2: Node classification results (mean% ± std%) on heterogeneous graph datasets. Best and second-best results are highlighted in red and blue, respectively. 
+
+Method FreeBase DBLP IMDB Yelp AMiner Macro-F1 Micro-F1 Macro-F1 Micro-F1 Macro-F1 Micro-F1 Macro-F1 Micro-F1 Macro-F1 Micro-F1 GCN 44.6 ± 1.4 37.4 ± 1.1 90.1 ± 0.8 91.6 ± 0.6 24.3 ± 0.2 55.4 ± 0.2 52.0 ± 0.2 67.4 ± 0.9 68.4 ± 0.6 81.6 ± 0.7 HAN 62.1 ± 2.4 48.8 ± 3.4 89.3 ± 0.4 90.4 ± 0.4 23.9 ± 0.5 55.9 ± 0.8 48.3 ± 0.3 48.9 ± 0.6 72.3 ± 0.6 84.8 ± 0.1 DMGI 54.8 ± 2.1 41.1 ± 1.9 65.7 ± 0.2 71.1 ± 1.0 35.3 ± 1.0 57.3 ± 0.8 51.6 ± 0.4 69.8 ± 0.2 30.3 ± 0.7 65.5 ± 0.5 IGNN 65.1 ± 0.1 61.7 ± 0.2 86.8 ± 0.1 87.5 ± 0.9 45.3 ± 0.3 54.8 ± 0.7 64.5 ± 0.4 71.2 ± 0.6 74.5 ± 0.6 85.2 ± 0.3 MRGCN 57.0 ± 0.3 53.9 ± 0.1 89.5 ± 0.3 90.5 ± 0.6 45.2 ± 0.6 47.7 ± 0.7 54.3 ± 0.4 73.7 ± 0.4 73.4 ± 0.4 82.9 ± 0.4 SSDCM 53.9 ± 2.9 53.9 ± 2.9 89.4 ± 0.5 89.9 ± 0.9 49.4 ± 0.2 59.1 ± 0.6 52.7 ± 0.8 70.2 ± 0.5 26.2 ± 0.5 55.5 ± 0.8 MHGCN 62.3 ± 1.1 54.4 ± 1.3 93.0 ± 0.4 93.6 ± 0.5 51.5 ± 0.7 64.2 ± 0.3 60.9 ± 0.6 73.3 ± 0.3 75.0 ± 0.5 85.2 ± 0.4 AMOGCN 63.6 ± 0.1 49.2 ± 0.6 92.3 ± 0.3 92.8 ± 0.5 50.2 ± 0.5 65.1 ± 0.4 67.5 ± 0.6 67.5 ± 0.5 75.7 ± 0.4 83.4 ± 0.5 HMGE 62.2 ± 0.1 45.8 ± 0.1 91.6 ± 0.4 92.4 ± 0.3 32.9 ± 0.3 57.4 ± 0.5 58.6 ± 0.3 74.8 ± 0.3 73.7 ± 0.6 84.8 ± 0.3 SynMDiff 66.2 ± 0.8 71.3 ± 0.4 93.4 ± 0.2 93.8 ± 0.2 53.0 ± 0.6 62.2 ± 1.0 77.7 ± 0.5 81.0 ± 0.6 76.2 ± 0.6 86.2 ± 0.2 dimension set to 256. Dropout is set to 0 .2, weight decay is 1 𝑒 −5, and the batch size is fixed at 128 to ensure training can be conducted on most single GPUs. We set the maximum number of training epochs to 200 and adopt the model parameters corresponding to the best validation performance for evaluation. During training, we use the Adam optimizer and the learning rate is set to a default value of 5 𝑒 − 4. Further details of the experiment can be found in 
+
+Appendix D.3 .
+
+## 5.1 Performance 
+
+Multi-omics Cancer Subtyping. Table 1 summarizes the classifi-cation results on cancer subtype datasets, with 10% of the labeled samples used for training. The proposed SynMDiff consistently outperforms the baselines in terms of both Macro-F1 and Micro-F1 on BRCA, UCEC, GBMLGG, and TCGA, while achieving the second-best performance on LGG. These results demonstrate the effectiveness of SynMDiff in modeling complex multi-omics depen-dencies and highlight its potential for cancer subtype analysis. 
+
+Heterogeneous Graph Node Classification. In the node classifi-cation setting on heterogeneous graphs, 20% of the labeled nodes were used for training, with the remaining data split evenly between validation and testing. The quantitative results of the experiments are presented in Table 2. As reported, SynMDiff consistently out-performs the baselines in both metrics across the FreeBase, DBLP, Yelp, and AMiner datasets, and achieves the best Macro-F1 score on the IMDB dataset. These results further confirm the superiority of the proposed SynMDiff in handling real-world heterogeneous data and relationships. 
+
+Multi-view Classification. For the multi-view classification set-ting, we use 10% of the labeled data for training, 10% for valida-tion, and the remaining data for testing. As shown in Table 3, our method outperforms a range of multi-view fusion baselines across all datasets. This demonstrates the significant superiority of our synchronized diffusion mechanism in capturing the complex re-lationships inherent in multi-view data. Notably, on the YouTube, IAPR, and ESPGame datasets, which involve multi-modal represen-tations, our method also shows clear performance gains.  
+
+> 6Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil
+
+Table 3: Classification results (mean% ± std%) on multi-view datasets. Best and second-best results are highlighted in red and blue, respectively. 
+
+Metrics Methods Co-GCN PDMF LGCN-FF ECMGD TUNED KAMSSM CoGFormer SynMDiff Macro-F1 Scene15 18.9 ± 8.7 39.8 ± 4.6 42.3 ± 5.7 69.3 ± 4.3 70.0 ± 3.0 67.8 ± 0.8 74.0 ± 0.7 81.1 ± 0.3 YouTube 43.4 ± 4.0 36.9 ± 3.3 42.3 ± 5.7 59.0 ± 0.4 57.3 ± 0.9 56.5 ± 1.1 63.6 ± 1.4 70.5 ± 0.5 MITIndoor 51.8 ± 0.8 48.9 ± 0.3 21.1 ± 7.8 36.5 ± 8.1 22.4 ± 3.4 25.8 ± 3.0 51.2 ± 2.3 55.2 ± 0.8 HW 94.9 ± 2.0 90.0 ± 2.3 91.5 ± 2.8 95.4 ± 0.0 88.9 ± 1.6 96.3 ± 0.2 96.6 ± 0.2 97.2 ± 0.2 IAPR 55.8 ± 3.8 60.1 ± 0.7 57.0 ± 1.4 65.5 ± 0.2 64.1 ± 4.4 65.9 ± 0.2 66.2 ± 0.2 70.2 ± 0.1 Animals 61.9 ± 4.3 70.6 ± 0.3 62.9 ± 6.2 74.8 ± 0.4 74.7 ± 0.6 70.9 ± 0.6 77.3 ± 0.2 79.1 ± 0.2 Caltech 9.8 ± 1.4 15.3 ± 0.7 33.4 ± 0.5 35.3 ± 0.4 32.9 ± 0.8 27.8 ± 0.4 37.6 ± 0.4 38.2 ± 0.4 ESPGame 67.3 ± 2.3 81.1 ± 0.8 68.7 ± 0.4 82.7 ± 0.1 77.6 ± 1.6 82.5 ± 1.4 77.8 ± 0.3 83.9 ± 0.6 Micro-F1 Scene15 31.5 ± 7.7 39.8 ± 4.6 50.1 ± 4.4 75.3 ± 0.4 72.9 ± 1.9 68.8 ± 0.8 75.5 ± 0.6 81.0 ± 0.4 YouTube 45.1 ± 2.3 36.9 ± 3.3 47.3 ± 1.8 59.4 ± 0.4 59.0 ± 0.7 56.9 ± 1.1 63.8 ± 1.2 70.7 ± 0.4 MITIndoor 52.9 ± 0.8 48.2 ± 0.2 23.1 ± 7.3 38.2 ± 6.4 30.0 ± 3.8 25.5 ± 3.0 52.5 ± 1.7 56.8 ± 0.7 HW 95.0 ± 2.0 90.0 ± 2.3 92.6 ± 0.1 95.6 ± 0.4 88.9 ± 1.6 96.3 ± 0.2 96.6 ± 0.2 97.2 ± 0.2 IAPR 54.8 ± 3.9 57.5 ± 0.8 55.8 ± 1.0 64.5 ± 0.2 63.6 ± 3.6 64.9 ± 0.2 64.8 ± 0.2 69.2 ± 0.1 Animals 71.2 ± 3.6 78.9 ± 0.2 74.2 ± 4.1 81.1 ± 0.4 81.3 ± 0.3 77.2 ± 0.5 83.4 ± 0.1 84.2 ± 0.2 Caltech 34.3 ± 0.9 15.3 ± 0.7 40.2 ± 0.8 54.4 ± 0.3 54.4 ± 0.6 48.0 ± 0.5 56.5 ± 0.2 58.0 ± 0.3 ESPGame 67.4 ± 2.4 81.2 ± 0.8 68.8 ± 0.4 82.8 ± 0.1 78.4 ± 1.5 82.9 ± 1.4 77.9 ± 0.3 84.2 ± 0.5 
+
+Table 4: Classification results (mean% ± std%), inference time (s), and memory usage (MB) on large-scale datasets. The best and second-best results are highlighted in red and blue, respectively. “OOM” indicates out-of-memory errors.                                                                                                                                                                                                                                         
+
+> Dataset NoisyMNIST YTF CIFAR-10 VGGFace Samples 70,000 286,006 50,000 34,027 Metric Macro-F1 Micro-F1 Time Mem Macro-F1 Micro-F1 Time Mem Macro-F1 Micro-F1 Time Mem Macro-F1 Micro-F1 Time Mem Co-GCN 31.5 ±7.7 31.5 ±7.7 5.0 128.0 85.5 ±0.2 88.2 ±0.2 37.7 201.8 97.2 ±0.4 97.2 ±0.4 7.4 216.0 32.0 ±0.4 32.8 ±0.4 4.5 196.3 PDMF 94.1 ±0.7 94.2 ±0.7 2.3 2834.2 55.8 ±0.3 60.6 ±0.2 11.2 3544.9 90.9 ±0.0 90.9 ±0.0 1.8 2973.6 47.0 ±0.4 46.4 ±0.4 11.1 2949.1 LGCNFF OOM OOM --OOM OOM --OOM OOM --OOM OOM --ECMGD OOM OOM --OOM OOM --OOM OOM --OOM OOM --CoGFormer OOM OOM --OOM OOM --OOM OOM --OOM OOM --TUNED 86.5 ±1.7 86.8 ±1.7 10.6 42.1 98.6 ±0.1 98.9 ±0.1 91.9 76.1 98.9 ±0.1 98.9 ±0.1 12.4 124.6 50.9 ±0.2 51.5 ±0.2 9.8 60.1 KAMSSM 79.3 ±0.7 79.6 ±0.3 0.4 1286.2 78.4 ±3.6 82.2 ±2.8 2.0 10049.7 99.1 ±0.1 99.1 ±0.1 0.4 1610.1 33.4 ±0.8 33.6 ±0.7 0.3 999.0
+> SynMDiff 98.0 ±0.0 98.0 ±0.0 0.7 877.6 100.0 ±0.0 100.0 ±0.0 3.6 5886.0 99.4 ±0.0 99.4 ±0.0 0.6 1428.0 57.3 ±0.3 57.4 ±0.3 0.5 747.4
+
+Large-Scale Scenarios. To validate the efficiency and scalability of our method during both training and inference, which are crit-ical for real-world deployment, we conduct experiments on four large-scale datasets. The results, inference time, and memory usage across different methods are reported in Table 4. Many advanced multi-view fusion methods require storing the complete topolog-ical structure, making them difficult to scale and often leading to out-of-memory errors on large datasets. Although methods such as KAMSSM and TUNED can be applied in these settings, they underutilize multi-view information, resulting in suboptimal per-formance. In contrast, the proposed SynMDiff remains scalable, achieving the best performance across all four large-scale datasets while incurring lower inference latency and memory consumption, demonstrating its practical suitability for resource-constrained and large-scale real-world applications. 
+
+## 5.2 Visualization 
+
+For a more intuitive comparison, Figure 2 presents t-SNE visual-izations of the embeddings learned by different methods on three representative datasets. In addition, we quantitatively evaluate the results using homogeneity and completeness scores [36]. Across all settings, the embeddings learned by SynMDiff demonstrate more compact clusters and clearer inter-class separation compared to the baselines, and achieve the highest scores on both homogeneity and completeness. This advantage is more pronounced on the TCGA dataset, which involves a larger number of samples and classes, thus posing a more challenging task. These visualizations further demon-strate that, due to its ability to capture synchronized cross-view interactions, SynMDiff learns more discriminative representations in complex multi-view scenarios.  
+
+> 7MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang.
+
+SynMDiff   
+
+> Homogeneity: 0.8154
+> Completeness: 0.8168
+
+AMOGCN   
+
+> Homogeneity: 0.7881
+> Completeness: 0.7906
+
+MHGCN   
+
+> Homogeneity: 0.7776
+> Completeness :0.7776
+
+SynMDiff   
+
+> Homogeneity: 0.7343
+> Completeness: 0.7467
+
+MoGCN   
+
+> Homogeneity: 0.5733
+> Completeness: 0.5873
+
+Moana   
+
+> Homogeneity: 0.5452
+> Completeness: 0.5596
+
+SynMDiff   
+
+> Homogeneity: 0.9368
+> Completeness: 0.9374
+
+CoGFormer   
+
+> Homogeneity: 0.9347
+> Completeness: 0.9349
+
+ECMGD   
+
+> Homogeneity: 0.9019
+> Completeness: 0.9022
+
+Figure 2: t-SNE visualizations of embeddings learned by dif-ferent methods on the heterogeneous graph dataset DBLP (top row), the multi-omics dataset TCGA (middle row), and the multi-view dataset HW (bottom row). 
+
+## 5.3 Ablation Study 
+
+In the ablation study, we aim to clarify two questions: (i) How im-portant are intra-view and inter-view propagation to model perfor-mance? (ii) Without the sampling strategy, does the model benefit from a broader receptive field, or does its performance degrade due to the noise introduced by dense adjacency relations? To answer the first question, we derive two variants that retain only intra-view or inter-view information propagation, denoted as w/o Inter and w/o Intra, respectively. To answer the second, we remove the sampling module and the centralized training architecture, allowing dense interactions between arbitrary pairs of features across multiple views, this variant is denoted as w/o Samp. We evaluate these three variants together with SynMDiff on six datasets under different multi-view settings. The results are shown in Figure 3. As can be clearly seen, all three variants consistently underperform SynMDiff across all datasets. Somewhat surprisingly, on most datasets, inter-view information propagation appears to be more important than intra-view aggregation, which further highlights the significance of our study. In addition, removing the sampling strategy leads to a substantial performance drop, suggesting that densely modeling in-teractions among multi-view features is not a desirable choice. Such MITIndoor  HW 
+
+BRCA  UCEC 
+
+FreeBase  Yelp 
+
+Figure 3: Ablation study of SynMDiff on six datasets. 
+
+dense interactions introduce a large number of semantically irrele-vant connections, and the resulting propagation of noise ultimately degrades model performance. 
+
+## 6 Discussion and Conclusion 
+
+We propose a synchronous multi-view neural diffusion mechanism to mitigate the conflict of view-specific structural inductive biases that hinder cross-view information propagation. By modeling pair-wise feature interactions in the joint multi-view space as diffusion flows, the proposed method simultaneously captures both intra-view and inter-view adaptive information propagation. To reduce computational overhead, we design an energy-based topological sampling strategy to prune redundant diffusion flows and introduce a centralized training paradigm based on virtual anchors, enabling efficient inference in large-scale scenarios. 
+
+Limitations & Future Works. While we propose a theoretically principled and elegant paradigm, its practical deployment warrants further study, particularly in developing more efficient pruning strategies. Moreover, although the centralized training architecture enables efficient inference and mitigates view-specific biases, it may introduce some information compression. These directions are left for future work. 
+
+## Acknowledgments 
+
+This work is in part supported by the National Natural Science Foundation of China under Grants U25A20527 and 62276065, and the Fujian Provincial Natural Science Foundation of China under Grant 2024J01510026. 
+
+> 8
+
+Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+## References 
+
+[1] Kamel Abdous, Nairouz Mrabah, and Mohamed Bouguessa. 2023. Hierarchical aggregations for high-dimensional multiplex graph embedding. IEEE Transactions on Knowledge and Data Engineering 36, 4 (2023), 1624–1637. [2] James Atwood and Don Towsley. 2016. Diffusion-convolutional neural networks. In Advances in Neural Information Processing Systems . 1–9. [3] Avrim Blum and Tom Mitchell. 1998. Combining labeled and unlabeled data with co-training. In Proceedings of the Eleventh Annual Conference on Computational Learning Theory . 92–100. [4] Ben Chamberlain, James Rowbottom, Maria I Gorinova, Michael Bronstein, Stefan Webb, and Emanuele Rossi. 2021. Grand: Graph neural diffusion. In Proceedings of the International Conference on Machine Learning . 1407–1418. [5] Yuhong Chen, Zhihao Wu, Zhaoliang Chen, Mianxiong Dong, and Shiping Wang. 2023. Joint learning of feature and topology for multi-view graph convolutional network. Neural Networks 168 (2023), 161–170. [6] Zhaoliang Chen, Lele Fu, Jie Yao, Wenzhong Guo, Claudia Plant, and Shiping Wang. 2023. Learnable Graph Convolutional Network and Feature Fusion for Multi-view Learning. Information Fusion 95 (2023), 109–119. [7] Zhaoliang Chen, Zhihao Wu, Luying Zhong, Claudia Plant, Shiping Wang, and Wenzhong Guo. 2024. Attributed multi-order graph convolutional network for heterogeneous graphs. Neural Networks 174 (2024), 106225. [8] Ronald R Coifman and Stéphane Lafon. 2006. Diffusion maps. Applied and Computational Harmonic Analysis 21, 1 (2006), 5–30. [9] Moshe Eliasof, Eldad Haber, and Eran Treister. 2021. Pde-gcn: Novel architectures for graph neural networks motivated by partial differential equations. In Advances in Neural Information Processing Systems . 3836–3849. [10] Guoji Fu, Mohammed Haroon Dupty, Yanfei Dong, and Lee Wee Sun. 2023. Implicit Graph Neural Diffusion Networks: Convergence, Generalization, and Over-Smoothing. arXiv:2308.03306 [11] Hongchang Gao, Feiping Nie, Xuelong Li, and Heng Huang. 2015. Multi-view sub-space clustering. In Proceedings of the IEEE International Conference on Computer Vision . 4238–4246. [12] Johannes Gasteiger, Stefan Weiß enberger, and Stephan Günnemann. 2019. Dif-fusion Improves Graph Learning. In Advances in Neural Information Processing Systems . 1–13. [13] Fangda Gu, Heng Chang, Wenwu Zhu, Somayeh Sojoudi, and Laurent El Ghaoui. 2020. Implicit graph neural networks. In Advances in Neural Information Process-ing Systems . 11984–11995. [14] Will Hamilton, Zhitao Ying, and Jure Leskovec. 2017. Inductive representation learning on large graphs. In Advances in Neural Information Processing Systems .1024–1034. [15] Aiping Huang, Zheng Wang, Yannan Zheng, Tiesong Zhao, and Chia-Wen Lin. 2021. Embedding regularizer learning for multi-view semi-supervised classifica-tion. IEEE Transactions on Image Processing 30 (2021), 6997–7011. [16] Haojian Huang, Chuanyu Qin, Zhe Liu, Kaijing Ma, Jin Chen, Han Fang, Chao Ban, Hao Sun, and Zhongjiang He. 2025. Trusted unified feature-neighborhood dynamics for multi-view classification. In Proceedings of the AAAI Conference on Artificial Intelligence . 17413–17421. [17] Junjie Huang, Guan Huang, Zheng Zhu, Yun Ye, and Dalong Du. 2022. BEVDet: High-performance Multi-camera 3D Object Detection in Bird-Eye-View. arXiv:2112.11790 [18] Zhichao Huang, Xutao Li, Yunming Ye, and Michael K Ng. 2020. MR-GCN: Multi-Relational Graph Convolutional Networks based on Generalized Tensor Product.. In Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence . 1258–1264. [19] Xiaojie Jin, Bowen Zhang, Weibo Gong, Kai Xu, Xueqing Deng, Peng Wang, Zhao Zhang, Xiaohui Shen, and Jiashi Feng. 2024. Mv-adapter: Multimodal video transfer learning for video text retrieval. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 27144–27153. [20] Thomas N Kipf and Max Welling. 2017. Semi-Supervised Classification with Graph Convolutional Networks. In International Conference on Learning Repre-sentations .[21] Zhiyuan Lai, Jiacheng Li, Jiayuan Wang, and Shiping Wang. 2026. Coopera-tive Graph Transformer with Structural Consensus for Multi-View Learning. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence . 22751–22759. [22] Shu Li, Wen-Tao Li, and Wei Wang. 2020. Co-GCN for multi-view semi-supervised learning. In Proceedings of the AAAI Conference on Artificial Intelligence . 4691– 4698. [23] Xiao Li, Jie Ma, Ling Leng, Mingfei Han, Mansheng Li, Fuchu He, and Yunping Zhu. 2022. MoGCN: a multi-omics integration method based on graph convo-lutional network for cancer subtype analysis. Frontiers in Genetics 13 (2022), 806842. [24] Weiran Liao, Jielong Lu, Yuhong Chen, Shide Du, Hongrong Chen, and Shiping Wang. 2026. From Static to Active: Knowledge-Aware Node State Selection in Multi-view Graph Learning. In Proceedings of the AAAI Conference on Artificial Intelligence . 23469–23477. [25] Yuqi Lin, Wen Zhang, Huanshen Cao, Gaoyang Li, and Wei Du. 2020. Classifying breast cancer subtypes using deep neural networks based on multi-omics data. 
+
+Genes 11, 8 (2020), 888. [26] Risheng Liu, Guangyu Zhong, Junjie Cao, Zhouchen Lin, Shiguang Shan, and Zhongxuan Luo. 2016. Learning to diffuse: A new perspective to design pdes for visual analysis. IEEE Transactions on Pattern Analysis and Machine Intelligence 
+
+38, 12 (2016), 2457–2471. [27] Zichao Long, Yiping Lu, Xianzhong Ma, and Bin Dong. 2018. Pde-net: Learning pdes from data. In Proceedings of the International Conference on Machine Learning .3208–3216. [28] Jielong Lu, Zhihao Wu, Zhaoliang Chen, Zhiling Cai, and Shiping Wang. 2024. Towards multi-view consistent graph diffusion. In Proceedings of the 32nd ACM International Conference on Multimedia . 186–195. [29] Jielong Lu, Zhihao Wu, Luying Zhong, Zhaoliang Chen, Hong Zhao, and Shiping Wang. 2024. Generative essential graph convolutional network for multi-view semi-supervised classification. IEEE Transactions on Multimedia 26 (2024), 7987– 7999. [30] Richard Lupat, Rashindrie Perera, Sherene Loi, and Jason Li. 2023. Moanna: multi-omics autoencoder-based neural network algorithm for predicting breast cancer subtypes. IEEE Access 11 (2023), 10912–10924. [31] Shubin Ma, Zhikui Chen, Lin Yuanbo Wu, and Liang Zhao. 2026. Multi-View Aligned Clustering via Sample-Bundled Optimization: Anchor Graph Enhance-ment and Contrastive Propagation. IEEE Transactions on Multimedia 28 (2026), 5497–5508. [32] Miller McPherson, Lynn Smith-Lovin, and James M Cook. 2001. Birds of a feather: Homophily in social networks. Annual Review of Sociology 27, 1 (2001), 415–444. [33] Anasua Mitra, Priyesh Vijayan, Ranbir Sanasam, Diganta Goswami, Srinivasan Parthasarathy, and Balaraman Ravindran. 2021. Semi-supervised deep learning for multiplex networks. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining . 1234–1244. [34] Feiping Nie, Guohao Cai, and Xuelong Li. 2017. Multi-view clustering and semi-supervised classification with adaptive neighbours. In Proceedings of the AAAI Conference on Artificial Intelligence . 2408–2414. [35] Chanyoung Park, Donghyun Kim, Jiawei Han, and Hwanjo Yu. 2020. Unsu-pervised attributed multiplex network embedding. In Proceedings of the AAAI Conference on Artificial Intelligence . 5371–5378. [36] Zhihao Peng, Yuheng Jia, Hui Liu, Junhui Hou, and Qingfu Zhang. 2021. Maximum entropy subspace clustering network. IEEE Transactions on Circuits and Systems for Video Technology 32, 4 (2021), 2199–2210. [37] Steven Rosenberg. 1997. The Laplacian on a Riemannian Manifold: An Introduction to Analysis on Manifolds . Vol. 31. Cambridge University Press. doi:10.1017/ CBO9780511623783 [38] Yongquan Shi, Yueyang Pi, Zhanghui Liu, Hong Zhao, and Shiping Wang. 2025. Information-controlled graph convolutional network for multi-view semi-supervised classification. Neural Networks 184 (2025), 107102. [39] Per Sidén and Fredrik Lindsten. 2020. Deep gaussian markov random fields. In 
+
+Proceedings of the International Conference on Machine Learning . 8916–8926. [40] Hong Tao, Chenping Hou, Feiping Nie, Jubo Zhu, and Dongyun Yi. 2017. Scal-able multi-view semi-supervised classification via adaptive regression. IEEE Transactions on Image Processing 26, 9 (2017), 4283–4296. [41] Matthew Thorpe, Tan Minh Nguyen, Hedi Xia, Thomas Strohmer, Andrea Bertozzi, Stanley Osher, and Bao Wang. 2022. GRAND++: Graph neural diffusion with a source term. In International Conference on Learning Representations . 1–21. [42] Naftali Tishby, Fernando C. Pereira, and William Bialek. 2000. The information bottleneck method. arXiv:physics/0004057 [43] Shiping Wang, Yueyang Pi, Yang Huang, Fuhai Chen, and Le Zhang. 2025. Multi-Channel Equilibrium Graph Neural Network for Multi-View Semi-Supervised Learning. IEEE Transactions on Pattern Analysis and Machine Intelligence 47, 10 (2025), 9375–9382. [44] Tongxin Wang, Wei Shao, Zhi Huang, Haixu Tang, Jie Zhang, Zhengming Ding, and Kun Huang. 2021. MOGONET integrates multi-omics data using graph con-volutional networks allowing patient classification and biomarker identification. 
+
+Nature Communications 12, 1 (2021), 3445. [45] Xiao Wang, Houye Ji, Chuan Shi, Bai Wang, Yanfang Ye, Peng Cui, and Philip S Yu. 2019. Heterogeneous graph attention network. In The World Wide Web Conference .2022–2032. [46] Qitian Wu, Chenxiao Yang, Wentao Zhao, Yixuan He, David Wipf, and Junchi Yan. 2023. DIFFormer: Scalable (Graph) Transformers Induced by Energy Constrained Diffusion. In International Conference on Learning Representations . 1–26. [47] Wenhao Wu, Shudong Wang, Yuanyuan Zhang, Wenjing Yin, Yawu Zhao, and Shanchen Pang. 2024. Mosgat: Uniting specificity-aware gats and cross modal-attention to integrate multi-omics data for disease diagnosis. IEEE Journal of Biomedical and Health Informatics 28, 9 (2024), 5624–5637. [48] Zhihao Wu, Xincan Lin, Zhenghong Lin, Zhaoliang Chen, Yang Bai, and Shiping Wang. 2023. Interpretable graph convolutional network for multi-view semi-supervised learning. IEEE Transactions on Multimedia 25 (2023), 8593–8606. [49] Yuan Xie, Wensheng Zhang, Yanyun Qu, Longquan Dai, and Dacheng Tao. 2018. Hyper-Laplacian regularized multilinear multiview self-representations for clus-tering and semisupervised learning. IEEE Transactions on Cybernetics 50, 2 (2018), 572–586. 9MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang. 
+
+[50] Chang Xu, Dacheng Tao, and Chao Xu. 2013. A Survey on Multi-view Learning. arXiv:1304.5634 [51] Cai Xu, Wei Zhao, Jinglong Zhao, Ziyu Guan, Yaming Yang, Long Chen, and Xiangyu Song. 2023. Progressive deep multi-view comprehensive representation learning. In Proceedings of the AAAI Conference on Artificial Intelligence . 10557– 10565. [52] Jinglin Xu, Wenbin Li, Xinwang Liu, Dingwen Zhang, Ji Liu, and Junwei Han. 2020. Deep embedded complementary and interactive information for multi-view classification. In Proceedings of the AAAI Conference on Artificial Intelligence .6494–6501. [53] Chenxiao Yang, Qitian Wu, and Junchi Yan. 2022. Geometric knowledge distilla-tion: Topology compression for graph neural networks. In Advances in Neural Information Processing Systems . 29761–29775. [54] Muli Yang, Cheng Deng, and Feiping Nie. 2019. Adaptive-weighting discrim-inative regression for multi-view classification. Pattern Recognition 88 (2019), 236–245. [55] Pengyang Yu, Chaofan Fu, Yanwei Yu, Chao Huang, Zhongying Zhao, and Junyu Dong. 2022. Multiplex heterogeneous graph convolutional network. In Proceed-ings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining .2377–2387. [56] Liang Zhao, Ziyue Wang, Xiao Wang, Zhikui Chen, and Bo Xu. 2025. Incomplete and Unpaired Multi-View Graph Clustering with Cross-View Feature Fusion. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence . 22786–22794. [57] Liang Zhao, Qiongjie Xie, Zheng Li, Songtao Wu, and Yi Yang. 2024. Dynamic Graph Guided Progressive Partial View-Aligned Clustering. IEEE Transactions on Neural Networks and Learning Systems 36 (2024), 9370–9382. 10 Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+# Appendix for “Synchronous Multi-view Neural Diffusion” 
+
+## A Proofs A.1 Proof of Proposition 1 
+
+Proposition 1. The asynchronous multi-view diffusion described in Eq. (10) constitutes a View-Decoupled Fusion paradigm. 
+
+Proof. Let 
+
+Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) := 𝜕 x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+𝜕𝑡 =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣 ) 
+
+> 𝑖 𝑗
+
+(𝑡 )  x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
++
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+P𝑣𝑢 (𝑡 )  x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+(A.1) denote the update operator defined by Eq. (10) in the main body. It suffices to verify that Φ(𝑣 ) 
+
+> 𝑖
+
+satisfies the two properties in Defini-tion 1. We decompose Φ(𝑣 ) 
+
+> 𝑖
+
+as 
+
+Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) = 𝐴 (𝑣 )
+
+> 𝑖
+
+ X(𝑣 ) (𝑡 ) + 𝐵 (𝑣 )
+
+> 𝑖
+
+ x(1) 
+
+> 𝑖
+
+(𝑡 ), . . . , x(𝑉 ) 
+
+> 𝑖
+
+(𝑡 ), (A.2) where 
+
+𝐴 (𝑣 ) 
+
+> 𝑖
+
+:=
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣 ) 
+
+> 𝑖 𝑗
+
+(𝑡 )  x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 ), (A.3) and 
+
+𝐵 (𝑣 ) 
+
+> 𝑖
+
+:=
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+P𝑣𝑢 (𝑡 )  x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 ). (A.4) 
+
+(i) View-Independent Evolution. By construction, 𝐴 (𝑣 ) 
+
+> 𝑖
+
+depends only on {x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 )} 𝑁 𝑗 =1. Therefore, for any 𝑢 ≠ 𝑣 ,
+
+𝜕𝐴 (𝑣 )
+
+> 𝑖
+
+𝜕 x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) = 0, ∀𝑗, (A.5) which verifies the View-Independent Evolution property in Defini-tion 1. 
+
+(ii) Intra-instance View Integration. The term 𝐵 (𝑣 ) 
+
+> 𝑖
+
+depends only on the co-indexed features {x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 )} 𝑉 𝑢 =1. Hence, for any 𝑗 ≠ 𝑖 ,
+
+𝜕𝐵 (𝑣 )
+
+> 𝑖
+
+𝜕 x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) = 0, ∀𝑢, (A.6) which shows that cross-view interaction is restricted to point-wise integration over co-indexed instances. Consequently, Φ(𝑣 ) 
+
+> 𝑖
+
+contains no direct dependence on x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 )
+
+with 𝑢 ≠ 𝑣 and 𝑗 ≠ 𝑖 . Therefore, cross-view and cross-instance dependencies cannot be jointly modeled within a single update step; they can only be induced indirectly through a two-stage mechanism consisting of intra-view propagation followed by point-wise cross-view aggregation. Thus, the asynchronous multi-view diffusion satisfies both defining properties of View-Decoupled Fusion, and therefore constitutes a View-Decoupled Fusion paradigm. □
+
+## A.2 Proof of Proposition 2 
+
+Proposition 2. The synchronous multi-view diffusion character-ized by Eq. (12) constitutes a Global Coupled Fusion. 
+
+Proof. Let 
+
+Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) := 𝜕 x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+𝜕𝑡 =
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+𝛼 (𝑢 ) (𝑡 )
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )  x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+(A.7) denote the update operator defined by Eq. (12) in the main body. To establish the proposition, it suffices to verify that Φ(𝑣 ) 
+
+> 𝑖
+
+satisfies the two properties in Definition 2. 
+
+(i) View-Joint Evolution. By Eq. (12) in the main body, the update of x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 ) depends explicitly on features from other views through terms of the form 
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )  x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 ).
+
+Accordingly, the operator Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) is, in general, not independent of x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) for 𝑢 ≠ 𝑣 ; equivalently, 
+
+𝜕 Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) 
+
+𝜕 x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) ≠ 0. (A.8) This verifies the View-Joint Evolution property in Definition 2. 
+
+(ii) Cross-instance View Interaction. Moreover, the operator Φ(𝑣 )
+
+> 𝑖
+
+aggregates information over all instance-view pairs ( 𝑗, 𝑢 ). Equiv-alently, the updated representation of instance 𝑖 in view 𝑣 is a function of the global multi-view collection 
+
+> 𝑉
+
+Ø
+
+> 𝑢 =1
+
+{x(𝑢 ) 
+
+> 1
+
+(𝑡 ), . . . , x(𝑢 ) 
+
+> 𝑁
+
+(𝑡 )} , (A.9) rather than only the co-indexed fiber {x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 )} 𝑉 𝑢 =1. This verifies the Cross-instance View Interaction property. Taken together, the synchronous diffusion operator exhibits both inter-view dependency and cross-instance coupling within a sin-gle update step. Therefore, the synchronous multi-view diffusion satisfies both defining properties, and hence constitutes a Global Coupled Fusion paradigm. □
+
+## A.3 Proof of Corollary 1 
+
+Corollary 1. The asynchronous multi-view diffusion in Eq. (10) 
+
+can be regarded as a restricted case of the synchronous multi-view diffusion in Eq. (12) .
+
+Proof. Let 
+
+Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) :=
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+𝛼 (𝑢 ) (𝑡 )
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )  x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 ) (A.10) denote the synchronous update operator defined by Eq. (12) in the main body. To establish the corollary, it suffices to show that Eq. (10) in the main body can be recovered from Φ(𝑣 ) 
+
+> 𝑖
+
+under a  
+
+> 11 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang.
+
+restricted choice of the coupling coefficients. Consider the following parameterization: 
+
+𝛼 (𝑢 ) (𝑡 ) ≡ 1, ∀𝑢 ∈ { 1, . . . , 𝑉 }, (A.11) and 
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 ) =
+
+
+
+S(𝑣 ) 
+
+> 𝑖 𝑗
+
+(𝑡 ), 𝑢 = 𝑣, 
+
+P𝑣𝑢 (𝑡 ), 𝑢 ≠ 𝑣, 𝑗 = 𝑖, 
+
+0, 𝑢 ≠ 𝑣, 𝑗 ≠ 𝑖. 
+
+(A.12) Under this restriction, the synchronous operator becomes 
+
+Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣,𝑣 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )  x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
++∑︁ 
+
+> 𝑢 ≠𝑣 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+(𝑡 )  x(𝑢 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+=
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣 ) 
+
+> 𝑖 𝑗
+
+(𝑡 )  x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
++∑︁ 
+
+> 𝑢 ≠𝑣
+
+P𝑣𝑢 (𝑡 )  x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 ).
+
+(A.13) Since the term corresponding to 𝑢 = 𝑣 in 
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+P𝑣𝑢 (𝑡 )  x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
+vanishes identically, the above expression is equivalently 
+
+Φ(𝑣 ) 
+
+> 𝑖
+
+(X( 𝑡 )) =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+S(𝑣 ) 
+
+> 𝑖 𝑗
+
+(𝑡 )  x(𝑣 ) 
+
+> 𝑗
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 )
+
++
+
+> 𝑉
+
+∑︁ 
+
+> 𝑢 =1
+
+P𝑣𝑢 (𝑡 )  x(𝑢 ) 
+
+> 𝑖
+
+(𝑡 ) − x(𝑣 ) 
+
+> 𝑖
+
+(𝑡 ),
+
+(A.14) which is exactly Eq. (10) in the main body. Therefore, the asynchro-nous diffusion is obtained from the synchronous formulation by im-posing two structural restrictions: first, cross-view interactions are confined to co-indexed instances ( 𝑗 = 𝑖 ); second, all cross-instance interactions across different views ( 𝑢 ≠ 𝑣, 𝑗 ≠ 𝑖 ) are removed. Hence, the asynchronous multi-view diffusion is a restricted case of the synchronous multi-view diffusion. □
+
+## A.4 Proof of Theorem 1 
+
+Theorem 1. (Support Recovery Guarantee) Let S∗ denote the ad-jacency matrix induced by the oracle topology G∗, and let ˆS be the truncated adjacency matrix obtained via Eq. (17) . Under the incoher-ence condition, the probability of structural mismatch between ˆS and 
+
+S∗ is bounded as: 
+
+P
+
+
+
+supp ( ˆS) ≠ supp (S∗)
+
+
+
+≤ ( 𝑁𝑉 )2 exp  −𝐶𝐷𝜃 2  . (A.15) Proof. Let 
+
+I := {( 𝑣, 𝑖 ) : 𝑣 ∈ [ 𝑉 ], 𝑖 ∈ [ 𝑁 ]} 
+
+denote the set of all view-instance indices, and write 
+
+𝑀 := |I| = 𝑁𝑉 . 
+
+For any 𝑎, 𝑏 ∈ I , let e𝑆 𝑎𝑏 denote the corresponding entry of the dense affinity matrix before truncation, and let 𝑆 ∗ 
+
+> 𝑎𝑏
+
+denote the cor-responding oracle entry induced by G∗.By Eq. (17) in the main body, the truncated matrix ˆ S is obtained by thresholding eS at level 𝜃 . Hence, entrywise, ˆ𝑆 𝑎𝑏 ≠ 0 ⇐⇒ e𝑆 𝑎𝑏 ≥ 𝜃 . (A.16) Therefore, recovering the support of S∗ is equivalent to correctly deciding, for every pair (𝑎, 𝑏 ), whether e𝑆 𝑎𝑏 lies above or below the threshold 𝜃 .Define 
+
+𝜇 𝑎𝑏 := E[e𝑆 𝑎𝑏 ].
+
+Under the incoherence condition, the oracle edges and non-edges are separated around the truncation threshold. Namely, there exists a constant 𝑐 0 > 0 such that for every 𝑎, 𝑏 ∈ I ,
+
+𝑆 ∗ 
+
+> 𝑎𝑏
+
+≠ 0 =⇒ 𝜇 𝑎𝑏 ≥ 𝜃 + 𝑐 0𝜃, 𝑆 ∗ 
+
+> 𝑎𝑏
+
+= 0 =⇒ 𝜇 𝑎𝑏 ≤ 𝜃 − 𝑐 0𝜃 . 
+
+(A.17) Moreover, the same incoherence condition implies a concentration inequality for each entry: there exists a constant 𝐶 1 > 0 such that for any 𝑡 > 0, 
+
+P |e𝑆 𝑎𝑏 − 𝜇 𝑎𝑏 | ≥ 𝑡  ≤ 2 exp (− 𝐶 1𝐷𝑡 2). (A.18) Now fix an arbitrary pair 𝑎, 𝑏 ∈ I , and define the support recov-ery error event 
+
+𝐸 𝑎𝑏 :=
+
+n
+
+1{ ˆ𝑆 𝑎𝑏 ≠ 0} ≠ 1{𝑆 ∗ 
+
+> 𝑎𝑏
+
+≠ 0}
+
+o
+
+. (A.19) We bound P(𝐸 𝑎𝑏 ) by considering two cases. 
+
+Case 1: 𝑆 ∗ 
+
+> 𝑎𝑏
+
+≠ 0. In this case, (A.17) yields 
+
+𝜇 𝑎𝑏 ≥ 𝜃 + 𝑐 0𝜃 . 
+
+If a support recovery error occurs, then necessarily ˆ 𝑆 𝑎𝑏 = 0, which by the truncation rule means 
+
+e𝑆 𝑎𝑏 < 𝜃 . 
+
+Hence, 
+
+𝜇 𝑎𝑏 − e𝑆 𝑎𝑏 ≥ ( 𝜃 + 𝑐 0𝜃 ) − 𝜃 = 𝑐 0𝜃, 
+
+and therefore 
+
+|e𝑆 𝑎𝑏 − 𝜇 𝑎𝑏 | ≥ 𝑐 0𝜃 . 
+
+Applying (A.18) with 𝑡 = 𝑐 0𝜃 , we obtain 
+
+P(𝐸 𝑎𝑏 ) ≤ P |e𝑆 𝑎𝑏 − 𝜇 𝑎𝑏 | ≥ 𝑐 0𝜃  ≤ 2 exp (− 𝐶 1𝐷𝑐 20𝜃 2). (A.20) 
+
+Case 2: 𝑆 ∗ 
+
+> 𝑎𝑏
+
+= 0. In this case, (A.17) yields 
+
+𝜇 𝑎𝑏 ≤ 𝜃 − 𝑐 0𝜃 . 
+
+If a support recovery error occurs, then necessarily ˆ 𝑆 𝑎𝑏 ≠ 0, namely 
+
+e𝑆 𝑎𝑏 ≥ 𝜃 . 
+
+Thus, 
+
+e𝑆 𝑎𝑏 − 𝜇 𝑎𝑏 ≥ 𝜃 − ( 𝜃 − 𝑐 0𝜃 ) = 𝑐 0𝜃, 
+
+which again implies 
+
+|e𝑆 𝑎𝑏 − 𝜇 𝑎𝑏 | ≥ 𝑐 0𝜃 . 
+
+Applying (A.18) once more gives 
+
+P(𝐸 𝑎𝑏 ) ≤ 2 exp (− 𝐶 1𝐷𝑐 20𝜃 2). (A.21) Combining the two cases, there exists a constant 𝐶 2 > 0 such that for every 𝑎, 𝑏 ∈ I ,
+
+P(𝐸 𝑎𝑏 ) ≤ exp (− 𝐶 2𝐷𝜃 2). (A.22)  
+
+> 12 Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil
+
+Finally, the event that the recovered support differs from the oracle support is exactly 
+
+n
+
+supp ( ˆS) ≠ supp (S∗)
+
+o
+
+=
+
+Ø 
+
+> 𝑎,𝑏 ∈ I
+
+𝐸 𝑎𝑏 . (A.23) Applying the union bound over all 𝑀 2 = (𝑁𝑉 )2 entries yields 
+
+P
+
+
+
+supp ( ˆS) ≠ supp (S∗)
+
+
+
+≤∑︁  
+
+> 𝑎,𝑏 ∈ I
+
+P(𝐸 𝑎𝑏 ) ≤ 𝑀 2 exp (− 𝐶 2𝐷𝜃 2).
+
+(A.24) Substituting 𝑀 = 𝑁𝑉 , we obtain 
+
+P
+
+
+
+supp ( ˆS) ≠ supp (S∗)
+
+
+
+≤ ( 𝑁𝑉 )2 exp (− 𝐶 2𝐷𝜃 2). (A.25) Renaming 𝐶 2 as 𝐶 completes the proof. □
+
+## B Computational Complexity Analysis 
+
+In this section, we first analyze the time and space complexity of the asynchronous multi-view diffusion derived from Eq. (10) in the main body, and the synchronous multi-view diffusion described in Eq. (12), respectively. We then further examine the complexity reduction achieved by the proposed topological sampling strategy and the Ego-Net style architecture. We denote by 𝑁 the number of instances, by 𝑉 the number of views, and by 𝐷 the feature dimension of the latent representation. 
+
+## B.1 Complexity of Asynchronous Multi-view Diffusion 
+
+We first consider the asynchronous multi-view diffusion in Eq. (10) of the main body. For each target feature x(𝑣 ) 
+
+> 𝑖
+
+∈ R𝐷 , the first term performs intra-view aggregation over all 𝑁 instances in the 𝑣 -th view. Since each interaction involves a 𝐷 -dimensional vector op-eration, its cost is 𝑂 (𝑁 𝐷 ). The second term performs inter-view fusion over all 𝑉 views for the same instance index 𝑖 , which costs 
+
+𝑂 (𝑉 𝐷 ). Therefore, the cost of updating one feature is 
+
+𝑂  (𝑁 + 𝑉 )𝐷 .
+
+Since there are 𝑁𝑉 target features in total, the overall time com-plexity of one asynchronous diffusion step is 
+
+𝑂  𝑁𝑉 (𝑁 + 𝑉 )𝐷  = 𝑂 (𝑁 2𝑉 𝐷 + 𝑁𝑉 2𝐷 ).
+
+We next analyze the space complexity. Storing the feature tensor 
+
+X = {X(𝑣 ) }𝑉 𝑣 =1 requires 𝑂 (𝑁𝑉 𝐷 ) memory. The intra-view diffusion coefficients require storing 𝑉 dense matrices S(𝑣 ) ∈ R𝑁 ×𝑁 , which costs 𝑂 (𝑉 𝑁 2). In addition, the cross-view coefficients P𝑣𝑢 form a 𝑉 × 𝑉 table, requiring 𝑂 (𝑉 2) memory. Hence, the total space complexity is 
+
+𝑂 (𝑁𝑉 𝐷 + 𝑉 𝑁 2 + 𝑉 2).
+
+In practical scenarios, it is typical that 𝑁 ≫ 𝐷 ≫ 𝑉 . Under this regime, the dominant term in the time complexity is 𝑂 (𝑁 2𝑉 𝐷 ), and the dominant term in the space complexity is 𝑂 (𝑉 𝑁 2). By further omitting the lower-order dependence on 𝐷 and 𝑉 , the asynchronous diffusion admits the simplified complexity Time = 𝑂 (𝑁 2), Space = 𝑂 (𝑁 2).
+
+## B.2 Complexity of Synchronous Multi-view Diffusion 
+
+We now consider the synchronous multi-view diffusion in Eq. (12) of the main body. For each target feature x(𝑣 ) 
+
+> 𝑖
+
+, the update traverses all source pairs (𝑢, 𝑗 ) in the entire multi-view space. Since there are 𝑉 𝑁 
+
+such source nodes and each interaction involves a 𝐷 -dimensional vector operation, the cost of updating one target feature is 
+
+𝑂 (𝑉 𝑁 𝐷 ).
+
+As there are 𝑁𝑉 target features in total, the overall time complexity of one synchronous diffusion step becomes 
+
+𝑂 (𝑁𝑉 · 𝑉 𝑁 𝐷 ) = 𝑂 (𝑉 2𝑁 2𝐷 ).
+
+For the space complexity, storing all node features requires 
+
+𝑂 (𝑁𝑉 𝐷 ) memory. Meanwhile, the dual-coupling coefficients S(𝑣,𝑢 )
+
+> 𝑖,𝑗
+
+form a dense tensor over all target-source pairs. The number of such coefficients is 
+
+𝑉 × 𝑁 × 𝑉 × 𝑁 = 𝑉 2𝑁 2,
+
+which gives coefficient storage complexity 𝑂 (𝑉 2𝑁 2). Therefore, the total space complexity is 
+
+𝑂 (𝑁𝑉 𝐷 + 𝑉 2𝑁 2).
+
+Again, under the practical regime 𝑁 ≫ 𝐷 ≫ 𝑉 , the dominant terms are 𝑂 (𝑉 2𝑁 2𝐷 ) in time and 𝑂 (𝑉 2𝑁 2) in space. By omitting the lower-order dependence on 𝐷 and 𝑉 , the synchronous diffusion can be simplified as Time = 𝑂 (𝑁 2), Space = 𝑂 (𝑁 2).
+
+## B.3 Complexity Reduction via Topological Sampling and Ego-Net Architecture 
+
+A direct implementation of synchronous diffusion is expensive because it requires exhaustive traversal over all 𝑉 2𝑁 2 target-source pairs. To address this issue, we first apply topological sampling, which truncates the dense topology into a sparse graph. Let 𝐸 
+
+denote the number of retained edges after truncation. Then, instead of aggregating over all possible target-source pairs, diffusion is only performed on the retained edges. Since each retained edge still involves a 𝐷 -dimensional message passing operation, the total time complexity of one sparse diffusion step becomes 
+
+𝑂 (𝐸𝐷 ).
+
+For the space complexity, the sparse topology only needs to store the retained edges and their associated coefficients, which requires 𝑂 (𝐸 ) memory. If the feature tensor is also counted, the total memory is 
+
+𝑂 (𝑁𝑉 𝐷 + 𝐸 ).
+
+We further introduce the Ego-Net style centralized architecture, where each instance is associated with a virtual anchor h𝑖 . For each anchor h𝑖 , the cost is proportional to the number of retained neighbors, namely 
+
+𝑂 𝐷 
+
+> 𝑉
+
+∑︁ 
+
+> 𝑣 =1
+
+|N (𝑣 ) 
+
+> 𝑖
+
+|
+
+!
+
+. 
+
+> 13 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang.
+
+Summing over all anchors yields the overall time complexity 
+
+𝑂 𝐷 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑉
+
+∑︁ 
+
+> 𝑣 =1
+
+|N (𝑣 ) 
+
+> 𝑖
+
+|
+
+!
+
+= 𝑂 (𝐸𝐷 ).
+
+The corresponding space complexity is still determined by the sparse retained topology, namely 𝑂 (𝐸 ), or equivalently 𝑂 (𝑁𝑉 𝐷 +𝐸 )
+
+if the feature storage is included. Under the practically relevant sparse regime, the average retained degree is bounded by a constant, and thus 𝐸 = 𝑂 (𝑁 ). Substituting this into the above expression gives Time = 𝑂 (𝑁 𝐷 ), Space = 𝑂 (𝑁𝑉 𝐷 + 𝐸 ).
+
+Finally, under the practical assumption 𝑁 ≫ 𝐷 ≫ 𝑉 , by omitting the lower-order dependence on 𝐷 and 𝑉 , the proposed topological sampling and Ego-Net architecture reduce the complexity to Time = 𝑂 (𝑁 ), Space = 𝑂 (𝐸 ).
+
+Therefore, the proposed design reduces the synchronous diffusion from quadratic complexity in the view-joint space to linear-time propagation with sparse topology storage, thereby enabling scalable deployment in large-scale scenarios. 
+
+## C Algorithm 
+
+This section presents the algorithmic realization of SynMDiff based on the formulation in the main text. The complete procedure is provided in Algorithm 1. 
+
+## D Experimental Details D.1 Dataset Description 
+
+In our experiments, we selected the following five widely-used cancer cohorts: 
+
+• BRCA supports breast invasive carcinoma PAM50 subtype classification, comprising three omics data types (mRNA, CNV, and Reverse-Phase Protein Array (RPPA)) and contain-ing 511 samples from four subtypes: Luminal A, Luminal B, TNBC, and HER2(+). 
+
+• LGG supports grade classification in glioma, comprising three omics data types (DNA methylation, miRNA, and mRNA) and containing 524 samples from two subtypes: Grade 2 and Grade 3. 
+
+• UCEC targets the classification of Uterine Corpus Endome-trial Carcinoma, including three omics data types: DNA methylation, miRNA, and mRNA. It comprises 430 samples categorized into EEA, SEA, and MSEAC subtypes. 
+
+• GBMLGG targets glioma classification, including three types of omics data: DNA methylation, miRNA, and mRNA. It comprises 511 samples grouped into AST, ODG, and OAC subtypes. 
+
+• TCGA integrates RNA-seq and CNV data, with the CNV processed using the GISTIC2 method (10,845 samples) and RNA-seq normalized for batch effects (11,060 samples). After filtering, the final dataset contains 9,664 samples from 28 subtypes. Table 5 summarizes the statistics of the datasets. For the heterogeneous graphs, we selected the following five repre-sentative datasets: 
+
+Algorithm 1 Synchronous Multi-view Neural Diffusion 
+
+Require: Multi-view dataset X = {X(𝑣 ) ∈ R𝑁 ×𝐷 (𝑣 )
+
+}𝑉 𝑣 =1; ground-truth labels Y; learning rate 𝜂 ; similarity threshold 𝜃 ; diffusion depth 𝑇 
+
+Ensure: Predicted labels ˆ Y 
+
+> 1:
+
+Construct the global diffusion coefficient matrix S over the joint multi-view space X 
+
+> 2:
+
+Obtain the sampled topology ˆ S = S ⊙ M(𝜃 ) according to Eq. (17)  
+
+> 3:
+
+while not converged do  
+
+> 4:
+
+for 𝑣 = 1 to 𝑉 do  
+
+> 5:
+
+Align the 𝑣 -th view into a shared latent space through a linear layer  
+
+> 6:
+
+˜X(𝑣 ) = 𝑓 𝜃 𝑣 (X(𝑣 ) ) 
+
+> 7:
+
+end for  
+
+> 8:
+
+for 𝑖 = 1 to 𝑁 do  
+
+> 9:
+
+Generate the virtual anchor h(0) 
+
+> 𝑖
+
+for the 𝑖 -th instance  
+
+> 10:
+
+Construct the Ego-Net topology T𝑖 from ˆ S 
+
+> 11:
+
+for 𝑡 = 0 to 𝑇 − 1 do  
+
+> 12:
+
+Update the virtual anchor by the centralized diffusion rule in Eq. (21)  
+
+> 13:
+
+end for  
+
+> 14:
+
+Obtain the final representation z𝑖 = h(𝑇 ) 
+
+> 𝑖
+> 15:
+
+end for  
+
+> 16:
+
+Compute the prediction ˆY = 𝑓 𝜙 ({ z𝑖 }𝑁 𝑖 =1) 
+
+> 17:
+
+Compute the cross-entropy loss 
+
+L = − Í𝑁 𝑖 =1
+
+Í𝐶 𝑐 =1 𝑌 𝑖,𝑐 log ˆ 𝑌 𝑖,𝑐  
+
+> 18:
+
+Update all trainable parameters by back-propagation with learning rate 𝜂  
+
+> 19:
+
+end while  
+
+> 20:
+
+return ˆY
+
+Table 5: A brief description of cancer subtype datasets. 
+
+Datasets # Samples #Features #Subtypes BRCA 511 mRNA: 1,000 CNV: 1,000 RPPA: 223 4LGG 524 DNA: 2,000 mRNA: 2,000 miRNA: 548 2UCEC 430 DNA: 2,000 mRNA: 2,000 miRNA: 554 3GBMLGG 511 DNA: 2,000 mRNA: 2,000 miRNA: 548 3TCGA 9,664 gene expression: 17,944 CNV: 17,944 28 
+
+• Freebase constitutes a subset of the broader Freebase knowl-edge graph, encompassing entities categorized into four dis-tinct types: movies (M), actors (A), directors (D), and writers (W).  
+
+> 14 Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil
+
+• DBLP is sourced from the DBLP citation network platform, with each node characterized by 334 attributes. The dataset categorizes nodes into four types: author, paper, term, and conference. In the experiments, the meta-path set {APA, APCPA, APTPA} is applied. 
+
+• IMDB is derived from an online movie database. We ex-tracted a subset containing four types of nodes: movies (M), actors (A), directors (D), and years (Y). We conduct experi-ments by the meta-path set {MAM, MDM, MYM}. 
+
+• YELP is a subset derived from a merchant review website with four types of nodes, i.e., business, user, service, and level. We generate the meta-path set {BUB, BLB, BSB} to conduct experiments. 
+
+• AMiner represents an academic heterogeneous graph dataset, comprising three types of nodes—paper (P), author (A), and reference (R)—and four types of edges: PA, AP, PR, and RP. The dataset also includes paper categories as labels. The meta-path set {PAP, PRP} is used for experimentation. Table 6 summarizes the statistics of the datasets. 
+
+Table 6: A brief description of heterogeneous graph datasets.                       
+
+> Datasets # Samples #Features #Views Meta-Paths #Classes FreeBase 43,854 3,492 3MAM MDM MWM 4DBLP 27,194 334 3APA APCPA APTPA 4IMDB 12,722 1,232 3MAM MDM MYM 3Yelp 3,913 2,614 3BUB BSB BLB 3AMiner 55,783 128 2PAP PRP 3
+
+For the multi-view classification task, we selected the following twelve datasets: 
+
+• HW is a handwritten digits dataset with six types of features, including Profile-correlation, Fourier-coefficient, Karhunen-Loeve, Morphological, Intensity-averaged, and Zernike Mo-ment, with dimensions 153, 596, 301, 27, 481, and 157, respec-tively. 
+
+• Youtube is a video dataset with audio and visual features, including MFCC, Volume Stream, Spectrogram Stream, Cuboids Histogram, Hist Motion Estimate, and Histogram of Oriented Gradients, with dimensions 2000, 64, 1024, 512, 64, and 647, respectively. 
+
+• Scene15 is an image dataset with 15 categories, using LBP, PHOW, and CENTRIST features, with dimensions 1800, 1180, and 1240, respectively. 
+
+• MITIndoor is a scene dataset with 5,360 images and 67 categories, using PHOW, LBP, CENTRIST, and deep features, with dimensions 4096, 3600, 1770, and 1240, respectively. 
+
+• IAPR is an image dataset containing 7,855 samples with two views, where each sample is represented by visual and textual features, with dimensions 100 and 100, respectively. 
+
+• Caltech is an object recognition dataset with 9,144 images and 102 categories. Each sample is described by six types of features, with dimensions 48, 40, 254, 1,984, 512, and 928, respectively. 
+
+• Animals is an image dataset containing 10,158 samples with two views, where each sample is represented by two types of visual features, both with dimension 4,096. 
+
+• Espgame is an image dataset with 11,032 samples and two views, where each sample is represented by visual and textual features, with dimensions 100 and 100, respectively. 
+
+• VGGFace is a face dataset containing 34,027 images with four views, where each sample is described by multiple deep features, with dimensions 944, 576, 512, and 640, respectively. 
+
+• CIFAR-10 is an image dataset with 50,000 samples and 10 categories. Each sample is represented by three types of features, with dimensions 512, 2,048, and 1,024, respectively. 
+
+• NoisyMNIST is a handwritten digits dataset containing 70,000 samples with two views, where each sample is rep-resented by two noisy feature representations, both with dimension 784. 
+
+• YTF is a video face dataset containing 286,006 samples with four views, where each sample is described by multiple fea-ture representations, with dimensions 944, 576, 512, and 640, respectively. Table 7 summarizes the statistics of the datasets. 
+
+Table 7: A brief description of multi-view test datasets.                                                                   
+
+> Datasets # Samples # Views # Features # Classes HW 2,000 6153 /596 /301 /481 /157 /27 10 Youtube 2,000 62,000 /1,024 /64 /512 /64 /647 10 Scene15 4,485 31,800 /1,180 /1,240 15 MITIndoor 5,360 43,600 /1,770 /1,240 /4,096 67 IAPR 7,855 2100 /100 6Caltech 9,144 648 /40 /254 /1,984 /512 /928 102 Animals 10,158 24,096 /4,096 50 Espgame 11,032 2100 /100 7VGGFace 34,027 4944 /576 /512 /640 50 CIFAR-10 50,000 3512 /2,048 /1,024 10 NoisyMNIST 70,000 2784 /784 10 YTF 286,006 4944 /576 /512 /640 200
+
+## D.2 Compared Methods 
+
+For multi-omics cancer subtyping, we selected seven state-of-the-art baselines: 
+
+• SVM constructs an optimal hyperplane to separate data points with maximum margin and performs classification on the learned representations. 
+
+• Random Forest constructs an ensemble of decision trees via random sampling and feature selection and performs classification on the learned representations. 
+
+• DeepMO [25] employs deep neural networks to integrate multi-omics data for accurate breast cancer subtype classifi-cation.  
+
+> 15 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang.
+
+• MOGONET [44] jointly learns omics-specific representa-tions and cross-omics correlations via graph convolutional networks for effective multi-omics classification. 
+
+• MoGCN [23] integrates multi-omics data via graph convolu-tional networks with autoencoder-based feature extraction and similarity network fusion for accurate cancer subtype classification. 
+
+• Moanna [30] integrates multi-omics data via a semi-supervised autoencoder and multi-task learning network for accurate breast cancer subtype prediction. 
+
+• MOSGAT [47] integrates multi-omics data via modality spe-cific graph attention networks and cross-modal attention to capture intra- and inter-omics relationships for classification. For heterogeneous graph learning, we selected the following nine advanced compared algorithms: 
+
+• GCN [20] models a homogeneous graph neural network. We target adjacency matrices generated by different meta-paths fed into GCN module and aggregate the resulting represen-tation through summation. 
+
+• HAN [45] employed hierarchical attention (node-level: meta-path neighbor importance; and semantic-level: meta-path relevance) to hierarchically aggregate features, enabling in-terpretable node embeddings in heterogeneous graphs. 
+
+• DMGI [35] constructs contrastive learning between the orig-inal network and a corrupted network on each meta-path and adds a consensus regularization to fuse node embeddings from different meta-paths. 
+
+• IGNN [13] employed fixed-point equilibrium equations with implicit state vectors, leveraging Perron-Frobenius theory for well-posedness and implicit differentiation for training, to capture long-range graph dependencies. 
+
+• MRGCN [18] introduced multi-dimensional convolution via Laplacian tensor eigen-decomposition and generalized tensor products, supporting arbitrary unitary transforms for multi-relational graph node classification. 
+
+• SSDCM [33] is a multiplexed network structure-aware repre-sentation learning method designed to maximize the mutual information between local and contextualized global graph summaries. 
+
+• MHGCN [55] learned multi-length heterogeneous meta-path interactions through multi-layer convolution aggre-gation, integrating multi-relational structural signals and attribute semantics into node embeddings for unsupervised and semi-supervised learning. 
+
+• AMOGCN [7] constructs a fused multi-order adjacency ma-trix and automatically explores meta-paths involving multi-hop neighbors under the guidance of node semantic infor-mation. 
+
+• HMGE [1] introduced hierarchical aggregation with non-linear dimension combinations and mutual information max-imization to unsupervisedly uncover latent structures in high-dimensional multiplex graphs. The following seven state-of-the-art multi-view classification meth-ods are used for comparison with the proposed model: 
+
+• Co-GCN [22] combined GCNs and co-training to effectively leverage spectral graph information from multiple views through adaptive use of combined Laplacians, enhancing the exploitation of structural data. 
+
+• PDMF [51] employed a two-stage strategy: pre-training cap-tured multi-view consistency and complementarity via aux-iliary representation decoding; fine-tuning leveraged these relations to learn a robust data-to-comprehensive represen-tation mapping. 
+
+• LGCN-FF [6] consisted of two stages: the first trained a representation from heterogeneous views, and the second enhanced graph fusion using learnable weights and parame-terized activation functions. 
+
+• ECMGD [28] integrated energy-constrained graph diffu-sion to unify multi-view data, enabling inter and intra-view feature flow with an energy function that guided diffusion toward globally consistent representations in GCNs. 
+
+• TUNED [16] integrates local and global feature neighbor-hood structures with evidential learning and Markov random fields for robust multi-view classification under uncertainty. 
+
+• KAMSSM [24] models knowledge-aware multi-view dynam-ics via node behavior selection and directional inter-view diffusion to mitigate interference from low-quality views. 
+
+• CoGFormer [21] jointly models local and global structural consensus via a cooperative graph transformer with denois-ing graph convolution and structure-guided attention for robust multi-view learning. 
+
+## D.3 Implementation and Training Details 
+
+In this section, we provide training details of the proposed method, including model design and hyperparameter settings. Specifically, we adopt the 𝑘 -nearest neighbors (kNN) algorithm as a concrete instantiation of the truncation procedure in Eq. (17) of the main text. This choice is motivated by its ability to capture high-quality geometric priors, while remaining computationally efficient and widely used for constructing topological structures from multi-view features [6, 22, 38, 43]. For heterogeneous graph node classification, we follow the setting of Lu et al. [28], where a simple GNN (e.g., GCN) is employed to project heterogeneous graph data into a multi-view feature space. In training, we use the Adam optimizer with cross-entropy loss. The maximum number of epochs is fixed at 200, and the model with the best validation performance is selected for testing. All results are reported as the mean and standard deviation over five runs with different random seeds. The batch size is set to 128 to ensure efficient training on commonly available single-GPU setups. For hyperparameter se-lection, we follow the original settings of all baseline methods as specified in their respective papers. For the proposed SynMDiff, to simplify tuning, we adopt a unified network configuration across all experiments. Specifically, we use a single-layer architecture, where a 512-dimensional MLP is first applied to align multi-view features, followed by a multi-head attention layer with 4 heads of dimension 128, and a feed-forward network (FFN) with hidden dimension 256. The dropout rate is set to 0.2, and the weight decay is fixed at 1e −5. We tune the learning rate, the aggregation order ( hops ), and the neighborhood size ( 𝑘 ) via validation, as these hyperparameters gov-ern the optimization dynamics and the effective receptive field of  
+
+> 16 Synchronous Multi-view Neural Diffusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil
+
+the induced topology. The detailed hyperparameter configurations are summarized in Table 8. 
+
+Table 8: Hyperparameter Configurations                                                                      
+
+> Dataset learning rate ℎ𝑜𝑝𝑠 𝑘
+> BRCA 0.0005 310 LGG 0.0005 05UCEC 0.0005 310 GBMLGG 0.0005 310 TCGA 0.0005 310 FreeBase 0.0005 310 DBLP 0.00005 610 IMDB 0.0005 710 Yelp 0.0001 510 Aminer 0.0005 310 Scene15 0.0005 110 YouTube 0.0001 310 MITIndoor 0.0005 210 HW 0.001 210 IAPR 0.001 310 Animals 0.0005 210 Caltech 0.0005 110 ESPGAME 0.0005 310 NoisyMNIST 0.0005 410 YTF 0.0001 310 CIFAR-10 0.00005 110 VGGFace 0.0005 110
+
+## D.4 Additional Ablation Analysis 
+
+Section 5.3 examines the effects of intra-view propagation, inter-view propagation, and topology sampling. We further evaluate three variants on the HW dataset: Async. , which replaces synchro-nous diffusion with its view-decoupled asynchronous counterpart; 
+
+w/o 𝑘 -NN , which removes 𝑘 -NN topology sampling; and w/o h𝑖 ,which removes the virtual anchor in the centralized architecture. All variants follow the same experimental setting. As shown in Table 9, the asynchronous variant decreases ACC by 0.94 percentage points while requiring approximately 6 .78 × more time and 53 .1× more memory than SynMDiff. Removing 𝑘 -NN sam-pling leads to the largest performance drop and increases the time and memory costs by approximately 6 .69 × and 56 .0×, respectively. This confirms that dense interactions introduce both computational redundancy and semantically irrelevant information. Removing the virtual anchor h𝑖 reduces ACC by 0 .62 percentage points and increases the execution time by approximately 25 .4%, while its mem-ory consumption remains comparable to that of SynMDiff. These results demonstrate that synchronous diffusion, topology sampling, and virtual-anchor-based information relay jointly contribute to the effectiveness and efficiency of the complete model. 
+
+## D.5 Sensitivity to the Neighborhood Size 
+
+The neighborhood size 𝑘 controls the trade-off between informa-tion coverage and topology sparsity. We vary 𝑘 from 5 to 30 on the HW dataset while keeping all other configurations unchanged. As reported in Table 10, SynMDiff achieves the highest ACC of 
+
+Table 9: Component-wise ablation results. 
+
+Metric Async. w/o 𝑘 -NN w/o h𝑖 SynMDiff ACC (%) 96.12 95.81 96.44 97.06 
+
+Time (ms) 376.25 371.15 69.60 55.50 
+
+Mem. (MB) 5376.90 5666.89 99.99 101.27 
+
+Table 10: Sensitivity to the neighborhood size 𝑘 .
+
+𝑘 5 10 15 20 25 30 ACC (%) 95.81 97.13 97.25 96.25 96.31 95.88 Time (ms) 25.76 27.39 28.64 29.34 29.48 30.09 Mem. (MB) 99.52 100.71 99.61 100.73 99.54 99.54 97 .25% at 𝑘 = 15, while 𝑘 = 10 provides comparable performance with slightly lower execution time. A small 𝑘 may exclude useful complementary information, whereas a large 𝑘 introduces less rele-vant neighbors and additional noise. The execution time increases moderately from 25 .76 ms to 30 .09 ms as 𝑘 increases, while memory consumption remains stable within 99 .52–100 .73 MB. An interme-diate neighborhood size therefore provides a favorable balance between information coverage, noise suppression, and computa-tional efficiency. 
+
+## E Further Illustration of Synchronous Fusion 
+
+Neighborhood structures inferred from different views are often heterogeneous and misaligned. Consequently, two semantically related instances may be connected in one view but disconnected in another. In a view-decoupled fusion framework, such missing relations can interrupt intermediate propagation pathways and pre-vent complementary information from being effectively exchanged. Figure 4 presents a Weisfeiler-Lehman (WL)-inspired toy example with two semantically related instances, 𝐴 and 𝐵 . The example con-tains 𝐴 1, 𝐴 2, and 𝐵 2, where the subscript denotes the view, while 
+
+𝐵 1 is omitted to isolate the relevant interaction pattern. The nu-merals inside the nodes represent abstract feature tokens rather than ground-truth labels. Solid edges denote available interactions, and the crossed dotted edge denotes a missing relation caused by view-specific structural bias. Under asynchronous fusion, information exchange between 𝐴 1
+
+and 𝐵 2 depends on an indirect path through 𝐴 2. Once the relation between 𝐴 2 and 𝐵 2 is absent, the complementary information can-not be propagated at either the sample or view level. The resulting representations are therefore local and incomplete. In contrast, syn-chronous fusion operates directly in the joint multi-view space and models the interaction between 𝐴 1 and 𝐵 2 without relying on the missing intermediate edge. Both sample- and view-level re-finement can consequently recover the joint signature {1, 2}. This WL-inspired example provides an intuitive message-passing in-terpretation of how synchronous fusion alleviates the restrictions imposed by inconsistent view-specific structures.                 
+
+> 17 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yongquan Shi, Weijun Huang, Yueyang Pi, Wendi Zhao, Yiqing Shi and Shiping Wang. 𝐴 1
+> 𝐴 2𝐵 2
+> 1
+> 12
+> 𝐴 1
+> 𝐴 2𝐵 2
+> 1
+> 12
+> 𝐴 1
+> 𝐴 2𝐵 2
+> 1
+> 22
+> 𝐴 1
+> 𝐴 2𝐵 2
+> 1,2
+> 21,2
+> 1
+> 22
+> 𝐴 1
+> 𝐴 2𝐵 2
+> 𝐴 1
+> 𝐴 2𝐵 2
+> 1,2
+> 1,2 1,2
+> 1
+> 12
+> 𝐴 1
+> 𝐴 2𝐵 2
+> 𝐴 1
+> 𝐴 2𝐵 2
+> 1,2
+> 1,2 1,2
+
+Async -Fusion  Sync -Fusion  
+
+> View -level Sample -level View -level Sample -level
+> Isolation by
+> view -bias
+
+Figure 4: A WL-inspired comparison between asynchronous and synchronous multi-view fusion. Under asynchronous fusion, the missing edge between 𝐴 2 and 𝐵 2 interrupts the intermediate propagation pathway and isolates 𝐵 2 from the complementary information in 𝐴 1. Synchronous fusion di-rectly models the interaction between 𝐴 1 and 𝐵 2, enabling the involved nodes to obtain the joint signature {1, 2}.
+
+## F Relation to Prior Work and Scope 
+
+SynMDiff is related to prior studies that interpret representation learning as a diffusion process [4, 12, 28, 46], where attention mech-anisms and graph-based operations are commonly used to esti-mate diffusion coefficients and implement information propagation. Among these studies, ECMGD [28] is the most closely related multi-view diffusion method. It first performs feature evolution within individual views and then combines the resulting view-specific representations. Despite its diffusion-based interpretation, this se-quential organization remains within the View-Decoupled Fusion paradigm, where cross-view interactions depend on intermediate representations shaped by view-specific structural biases. In con-trast, SynMDiff formulates the joint multi-view feature space as a unified dynamical system, in which the dual-coupling coefficient 
+
+𝑆 (𝑣,𝑢 ) 
+
+> 𝑖,𝑗
+
+directly models the influence of instance 𝑗 in view 𝑢 on in-stance 𝑖 in view 𝑣 . Intra-view, inter-view, cross-instance, and cross-view interactions are therefore captured within the same diffusion process rather than decomposed into independent stages. To the best of our knowledge, this is the first neural diffusion formulation that models intra- and inter-view interactions in a fully synchro-nous manner. Accordingly, the scope of this work primarily concerns the for-mulation of multi-view fusion rather than the development of a new attention mechanism or graph neural-network backbone. Attention-based diffusivity estimation and graph propagation are adopted as established tools for realizing the generalized diffusion flow, while our focus is the transition from view-decoupled information propa-gation to globally coupled synchronous fusion. To make joint diffu-sion computationally practical, we further introduce energy-based topology sampling to remove redundant or semantically irrelevant diffusion pathways and a virtual-anchor architecture to avoid ex-haustive cross-view traversal. Together, these designs provide an efficient and scalable realization of the synchronous formulation without altering its central modeling principle.

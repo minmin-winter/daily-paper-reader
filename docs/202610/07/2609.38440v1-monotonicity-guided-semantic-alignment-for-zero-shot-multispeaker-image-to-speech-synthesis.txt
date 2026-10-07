@@ -1,0 +1,315 @@
+Title: Monotonicity-Guided Semantic Alignment for Zero-shot Multispeaker Image-to-Speech Synthesis
+
+URL Source: https://arxiv.org/pdf/2609.38440v1
+
+Published Time: Thu, 01 Oct 2026 00:17:19 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+## MONOTONICITY-GUIDED SEMANTIC ALIGNMENT FOR ZERO-SHOT MULTISPEAKER IMAGE-TO-SPEECH SYNTHESIS 
+
+## Lijun Wang, Yixian Lu, Shogo Okada *
+
+## School of Information Science, Japan Advanced Institute of Science and Technology 
+
+ABSTRACT 
+
+Direct image-to-speech (Img2Sp) poses an alignment chal-lenge in mapping visual content to ordered speech sequences, as images permit multiple spoken descriptions and lack monotonic correspondence with speech sequences. We pro-pose Monotonicity-Guided Semantic Alignment (MGSA), to the best of our knowledge, the first framework for zero-shot multispeaker Img2Sp synthesis. We use semantic speech units to provide shared content targets across speak-ers with reference speech for speaker conditioning. A query aligner maps semantic memory learned from visual con-tent to speech unit positions via a soft monotonic prior, which yields position-specific conditioning states. A block-wise masked diffusion generator is employed for the speech unit generation conditioning on these states. Experiments on Flickr8k-Audio show competitive captioning perfor-mance against single-speaker baselines, while evaluation with LibriTTS-R references supports zero-shot synthesis for unseen speakers. Ablations validate the effectiveness of aligner and block diffusion. Audio samples are available at 
+
+https://alizeded.github.io/mgsa-demo .
+
+Index Terms — Image-to-speech synthesis, Blockwise masked diffusion, Multi-modal speech processing 
+
+1. INTRODUCTION 
+
+Direct image-to-speech (Img2Sp) synthesis generates spoken descriptions directly from visual content without in-termediate text, which is important when written form is un-available or latency is critical, such as in hands- and eyes-free interaction and in-cabin assistive narration. It also expands speech technology to roughly half of the world’s languages that lack standardized written forms [1]. Some existing methods predict mel spectrograms [2] or discrete unit representations [3, 4] by using encoder-decoder architectures trained with teacher forcing. Im2Sp [5] trans-fers a pretrained image captioning model to autoregressive (AR) prediction of clustered self-supervised HuBERT fea-tures. PixVoxLM [6] predicts EnCodec tokens [7] by fine-tuning BLIP [8]. However, these methods do not demon-strate reference-conditioned synthesis (i.e., zero-shot multi-
+
+> * Corresponding Author. Email: okada-s@jaist.ac.jp.
+
+speaker setting) for unseen speakers. For example, SAS and PixVoxLM use synthesized speech from a single-speaker text-to-speech (TTS) system [2, 6]. Im2Sp reconstructs the pre-dicted units using a vocoder trained on LJSpeech [5]. We thus explore zero-shot multispeaker Img2Sp synthesis, where the system generates image-grounded descriptions while con-ditioning on reference speech from unseen speakers. To support the zero-shot multispeaker synthesis, we em-ploy semantic speech units as shared content targets across speakers and reference speech for speaker conditioning. This choice is also motivated by the concern that regressing contin-uous features (e.g., mel spectrograms) may prevent the model from focusing on image content [5]. However, these units do not specify how visual content corresponds to speech unit positions. Compared with text, an image permits multiple descriptions with different content and ordering. Its spatial features do not have predefined monotonic correspondence to unit positions. Speaker-dependent variations in speaking rates and acoustic conditions further complicate alignment learn-ing in open-set multispeaker settings, as observed in zero-shot TTS [9]. Reference speech and teacher-forcing prefixes also introduce predictive cues that may create a shortcut to reduce the model’s reliance on image conditions, since neural networks can favor the most exploitable signals and underfit weaker ones [10, 11, 12]. Accordingly, the remaining challenge is to organize vi-sual content into position-specific conditions for speech unit generation. We therefore introduce an alignment framework that uses a soft monotonic prior to guide encoded visual con-tent to construct position-specific conditions for speech unit generation. An auxiliary objective is introduced to super-vise the content at each speech unit position. The prior acts on the learned memory rather than the spatial order of im-age features. We adopt blockwise masked diffusion to com-bine flexible length generation and efficient blockwise infer-ence [13]. Unlike non-AR approaches that require a prede-fined duration, it generates block-by-block until termination. Compared with token-by-token AR decoding, masking mech-anism within each block limits access to local prefix context, potentially reducing the tendency to favor prefix continuation over image conditioning [10, 11]. We propose Monotonicity-Guided Semantic Alignment (MGSA), as illustrated in Fig. 1. A semantic encoder (SE) fγarXiv:2609.38440v1 [eess.AS] 29 Sep 2026 (a) Image-to-unit Generation            
+
+> Image
+> I
+> Image Encoder V
+> Semantic Encoder fγ
+> s
+> Memory
+> M
+> Monotonic Query Aligner gϕ
+> s
+> Conditioning States
+> Hb
+> Frozen Trainable
+> s: Speaker Conditioning
+> Pool + Norm.
+> csem
+> Unit History ̃
+> x( < b)
+> Masked Block
+> z(b)
+> s
+> Blockwise Masked Di ff usion Generator
+> Gϑ
+> Generated Speech Units
+> mask
+> (b) Monotonic Query Alignment
+> Memory [M;Wss]Shared q
+> + RoPE
+> MQA gϕ
+> Block-causal Self-attention Cross-attention
+> QK,V
+> Soft Monotonic Prior
+> Memory Slot f
+> Unit Position  j
+> Conditioning States HTraining Only
+> Unit Prediction Head Occupancy Head
+> unit occ
+
+Fig. 1 . Overview of the MGSA: A zero-shot multispeaker Img2Sp generation framework. learns an indexed semantic memory from visual features and speaker conditioning. A monotonic query aligner (MQA) gϕ
+
+maps this memory to speech unit positions using a soft mono-tonic prior to construct conditioning states, without access to speech unit prefixes. This design encourages the states to encode visual content without relying on preceding units. A blockwise masked diffusion generator Gϑ uses the states to generate speech units. Following [2, 6], we train the image-to-unit (I2U) models and use an off-the-shelf unit-to-speech (U2S) model for speech waveform synthesis. Our contributions can be organized as follows: 1. To our knowledge, we are the first to introduce and in-vestigate zero-shot multispeaker Img2Sp synthesis. 2. We propose MGSA, a new approach based on block-wise masked diffusion for zero-shot multispeaker syn-thesis using monotonicity-guided alignment. 3. Experiments show that MGSA achieves competitive performance with single-speaker baselines while sup-porting unseen speakers with excellent speech quality. 
+
+2. PROPOSED METHOD Preliminaries. Given an image I, reference speech 
+
+aref (t), and an optional prefix prompt x<P , our goal is to synthesize speech ˆy(t). A speech tokenizer Etok (·) con-verts target speech s(t) into discrete speech units x =[x0, · · · , x L−1] ∈ V L. A reference-conditioned U2S model 
+
+Dtok (·) reconstructs the waveform as ˆy(t) = Dtok ( ˆ x; aref ).Let B be the block size and P = kB the prefix length for a 
+
+k-block prompt, with P = 0 for generation without a prompt. The speaker style s is extracted from aref (t). I is the content condition. aref (t) offers speaker conditioning and the image guides the content of synthesized speech. 
+
+Semantic Content Encoding. A frozen visual encoder 
+
+V (·) first extracts image representations. The semantic en-coder fγ then encodes visual features and speaker condition-ing s into a fixed-capacity memory M ∈ RF ×d with F slots: 
+
+M = fγ (V (I), s). (1) 
+
+M stores semantic content in indexed slots. To provide global semantic conditioning csem for Gϑ, we mean-pool and nor-malize M following the practice of [14]. 
+
+Monotonic Query Alignment. While M provides se-mantic content, its slots have no predefined correspondence to speech unit positions. We introduce MQA gϕ to produce position-specific conditioning states H by attending to M
+
+with a soft monotonic prior. H are further fed into the gener-ator Gϑ to generate the unit sequences block by block. This component plays a central role in aligning visual content with ordered speech unit sequences. When generating block b, Gϑ predicts the current block conditioned on all completed blocks. The MQA gϕ produces conditioning states Hb for Nb = ( b + 1) B positions using a shared learnable query token q across positions and positional information from positional encoding. 
+
+Hb = gϕ
+
+
+
+(qb,j )Nb−1 
+
+> j=0
+
+, M, W ss
+
+
+
+∈ RNb×d. (2) Here, 0 ≤ j < N b We append d-dimensional speaker token 
+
+Wss to M to form the cross-attention memory. For block b,the input sequences stack Nb queries qb,j = q with positions distinguished by positional encoding. In both training and inference, MQA gϕ takes only shared queries, positional information, and the image and speaker conditions as input. Speech units are fed exclusively to the generator Gϑ that uses ground-truth units as teacher-forced prefixes during training and generates units block by block during inference. In training, gϕ computes all L + B states in a single forward pass. In inference, it recomputes the states for each new block with B additional queries. Although all states are recomputed, the states in completed blocks remain unchanged since their inputs are fixed, and the block-causal mask prevents attention to future blocks. 
+
+Block diffusion generation. The unit sequence x is padded with the ⟨EOS ⟩ (end-of-sequence) token to the near-est block boundary, following [13]: ˜x = ( x0, x 1, · · · , x L−1,
+
+⟨EOS ⟩eL−L), where eL = B⌈(L + 1) /B ⌉. Let ˜x(b) =˜xbB :( b+1) B denote block b. The generator Gϑ predicts per-position unit distributions pϑ through softmax, while pblk 
+
+> ϑ
+
+denotes the block distribution induced by iterative masked decoding. For a prefix of length P = kB , generation starts at 
+
+b0 = P/B . With K = eL/B and Cb = ( ˜ x(<b ), Hb, csem , s),the overall conditional distribution pΘ is: 
+
+pΘ
+
+  ˜x≥P | I, a ref , x<P 
+
+ =
+
+> K−1
+
+Y
+
+> b=b0
+
+pblk 
+
+> ϑ
+
+  ˜x(b) | C b
+
+. (3) Each block is learned by using masked diffusion. During training, a subset of positions Mb ⊆ [bB, (b + 1) B) in the active block b is replaced by ⟨MASK ⟩ using a cosine schedule 
+
+r = cos( π 
+
+> 2
+
+μ), μ ∼ U (0 , 1) . The generator Gϑ is optimized via cross-entropy in the masked subset Mb.During inference, each block is initialized as fully masked and is refined iteratively over R rounds. In each step t, Gϑpredicts uncommitted tokens and ranks them by confidence perturbed by annealed Gumbel noise [15]. Concretely, Gϑ
+
+re-predicts every still-masked position at round t by sampling a candidate ˆxj per position j with choice temperature τc and scores it by: 
+
+score j = log pϑ
+
+ ˆxj | z(b), ex(<b ), H b, c sem , s+τc
+
+
+
+1− tR
+
+
+
+gj ,
+
+(4) where gj ∼ Gumbel(0 , 1) . At round t, the highest-scoring candidates are committed, leaving ⌊B cos( πt/ (2 R)) ⌋ posi-tions masked. EOS is suppressed for j < L min . After each completed block, the sequence is truncated before its first 
+
+⟨EOS ⟩; otherwise the generation continues to the limit Lmax .
+
+Loss Function. To learn monotonicity-guided alignment, we supervise the conditioning states H = gϕ(·) with unit pre-diction Lunit and occupancy prediction objectives Locc . Two prediction heads map Hj at position j to unit and occupancy distributions, denoted by punit and pocc , respectively. During training, gϕ produces L + B states in a single forward pass, of which Gϑ uses the first eL states. Occupancy supervision covers all L + B states and is used only during training. 
+
+Lunit = − 1
+
+L
+
+> L−1
+
+X
+
+> j=P
+
+log punit (xj | Hj ),
+
+Locc = − 1
+
+L + B
+
+> L+B−1
+
+X
+
+> j=0
+
+log pocc (I[j < L ] | Hj ),
+
+(5) where I[j < L ] indicates whether the position j is within the target sequence. We form the MQA training loss as: LMQA =
+
+Lunit + Locc . The masked prediction objective for the gener-ator Gϑ can be formulated as: 
+
+Lmask =
+
+Ex,b,r 
+
+hP 
+
+> j∈M b
+
+− log pϑ(exj |z(b), ex(<b ), H b, csem , s)
+
+i
+
+Ex,b,r [|M b|] .
+
+(6) We combine this masked prediction objective with the unit and occupancy losses to obtain the total loss of MGSA: 
+
+LMGSA = Lmask + Lunit + Locc .
+
+3. MODEL ARCHITECTURE Semantic Encoder. A frozen BLIP2 Q-former first ex-tracts 32 visual tokens from the image I [16], providing high-level visual features for semantic alignment. The SE fγ ,parameterized as a 12-layer base-sized Transformer decoder with 320 learnable queries, maps them to semantic memory 
+
+M ∈ R320 ×768 . RoPE is used for positional encoding [17]. 
+
+Speaker conditioning. Reference speech aref provides speaker conditioning s defined in Sec. 2. aref is encoded into an ECAPA-TDNN speaker vector [18] and four FACodec tim-bre and prosody vectors [19], following the practice of [20]. Each vector is ℓ2-normalized to eliminate magnitude, similar to [21]. The SE concatenates s with visual features along the                                    
+
+> Setting B1 ↑B4 ↑M↑R↑C↑
+> Alignment & Visual Conditioning
+> MGSA (w/o MQA) 56.4 15.7 17.7 42.5 33.3 MGSA (mismatched img.) 34.5 2.71 8.08 25.4 3.61
+> Block Diffusion
+> AR 38.2 6.9 17.2 34.4 15.0 AR w/ mismatched img. 23.9 1.07 8.19 21.4 1.55 MGSA (full) 61 .318 .420 .045 .641 .5
+
+Table 1 . Ablations at 200 k steps via the cross-sentence proto-col. Bold and underline denotes the best and the second best. feature dimension, while MQA appends the projected speaker token Wss to M along the sequence dimension. 
+
+Monotonic Query Aligner. MQA gϕ is a 2-layer base-sized Transformer decoder with a learned query q replicated to the requested sequence length. We use RoPE [17] to as-sign unit positions. We formulate the attention mechanism of gϕ using a block-causal self-attention mask Aslf  
+
+> j,k
+
+∈ { 0, 1}
+
+[13] for query and key positions (j, k ) and a soft monotonic bias Bcrs  
+
+> j,f
+
+for cross-attention logits between unit position j
+
+and memory slot f :
+
+Aslf  
+
+> j,k
+
+= I[⌊k/B ⌋ ≤ ⌊ j/B ⌋],
+
+Bcrs  
+
+> j,f
+
+= −α|f − c(j)|, 0 ≤ f < F, (7) where α = softplus(˜ α) > 0 and c(j) = min( j/ρ, F −1) . ρ is the nominal number of units per memory slot. The appended speaker token Wss has zero bias, i.e., Bcrs  
+
+> j,F
+
+= 0 . Aslf restricts each query to its own and preceding blocks. Bcrs encourages attention near c(j) with a learnable bias strength α.
+
+Block Masked Diffusion Generator. The generator Gϑ
+
+is an 8-layer, 512-dimensional Diffusion Transformer (DiT) [22] with 8 attention heads and local Canon layers [23]. The input uj to Gϑ combines the token embedding Etok with 
+
+Hb,j that is linearly projected to 512 dimensions by WH :
+
+uj = Etok (zj ) + WH Hb,j + bH , (8) where bH is a learnable bias and zj is the unit, mask, or EOS token at position j. We use adaptive layer-normalization to inject csem and s [22]. Classifier-free guidance (CFG) is ap-plied only to image conditioning [24]. The null branch re-places visual features with zeros while retaining s.
+
+4. EXPERIMENTS 4.1. Experimental Setup Data Preparation. We use Flickr8k-Audio [25] and Spo-kenCOCO [3] together under Karpathy split [26] for training and test, following prior works [3, 2, 4, 5, 6]. We apply LibriTTS-R test reference of 38 speakers for unseen speaker evaluation [27]. We extract semantic speech units using Cosyvoice 2’s automatic-speech-recognition-supervised S3
+
+tokenizer and use its acoustic decoder for U2S synthesis [21]. Method Speaker Setting B1 ↑ B4 ↑ M ↑ R ↑ C ↑                                                                                                 
+
+> SAT [3] Single –11.6 14.1 39.0 23.2 SAT-FT [3] Single –12.6 14.5 39.1 24.2 E-I2S [4] Single –14.8 17.4 45.8 32.9 Im2Sp [5] (CLIP init.) Single –17.7 20.6 45.9 45.8 Im2Sp [5] (GiT init.) Single –20.6 22.0 48.4 53.6
+> SAS [2] Single 29.6 3.5 11.3 23.2 8.0 PixVoxLM [6] (Delay) Single 48.1 11.5 15.2 35.8 25.5
+> MGSA (same-sent. )Multiple 62.4 19.2 20.8 46.3 45.0
+> MGSA (cross-sent. )Multiple 62.3 19.0 20.6 46.1 44.9
+> MGSA (unseen )Multiple 63.8 18.4 21.2 47.2 46.2 Setting DistillMOS ↑UTMOS ↑SIM ↑
+> Ground truth 3.65 ±0.58 3.50 ±0.68 0.973
+> MGSA ( same-sent. )3.66 ±0.59 3.99 ±0.47 0.940
+> MGSA ( cross-sent. )3.66 ±0.59 3.95 ±0.47 0.935
+> MGSA ( unseen )3.98 ±0.43 4.44 ±0.08 0.935
+
+Table 2 . Baseline comparisons and speech quality evalua-tions. All evaluations use P = 0 . ±: standard deviation. 
+
+Training Strategy. Both MQA gϕ and generator Gϑ
+
+operate with a block size B = 16 (0.64 s at 25 Hz ), fol-lowing [28]. During training, speaker conditioning s is extracted from an utterance sampled uniformly from the target speaker’s utterance pool. The model is optimized using scheduler-free AdamW [29] with a batch size of 128, a learn-ing rate of 5e−4, and 300 k total steps with a 5k -step warmup. We set Lmin = 0 , Lmax = 400 , and ρ = 2 to cover the max-imum length of the training dataset. We set pcfg = 0 .1 for CFG training and the CFG scale to 1.5 for inference. During inference, we set R = 64 and τc = 0 .0.
+
+Evaluation Metrics. Following previous works, we apply an off-the-shelf ASR model (wav2vec2-Large fine-tuned on LibriSpeech 960h) to transcribe synthesized speech and evaluate BLEU (B1 & B4) [30], METEOR (M) [31], ROUGE-L (R) [32], and CIDEr (C) [33]. We assess natu-ralness using DistillMOS [34] and UTMOS [35]. Speaker similarity (SIM) is evaluated using WavLM-SV following the practice of [36]. 
+
+Reference Protocols. Inspired by [14, 20, 36], we evalu-ate three reference speech conditions as: (1) the target utter-ance itself ( same-sentence ); (2) a different utterance from the same speaker ( cross-sentence ); (3) and an external utterance from an unseen speaker during MGSA training ( unseen ). All 176 Flickr8k-Audio test speakers appear in MGSA training. 
+
+Baselines. We compare with SAT [3], E-I2S [4], SAS [2], Im2Sp [5], and PixVoxLM [6] on the Flickr8k-Audio [25] test split using published scores. All reported baselines use single-speaker synthesis. SAS predicts mel spectrograms, while SAT and E-I2S use discrete speech units from sepa-rately trained VQ-VAE-based U2S models. Im2Sp trains an AR-based I2U model using 200-cluster HuBERT units and a unit-based vocoder. PixVoxLM predicts EnCodec tokens with fine-tuning BLIP [8]. In contrast, MGSA supports zero-shot multispeaker synthesis conditioned on reference speech from           
+
+> Speech pair SIM Generated speech / unseen reference 0.935 ±0.043
+> Natural recording / same speaker 0.946 ±0.040
+> Natural recording / different speakers 0.658 ±0.162
+
+Table 3 . Speaker similarity evaluation for unseen speaker synthesis, compared with same- and different-speaker pairs of natural LibriTTS-R recordings. unseen speakers. Remarkably, although captioning metrics remain directly comparable, baselines benefit from a more constrained single-speaker setting and do not face an addi-tional generalization challenge to unseen speakers. 
+
+4.2. Experimental Results Alignment and Visual Conditioning. We remove MQA 
+
+gϕ while retaining csem and s to validate its effectiveness and separately test mismatched images to evaluate visual condi-tioning. Results in Table 1 support the effectiveness of MQA and confirm that MGSA uses image conditioning. 
+
+Block Diffusion. We replace the blockwise masked diffu-sion with an AR generator and repeat the mismatched-image conditioning test. Table 1 shows that the AR variant performs worse and further degrades with mismatched images, support-ing the benefit of blockwise masked diffusion. 
+
+Unseen Speaker. As shown in Table 2, with reference speech from unseen LibriTTS-R speakers, MGSA achieves captioning performance comparable to that in the seen-speaker settings and obtains higher DistillMOS and UTMOS scores. Its generated-to-reference SIM is close to that of natural LibriTTS-R recordings from the same speakers and well above that of different speakers. Results in Tables 2 and 3 support MGSA’s capability on zero-shot synthesis while maintaining good captioning performance. 
+
+Comparison against single-speaker baselines. Results in Table 2 show that MGSA outperforms SAS, SAT, SAT-FT, and PixVoxLM. Under the unseen protocol, it also exceeds the Im2Sp variant with a CLIP-initialized encoder and a ran-domly initialized decoder. The GiT-initialized Im2Sp variant achieves higher captioning scores, while MGSA allows zero-shot multispeaker synthesis for unseen speakers. 
+
+5. CONCLUSION & LIMITATION 
+
+We present MGSA, a new framework for zero-shot multi-speaker synthesis that combines monotonicity-guided align-ment and block diffusion. Experiments show that MGSA achieves competitive performance against single-speaker baselines while supporting zero-shot multispeaker synthesis. Ablation studies indicate the effectiveness of the alignment mechanism and blockwise diffusion designs. However, cap-tioning performance remains a limitation for practical appli-cation, motivating further improvement in visual grounding and content accuracy in the I2U model. 6. REFERENCES 
+
+[1] A. Lee et al., “Textless speech-to-speech translation on real data,” in 
+
+Proc. NAACL-HLT . 2022, pp. 860–872, ACL. [2] X. Wang et al., “Show and speak: Directly synthesize spoken descrip-tion of images,” in Proc. ICASSP , 2021, pp. 4190–4194. [3] W.-N. Hsu et al., “Text-free image-to-speech synthesis using learned segmental units,” in Proc. ACL-IJCNLP . 2021, pp. 5284–5300, ACL. [4] J. Effendi et al., “End-to-end image-to-speech generation for untran-scribed unknown languages,” IEEE Access , vol. 9, pp. 55144–55154, 2021. [5] M. Kim et al., “Towards practical and efficient image-to-speech cap-tioning with vision-language pre-training and multi-modal tokens,” in 
+
+Proc. ICASSP , 2024. [6] C. Tran and S. Sakti, “From pixels to voice: A simple and efficient end-to-end spoken image description approach via vision codec lan-guage models,” in Proc. ICASSP , 2025, pp. 1–5. [7] A. D´ efossez et al., “High fidelity neural audio compression,” arXiv preprint arXiv:2210.13438 , 2022. [8] J. Li et al., “BLIP: Bootstrapping language-image pre-training for uni-fied vision-language understanding and generation,” in Proc. ICML ,2022, pp. 12888–12900. [9] M. Chen et al., “MultiSpeech: Multi-speaker text to speech with trans-former,” in Proc. Interspeech , 2020, pp. 4024–4028. [10] R. Geirhos et al., “Shortcut learning in deep neural networks,” Nat. Mach. Intell. , vol. 2, no. 11, pp. 665–673, 2020. [11] M. Pezeshki et al., “Gradient starvation: A learning proclivity in neu-ral networks,” in Adv. Neural Inf. Process. Syst. , 2021, vol. 34, pp. 1256–1272. [12] N. Wu et al., “Characterizing and overcoming the greedy nature of learning in multi-modal deep neural networks,” in Proc. ICML . 2022, vol. 162 of Proc. Mach. Learn. Res. , pp. 24043–24055, PMLR. [13] M. Arriola et al., “Block diffusion: Interpolating between autoregres-sive and diffusion language models,” in Proc. ICLR , 2025. [14] K. Lee et al., “DiTTo-TTS: Diffusion transformers for scalable text-to-speech without domain-specific factors,” in Proc. ICLR , 2025. [15] H. Chang et al., “MaskGIT: Masked generative image transformer,” in Proc. CVPR , 2022, pp. 11315–11325. [16] J. Li et al., “BLIP-2: Bootstrapping language-image pre-training with frozen image encoders and large language models,” in Proc. ICML .2023, vol. 202 of Proc. Mach. Learn. Res. , pp. 19730–19742, PMLR. [17] J. Su et al., “RoFormer: Enhanced transformer with rotary position embedding,” Neurocomputing , vol. 568, pp. 127063, 2024. [18] B. Desplanques et al., “ECAPA-TDNN: Emphasized channel atten-tion, propagation and aggregation in TDNN based speaker verifica-tion,” in Proc. Interspeech , 2020, pp. 3830–3834. [19] Z. Ju et al., “NaturalSpeech 3: Zero-shot speech synthesis with fac-torized codec and diffusion models,” in Proc. ICML , 2024, Oral. [20] D. Yang et al., “SimpleSpeech 2: Towards simple and efficient text-to-speech with flow-based scalar latent transformer diffusion models,” 
+
+IEEE Trans. Audio, Speech, Lang. Process. , 2025. [21] Z. Du et al., “Cosyvoice 2: Scalable streaming speech synthesis with large language models,” arXiv preprint arXiv:2412.10117 , 2024. [22] W. Peebles and S. Xie, “Scalable diffusion models with transformers,” in Proc. ICCV , 2023, pp. 4195–4205. [23] Z. Allen-Zhu, “Physics of Language Models: Part 4.1, Architec-ture Design and the Magic of Canon Layers,” in Proc. NeurIPS ,2025, NeurIPS ’25, Full version available at https://ssrn.com/ abstract=5240330 .[24] J. Ho and T. Salimans, “Classifier-free diffusion guidance,” in Proc. NeurIPS Workshop , 2021. [25] D. Harwath and J. Glass, “Deep multimodal semantic embeddings for speech and images,” in Proc. ASRU , 2015, pp. 237–244. [26] A. Karpathy and L. Fei-Fei, “Deep visual-semantic alignments for generating image descriptions,” in Proc. CVPR , 2015, pp. 3128–3137. [27] Y. Koizumi et al., “LibriTTS-R: A restored multi-speaker text-to-speech corpus,” in Proc. Interspeech , 2023, pp. 5496–5500. [28] D. Seo et al., “Chatterbox-flash: Prior-calibrated block diffusion for streaming zero-shot TTS,” arXiv preprint arXiv:2605.30748 , 2026. [29] A. Defazio et al., “The road less scheduled,” arXiv preprint arXiv:2405.15682 , 2024. [30] K. Papineni et al., “Bleu: A method for automatic evaluation of ma-chine translation,” in Proc. ACL , 2002, pp. 311–318. [31] S. Banerjee and A. Lavie, “Meteor: An automatic metric for mt evalu-ation with improved correlation with human judgments,” in Proc. ACL Workshop , 2005, pp. 65–72. [32] C.-Y. Lin, “ROUGE: A package for automatic evaluation of sum-maries,” in Text Summarization Branches Out , 2004, pp. 74–81. [33] R. Vedantam et al., “CIDEr: Consensus-based image description eval-uation,” in Proc. CVPR , 2015, pp. 4566–4575. [34] B. Stahl and H. Gamper, “Distillation and pruning for scalable self-supervised representation-based speech quality assessment,” in Proc. ICASSP , 2025. [35] T. Saeki et al., “Utmos: Utokyo-sarulab system for voicemos chal-lenge 2022,” in Proc. Interspeech , 2022, pp. 4521–4525. [36] C. Wang et al., “Neural codec language models are zero-shot text to speech synthesizers,” arXiv preprint arXiv:2301.02111 , 2023.

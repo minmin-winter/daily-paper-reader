@@ -1,0 +1,1393 @@
+Title: ReMAP: Restoring the Perceptual Cycle with Reasoning-Time Latent Visual Memory
+
+URL Source: https://arxiv.org/pdf/2610.05097v1
+
+Published Time: Tue, 06 Oct 2026 01:50:28 GMT
+
+Number of Pages: 32
+
+Markdown Content:
+# ReMAP: Restoring the Perceptual Cycle with Reasoning-Time Latent Visual Memory 
+
+Hao Jiang 1* , Zhanyu Guo 1* , Chenwei Wu 2† , Yichen Guo 3,4† , Qizhe Zhang 4,Junchi Yao 5, Jixian Wu 6, Jinhao You 1, Kai Tang 4, Jiajun Cao 4,Tinghao Wang 1, Mengyu Wang 7, Leo Anthony Celi 8, Shanghang Zhang 4B 
+
+> 1
+
+University of Electronic Science and Technology of China, 2 University of Michigan, Ann Arbor,  
+
+> 3
+
+Nanyang Technological University, 4 Peking University,  
+
+> 5
+
+Mohamed bin Zayed University of Artificial Intelligence, 6 New York University,  
+
+> 7
+
+Harvard University, 8 Massachusetts Institute of Technology 
+
+Abstract: As multimodal large language models (MLLMs) reason for longer, attention to the initial visual input diminishes, weakening visual grounding. Visual memory reintroduces vi-sual evidence during reasoning. We conduct a controlled analysis of visual memory along three axes: curation, organization, and access. We find that local evidence benefits from global con-text, compact latent representations balance accuracy and visual-context cost, and the utility of memory access depends on the reasoning state. Guided by these findings, we propose ReMAP 
+
+(Reasoning-Time Memory-Augmented Perception ), which couples two complementary la-tent memories: a static, question-conditioned Global memory that preserves scene and cross-image context, and a dynamic Local memory that uses this context as an anchor while selecting and re-encoding region-level evidence according to the current reasoning state and the question. Both memories return compact latent tokens that are inserted into the reasoning sequence, and a reinforcement-learning access policy trained with branched rollouts decides when to continue reasoning or invoke Global or Local memory. On ten benchmark families, ReMAP outperforms prior visual-memory methods on all four multi-image benchmarks, exceeding the strongest prior results on MuirBench and MIMIC by 8.38 and 14.84 percentage points, respectively. Across four backbone families, enabling memory access improves over the same trained model with memory disabled, and on shared V*Bench, CV-Bench-2D, and MuirBench questions ReMAP reduces the visual tokens entering the reasoning sequence by 51.0–76.8% relative to the native-resolution backbone. Further analyses show that Global and Local memory form distinct yet complementary latent representations and play coordinated roles in interleaved vision-language reasoning. Together, these components restore the perceptual cycle by letting the reasoning state trigger targeted visual retrieval, with the retrieved evidence guiding subsequent reasoning. Code coming soon. 
+
+1 INTRODUCTION 
+
+Vision–language models are increasingly applied to visual tasks covering larger visual contexts and longer reasoning trajectories. These tasks require models to draw on visual evidence at different reasoning stages such as inspecting fine-grained details, comparing observations across images, or verifying intermediate conclusions. As visual inputs and generated text accumulate, maintaining ac-cess to relevant visual evidence is increasingly challenging. Recent studies report visual forgetting, where attention to visual inputs diminishes during extended generation (Sun et al., 2025; Liu et al., 2025), highlighting the difficulty of sustaining visual grounding throughout reasoning. Visual memory methods have emerged as a natural solution to retain visual evidence during reason-ing. Existing approaches explore several routes with distinct trade-offs: reinspecting source pixels offers fine-grained details but requires extra image processing (Zheng et al., 2026; Su et al., 2025; Jiang et al., 2025), replaying encoded features reuses existing representations but limits available ev-idence to their initial coverage (Chu et al., 2025; Gao et al., 2025; Zhang et al., 2026a), constructing 
+
+> *
+
+Equal contribution. †Project leader. BCorresponding author. Correspondence to: Hao Jiang ( 2024010906013@std.uestc.edu.cn ), Shanghang Zhang ( shanghang@pku.edu.cn ). arXiv:2610.05097v1 [cs.CV] 4 Oct 2026 Preprint. Under review. (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity (c) Global context resolves local ambiguity Human Qwen Human Qwen Human Qwen  
+
+> What is shown in this image? Briefly explain your answer.
+> 1,244token analysis
+> Manual crop replay
+> Look closely. What are these pieces made of?
+> Densely packed cylinders of different heights.
+> Most likely plastic , possibly wood.
+> + Global information
+> The background of this photo looks like a kitchen.
+> With that context, they are likely spaghetti.
+> Full image Local crop
+> Local crop Full image
+
+Early (20%) Middle (50%) Late (80%) 
+
+Replay position 
+
+60 65 70 75 
+
+> Accuracy (%)
+
+65.9 64.8 67.0 
+
+72.5 72.5 71.4 
+
++6.6 pp +7.7 pp +4.4 pp 
+
+Frozen latent Crop pixels Fresh latent 020 40 60 80 100 
+
+> Accuracy (%)
+
+00.25 0.50 0.75 1.00 1.25 
+
+> Rel. memory (×)
+
+0.22× 1.00× 0.49× 
+
+41.7% 66.7% 50.0% 
+
+Frozen features Fresh features Accuracy Replay overhead What color is 
+
+the helmet? 
+
+Negative gain  Positive gain 
+
+CoT 
+
+Images  Query 
+
+> 0
+
+What changed? 
+
+Which animal 
+
+is this?  Memory  
+
+> Memory 1 Memory 2
+
+(a) Global information helps interpret local details. (b) Latent memory balances accuracy and replay overhead. (c) Memory invocation is not always beneficial, and its optimal timing varies across samples. 
+
+Figure 1: Investigating memory curation, organization, and access. (a) An interaction with Qwen2.5-VL-7B-Instruct on a MuirBench example illustrates how global context helps resolve am-biguous local evidence. (b) A comparison of frozen latents, crop pixels, and fresh latents on a random 25% subset of V*Bench examines the trade-off between accuracy and incremental GPU-memory overhead. (c) An easy recognition example and cases from V*Bench and MuirBench show how the need for memory and its invocation timing vary across queries and reasoning states. latent memories provides compact representations at the cost of interpretability (Zhang et al., 2026b; Chen et al., 2026c; Yu et al., 2026). These approaches differ in evidence selection, representation, and delivery timing. We therefore ask: what design choices of a visual memory system truly improve visual reasoning? 
+
+We characterize visual memory along three design axes: curation (what evidence enters memory), 
+
+organization (how evidence is represented), and access (when to access memory and which memory to use). Under this framework, we conduct preliminary experiments combining qualitative analysis with controlled empirical evaluations, as illustrated in Figure 1. These analyses yield three key findings: ❶ Memory curated from local visual evidence alone can be insufficient for contextual reasoning, as illustrated in Figure 1(a). ❷ Memory organization affects both reasoning accuracy and computational overhead, as illustrated by the trade-off between image-crop replay and compact latent representations in Figure 1(b). ❸ Reintroducing visual evidence is not always beneficial, and its utility depends on when it is access ed during reasoning (Figure 1(c)). Guided by these findings, we propose ReMAP (Reasoning-Time Memory-Augmented Perception ). For memory curation , ReMAP combines Global memory, which preserves scene and cross-image context from the input images and question, with Local memory, which selects and re-encodes image regions according to the current reasoning state. For memory organization , Global and Local memory return compact latent tokens that are inserted into the reasoning sequence to balance reasoning accuracy and computational overhead. For memory access , we treat memory invocation as an agentic tool call so that the model can obtain relevant visual evidence when needed. We leverage branched rollouts before each invocation to learn whether, when, and which memory to invoke. These rollouts compare the outcomes of requesting memory versus continuing from the same reasoning state and teach when memory helps. Inference follows a single trajectory. We evaluate ReMAP against existing visual memory methods on ten benchmark families span-ning single-image perception, multi-image reasoning, and broader visual understanding. ReMAP achieves state-of-the-art overall performance across the benchmark suite. Notably, ReMAP sig-2Preprint. Under review. nificantly improves multi-image reasoning, outperforming existing visual-memory methods on all four benchmarks and exceeding the strongest prior results on MuirBench and MIMIC by 8.38 and 14.84 percentage points, respectively. Beyond these aggregate gains, our analyses characterize reasoning-time visual memory: ReMAP’s memory access improves performance across four back-bone families, Global and Local evidence provide complementary benefits, and compact latent re-turns reduce visual-context cost while maintaining leading accuracy. Further analyses make Global and Local memory interpretable through their distinct yet complementary latent representations and coordinated roles in interleaved vision-language reasoning. Our contributions are threefold: 
+
+❶ We identify three principles for reasoning-time visual memory: contextualize local evidence with global context, compress representations, and adapt access to the evolving reasoning state. 
+
+❷ We introduce ReMAP, a framework for reasoning-time visual memory. ReMAP com-bines query-conditioned Global context with state-guided Local evidence in compact latent returns and learns when and which memory to invoke through branched rollouts. 
+
+❸ We demonstrate strong multi-image reasoning with interpretable memory roles. 
+
+ReMAP outperforms prior visual-memory methods on all four multi-image benchmarks, while representation and trajectory analyses reveal the complementary functions of Global and Local memory. 
+
+2 RELATED WORK 
+
+Memory curation spans pixel reacquisition, feature replay, and learned memory formation, with dis-tinct trade-offs between evidence coverage and processing overhead (Zheng et al., 2026; Su et al., 2025; Zhang et al., 2026b). Memory organization represents evidence through images, text, en-coded features, or latent tokens, with different trade-offs in interpretability and context cost (Hu et al., 2024; Zhang et al., 2026d; Huang et al., 2026; Yu et al., 2026). Memory access uses heuristic triggers, uncertainty criteria, or learned policies (Sun et al., 2025; Liu et al., 2026b; Peng et al., 2026), and related policy optimization methods improve tool use and visual reasoning through train-ing feedback (Dong et al., 2026a; Li et al., 2026c). ReMAP bridges these dimensions by combining pixel reacquisition with compact latent memory and preserving scene and cross-image context to interpret newly acquired local evidence. Its access training branches before memory invocation to compare requesting memory with continuing from the same reasoning state, providing feedback on the utility of memory access. A detailed review and comparison are provided in Appendix A.1. 
+
+3 REASONING -T IME MEMORY -A UGMENTED PERCEPTION 
+
+In this section, we introduce ReMAP, which interleaves autoregressive reasoning with access to la-tent visual memory to restore the perceptual cycle. Figure 2 provides an overview of the framework. Given images I = {Ii}Ni=1 and a question Q, the model begins reasoning from a coarse visual prefix 
+
+V c = Ec(I). During reasoning, the model can continue generating text or invoke Global or Local latent memory. After each memory return, the model resumes reasoning with the retrieved evidence. Specifically, Section 3.1 describes how Global and Local memories are formed and integrated into the reasoning sequence. Section 3.2 describes memory access and its training policy. 3.1 MEMORY CURATION AND ORGANIZATION 
+
+Global memory. Global memory provides a compact representation of image content and, for multi-image inputs, relationships across images. We construct it in two stages: the Image Weaver summarizes each image, and the Relation Weaver integrates these summaries into relational context. Both stages are conditioned on the input question. Let Vi denote the encoded visual features of image Ii. We use two sets of learnable query tokens, 
+
+QG and QR, to aggregate per-image content and relational context, respectively. The corresponding modules, Wimg and Wrel , apply cross-attention followed by feed-forward layers. The Image Weaver attends to each image’s features separately, while the Relation Weaver attends to the concatenated image summaries. Both include an encoded representation of the question in their attention context, 3Preprint. Under review. The first two images show Porsche cars, and the third reports sales by model. What is the total sales volume of the two cars? 
+
+> The first two images contain the target vehicles, while the third organizes sales by model; each vehicle must be matched to its corresponding chart row.
+
+Globa l Memory 
+
+Token Sequence  … …
+
+> The
+> total sales
+> is
+> 2280 .
+
+Globa l Memory  Formation      
+
+> 𝑽 𝟏 𝑽 𝟐 𝑽 𝟑
+> 𝑸 𝑮
+> Image
+> Weaver
+> 𝑸 𝑹
+> 𝑸 𝑮
+> Image
+> Weaver
+> 𝑸 𝑮
+> Image
+> Weaver
+> 𝒵 𝑟𝑒𝑙 = 𝑊 𝑟𝑒𝑙 𝑄 𝑟𝑒𝑙 ,𝑍 1
+> 𝑖𝑚𝑔 ; ⋯ ; 𝑍 𝑁
+> 𝑖𝑚𝑔
+
+Relation  Weaver 
+
+ROI Re-Encoder 
+
+… …𝒉 𝟏  𝒉 𝟐  𝒉 𝟑 
+
+Local  Weaver  ሚ𝑍 𝑡,𝑖 𝐿 = 𝑊 𝐿  ෠ℎ𝑡 , 𝑅 𝑡,𝑖 ; 𝑍 𝐺 
+
+Twig Localization 
+
+𝑹 𝒕,𝟏  𝑹 𝒕,𝟐  𝑹 𝒕,𝟑 
+
+Local Memory  Formation 
+
+Vision Encoder 
+
+> Hidden
+> States
+
+𝑸       
+
+> 𝒉 𝟏 +𝒉 𝟐 +𝒉 𝟑 +
+> 𝒁 𝟏
+> 𝒊𝒎𝒈 𝒁 𝟐
+> 𝒊𝒎𝒈 𝒁 𝟑
+> 𝒊𝒎𝒈
+> 𝑰 𝟏 𝑰 𝟐 𝑰 𝟑
+
+Local Memory  𝒁 𝑳 𝒁 𝑮   
+
+> 𝑍 𝐺 =𝑍 1𝑖𝑚𝑔 ; ⋯ ; 𝑍 𝑁 𝑖𝑚𝑔 ; 𝒵 𝑟𝑒𝑙
+
+Figure 2: Overview of ReMAP. Global memory forms a question-conditioned summary of individ-ual images and their relations before decoding. During reasoning, a Local request uses the current state to select sources and regions, re-encodes selected pixels, and compresses them with cached Global context. Global and Local returns are inserted as continuous latent blocks after their request markers, followed by end markers before autoregressive decoding resumes. denoted by the conditioning on Q below: 
+
+Zimg 
+
+i = Wimg (QG, V i; Q), Zrel = Wrel 
+
+ QR, [Zimg 1 ; · · · ; Zimg 
+
+N ]; Q. (1) The Global memory block ZG = [ Zimg 1 ; · · · ; Zimg 
+
+N ; Zrel ] concatenates the image summaries and relational context. Constructed and cached before decoding, ZG depends on the input images and question and remains fixed throughout reasoning. When the decoder generates <mem g> , the run-time inserts ZG followed by <mem g end> and resumes reasoning. 
+
+Local memory. Figure 3(a) shows how Local memory dynamically retrieves fine-grained evidence as reasoning evolves. At state ht, the Source Selector uses the layer-12 request state h12 
+
+t to select images St, and Twig uses the layer-18 prefix states H18 
+
+<t to localize a crop in each selected image. Twig extends the ROI predictor of SD-RPN (Shi et al., 2025) and Q-Zoom (Shi et al., 2026) from the input question to the current reasoning prefix, so successive requests can localize different regions. A frozen ROI encoder maps the crops to region features Rt,i . The Local Weaver takes the cached Global memory ZG as an additional input while compressing each region: 
+
+eZLt,i = WL(ht, R t,i ; ZG), ZL =  eZLt,i 
+
+
+
+i∈S t
+
+. (2) 
+
+ZG anchors each crop in the image-level and cross-image context that local evidence alone can miss, consistent with our first finding. A <mem l> request similarly inserts ZL followed by 
+
+<mem l end> before generation resumes. The concatenated block contains K Local latents. 3.2 MEMORY ACCESS 
+
+Latent memory keeps retrieved visual evidence within a fixed token budget. Replaying whole im-ages at every request would repeatedly expand the context and compete with the ongoing reasoning sequence. Moreover, memory does not help at every step, since its value depends on when it is ac-cessed, consistent with our third finding. The content of a return can be supervised directly, whereas the value of its timing appears only in later reasoning. We therefore separate memory formation from memory access. Stage I uses supervised fine-tuning to form useful memory and warm up request handling, while Stage II uses reinforcement learning to learn whether and when to invoke Global or Local memory. 4Preprint. Under review. Source selector   
+
+> Layer 18
+> Layer 12
+> Layer 1
+> ……
+> Frozen Backbone
+> LLM
+> …
+> Image
+> tokens
+> Text
+> tokens
+> Decoder blocks ×2
+> Q/k projection+mRoPE
+> Twig Localization
+> LoRA
+> 𝑞 𝑡 𝐾 𝑖𝑚𝑔
+> 𝑞 𝑡 𝐾 𝑖𝑚𝑔 𝑇
+> Query condition
+> Cross -attention
+> FFN
+> Formation
+> Local Weaver
+> K
+
+(a) Local memory formation 
+
+> qroi
+
+𝒁 𝑳 
+
+(c ) Memory  invocation  polic y learning 
+
+1. Branch -point selection  2. Shared -prefix rollouts and credit 
+
+𝒖  𝒔 𝒕 , 𝒂 𝒕 = 𝟏 − 𝒑 𝒕  𝒂 𝒕 𝒎 
+
+> What is the total sales volume of the two cars?
+> Answer
+
+𝐴 1
+
+𝐴 2
+
+𝐴 3      
+
+> G
+> L
+> N
+> Shared prefix
+> Branch Step Action type <mem_g >
+> Decision 1
+> <mem_l >
+> Decision 2Decision 3
+
+𝒖 𝟏  𝒖 𝟐  𝒖 𝟑     
+
+> Text …
+> 𝒑 𝒕 𝑮
+> 𝒑 𝒕 𝑳
+> 𝒑 𝒕 𝑵
+> (no request)
+> 𝓢 𝒕
+> 𝒃 𝒕,𝒊
+
+𝑹 𝒕,𝒊 
+
+𝑬 𝐫𝐨𝐢    
+
+> 𝑯 <𝒕 𝟏𝟖
+> 𝒉 𝒕 𝟏𝟐
+> 𝒉 𝒕 𝟏𝟐 𝒁 𝑮 𝑸 𝑳
+> 1. Memory content training
+> ht
+
+Local 
+
+Weaver  LLM 
+
+ℒsuffix  = CE (෡𝒀 , Y)𝒁 𝑳 
+
+> 2. ROI localization
+
+ℒROI  = ℒwBCE  (Ā, qroi )+(1-softIoU )Twig 
+
+qroi     
+
+> 𝑯 <𝒕 𝟏𝟖
+> 3. St udent -state adaptation
+> Teacher
+> review
+> What is the total sales volume of the two cars?
+> 𝑰 𝒊 𝒃 𝒕,𝒊
+> Student
+> prefix
+> +
+> 4.Interface warm -up
+> <mem_x _end>
+
+ℒcall  ℒend Latent memory 
+
+> Student prefix
+
+ℒlater 
+
+…
+
+> <mem_g >
+> <mem_l >
+> 𝑹 𝒕𝒆𝒂𝒄𝒉𝒆𝒓
+> 𝒁 𝑮
+
+(b ) Stage1: memory and interface training    
+
+> Sampled continuations
+> Y:Teacher continuation
+> Ā:Annotated ROI
+> Same loss
+
+ℒROI  
+
+> Same loss
+
+ℒsuffix  
+
+> inSt udent -stat e
+
+Figure 3: Local memory and adaptive invocation. (a) The request state h12 
+
+t selects source images 
+
+St, Twig uses the prefix states H18 
+
+<t to localize a crop in each, and the Local Weaver compresses the crops with the Global anchor ZG into K Local latents. (b) Stage I trains the Local Weaver with Lsuffix and Twig with LROI , adapts both to teacher-reviewed student states, and warms up the memory tokens. (c) Each root branches where siblings are most likely to take a different route, and the invocation gain compares requesting memory with the default continuation N at the same state. 
+
+Stage I: Supervised learning and warm-up. Stage I isolates memory formation from access-policy learning, so that each return localizes the right region and carries evidence that supports sub-sequent reasoning. The vision encoder, pretrained LLM, and decoder LoRA remain frozen through-out this stage. Existing datasets lack ROI annotations that change along the reasoning chain, so we annotate reasoning steps with target regions, together with reference CoTs from a teacher VLM, per-image facts, cross-image relations, and answers. We first optimize memory quality by training the Image and Relation Weavers and then the Local Weaver. Their returns are inserted into teacher CoTs, and the continuation cross-entropy Lsuffix through the frozen LLM, together with fact, rela-tion, and answer supervision, trains them to encode evidence for the teacher’s subsequent reasoning. We then train Twig to localize the annotated regions with LROI . Because student states differ from teacher states, we next train continuation on student rollouts, where the teacher reviews the student’s prefixes and crops to provide continuation and ROI targets for the same two losses. Finally, with the formation modules fixed, a warm-up lets the model emit the memory special tokens, updating only the input embeddings of the four markers and the output-layer rows that score <mem g> and 
+
+<mem l> . Figure 3(b) illustrates these signals, and Appendix A.3.3 gives the objectives. 
+
+Stage II: Reinforcement learning for memory access. Guided by our third finding, Stage II makes memory access helpful by learning when and which memory to request, with formation modules frozen. At a request boundary, the decoder emits a Global or Local request token or con-tinues generating text. A trajectory’s final reward cannot show whether a given request helped. We therefore branch from a shared prefix and compare requesting with continuing at the same state. Following ARPO (Dong et al., 2026a), each root branches at most once, at the state maximizing 
+
+u(st, a t) = 1 − pt(at)m, (3) where pt(at) is the probability of the realized route at, with pt(N) = 1 − pt(G) − pt(L) for no request, and m is the number of sibling rollouts. This score is the probability that at least one sibling takes a different route, so the branch goes where siblings likely diverge from the root, as illustrated in Figure 3(c). A sibling i that requests memory at branch b receives the invocation gain 
+
+∆call 
+
+i = Ri − Bb, where Ri is its final-answer reward and Bb is the mean reward of siblings that continue without a request. These siblings may still request memory later, so the gain measures the value of requesting now. Normalized invocation gains update the request-token embeddings and 5Preprint. Under review. Table 1: Comparison with existing visual memory methods across ten benchmark families. 
+
+Results cover single-image perception, multi-image reasoning, and broader visual understanding. MIMIC Avg. is the mean across four subsets. The top-2 results in each column are highlighted as first and second , with the best results also shown in bold .                                                                                                                                                                                          
+
+> Single-image evidence acquisition Multi-image relational reasoning Held-out generalization Method V⋆CV-2D CV-3D HR-4K HR-8K BLINK Muir MMSI MIMIC Avg. RWQA MathVista MMVet Native 76.44 74.41 76.33 72.88 67.75 56.62 57.85 28.10 45.17 67.97 59.90 46.06 Coarse 67.54 73.10 75.42 61.13 54.62 57.79 58.15 28.40 43.56 67.19 59.50 47.06
+> Pixel reinspection
+> Q-Zoom 79.06 76.35 74.08 73.00 66.63 53.97 50.38 25.40 42.29 70.85 54.60 47.43 DeepEyes 84.29 78.61 79.42 74.63 68.75 49.24 48.50 24.10 39.27 69.67 62.00 51.01 Pixel Reasoner 81.15 75.00 81.58 73.50 65.38 58.50 53.15 27.90 44.83 71.90 71.40 48.07 ReGround 73.30 73.73 77.00 68.13 60.63 54.65 56.12 25.40 28.01 66.93 69.30 43.21
+> Encoded-feature reuse
+> ICoT 56.02 68.22 33.67 66.13 65.25 24.02 20.96 26.30 29.91 35.95 27.40 36.79 MINT-CoT 41.36 72.84 74.83 54.00 43.00 49.79 54.04 26.80 34.05 62.48 62.10 47.98
+> Latent representations
+> DMLR 44.50 68.52 66.75 46.00 42.38 42.32 39.81 22.00 23.74 54.90 51.40 35.87 VaLR 70.68 74.79 71.75 51.00 47.88 44.88 45.08 19.50 17.93 45.75 49.30 33.21 V-Reflection 79.06 75.21 77.75 73.25 66.50 54.21 46.65 25.10 53.16 70.85 68.70 37.94 VisMem 60.21 76.64 82.50 56.13 47.88 56.95 57.00 21.70 41.19 68.10 61.10 45.55 SFT 58.64 75.04 75.58 56.62 48.25 54.13 55.73 29.00 52.70 70.59 72.10 55.05 Stage I sft 76.44 77.96 83.33 75.00 68.38 58.92 57.81 27.30 68.37 71.24 70.10 48.35
+> Ours 82.20 79.28 83.92 75.50 69.13 60.65 65.38 29.30 68.00 71.76 73.40 64.27
+
+output rows, and group-relative final-answer advantages (Shao et al., 2024b) update the decoder LoRA. Appendix A.3.4 gives the objectives. 
+
+4 EXPERIMENTS 
+
+We evaluate ReMAP on single-image perception, multi-image reasoning, and broader visual under-standing. We then examine the contributions of memory curation, organization, and access through ablations, latent visualizations, reasoning trajectories, and visual-context cost. 4.1 EXPERIMENTAL SETUP 
+
+Benchmarks. We use ten benchmark families in three categories. Single-image perception 
+
+includes V*Bench (Wu & Xie, 2024), CV-Bench-2D/3D (Tong et al., 2024), and HR-Bench-4K/8K (Wang et al., 2025b). Multi-image reasoning includes BLINK (Fu et al., 2024), Muir-Bench (Wang et al., 2025a), MMSI-Bench (Yang et al., 2026a), and MIMIC (Das et al., 2026). 
+
+Broader visual understanding (Yu et al., 2024; Lu et al., 2024; xAI, 2024) uses MM-Vet, Math-Vista, and RealWorldQA for generalization tests. 
+
+Baselines and implementation. Following the approaches discussed in the introduction, we com-pare pixel reinspection methods Q-Zoom (Shi et al., 2026), DeepEyes (Zheng et al., 2026), Pixel Reasoner (Su et al., 2025), and ReGround (Peng et al., 2026), encoded-feature reuse methods ICoT (Gao et al., 2025) and MINT-CoT (Chen et al., 2025), and latent-representation methods DMLR (Liu et al., 2026a), VaLR (Jeon et al., 2026), V-Reflection (Zhou et al., 2026), and Vis-Mem (Yu et al., 2026). Native and Coarse provide backbone controls at native resolution and at most 1,024 initial visual tokens per image. ReMAP uses the Coarse input budget and returns 32 latents per Local call. All ReMAP rows and the Native and Coarse controls in Table 1 use Qwen2.5-VL-7B-Instruct (Bai et al., 2025); prior methods keep their released backbones. ReMAP is trained 6Preprint. Under review. Table 2: Memory access across backbone families. Base denotes the original backbone, and OFF denotes the trained ReMAP model with memory invocation disabled. ∆ reports ReMAP −Base differences in score points. Evaluation details appear in Appendix A.6. 
+
+Backbone Method V⋆ CV-3D HR-8K BLINK MuirBench MMSI MIMIC Avg. 
+
+> Qwen2.5-VL-3B
+
+Base 51.83 50.83 42.12 43.61 50.08 29.40 28.21 OFF 56.02 70.58 49.75 46.66 50.77 28.70 36.25 ReMAP 58.64 75.58 51.25 48.45 55.23 30.50 50.11 
+
+∆ ↑ +6.81 ↑ +24 .75 ↑ +9.12 ↑ +4.84 ↑ +5.15 ↑ +1.10 ↑ +21 .90 
+
+> LLaVA-OneVision-7B
+
+Base 70.68 45.08 56.62 44.66 41.85 28.90 44.05 OFF 71.73 70.17 56.25 51.60 41.65 27.50 52.79 ReMAP 76.44 76.00 59.25 53.45 48.65 29.70 59.52 
+
+∆ ↑ +5.76 ↑ +30 .92 ↑ +2.62 ↑ +8.78 ↑ +6.81 ↑ +0.80 ↑ +15 .47 
+
+> Qwen3-VL-8B
+
+Base 62.30 92.25 59.00 64.39 73.77 27.90 56.99 OFF 63.87 91.50 57.12 65.33 72.69 31.60 58.70 ReMAP 66.49 93.83 60.00 67.07 74.31 32.30 74.20 
+
+∆ ↑ +4.19 ↑ +1.58 ↑ +1.00 ↑ +2.68 ↑ +0.54 ↑ +4.40 ↑ +17 .21 
+
+> InternVL3-8B
+
+Base 59.16 68.67 62.88 53.34 51.81 27.30 36.94 OFF 61.26 68.33 63.12 53.81 51.42 29.20 43.00 ReMAP 65.45 69.25 64.12 55.44 52.88 30.30 57.00 
+
+∆ ↑ +6.28 ↑ +0.58 ↑ +1.25 ↑ +2.10 ↑ +1.08 ↑ +3.00 ↑ +20 .06 
+
+primarily on 16 NVIDIA A800 GPUs. Evaluation protocols, baseline configurations, and training details appear in Appendices A.6, A.4, and A.5. 4.2 OVERALL PERFORMANCE 
+
+❶ ReMAP outperforms prior methods on all four multi-image benchmarks. In Table 1, ReMAP surpasses the best prior results on MuirBench and MIMIC by 8.38 and 14.84 percentage points, re-spectively. These gains span cross-image comparison, spatial reasoning, and evidence aggregation. ReMAP also improves over the native-resolution backbone on all five single-image metrics, extend-ing its benefits to fine-grained visual perception. 
+
+❷ ReMAP’s learned memory access transfers across backbone families. We isolate the contri-bution of reasoning-time memory invocation by comparing each backbone’s original Base model, its trained Memory-OFF counterpart, and ReMAP with memory enabled (Table 2). ReMAP improves over Memory-OFF on both single-image and multi-image metrics for all four backbones, showing that the gains come from dynamic evidence access during reasoning rather than from the trained model weights alone. 4.3 INTERPRETING LATENT MEMORY ORGANIZATION 
+
+Global and Local form two distinct types of latent memory. Figure 4 visualizes their benchmark-conditioned t-SNE projections. Local is benchmark-specific: its distribution changes across bench-marks. Global mixes across benchmarks because it captures abstract scene-level and cross-image relations. In the multi-image view, Global is more dispersed, suggesting that it represents a wider range of inter-image relations. 7Preprint. Under review. 
+
+(a) High-resolution benchmarks −50 −25 0 25 
+
+t-SNE Component 1 
+
+−40 −20 020 40 
+
+> t-SNE Component 2
+
+High-resolution benchmarks 
+
+Global Local 
+
+CV-Bench-3D CV-Bench-2D V*Bench HR-Bench-4K HR-Bench-8K (b) Multi-image benchmarks −50 −25 0 25 
+
+t-SNE Component 1 
+
+−40 −20 020 40 
+
+> t-SNE Component 2
+
+Multi-image benchmarks 
+
+Global Local 
+
+MIMIC BLINK MuirBench MMSI-Bench 
+
+Figure 4: Global and Local memory representations. (a) High-resolution and (b) multi-image benchmark groups. Joint t-SNE projections show mean-pooled Global and Local memory vectors; colors denote benchmark groups, circles and triangles denote Global and Local, respectively, and shaded contours show density. 4.4 MEMORY ACCESS AND THE PERCEPTUAL CYCLE HR-Bench-4K #0347 
+
+What is the speed limit indicated on the sign in the image?    
+
+> A. 20 km/h B. 40 km/h C. 60 km/h D. 30 km/h
+
+No memory 
+
+> Answer
+
+B
+
+With memory 
+
+> Answer
+
+D
+
+Original input 
+
+(a)  Local gaze completion perceptual cycle 
+
+# Local ROI 1
+
+MMSI #0377 
+
+Where is the potted plant relative to 
+
+the longest sofa? The statue is north 
+
+of the sofa. 
+
+# Global relation & anchors 
+
+Raw heatmaps  Sharpened peaks 
+
+(b)  Global –Local interleaved perceptual cycle 
+
+2 3
+
+> A1
+> A2
+> B1
+> B2
+
+# Local ROI 2 # Local ROI 3  
+
+> A. Due south B. Northeast
+> C. Due east D. Southwest
+
+No memory 
+
+> Answer
+
+C
+
+With memory 
+
+> Answer
+
+B
+
+Original input  # Local ROI 1
+
+# Local ROI 2              
+
+> To determine the speed limit indicated on the sign in the image, let ’s follow these steps: ①
+> <mem_l><mem_l_end> The sign is a standard German speed limit sign, circular with a
+> white background and black border, ②<mem_l><mem_l_end> indicating a speed limit. ③
+> <mem_l><mem_l_end> The sign shows a number in the center, which is the speed limit in
+> kilometers per hour.The number on the sign is "30".Given these observations, the speed
+> limit indicated on the sign is 30 km/h.
+> Answer: D
+> To determine the position of the potted plant relative to the longest sofa, let's analyze the
+> image step by step: Identify the longest sofa: It is the couch on the right side of the image. ①
+> <mem_l><mem_l_end> Find the statue: It is on the table located on the left side of the image.
+> ②<mem_l><mem_l_end> Draw a line from the statue towards the potted plant and deduce
+> the direction it points: it points towards the northeast .③<mem_g><mem_g_end> Identify
+> the position of the potted plant: It is located to the northeast of the longest sofa.
+> Answer: B
+
+Figure 5: Local refinement and Global–Local interaction. (a) HR-Bench-4K #0347: repeated Local calls narrow the inspection from the street scene to a speed-limit sign, yielding 30 km/h rather than 40 km/h without memory. (b) MMSI #0377: two Local calls followed by a Global call accompany the northeast answer, whereas the paired no-call trajectory answers due east. 
+
+Local provides fine-grained visual evidence, Global provides broader scene and cross-image context, and their interleaved calls restore the perceptual cycle. We analyze how the learned policy routes between these two forms of visual evidence as reasoning evolves. Figure 5 shows that memory returns are inserted into ongoing reasoning and change the subsequent reasoning state, yielding a state-dependent evidence–reasoning loop rather than a fixed access schedule. Figure 6(b) 8Preprint. Under review. Native Q-Zoom DeepEyes VisMem ReMAP            
+
+> 05,000 10,000 15,000 20,000
+> Visual tokens entering the sequence
+> 4,418 1,340 4,454 4,418
+> 1,024
+> 906 626 1,114 906 444
+> 7,099 4,016 9,197 7,099
+> 3,389
+> 025 50 75 100
+> Performance (%)
+> 76.44 79.06 84.29 60.21
+> 82.20
+> 74.41 76.35 78.61 76.64
+> 79.28
+> 57.85 50.38 48.50 57.00
+> 65.38
+> V*Bench CV-Bench-2D MuirBench
+
+(a) 0 20 40 60 80 100  
+
+> Normalized CoT position (%)
+> 0% 5% 10% 15% 20% 25% 30%
+> Invocation ratio
+> CV-Bench HR-Bench MMSI MathVista MM-Vet Global Local
+
+(b) 
+
+Figure 6: Memory invocation and visual-context cost. (a) Mean total visual tokens entering the sequence (bars) and performance (lines) on shared V*Bench, CV-Bench-2D, and MuirBench ques-tions; the shaded column marks ReMAP. (b) Global (solid) and Local (dashed) invocation ratios over the normalized reasoning trajectory. Table 3: Training, curation, and access ablations (%). Base is Coarse; BLINK reports micro accuracy and MM-Vet mean graded scores. 
+
+Method V⋆ CV-3D Muir BLINK MM-Vet Base 67.54 75.42 58.15 57.81 47.06 SFT 58.64 75.58 55.73 54.13 55.05 Stage I sft 76.44 83.33 57.81 58.92 48.35 
+
+Memory curation 
+
+w/o Memory 79.06 80.00 61.00 59.02 57.80 w/ Global memory 79.58 83.00 64.00 59.50 60.55 w/ Local memory 81.68 81.00 62.00 60.02 59.63 
+
+Memory access 
+
+Fixed 76.96 83.00 61.46 59.39 58.72 Random 79.58 79.75 61.58 58.81 57.34 Entropy 79.06 81.17 62.00 59.39 59.63 
+
+ReMAP 82.20 83.92 65.38 60.65 64.27 
+
+shows that Local calls concentrate early and in the middle of the trajectory, whereas Global calls persist later. 4.5 COMPONENT , C APACITY , AND ACCESS ABLATIONS 
+
+Next, we study the gains from different components and design choices in ReMAP, including train-ing, memory curation, memory access, and latent capacity. 
+
+Global and Local specialize by scope, and their combination is best. We analyze how curation scope affects benchmark performance. Global is stronger on CV-Bench-3D, MuirBench, and MM-Vet, whereas Local is stronger on V ⋆Bench and BLINK. Combining both memories is best on every benchmark, exceeding the better of the Global-only and Local-only variants by 3.72 points on MM-Vet, as shown in Table 3. 
+
+Learned invocation is more reliable than fixed or heuristic schedules. We analyze whether the learned access policy selects more useful request points than Fixed, Random, and Entropy sched-ules. ReMAP is highest on every benchmark, exceeding the strongest of these alternatives by 3.38 points on MuirBench and 4.64 on MM-Vet. Fixed invocation falls below w/o Memory on V ⋆Bench, showing that a fixed schedule can make added evidence harmful; Table 3 reports the access variants. The control definitions are given in Appendix A.9. Appendix A.10 examines branch-point selection and routing diversity. 9Preprint. Under review. 4 8 16 32 64         
+
+> 20 30 40 50 60
+> Local latent tokens ( K)Performance (%)
+> 2N+2 4N+4 8N+8
+> Global latent tokens HR-Bench 4K MuirBench MMSI-Bench Macro average
+
+Figure 7: Latent-capacity sensitivity. Performance on 20% holdout splits from HR-Bench-4K, MuirBench, and MMSI-Bench. Curves show benchmark scores and their equal-weight macro av-erage; shaded bands are item-level 95% intervals from one training seed. Dashed guides mark the selected K = 32 and 4N + 4 settings. 
+
+ReMAP remains effective across a range of latent return sizes, making a compact capacity sufficient. We sweep the Local and Global return sizes to determine the default configuration (Fig-ure 7). Performance is broadly stable across the tested capacities, while increasing the number of returned tokens does not bring consistent gains. We therefore use K = 32 Local tokens and 4N + 4 
+
+Global tokens in the remaining experiments. 4.6 VISUAL -C ONTEXT COST 
+
+ReMAP maintains strong performance with substantially lower visual-context cost. We ana-lyze the accuracy–context-cost tradeoff using the matched profiles in Figure 6(a). ReMAP remains competitive while using fewer visual tokens than Native, and its compact memory returns refresh visual evidence without repeatedly expanding the decoder context. Detailed accounting is provided in Appendix A.12. 
+
+5 LIMITATIONS 
+
+We note three limitations of ReMAP that we hope to address in future work. First, ReMAP operates within a fixed memory and access budget: each trajectory permits at most five memory requests, each Local request re-encodes at most three selected images, and each Global block has a fixed 
+
+4N + 4 layout. These limits keep computation low but may omit evidence when an input contains many images or when a task requires extended visual search. Second, Twig is trained only in Stage I on teacher-reviewed ROI targets and receives no further training dedicated to localization. When its box misses the relevant region, the subsequent zoom-in contributes less useful detail, so we expect a stronger localizer, for example one trained with dedicated grounding data, to further improve Local memory. Third, the memory modules are attached at fixed positions of the backbone: the Source Selector reads layer 12, and Twig reads layer 18. Internal layer sweeps selected these taps from the quality of the tapped representations, but we have not yet studied how placing the components at other layers affects end-to-end performance, and we leave this analysis to future work. 
+
+6 CONCLUSION 
+
+ReMAP shows that visual memory becomes effective when the scope and timing of visual evidence follow the reasoning state. Global memory preserves question-conditioned scene and cross-image context, while Local memory reacquires fine-grained pixels as the trajectory demands. A learned policy coordinates these two forms of evidence within compact latent returns, improving over prior methods on all four multi-image benchmarks and over the Native backbone on all five single-image 10 Preprint. Under review. metrics while reducing the profiled visual context. Together, these components restore the perceptual cycle by letting each reasoning step use its current evidence to guide the next visual inspection. We hope this view helps future multimodal models treat perception as part of reasoning. AI USE STATEMENT 
+
+We used generative AI tools to aid and polish the writing, retrieve and discover related literature, and draft sections of the manuscript. We reviewed all AI-assisted material and take responsibility for the final content of this paper. ETHICS STATEMENT 
+
+This work uses public research datasets and no human subjects or newly collected personal data. ReMAP does not remove inherited model biases or failure modes; additional visual operations can also make source-allocation or localization errors appear confident. REPRODUCIBILITY STATEMENT 
+
+Details of the memory interface, learning objectives, training configuration, data, evaluation proto-cols, and ablations are provided in the appendices. We will publicly release our source code and model weights. 
+
+REFERENCES 
+
+Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, Humen Zhong, Yuanzhi Zhu, Mingkun Yang, Zhaohai Li, Jianqiang Wan, Pengfei Wang, Wei Ding, Zheren Fu, Yiheng Xu, Jiabo Ye, Xi Zhang, Tianbao Xie, Zesen Cheng, Hang Zhang, Zhibo Yang, Haiyang Xu, and Junyang Lin. Qwen2.5-VL technical report, 2025. URL https://arxiv.org/abs/2502.13923 .Chao Chen, Zhixin Ma, Yongqi Li, Yupeng Hu, Yinwei Wei, Wenjie Li, and Liqiang Nie. Reasoning in the dark: Interleaved vision-text reasoning in latent space. In Findings of the Association for Computational Linguistics: ACL 2026 , pp. 39117–39129, San Diego, California, United States, July 2026a. Association for Computational Linguistics. doi: 10.18653/v1/2026.findings-acl.1949. URL https://aclanthology.org/2026.findings-acl.1949/ .Harold Haodong Chen, Xinxiang Yin, Wen-Jie Shu, Hongfei Zhang, Zixin Zhang, Chenfei Liao, Litao Guo, Qifeng Chen, and Ying-Cong Chen. Show, don’t tell: Morphing latent reasoning into image generation. arXiv preprint arXiv:2602.02227 , 2026b. URL https://arxiv.org/ abs/2602.02227 .Tao Chen, Kun Zhang, Qiong Wu, Xiao Chen, Chao Chang, Xiaoshuai Sun, Yiyi Zhou, and Rongrong Ji. Scaling the long video understanding of multimodal large language models via visual memory mechanism. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) , pp. 31877–31888, June 2026c. URL https://openaccess.thecvf.com/content/CVPR2026/html/ Chen_Scaling_the_Long_Video_Understanding_of_Multimodal_Large_ Language_Models_CVPR_2026_paper.html .Xinyan Chen, Renrui Zhang, Dongzhi Jiang, Aojun Zhou, Shilin Yan, Weifeng Lin, and Hongsheng Li. MINT-CoT: Enabling Interleaved Visual Tokens in Mathemati-cal Chain-of-Thought Reasoning. In Advances in Neural Information Processing Sys-tems , volume 38, pp. 69110–69139. Curran Associates, Inc., 2025. doi: 10.52202/ 085713-2324. URL https://proceedings.neurips.cc/paper_files/paper/ 2025/file/6403d7e0824e7be2e699f47d9703ed80-Paper-Conference.pdf .Xu Chu, Xinrong Chen, Guanyu Wang, Zhijie Tan, Kui Huang, Wenyu Lv, Tong Mo, and Weiping Li. Qwen Look Again: Guiding vision-language reasoning models to re-attention visual informa-tion, 2025. URL https://arxiv.org/abs/2505.23558 .11 Preprint. Under review. Anurag Das, Adrian Bulat, Alberto Baldrati, Ioannis Maniadis Metaxas, Bernt Schiele, Geor-gios Tzimiropoulos, and Brais Martinez. More images, more problems? a controlled analysis of VLM failure modes. In Maria Liakata, Viviane P. Moreira, Jiajun Zhang, and David Jur-gens (eds.), Findings of the Association for Computational Linguistics: ACL 2026 , pp. 7423– 7442, San Diego, California, United States, July 2026. Association for Computational Lin-guistics. ISBN 979-8-89176-395-1. doi: 10.18653/v1/2026.findings-acl.366. URL https: //aclanthology.org/2026.findings-acl.366/ .Yizhuo Ding, Mingkang Chen, Zhibang Feng, Tong Xiao, Wanying Qu, Wenqi Shao, and Yanwei Fu. VTPerception-R1: Enhancing multimodal reasoning via explicit visual and textual percep-tual grounding. arXiv preprint arXiv:2509.24776 , 2025. URL https://arxiv.org/abs/ 2509.24776 .Guanting Dong, Hangyu Mao, Kai Ma, Licheng Bao, Yifei Chen, Zhongyuan Wang, Zhongxia Chen, Jiazhen Du, Huiyang Wang, Fuzheng Zhang, Guorui Zhou, Yutao Zhu, Ji-Rong Wen, and Zhicheng Dou. Agentic reinforced policy optimization. In The Fourteenth International Con-ference on Learning Representations , 2026a. URL https://iclr.cc/virtual/2026/ poster/10009306 .Shuai Dong, Siyuan Wang, Xingyu Liu, Chenglin Li, Haowen Hou, and Zhongyu Wei. Interleaved latent visual reasoning with selective perceptual modeling. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 29316– 29335, San Diego, California, United States, July 2026b. Association for Computational Linguis-tics. doi: 10.18653/v1/2026.acl-long.1351. URL https://aclanthology.org/2026. acl-long.1351/ .Xingyu Fu, Yushi Hu, Bangzheng Li, Yu Feng, Haoyu Wang, Xudong Lin, Dan Roth, Noah A. Smith, Wei-Chiu Ma, and Ranjay Krishna. BLINK: Multimodal large language models can see but not perceive. In Computer Vision – ECCV 2024 , pp. 148–166, 2024. doi: 10.1007/ 978-3-031-73337-6 9. URL https://www.ecva.net/papers/eccv_2024/papers_ ECCV/html/3356_ECCV_2024_paper.php .Jun Gao, Yongqi Li, Ziqiang Cao, and Wenjie Li. Interleaved-Modal Chain-of-Thought. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,pp. 19520–19529, June 2025. URL https://openaccess.thecvf.com/content/ CVPR2025/html/Gao_Interleaved-Modal_Chain-of-Thought_CVPR_2025_ paper.html .Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. LoRA: Low-rank adaptation of large language models, 2021. URL https: //arxiv.org/abs/2106.09685 .Yushi Hu, Weijia Shi, Xingyu Fu, Dan Roth, Mari Ostendorf, Luke Zettlemoyer, Noah Smith, and Ranjay Krishna. Visual Sketchpad: Sketching as a Visual Chain of Thought for Multimodal Language Models. In Advances in Neural Information Processing Sys-tems , volume 37, pp. 139348–139379. Curran Associates, Inc., 2024. doi: 10.52202/ 079017-4423. URL https://proceedings.neurips.cc/paper_files/paper/ 2024/file/fb82011040977c7712409fbdb5456647-Paper-Conference.pdf .Siyuan Huang, Xiaoye Qu, Yafu Li, Tong Zhu, Zefeng He, Muxin Fu, Daizong Liu, Wei-Long Zheng, and Yu Cheng. Persistent visual memory: Sustaining perception for deep generation in LVLMs, 2026. URL https://arxiv.org/abs/2605.00814 .Byungwoo Jeon, Yoonwoo Jeong, Hyunseok Lee, Minsu Cho, and Jinwoo Shin. Vision-aligned latent reasoning for multi-modal large language model. arXiv preprint arXiv:2602.04476 , 2026. URL https://arxiv.org/abs/2602.04476 .Chaoya Jiang, Yongrui Heng, Wei Ye, Han Yang, Haiyang Xu, Ming Yan, Ji Zhang, Fei Huang, and Shikun Zhang. VLM-R 3: Region recognition, reasoning, and refinement for enhanced multimodal chain-of-thought. arXiv preprint arXiv:2505.16192 , 2025. doi: 10.48550/arXiv.2505.16192. URL https://arxiv.org/abs/2505.16192 .12 Preprint. Under review. Dongfu Jiang, Xuan He, Huaye Zeng, Cong Wei, Max W. F. Ku, Qian Liu, and Wenhu Chen. MAN-TIS: Interleaved multi-image instruction tuning. Transactions on Machine Learning Research ,2024. URL https://openreview.net/forum?id=skLtdUVaJa .Houcheng Jiang, Jiajun Fu, Junfeng Fang, Chen Gao, Xiang Wang, Xiangnan He, and Yong Li. UniVLR: Unifying text and vision in visual latent reasoning for multimodal LLMs. arXiv preprint arXiv:2605.11856 , 2026. doi: 10.48550/arXiv.2605.11856. URL https://arxiv.org/ abs/2605.11856 .Boyi Li, Yifan Shen, Yuanzhe Liu, Yifan Xu, Jiateng Liu, Xinzhuo Li, Zhengyuan Li, Jingyuan Zhu, Yunhan Zhong, Fangzhou Lan, Jianguo Cao, James M. Rehg, Heng Ji, Ismini Lourentzou, and Xu Cao. Toward cognitive supersensing in multimodal large language model. arXiv preprint arXiv:2602.01541 , 2026a. URL https://arxiv.org/abs/2602.01541 .Feng Li, Renrui Zhang, Hao Zhang, Yuanhan Zhang, Bo Li, Wei Li, Zejun Ma, and Chunyuan Li. LLaVA-NeXT-Interleave: Tackling multi-image, video, and 3D in large multimodal models. 
+
+arXiv preprint arXiv:2407.07895 , 2024. URL https://arxiv.org/abs/2407.07895 .Yifan Li, Zhenghao Chen, Ziheng Wu, Kun Zhou, Ruipu Luo, Can Zhang, Zhentao He, Yufei Zhan, Wayne Xin Zhao, and Minghui Qiu. Unleashing perception-time scaling to multimodal reasoning models. In International Conference on Learning Representa-tions , 2026b. URL https://proceedings.iclr.cc/paper_files/paper/2026/ hash/499b12df1531fe8ee0febcf08381f3a4-Abstract-Conference.html .Yunheng Li, Hangyi Kuang, Hengrui Zhang, Jiangxia Cao, Zhaojie Liu, Qibin Hou, and Ming-Ming Cheng. Rethinking token-level policy optimization for multimodal chain-of-thought. arXiv preprint arXiv:2603.22847 , 2026c. URL https://arxiv.org/abs/2603.22847 .Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Pi-otr Doll´ ar, and C. Lawrence Zitnick. Microsoft COCO: Common objects in context. In Com-puter Vision – ECCV 2014 , volume 8693 of Lecture Notes in Computer Science , pp. 740–755. Springer, 2014. doi: 10.1007/978-3-319-10602-1 48. URL https://doi.org/10.1007/ 978-3-319-10602-1_48 .Chengzhi Liu, Zhongxing Xu, Qingyue Wei, Juncheng Wu, James Zou, Xin Eric Wang, Yuyin Zhou, and Sheng Liu. More thinking, less seeing? assessing amplified hallucination in multimodal reasoning models, 2025. URL https://arxiv.org/abs/2505.21523 .Chengzhi Liu, Yuzhe Yang, Yue Fan, Qingyue Wei, Sheng Liu, and Xin Eric Wang. Reason-ing within the mind: Dynamic multimodal interleaving in latent space. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Findings ,pp. 9225–9236, June 2026a. URL https://openaccess.thecvf.com/content/ CVPR2026F/html/Liu_Reasoning_Within_the_Mind_Dynamic_Multimodal_ Interleaving_in_Latent_Space_CVPRF_2026_paper.html .Xu Liu, Yongheng Zhang, Qiguang Chen, Yao Li, Sheng Wang, and Libo Qin. Let’s think with images efficiently! an interleaved-modal chain-of-thought reasoning framework with dynamic and precise visual thoughts. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 40, pp. 32213–32221, 2026b. doi: 10.1609/aaai.v40i38.40494. URL https://ojs. aaai.org/index.php/AAAI/article/view/40494 .Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. MathVista: Evaluating mathematical reasoning of foundation models in visual contexts. In The Twelfth International Conference on Learning Rep-resentations , 2024. URL https://proceedings.iclr.cc/paper_files/paper/ 2024/hash/663bce02a0050c4a11f1eb8a7f1429d3-Abstract-Conference. html .Lei Peng, Shuai Lv, and Wei Hu. ReGround: Restoring visual grounding in multi-step reasoning through self-diagnosis and visual re-examination. In Proceedings of the 34th ACM International Conference on Multimedia , 2026. URL https://arxiv.org/abs/2608.04385 .13 Preprint. Under review. Tan-Hanh Pham and Chris Ngo. Multimodal chain of continuous thought for latent-space reasoning in vision-language models. arXiv preprint arXiv:2508.12587 , 2025. URL https://arxiv. org/abs/2508.12587 .Hao Shao, Shengju Qian, Han Xiao, Guanglu Song, Zhuofan Zong, Letian Wang, Yu Liu, and Hongsheng Li. Visual CoT: Advancing multi-modal language models with a comprehensive dataset and benchmark for chain-of-thought reasoning. arXiv preprint arXiv:2403.16999 , 2024a. URL https://arxiv.org/abs/2403.16999 .Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. DeepSeekMath: Pushing the limits of mathematical reasoning in open language models, 2024b. URL https://arxiv.org/abs/ 2402.03300 .Yuheng Shi, Xiaohuan Pei, Minjing Dong, and Chang Xu. Catching the details: Self-distilled RoI predictors for fine-grained MLLM perception. arXiv preprint arXiv:2509.16944 , 2025. URL 
+
+https://arxiv.org/abs/2509.16944 .Yuheng Shi, Xiaohuan Pei, Linfeng Wen, Minjing Dong, and Chang Xu. Q-Zoom: Query-aware adaptive perception for efficient multimodal large language models. arXiv preprint arXiv:2604.06912 , 2026. URL https://arxiv.org/abs/2604.06912 .Alex Su, Haozhe Wang, Weiming Ren, Fangzhen Lin, and Wenhu Chen. Pixel Rea-soner: Incentivizing Pixel Space Reasoning via Curiosity-Driven Reinforcement Learning. In Advances in Neural Information Processing Systems , volume 38, pp. 8222–8251. Curran Associates, Inc., 2025. doi: 10.52202/085713-0280. URL 
+
+https://proceedings.neurips.cc/paper_files/paper/2025/file/ 0c38f54740062529aa4117a04b583f3c-Paper-Conference.pdf .Hai-Long Sun, Zhun Sun, Houwen Peng, and Han-Jia Ye. Mitigating visual forgetting via take-along visual conditioning for multi-modal long CoT reasoning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 5158– 5171. Association for Computational Linguistics, 2025. doi: 10.18653/v1/2025.acl-long.257. URL https://aclanthology.org/2025.acl-long.257/ .Shengbang Tong, Ellis Brown, Penghao Wu, Sanghyun Woo, Manoj Middepogu, Sai Charitha Akula, Jihan Yang, Shusheng Yang, Adithya Iyer, Xichen Pan, Austin Wang, Rob Fer-gus, Yann LeCun, and Saining Xie. Cambrian-1: A fully open, vision-centric exploration of multimodal llms. In Advances in Neural Information Processing Systems , volume 37, 2024. URL https://proceedings.neurips.cc/paper_files/paper/2024/ hash/9ee3a664ccfeabc0da16ac6f1f1cfe59-Abstract-Conference.html .Fei Wang, Xingyu Fu, James Y. Huang, Zekun Li, Qin Liu, Xiaogeng Liu, Mingyu Derek Ma, Nan Xu, Wenxuan Zhou, Kai Zhang, Tianyi Lorena Yan, Wenjie Jacky Mo, Hsiang-Hui Liu, Pan Lu, Chunyuan Li, Chaowei Xiao, Kai-Wei Chang, Dan Roth, Sheng Zhang, Hoi-fung Poon, and Muhao Chen. MuirBench: A comprehensive benchmark for robust multi-image understanding. In The Thirteenth International Conference on Learning Representations ,2025a. URL https://proceedings.iclr.cc/paper_files/paper/2025/hash/ 9cf6139382f98623d08cc595622f3fb1-Abstract-Conference.html .Jiacong Wang, Zijian Kang, Haochen Wang, Haiyong Jiang, Jiawen Li, Bohong Wu, Ya Wang, Jiao Ran, Xiao Liang, Chao Feng, and Jun Xiao. VGR: Visual Grounded Reasoning. In International Conference on Learning Representations , volume 2026, pp. 89506–89528, 2026a. URL https://proceedings.iclr.cc/paper_files/paper/2026/file/ 90aeee6dfe75ab6b5d6958bce40d3e16-Paper-Conference.pdf .Wenbin Wang, Liang Ding, Minyan Zeng, Xiabin Zhou, Li Shen, Yong Luo, Wei Yu, and Dacheng Tao. Divide, conquer and combine: A training-free framework for high-resolution image per-ception in multimodal large language models. In Proceedings of the AAAI Conference on Ar-tificial Intelligence , volume 39, pp. 7907–7915, 2025b. doi: 10.1609/aaai.v39i8.32852. URL 
+
+https://ojs.aaai.org/index.php/AAAI/article/view/32852 .14 Preprint. Under review. Yubo Wang, Juntian Zhang, Yichen Wu, Yankai Lin, Nils Lukas, and Yuhan Liu. Forest before trees: Latent superposition for efficient visual reasoning. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 11272– 11288, San Diego, California, United States, July 2026b. Association for Computational Linguis-tics. doi: 10.18653/v1/2026.acl-long.517. URL https://aclanthology.org/2026. acl-long.517/ .Mingyuan Wu, Jingcheng Yang, Jize Jiang, Meitang Li, Kaizhuo Yan, Hanchao Yu, Minjia Zhang, Chengxiang Zhai, and Klara Nahrstedt. VTool-R1: Vlms learn to think with images via reinforcement learning on multimodal tool use. In The Fourteenth International Conference on Learning Representations , 2026. URL 
+
+https://proceedings.iclr.cc/paper_files/paper/2026/hash/ 7e6f445a74cdb71931aac64f1e3f49c9-Abstract-Conference.html .Penghao Wu and Saining Xie. V*: Guided visual search as a core mechanism in multimodal llms. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogni-tion , pp. 13084–13094, 2024. URL https://openaccess.thecvf.com/content/ CVPR2024/html/Wu_V_Guided_Visual_Search_as_a_Core_Mechanism_in_ Multimodal_CVPR_2024_paper.html .xAI. Grok-1.5 Vision Preview. Official xAI announcement introducing RealWorldQA, 2024. URL 
+
+https://x.ai/news/grok-1.5v .Sihan Yang, Runsen Xu, Yiman Xie, Sizhe Yang, Mo Li, Jingli Lin, Chenming Zhu, Xiaochen Chen, Haodong Duan, Xiangyu Yue, Dahua Lin, Tai Wang, and Jiang-miao Pang. MMSI-Bench: A benchmark for multi-image spatial intelligence. In The Fourteenth International Conference on Learning Representations , 2026a. URL https://proceedings.iclr.cc/paper_files/paper/2026/hash/ fe5d4bd3e2af823701b5d8f70a3c7602-Abstract-Conference.html .Zeyuan Yang, Xueyang Yu, Delin Chen, Maohao Shen, and Chuang Gan. Machine Mental Imagery: Empower Multimodal Reasoning with Latent Visual Tokens. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 33510–33520, June 2026b. URL https://openaccess.thecvf.com/content/CVPR2026/html/ Yang_Machine_Mental_Imagery_Empower_Multimodal_Reasoning_with_ Latent_Visual_Tokens_CVPR_2026_paper.html .Deheng Ye, Zhao Liu, Mingfei Sun, Bei Shi, Peilin Zhao, Hao Wu, Hongsheng Yu, Shaojie Yang, Xipeng Wu, Qingwei Guo, Qiaobo Chen, Yinyuting Yin, Hao Zhang, Tengfei Shi, Liang Wang, Qiang Fu, Wei Yang, and Lanxiao Huang. Mastering complex control in MOBA games with deep reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence , 2020. URL https://arxiv.org/abs/1912.09729 .Runpeng Yu, Xinyin Ma, and Xinchao Wang. Auto-Controlled Image Perception in MLLMs via Vi-sual Perception Tokens. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pp. 21822–21831, October 2025. URL https://openaccess.thecvf. com/content/ICCV2025/html/Yu_Auto-Controlled_Image_Perception_ in_MLLMs_via_Visual_Perception_Tokens_ICCV_2025_paper.html .Weihao Yu, Zhengyuan Yang, Linjie Li, Jianfeng Wang, Kevin Lin, Zicheng Liu, Xinchao Wang, and Lijuan Wang. MM-Vet: Evaluating large multimodal models for integrated capabilities. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of 
+
+Proceedings of Machine Learning Research , pp. 57730–57754. PMLR, 2024. URL https: //proceedings.mlr.press/v235/yu24o.html .Xinlei Yu, Chengming Xu, Guibin Zhang, Zhangquan Chen, Yudong Zhang, Yongbo He, Peng-Tao Jiang, Jiangning Zhang, Xiaobin Hu, and Shuicheng Yan. VisMem: Latent vision memory unlocks potential of vision-language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 31544–31555, June 2026. URL 
+
+https://openaccess.thecvf.com/content/CVPR2026/html/Yu_VisMem_ Latent_Vision_Memory_Unlocks_Potential_of_Vision-Language_ Models_CVPR_2026_paper.html .15 Preprint. Under review. Guanghao Zhang, Tao Zhong, Yan Xia, Mushui Liu, Zhelun Yu, Haoyuan Li, Wanggui He, Dong She, Yi Wang, and Hao Jiang. CMMCoT: Enhancing Complex Multi-Image Comprehension via Multi-Modal Chain-of-Thought and Memory Augmentation. Proceedings of the AAAI Conference on Artificial Intelligence , 40(15):12430–12438, 2026a. doi: 10.1609/aaai.v40i15.38236. URL 
+
+https://ojs.aaai.org/index.php/AAAI/article/view/38236 .Guibin Zhang, Muxin Fu, and Shuicheng Yan. MemGen: Weaving Genera-tive Latent Memory for Self-Evolving Agents. In International Conference on Learning Representations , volume 2026, pp. 22555–22588, 2026b. URL 
+
+https://proceedings.iclr.cc/paper_files/paper/2026/file/ 26407588dfb08e48c459c074ab6adb7d-Paper-Conference.pdf .Xin Zhang, Qiqi Tao, Jiawei Du, Moyun Liu, and Joey Tianyi Zhou. Visual latents know more than they say: Unsilencing latent reasoning in MLLMs. arXiv preprint arXiv:2605.02735 , 2026c. URL https://arxiv.org/abs/2605.02735 .Yang Zhang, Xiaoshuai Sun, Rui Zhao, Wujin Sun, Yidong Chen, Jiayi Ji, Qian Chen, and Rongrong Ji. Look on demand: A cognitive scheduling framework for visual evidence acquisition in mul-timodal reasoning. In Proceedings of the 43rd International Conference on Machine Learning ,2026d. URL https://arxiv.org/abs/2605.28160 .Ziwei Zheng, Minghao Yang, Jack Hong, Chenxiao Zhao, Guohai Xu, Le Yang, Chao Shen, and Xing Yu. DeepEyes: Incentivizing “thinking with images” via reinforce-ment learning. In The Fourteenth International Conference on Learning Representations ,2026. URL https://proceedings.iclr.cc/paper_files/paper/2026/hash/ cdb347d7516d52a9280ea9d6708911f6-Abstract-Conference.html .Jiazhou Zhou, Yucheng Chen, Hongyang Li, Qing Jiang, Hu Zhou, Ying-Cong Chen, and Lei Zhang. V-Reflection: Transforming mllms from passive observers to active interrogators, 2026. URL 
+
+https://arxiv.org/abs/2604.03307 .
+
+A APPENDIX 
+
+A.1 RELATED WORK AND POSITIONING 
+
+Memory curation: acquiring and selecting visual evidence. Memory curation determines which evidence reasoning acquires. DeepEyes learns crop requests (Zheng et al., 2026), while Pixel Reasoner combines image cropping and video-frame selection (Su et al., 2025). VLM-R 3 interleaves region selection, cropping, and zooming with textual reasoning (Jiang et al., 2025). VPT supports token-guided cropping and state-conditioned full-image re-encoding (Yu et al., 2025). CMMCoT generates image indices and boxes to re-encode entity regions during multi-image reasoning (Zhang et al., 2026a). Qwen Look Again, ICoT, and MINT-CoT instead select or reuse encoded visual to-kens (Chu et al., 2025; Gao et al., 2025; Chen et al., 2025). VTPerception-R1 grounds reasoning in explicit perceptual descriptions (Ding et al., 2025), while perception-time scaling decomposes per-ceptual estimates into symbolic intermediate steps (Li et al., 2026b). VisMem uses state-conditioned formers to produce perceptual and semantic memory (Yu et al., 2026). V-Reflection trains latent rea-soning states with spatial supervision (Zhou et al., 2026). 
+
+Memory organization: representing visual evidence. Visual Sketchpad represents intermediate evidence as generated sketches (Hu et al., 2024), VTool-R1 as annotated images (Wu et al., 2026), and CSMR as text (Zhang et al., 2026d). Take-along Visual Conditioning pools visual tokens (Sun et al., 2025), while Persistent Visual Memory projects image embeddings into a lower-dimensional space (Huang et al., 2026). CMMCoT retrieves cross-image cues from cached per-layer visual key– value features (Zhang et al., 2026a). FlexMem compresses and retrieves visual KV memories for long-video understanding (Chen et al., 2026c). MemGen and VisMem represent memory as latent token sequences (Zhang et al., 2026b; Yu et al., 2026). Laser and Mirage represent intermediate reasoning through continuous hidden states or self-generated visual tokens (Wang et al., 2026b; Yang et al., 2026b). MCOUT-Multi refines continuous thoughts by attending to multimodal input embeddings (Pham & Ngo, 2025), while Cognitive Supersensing predicts answer-image latents and 16 Preprint. Under review. Table 4: Qualitative positioning of representative visual-memory methods. Green checks indi-cate explicit support, red crosses indicate non-core mechanisms, and gray dashes indicate dimen-sions not emphasized in the cited work.                                                                    
+
+> Method Pixel / Region Reacquisition Compact Visual Memory State-Conditioned Access Cross-Image Context Global / Local Split Invocation vs. Continuation
+> DeepEyes ✓✗––✗✗
+> Pixel Reasoner ✓✗––✗✗
+> VLM-R 3✓✗––✗✗
+> CMMCoT ✓✓–✓✗✗
+> Qwen Look Again ✗✓––✗✗
+> ICoT / MINT-CoT ✗✓––✗✗
+> MemGen ✗✓✓–✗✗
+> VisMem ✗✓✓–✗✗
+> FlexMem ✗✓––✗✗
+> ReGround ✓✗✓–✗✗
+> ReMAP (ours) ✓✓✓✓✓✓
+
+uses them to guide rationale training (Li et al., 2026a). IVT-LR combines recurrent hidden states with selected input-image embeddings for latent reasoning (Chen et al., 2026a). ILVR interleaves text with generated visual latents supervised by selected features from intermediate helper images (Dong et al., 2026b). UniVLR supervises latent reasoning with visual encodings of rendered rea-soning text and auxiliary images (Jiang et al., 2026). Zhang et al. (2026c) identify underused visual latents and optimize them at inference time with a frozen backbone. 
+
+Memory access: timing and selecting memory use. Take-along Visual Conditioning and Qwen Look Again reactivate visual evidence at reflection events (Sun et al., 2025; Chu et al., 2025). Re-Ground uses self-diagnosis to guide re-examination (Peng et al., 2026), and VGR triggers region-specific replay from precomputed visual features (Wang et al., 2026a). DaP-ICoT inserts selected object images when the reasoning step’s mean logit margin falls below a threshold (Liu et al., 2026b). MemGen learns a memory trigger (Zhang et al., 2026b). LatentMorph learns when to invoke latent reasoning over compact visual memory during image generation (Chen et al., 2026b). VisMem inserts perceptual or semantic latent memory through invocation tokens (Yu et al., 2026). Its two memories differ in abstraction level rather than in spatial scope, and a request is not compared with continuing from the same state. CSMR invokes a separate perception module (Zhang et al., 2026d). For policy training, ARPO allocates entropy-guided rollout branches after tool feedback (Dong et al., 2026a). PEPO combines visual hidden-state similarity and token entropy to reweight token advantages without auxiliary branches (Li et al., 2026c). 
+
+Positioning ReMAP. ReMAP bridges these dimensions by connecting active visual evidence ac-quisition with latent memory and learned access. Within memory curation, it emphasizes the com-plementarity between newly acquired local details and the scene and cross-image context needed to interpret them. Within memory organization, it brings pixel-level reacquisition into compact latent memory, connecting renewed perception with an efficient representation of visual evidence. Within memory access, it focuses on the utility of requesting evidence at a given reasoning state, using comparisons between invocation and continuation to guide selective access. Together, these choices support sustained visual grounding throughout reasoning. A.2 RUNTIME AND MEMORY INTERFACE 
+
+Memory transactions. ReMAP begins autoregressive reasoning from a coarse visual prefix of the input images. Ordinary autoregressive generation continues by default. A memory transaction is performed only when the decoder emits a Global or Local request token. The corresponding transactions are 
+
+⟨mem g ⟩; ZG; ⟨mem g end ⟩, ⟨mem l ⟩; ZL; ⟨mem l end ⟩. (4) 17 Preprint. Under review. After the decoder emits a request token, the runtime inserts the corresponding latent block and end marker into the current decoder sequence. Generation resumes from the position following the end marker. End markers are not sampled as vocabulary outputs, and returned latents enter the decoder as continuous inputs. Each reasoning trajectory permits at most five memory requests. After the request budget is exhausted or the model commits an answer, Global and Local request tokens are masked. Inserted latents and end markers occupy successive positions in the decoder sequence and KV cache. Request tokens and these inserted positions do not count toward the ordinary-text budget, but they still consume decoder context capacity. 
+
+Global memory. Global curation forms a question-conditioned latent block from the ordered in-put images. For an input containing N images, four tokens are allocated to each image and four additional tokens encode cross-image relations: 
+
+KG(N ) = 4 N + 4 . (5) The resulting block is formed before decoding, cached throughout the reasoning trajectory, and inserted at a new sequence position whenever the decoder emits a Global request. Repeated Global requests neither re-encode the input images nor regenerate the cached block from a later reasoning state. 
+
+Local memory. The Local request uses the current reasoning state to select image sources and regions. The selector retains at most three sources, stopping when cumulative selection probability reaches 0.85. A frozen vision encoder maps the selected crops to region features, and the Local Weaver combines these features with the reasoning state and cached Global memory: 
+
+ZL = [ WL(ht, R t,i ; ZG)] i∈S t . (6) Each Local request returns 32 latent tokens. Global memory supplies context for Local compression but is not concatenated into the 32-token Local output. The 4N + 4 Global layout, the 32-token Local return, the three-source cap, and the 0.85 threshold define the memory interface used in all main experiments. The Source Selector reads the layer-12 state exposed at a request boundary, and Twig uses layer-18 prefix states selected by a layer sweep. Stage II rollout branching follows the partial-rollout strategy of ARPO (Dong et al., 2026a) and is specified with the access objective below. A.3 MEMORY FORMATION AND ACCESS OBJECTIVES 
+
+A.3.1 GLOBAL LAYOUT AND CACHING 
+
+Each per-image Image-Weaver span contains four latent queries and is restricted by its attention mask to the visual activations of its own source image. Thus Zimg  
+
+> i
+
+∈ R4×d. The Relation Weaver uses four queries over the concatenated image summaries [Zimg 1 ; · · · ; Zimg  
+
+> N
+
+]; its relation span can attend to all sources, giving Zrel ∈ R4×d. Both weavers are conditioned on the encoded question, as in Equation 1. The Global block is therefore 
+
+ZG = [ Zimg 1 ; · · · ; Zimg  
+
+> N
+
+; Zrel ] ∈ R(4 N +4) ×d, (7) which is the KG(N ) = 4 N + 4 layout used in the capacity sweep of Figure 7. We compute this block once from the prompt-time images and question, retain it as ZG, and reuse the same latent values at every later Global request. Only the decoder insertion position and its resulting KV entries are new; later reasoning states determine whether a request is made, but do not recompute or alter the cached block. A.3.2 LOCAL SELECTION AND COMPRESSION 
+
+The Source Selector uses the layer-12 request state ht = h12  
+
+> t
+
+to rank the source images. If pt,i 
+
+denotes the normalized score of source i, the selector orders sources by decreasing score and keeps 18 Preprint. Under review. the shortest prefix whose cumulative score reaches 0.85, with a maximum of three sources. When the threshold is not reached within three sources, it keeps the three highest- scoring sources. The layer-12 request tap and layer-18 Twig tap are ReMAP settings selected by internal layer sweeps: layer 12 supplies the state at a request boundary, while layer 18 provides the spatially arranged activations used for localization. Twig Localization uses the layer-18 prefix states H18  
+
+> <t
+
+to locate a region bt,i in each selected image Ii. Let V ci denote the coarse visual features of image Ii. Source selection, region localization, and frozen crop encoding are written as 
+
+St = fsel 
+
+ ht, {V ci }Ni=1 
+
+,bt,i = floc 
+
+ H18 
+
+> <t
+
+, V ci
+
+, Rt,i = Eroi 
+
+ Ii[bt,i ]. (8) Here, Ii[bt,i ] is the selected crop, and Eroi is the frozen vision encoder that produces its region features Rt,i .After processing H18  
+
+> <t
+
+with its decoder blocks, Twig applies query/key projections and multimodal rotary position embeddings (mRoPE). In Figure 3(a), qht denotes the query at the current reasoning position for head h, and Kh 
+
+> img
+
+contains the keys at the selected image’s visual-token positions. The ROI heatmap is the head-averaged scaled dot product reshaped to the image’s coarse spatial grid: 
+
+qroi = reshape Gh×Gw
+
+1
+
+H
+
+> H
+
+X
+
+> h=1
+
+qht (Kh
+
+> img
+
+)⊤
+
+√dh
+
+!
+
+. (9) For readout, qroi is treated as a logit map consistent with the weighted-BCE localization objective. We retain grid cells with qroi > 0 (equivalently, sigmoid probability at least 0.5), take the min–max box of their row and column coordinates, map the box from the coarse grid to image pixels, and clip it to the image boundary. The resulting box is bt,i for crop encoding. For local compression, the Local Weaver conditions its learnable compression queries QL on the reasoning state ht and cached Global memory ZG. Twig’s qt is used only for region localization. The crop features Rt,i provide fine-grained evidence, while ZG supplies image summaries and cross-image relational context. Equation 2 summarizes source-specific compression and concatenation into a return with K = 32 latent tokens in the default configuration. A.3.3 FORMATION AND WARM -UP OBJECTIVES 
+
+Continuation distillation. The Image, Relation, and Local Weavers are trained through the frozen LLM. For a teacher trajectory with prefix Pt and continuation Y , we insert a Global or Local trans-action at position t and minimize 
+
+Lsuffix = − 1
+
+|Y | 
+
+> |Y|
+
+X
+
+> k=1
+
+log pLLM 
+
+ Yk | P t, [⟨mem ⟩; Z; ⟨mem end ⟩], Y <k 
+
+, (10) where Z is ZG or ZL and the markers match its memory type. The LLM is frozen, so gradients reach only the weaver that produced Z. The loss therefore trains each weaver to encode the evidence that the teacher’s subsequent reasoning uses. Together with Lsuffix , fact, relation, and answer supervision from the Stage I annotations (Appendix A.5) trains the weavers. 
+
+ROI localization. Twig produces ROI logits qroi on the coarse grid of each selected image. The teacher-reviewed box is rasterized to a binary target ¯A on the same grid. With P = sigmoid( qroi ),the localization objective is 
+
+LROI = LwBCE ( ¯A, q roi ) + 1 − softIoU( ¯A, P ),
+
+softIoU( ¯A, P ) = 
+
+P ¯A ⊙ P
+
+P ¯A + P P − P ¯A ⊙ P . (11) Q-Zoom (Shi et al., 2026) trains its ROI predictor with binary cross-entropy. We weight positive cells by the ratio of negative to positive cells, so that a small target region is not dominated by background cells. We cap this weight at 50 based on our experience. The soft-IoU term matches the overall extent of the heatmap to the target box. 19 Preprint. Under review. 
+
+Student-state adaptation. Teacher trajectories do not contain the states that the student reaches at inference. We therefore run the student autoregressively and apply the same two objectives to its states. For a student state st with complete text-and-latent prefix Pt, the teacher reviews Pt together with the selected crop Ii[bt,i ] and returns an ROI target ¯A and a continuation target Y . Twig is updated with LROI , and the weavers with Lsuffix conditioned on Pt.
+
+Interface warm-up. Each warm-up sequence either contains no memory transaction or contains one Global or Local transaction at a request boundary. The frozen formation modules compute Z,which enters the sequence as a constant input. Warm-up minimizes next-token cross-entropy over the supervised positions T :
+
+Lwarm = − 1
+
+|T | 
+
+X
+
+> k∈T
+
+log π(yk | y<k ), T = Tcall ∪ T end ∪ T later . (12) Here Tcall contains the request token, Tend the first text token after the end marker, and Tlater the remaining reasoning and answer tokens. The three sets give Lcall , Lend , and Llater in Figure 3(b). Prompt tokens, inserted latents, and end markers are excluded from T . Sequences without a trans-action supervise ordinary text at states where no memory is requested, so the decoder does not learn to request memory at every state. Only the four marker input rows and the two request output rows are updated. The end-marker input rows receive gradients through the text predicted after the return. A.3.4 ACCESS LEARNING OBJECTIVE 
+
+Policy parameters. Let πϕ,ψ denote the decoding policy. The symbol ϕ denotes the decoder LoRA parameters, and ψ = ( ηG, η L, w G, w L) denotes the request interface, where ηG and ηL are the request-token input embeddings and wG and wL are their output-classifier rows. All other pa-rameters, including the end-marker embeddings and the memory-formation modules, stay fixed. Let 
+
+Vt be the legal vocabulary and hϕ,η (Pt) the decoder state over the complete text-and-latent prefix. The request rows share the output softmax with the frozen ordinary rows wv :
+
+ℓ(v | st) = w⊤ 
+
+> v
+
+hϕ,η (Pt), πϕ,ψ (v | st) = exp ℓ(v | st)
+
+P 
+
+> u∈V t
+
+exp ℓ(u | st) . (13) This softmax gives pt(G) and pt(L) , and the remaining mass is pt(N) = 1 − pt(G) − pt(L) . An ordinary output z has probability pϕ,ψ (N | st) qϕ,η (z | st, N) . Updating wG and wL changes the request logits and the shared normalizer, and updating ηG and ηL changes the hidden states after a request. Invocation credit therefore acts on the whole suffix after a request, including the text generated after the returned latents. 
+
+Rollouts and branch selection. Each prompt samples four root trajectories from the behavior pol-icy πold . Candidate branch states precede answer commitment and admit at least one legal request, including the initial state. Each root branches once, at the candidate with the largest u(st, a t) in Equation 3, with ties resolved by the earliest position. From the shared prefix, two siblings ( m = 2 )are sampled independently, each with its own subsequent requests and reasoning. Requests in the shared prefix count toward the five-request budget. The roots and their siblings form the natural group G, so 4 ≤ |G| ≤ 12 .
+
+Rewards. For a completed trajectory τi, the terminal reward scores its extracted answer ˆy(τi)
+
+against the reference y⋆:
+
+Ri = Score(ˆ y(τi), y ⋆) ∈ [0 , 1] . (14) Typed answer checks are used where applicable, and semantic evaluation gives graded scores; for example, listing questions receive per-example F1. A prompt enters the policy losses only when all natural trajectories and the required continuation controls have valid scores. Unavailable scores are not treated as zero. 
+
+Same-state continuation baseline. For branch b, the siblings at b are the root and its resampled continuations, and Gb contains them. Let Db = {i ∈ G b : ai,b = N } contain the siblings that continue without a request at b, which can include the root. The baseline Bb in Section 3.2 is their mean reward: 
+
+Bb =
+
+|Db|−1 P 
+
+> i∈Db
+
+Ri, Db̸ = ∅,R(τ aux  
+
+> b
+
+), Db = ∅, (15) 20 Preprint. Under review. where τ aux  
+
+> b
+
+starts from the same branch state and is forced to emit an ordinary token at its first decision. Its later decisions follow πold and may request memory. The auxiliary continuation only supplies Bb and does not enter G.
+
+Advantages. The decoder uses the group-relative advantage of GRPO (Shao et al., 2024b), and the request interface uses the normalized gain over continuation at the same branch state: 
+
+ˆAdec  
+
+> i
+
+= Ri − ¯RG
+
+σG + δ , ˆAcall  
+
+> i
+
+= Ri − Bb(i)
+
+˜σb(i)
+
+, ˜σb =
+
+σb + δ, σb > δ, 
+
+1, σb ≤ δ. (16) Here ¯RG and σG are the mean and sample standard deviation of rewards in G, and b(i) is the branch at which trajectory i requests memory. The branch scale σb is the sample standard deviation of the rewards in Gb together with one additional entry Bb. We set δ = 10 −6. Equal rewards give zero advantage in both terms. 
+
+Policy objectives. Let zij be the vocabulary output at decision j of trajectory i, including ordinary text, request tokens, and EOS. Its likelihood ratio ρij = πϕ,ψ (zij | sij )/π old (zij | sij ) uses the same legal-output mask as sampling. We use the dual-clipped policy loss (Ye et al., 2020): 
+
+ℓclip (ρ, A ) = − min {ρA, clip( ρ, 1 − ϵ, 1 + ϵ)A} ,ℓdc (ρ, A ) = 
+
+min {ℓclip (ρ, A ), −cA }, A < 0,ℓclip (ρ, A ), A ≥ 0,
+
+(17) where ϵ is the ratio-clipping width and c > 1 bounds the loss for negative advantages. The decoder term uses all Ti sampled decisions of each natural trajectory, including request tokens, EOS, and the shared prefix of each sibling, with Ndec = P 
+
+> i∈G
+
+Ti. The invocation term uses the set C of decisions from natural trajectories that request memory at their branch, from the request through answer commitment; it includes ordinary text as well as later requests. Returned latents and end markers are inserted by the runtime and contribute no policy term. With Ncall = max(1 , |C| ), the two objectives are 
+
+Ldec = 1
+
+Ndec 
+
+X
+
+> i∈G
+> Ti
+
+X
+
+> j=1
+
+ℓdc (ρij , ˆAdec  
+
+> i
+
+) + λCE LCE ,
+
+Laccess = 1
+
+Ncall 
+
+X
+
+> (i,j )∈C
+
+ℓdc (ρij , ˆAcall  
+
+> i
+
+) + λpref Lpref .
+
+(18) The policy part of Laccess is zero when C is empty. Only ϕ receives gradients from Ldec , and only 
+
+ψ receives gradients from Laccess . Each objective is computed per prompt and averaged over the prompts eligible for it. The values of ϵ, c, λCE , and λpref are listed in Table 5. 
+
+Post-call answer supervision. Let P+ 
+
+> t
+
+be the complete prefix just after a memory return, including the request, its latents, and its end marker. The target Y contains the answer-format prefix, the reference answer, and EOS. With memory requests masked, the auxiliary loss is 
+
+LCE = − 1
+
+|Y | 
+
+> |Y|
+
+X
+
+> k=1
+
+log πtext  
+
+> ϕ,ψ
+
+(Yk | P + 
+
+> t
+
+, Y <k ). (19) The return is taken from the last pre-answer request of the first root that makes one. If no root requests memory, a forced initial Global or Local probe supplies the return. The prefix P+ 
+
+> t
+
+contains no later returns, reasoning suffix, or reference answer. This term trains the decoder to answer from returned evidence and needs only a valid reference, independent of the rollout reward. 
+
+Initial-state request preferences. Three probes start from the initial state s0. One is forced to emit an ordinary token, and the other two emit the Global and Local request tokens; later decisions follow πold . Let ∆a = R(τ a 
+
+> 0
+
+) − R(τ N0 ) for a ∈ { G, L}. The preference loss is 
+
+Lpref = 12
+
+X
+
+> a∈{ G,L}
+
+|∆a| softplus 
+
+
+
+− sgn(∆ a) log pψ (a | s0)
+
+pψ (N | s0)
+
+
+
+. (20) 21 Preprint. Under review. The loss raises the probability of a request relative to continuation when that request improves the reward, and lowers it otherwise. The initial hidden state is detached, so only wG and wL receive gradients. The probes do not enter either policy term. A prompt uses this term only when all three probes have valid scores. A.4 TRAINING CONFIGURATION 
+
+Figure 8 shows the five training steps. The vision encoder and the pretrained LLM weights stay frozen in every step, and each step updates only the modules marked as trainable. The Stage I objectives are defined in Appendix A.3.3, and the Stage II objectives in Appendix A.3.4. updated / trainable  frozen 
+
+1
+
+Weaver 
+
+Distillation 
+
+2
+
+Twig 
+
+Training 
+
+3
+
+Student -State 
+
+Adaptation 
+
+4
+
+Interface 
+
+Warm -up 
+
+5
+
+Access 
+
+Learning 
+
+(Stage II)              
+
+> 𝐿 𝑓𝑜𝑟𝑚 = 𝐶𝐸 𝑡𝑒𝑎𝑐ℎ𝑒𝑟𝐶𝑜𝑇
+> +𝑓𝑎𝑐𝑡𝑠 + 𝑟𝑒𝑙𝑎𝑡𝑖𝑜𝑛𝑠 + 𝑎𝑛𝑠𝑤𝑒𝑟𝑠
+> Global / Local
+> formation memory
+> Teacher -reviewed ROI targets Twig Localization Vision encoder +
+> trained weavers
+> 𝐿 𝑅𝑂𝐼 = 𝐿 𝑤𝐵𝐶𝐸 + 1 − 𝑠𝑜𝑓𝑡𝐼𝑜𝑈
+> ROI heatmap / crop box
+> Student -generated prefixes
+> +selected crop Twig +
+> memory weavers
+> Vision encoder +
+> pretrained LLM + decoder LoRA 𝐿 𝑠𝑡𝑢𝑑𝑒𝑛𝑡 = 𝐿 𝑅𝑂𝐼 + 𝐿 𝑠𝑢𝑓𝑓𝑖𝑥
+> adapted returns
+> request / return markers
+> <request>
+
+...  <return>     
+
+> 4 marker input rows +
+> 2 request output rows
+> ordinary vocabulary rows +
+> formation modules
+> 𝐿 𝑖𝑓𝑎𝑐𝑒 = 𝐶𝐸 𝑟𝑒𝑞𝑢𝑒𝑠𝑡 +
+> 𝐶𝐸 𝑡𝑒𝑥𝑡𝑎𝑓𝑡𝑒𝑟𝑟𝑒𝑡𝑢𝑟𝑛
+> protocol -ready model
+
+✓
+
+> root trajectories + CRD siblings
+
+...                        
+
+> Decoder
+> LoRA φRequest
+> interface ψ
+> backbone + weavers +
+> end -marker rows
+> 𝐿 𝑑𝑒𝑐 = 𝑑𝑢𝑎𝑙 − 𝑐𝑙𝑖𝑝 𝐴 𝑑 𝑒𝑐 + 𝜆 𝐶𝐸 𝐿 𝐶𝐸
+> group rewards /
+> invocation gains
+> separate gradient scopes: φ ← L_dec, ψ ← L_access
+> Teacher CoT + facts / relations /answers
+> Q: … ?
+> A: …
+> CoT: …
+> Facts: …
+> Image Weaver
+> + Relation Weaver
+> + Local Weaver
+> Vision encoder +
+> pretrained LLM
+> LLM
+> <prefix>
+> ...
+> ──────── LLM LoRA 𝐿 𝑠𝑢𝑓𝑓𝑖𝑥 = 𝐶𝐸 Ŷ, 𝑌
+> LLM 𝐿 𝑎𝑐𝑐𝑒𝑠𝑠 = 𝑑𝑢𝑎𝑙 − 𝑐𝑙𝑖𝑝 𝐴 𝑐 𝑎𝑙𝑙 +
+> 𝜆 𝑝𝑟𝑒𝑓 𝐿 𝑝𝑟𝑒𝑓
+
+colored blocks denote schematic formation modules or latent groups; labels give their role Color key: 
+
+Figure 8: Five-step training pipeline. Each row lists the inputs of one step, the updated modules (flame), the frozen components (snowflake), the objective, and the output. Steps 1–4 form Stage I, and step 5 is Stage II access learning, in which the decoder LoRA ϕ and the request interface ψ
+
+receive gradients only from Ldec and Laccess , respectively. 
+
+Optimization. Table 5 lists the optimizer settings. The ratio-clipping width ϵ = 0 .2 and the dual-clip constant c = 3 follow Ye et al. (2020), and δ = 10 −6 only stabilizes the normalization in Equation 16. The decoder LoRA (Hu et al., 2021) is attached to the query, key, value, output, and MLP projections of the top four decoder layers, with rank r = 16 and α = 32 . We set the learning rates, the LoRA configuration, the auxiliary loss weights, and the gradient-norm limit based on our experience. The Global Weavers use a separate learning rate for the output projection that maps their latents to the decoder embedding space. Each Stage I step makes one pass over its supervision. The random seed is 20260911. 
+
+Rollouts and training length. Stage II runs on 16 A800 GPUs with one prompt per GPU and no gradient accumulation, so each step schedules 16 prompts. Each prompt samples four root trajec-tories at temperature 1, and each eligible root adds two siblings, so a step samples 64–192 natural trajectories. Continuation controls and preference probes are sampled in addition. Rollouts use a 768-token ordinary-text budget, a 64-token answer-completion grace period, and at most five mem-ory requests. These rollout sizes and budgets are set empirically. The 40,000-example schedule contains 2,500 steps. 
+
+Checkpoint selection. We evaluate the model every 100 steps and at the end of training on a fixed development set whose task list is set before training. The selected checkpoint maximizes the equally weighted mean of per-task rewards, and ties select the earlier checkpoint. The same weights are used for all final benchmarks, and final benchmark scores do not enter the selection. 22 Preprint. Under review. Table 5: Optimization settings for memory formation and access learning.                                  
+
+> Stage Parameter group or setting Value I: Global formation Image and Relation Weavers 10 −6
+> Output projection 10 −5
+> I: Local formation Source Selector, Twig, and Local Weaver 10 −6
+> I: interface warm-up Marker and request rows 10 −4
+> II: access learning Decoder LoRA 10 −6
+> Decoder LoRA rank r/α16 /32
+> Decoder LoRA layers top 4 of 28 Request rows 3×10 −4
+> Ratio-clipping width ϵ0.2
+> Dual-clip constant c3
+> Answer-loss weight λCE 0.1
+> Preference-loss weight λpref 0.1
+> All stages Optimizer / weight decay AdamW / 0
+> Maximum gradient norm 1
+
+A.5 TRAINING DATA 
+
+Sources and allocation. We construct 50,000 image–question examples for Local memory forma-tion, 30,000 for Global memory formation, and 40,000 for Stage II access learning. Each example contains one or more images, a question, and a reference answer. Table 6 lists the source datasets. All examples come from the training splits of these sources and are deduplicated against every eval-uation unit in Table 7, so there is no leakage between training and evaluation data. Table 6: Training data sources. Source datasets provide question–answer pairs, region annotations, or instance annotations from which additional questions are constructed.   
+
+> Source Content and use Visual-CoT (GQA) (Shao et al., 2024a) Object, attribute, and spatial-relation questions with region annotations. COCO train2017 (Lin et al., 2014) Multi-image questions built from instance annotations. Mantis-Instruct (Jiang et al., 2024): ChartQA, Spot-the-Diff, ImageCoDe, NLVR2, and Birds-to-Words Chart reading and arithmetic, image comparison, description-to-image matching, and cross-image relational judgments. Q-Zoom’s VStar-COCO data (Shi et al., 2026) Spatial-relation questions on COCO train2017 images. ScanQA via M4-Instruct (Li et al., 2024) Multi-view scene question answering, restricted to examples from the original ScanQA training split.
+
+Stage I annotations. Each Stage I example carries a reference CoT, per-image facts, cross-image relations, the answer, and target regions. Qwen3-VL-32B-Instruct generates the reference CoTs. Answers come from the source datasets. Target regions come from source region annotations and from model-generated step annotations, which are checked against the source images and the pro-posed crops. Per-image facts and cross-image relations are derived from source annotations and from model-generated pseudo-labels. Facts and relations supervise what Global memory encodes, region annotations supervise Local source selection and localization, and answers supervise task completion. 
+
+Student-state targets. For student-state adaptation, we roll out Qwen2.5-VL-7B-Instruct and record each text-and-latent prefix with its source selections, crops, and memory returns. The teacher reviews each prefix together with its crop and returns only the ROI target ¯A and the continuation target Y . We do not reuse the full teacher CoT as the continuation of a student state, because that CoT need not follow from the student’s prefix. 23 Preprint. Under review. 
+
+Access-learning data. Stage II examples cover single-image perception, multi-image reasoning, and general visual question answering. Rewards and the post-call answer loss use the source an-swers, and the Stage I memory annotations are not used in Stage II. A.6 EVALUATION SPLITS AND SCORING 
+
+The evaluation suite contains ten benchmark families, divided into fifteen evaluation units with 19,913 examples in total (Table 7). Paired comparisons evaluate both conditions on the same exam-ples in every unit. BLINK uses its labelled validation split, and MathVista uses test-mini. Mecha-nistic subsets and development probes are reported separately from these evaluation units. Table 7: Evaluation units and aggregation rules. Scores are reported as percentages. The example count is the full evaluation denominator.                                  
+
+> Evaluation unit Examples Aggregated metric
+> Single-image perception
+> V*Bench, released test 191 Micro accuracy CV-Bench, test-2D 1,438 Mean source accuracy CV-Bench, test-3D 1,200 Micro accuracy HR-Bench, 4K 800 Mean category accuracy HR-Bench, 8K 800 Mean category accuracy
+> Multi-image reasoning
+> BLINK, labelled validation 1,901 Mean subtask accuracy MuirBench, released test 2,600 Micro accuracy MMSI-Bench, non-circular set 1,000 Micro accuracy MIMIC, Common test 1,000 Accuracy MIMIC, Counting test 5,000 Accuracy MIMIC, Odd-One-Out test 1,000 Accuracy MIMIC, Listing test 1,000 Corpus micro set F1
+> Broader visual understanding
+> MM-Vet v1, released set 218 Mean fractional judge credit MathVista, test-mini 1,000 Accuracy RealWorldQA, released test 765 Micro accuracy Total 19,913
+
+Aggregation. CV-Bench-2D averages the accuracies of its two sources with equal weight. Each HR-Bench split averages four category accuracies, and BLINK averages its fourteen subtask accu-racies. These macro averages differ from micro accuracy when components differ in size. MIMIC keeps its released metrics: accuracy for Common, Counting, and Odd-One-Out, and corpus-level micro set F1 for Listing, which is not an average of per-example F1 scores. The MIMIC Avg. col-umn in the main tables is the arithmetic mean of these four scores and is not an official MIMIC metric. Unresolved predictions stay in the denominator and receive no credit. 
+
+Judged benchmarks. MM-Vet is scored by the mean fractional credit from a fixed DeepSeek-V4-Flash judge with a fixed JSON prompt. MathVista uses deterministic scoring for multiple-choice an-swers and the same judge for mathematical equivalence of free-form answers. These judges replace the online GPT-based judging of the original benchmarks. 
+
+Comparison protocol. All methods in Table 1 are evaluated on the same examples with the same released questions, answer options, image order, answer-format instructions, scoring rules, and judge. Each baseline uses its authors’ released checkpoint, tools, stopping rules, and generation caps and is not retrained on our data; single-image methods receive an ordered contact sheet for multi-image inputs. Because baselines differ in backbone and training data, the main table also re-ports the backbone controls Native and Coarse and the same-data controls SFT and Stage I sft , which share ReMAP’s backbone and training data. 
+
+Prompts and generation settings. Native-protocol comparisons keep the released question, an-swer options, image order, and answer-format instruction. Baselines that accept only one image 24 Preprint. Under review. receive an ordered contact sheet of all input images, marked with a dagger in Table 8. Generation budgets, stopping rules, and the memory-request cap are reported with each evaluation condition. 
+
+Additional baseline configurations. MINT-CoT and ICoT use their Qwen2-VL-7B implementa-tions, and Pixel Reasoner uses its released Qwen2.5-VL-7B policy. ICoT keeps all input images but replays visual tokens from the last image through its released selection rule. Pixel Reasoner uses a 65,536-token runtime context for multi-image inputs, caps each crop at 1,024 visual tokens and each generation round at 1,024 output tokens, keeps a 5,120-token cap on initial images, and preserves its released crop tools and stopping rules. Q-Zoom caps its initial image or ordered contact sheet and each RoI at 576 visual tokens, with at most 576 output tokens. These caps apply to each input or crop, not to the whole trajectory. 
+
+Cross-backbone evaluation. In Table 2, Base denotes the original backbone, OFF the trained model with Global and Local requests disabled, and ReMAP the full model. The six benchmark columns are computed as 100 n/N from the correct counts n, with N =191 , 1200 , 800 , 1901 , 2600 , 1000 in column order. For HR-Bench-8K and BLINK, these are mi-cro accuracies rather than the official four-category and fourteen-subtask macro averages used in the main table. For every backbone, MIMIC Avg. is the mean over the four MIMIC subsets. Differences are computed from unrounded ratios and rounded to two decimals. 
+
+Paired scoring. The mechanistic comparisons share source examples, decoding settings, and scor-ing rules; each study specifies its memory interface, request positions, and content controls. Every expected example stays in the denominator, and an unresolved prediction is scored as wrong. We re-port aggregate accuracy and paired HELP /HARM counts. Confidence intervals use a sample-clustered bootstrap that resamples all states of an example together. The full-cohort visual-influence and static pixel-budget analyses use 5,000 percentile resamples with seed 20260828, and the state-conditioned utility and content-control analyses use 4,000 resamples with seed 20260830. Budget-sweep inter-vals are pointwise across the five tested values of K.
+
+MIMIC components. Table 8 lists the four MIMIC component scores behind the MIMIC Avg. column of the main table. Table 8: MIMIC component scores. A dagger denotes an ordered contact-sheet adaptation. Vis-Mem is the public-code reproduction used in the main table. Method Common Counting Odd-One-Out Listing Mean Native 62.60 44.98 60.40 12.69 45.17 Coarse 61.10 38.42 54.70 20.02 43.56 Q-Zoom † 51.90 37.44 54.80 25.00 42.29 DeepEyes † 52.60 40.38 53.20 10.90 39.27 Pixel Reasoner 64.50 43.34 30.00 41.46 44.83 ReGround 53.60 36.76 13.00 8.66 28.01 ICoT 48.80 15.38 54.90 0.55 29.91 MINT-CoT 54.30 30.06 18.50 33.33 34.05 DMLR † 38.70 16.14 17.70 22.41 23.74 VaLR 38.10 12.38 20.60 0.62 17.93 V-Reflection 85.10 31.04 58.20 38.28 53.16 VisMem 60.30 37.82 55.10 11.55 41.19 ReMAP 92.00 71.76 80.00 28.24 68.00 A.7 VISUAL INFLUENCE AND STATE -C ONDITIONED UTILITY 
+
+The two probes in this section measure how much the initial images still affect predictions as rea-soning proceeds, and whether the value of renewed visual access depends on the reasoning state. Both use a fixed Q-Zoom-adapted Qwen2.5-VL-7B checkpoint. 25 Preprint. Under review. A.7.1 VISUAL INFLUENCE DECAY 
+
+For each example, we generate one deterministic reasoning trajectory. We then teacher-force the same text while replacing all input images with a same-layout patch-shuffled or blank version, and compare the next-token distributions pt and ept under the original and perturbed images: 
+
+ft = 1[arg max pt̸ = arg max ept] , dt = JS( pt, ept). (21) The flip indicator ft records a change of the most likely next token, and the Jensen–Shannon diver-gence dt also records changes that keep that token. Positions are normalized by trajectory length and pooled into eight bins. Both statistics measure the size of the visual influence, not its direction. Figure 9 plots the flip rate across the eight bins, and Table 9 compares the first and last parts of each trajectory. 0 0.25 0.5 0.75 10%    
+
+> 5%
+> 10 %
+> 15 %
+> 20 %
+> Normalized reasoning position Next-token flip rate
+> (a) Pooled, 697 trajectories
+> Patch-shuffled Blank
+> 00.25 0.50.75 10%
+> 5%
+> 10 %
+> 15 %
+> 20 %
+> Normalized reasoning position
+> (b) Patch-shuffled, by cohort
+> V*Bench BLINK MuirBench
+
+Figure 9: Visual influence decays along the reasoning trajectory. Rate at which the next-token top-1 decision changes when the input images are replaced, in eight bins of normalized reasoning position. (a) Patch-shuffled and blank images, pooled over V*Bench, BLINK, and MuirBench, with 95% bootstrap intervals. (b) Patch-shuffled images for each cohort. Table 9: Patch-shuffle visual influence across reasoning. Eligible/selected counts the trajectories analyzed out of the sampled examples. First → last bin gives the flip rate in the first and eighth bins. Paired change is the per-example mean flip rate over the last quarter of the trajectory minus that over the first quarter, with a 95% bootstrap interval. Cohort Eligible / selected First → last bin Paired change V*Bench 189 /191 15 .43% → 2.36% −8.79 [−10 .48 , −7.00 ] pp BLINK 254 /256 13 .27% → 2.45% −10 .88 [−12 .15 , −9.63 ] pp MuirBench 254 /256 7.43% → 1.96% −4.50 [−5.48 , −3.55 ] pp Pooled 697 /703 11 .73% → 2.25% −7.98 [−8.78 , −7.21 ] pp Blank images give the same pattern, with the flip rate falling from 14.82% to 2.50%. Under patch shuffling, the mean JS divergence falls from 0.0320 to 0.0039. The signed change in the log prob-ability of the generated token is not consistent across cohorts: pooled, it is −0.0211 with interval 
+
+[−0.0450 , 0.0026] , and V*Bench has the opposite sign from BLINK and MuirBench. The initial images therefore influence later predictions less, but removing them does not uniformly lower the probability of the generated text. A.7.2 STATE -C ONDITIONED UTILITY 
+
+We insert visual content at selected states of the same deterministic trajectory and compare the gold-answer log probability. Candidate states are the prompt-only state and the positions at 20%, 40%, 60%, and 80% of the chain of thought. All arms share the textual prefix, the native visual user-turn interface, and a 16-token return budget. The pair of states in each contrast is chosen on development examples, and all estimates and intervals in Table 10 are computed on an independent confirmation split. 26 Preprint. Under review. Table 10: State and content contrasts in gold-answer log probability. Late–early contrasts insert the same content at the later and the earlier selected state. Content contrasts compare the correct region or scene with a random wrong region, a matched wrong scene, or a shuffled scene. NS marks an interval that contains zero. Cohort Contrast Estimate 95% CI V*Bench ( n = 125 ) late–early correct-content utility +0 .1771 [+0 .1327 , +0 .2227] 
+
+V*Bench ( n = 125 ) correct–random-wrong RoI −0.0112 [−0.0754 , +0 .0486] NS CV-Bench-3D ( n = 152 ) late–early current-scene utility +0 .0726 [+0 .0405 , +0 .1050] 
+
+CV-Bench-3D ( n = 152 ) current–matched-wrong scene +0 .2265 [+0 .1361 , +0 .3171] 
+
+CV-Bench-3D ( n = 152 ) current–shuffled scene +0 .0264 [−0.0358 , +0 .0882] NS The same correct content is more useful at the later state on both V*Bench ( +0 .1771 ) and CV-Bench-3D ( +0 .0726 ), so the value of identical evidence depends on when it is accessed. On CV-Bench-3D, the current scene is also more useful than a matched wrong scene ( +0 .2265 ). The con-trasts against a random wrong region on V*Bench and against a shuffled scene on CV-Bench-3D are not significant. A.8 MEMORY -C ONTENT REQUIREMENTS AND CONTROLS 
+
+The two probes in this section test which memory content helps: freshly encoded pixels of a region versus features from the initial encoding, and correct relational context across images versus content-matched controls. Both use the fixed checkpoint of Appendix A.7. A.8.1 SAME -B OX PIXEL RE-ENCODING 
+
+On the 191 V*Bench examples, both arms use the gold RoI, the same insertion point in the prefill, and the same number K of inserted tokens. The feature arm pools the RoI features from the initial encoding. The pixel arm crops the region from the source image, encodes it at high resolution, and compresses the result to K tokens. Figure 10 reports five values of K.4 8 16 32 64         
+
+> 55 60 65 70 75 80
+> Inserted tokens K
+> Accuracy (%)
+> (a) Accuracy
+> Feature pooling Pixel re-encoding 4816 32 64
+> −0.100.10.20.30.4
+> Inserted tokens K
+> (b) Pixel −feature gold log prob.
+
+Figure 10: Pixel re-encoding versus feature pooling on V*Bench. Both arms return the gold RoI with K inserted tokens at the same insertion point on 191 examples. (a) Accuracy. (b) Pixel minus feature gold-answer log probability, with 95% CIs. Pixel re-encoding matches the feature arm at K = 4 (−0.0007 in gold-answer log probability) and exceeds it from K = 8 onward. At K = 32 , it raises the log probability by 0.2243 (95% CI 
+
+[0 .1241 , 0.3325] ) and accuracy from 62.30% to 71.73%. The high-resolution RoI pass uses 278.4 visual tokens on average, compared with 1,244.4 for the high-resolution full image. At K = 16 ,pixel memory also exceeds wrong-RoI, shuffled, blank, and zero controls. Splitting the examples into target-size tertiles gives the same direction in every tertile, with small differences between tertiles. 27 Preprint. Under review. A.8.2 RELATIONAL -R OLE PROBE 
+
+We build 192 non-overlapping part–whole image pairs from COCO train2017 instance annotations, covering 800 unique images. In the role-changing condition, the focal image stays pixel-identical while its relation to the other image changes. In the appearance control, the appearance changes while the focal role stays fixed. Sensitivity is the total-variation distance between the model’s answer distributions before and after a change, and fixation is the rate at which the model keeps predicting the focal option after the roles are swapped. Table 11: Relational-role probe. The upper rows use total-variation sensitivity or fixation rate on 192 pairs. The lower rows compare the oracle relational context with each control in gold-answer log probability on the 71 selected late failure states. NS marks an interval that contains zero. 
+
+Contrast Estimate 95% CI Role change − appearance control +0 .0482 [+0 .0254 , +0 .0725] 
+
+Late − early role sensitivity +0 .0039 [−0.0056 , +0 .0138] NS Late − early fixation rate +0 .0182 [−0.0026 , +0 .0391] NS Oracle − no context +2 .5797 [+2 .1222 , +2 .9881] 
+
+Oracle − blank block +2 .4765 [+2 .1251 , +2 .8061] 
+
+Oracle − zero block +2 .8028 [+2 .5116 , +3 .0891] 
+
+Oracle − object list only +1 .3852 [+1 .1268 , +1 .6433] 
+
+Oracle − another sample +1 .2927 [+1 .0276 , +1 .5654] 
+
+Oracle − wrong role +3 .1493 [+2 .7849 , +3 .5274] 
+
+The model is more sensitive to a role change than to an appearance change ( +0 .0482 ), so its predic-tions depend on cross-image relations and not only on the focal image (Figure 11(a)). Neither role sensitivity nor fixation changes significantly between early and late states. 20% 40% 60% 80%     
+
+> 00.05 0.10.15 0.2
+> Reasoning position Total-variation distance
+> (a) Sensitivity along reasoning
+> Role change Appearance change
+> 020 40 60
+> Oracle Blank block Zero block Another sample Object list only Wrong role No context
+> 57 .753 .552 .149 .347 .935 .20
+> Accuracy (%)
+> (b) Repair of 71 failure states
+
+Figure 11: Relational-role probe. (a) Total-variation sensitivity to a role change and to an appear-ance change at four reasoning positions on 192 pairs, with 95% intervals. (b) Accuracy on the 71 selected late failure states with the oracle relational context and six controls; without context, every state is wrong by construction. To test whether correct relational context can repair these errors, we select the 71 late states at which the model predicts the focal option for both the true and the role-swapped prefix, so that its role-swapped prediction is wrong. At each state, we insert either the oracle relational context or one of six controls: no context, a blank block, a zero block, an object list only, another sample’s context, or the wrong role. Without context, all 71 states are wrong by construction. The oracle context repairs 41 of them, an accuracy of 57.7%, compared with 53.5%, 52.1%, 47.9%, 49.3%, and 35.2% for the blank, zero, object-list, other-sample, and wrong-role controls (Figure 11(b)). In gold-answer log probability, it exceeds every control (Table 11). Because the states are selected as failures and the relation comes from an oracle, this probe measures what correct relational content can contribute, not the effect of the learned Global memory. 28 Preprint. Under review. A.9 ADDITIONAL ABLATIONS 
+
+Shared evaluation setting. The memory-curation and memory-access variants in Table 3 use the complete ReMAP weights and share the input examples, preprocessing, scoring, and decoding lim-its. Base is the Coarse backbone with at most 1,024 visual tokens per image. The table uses all 191 V ⋆Bench, 1,200 CV-Bench-3D, 2,600 MuirBench, 1,901 BLINK, and 218 MM-Vet examples. V⋆Bench, CV-Bench-3D, MuirBench, and BLINK report micro accuracy, and MM-Vet reports the mean graded score. BLINK in this table therefore uses micro accuracy rather than the mean-subtask aggregation of Appendix A.6. Unresolved answers count as incorrect. 
+
+Memory-curation variants. w/o Memory masks both request tokens. w/ Global memory and w/ Local memory enable only one request type and keep the decoder adapter, request parameters, and answer path of ReMAP. When Global requests are disabled, Local still uses the cached Global memory ZG, and the unused return capacity is not reassigned. Each Local request returns 32 latent tokens, including on multi-image examples. All variants use a 768-token ordinary-text budget, a 64-token answer grace period, and at most five memory requests. Memory requests do not count toward the text budget. 
+
+Training variants. SFT distills the teacher CoT without memory, and Stage I sft distills both the CoT and the memory. ReMAP adds access learning after Stage I. These variants differ in training. w/o Memory instead shares all of ReMAP’s weights, including the Stage II decoder LoRA, and masks Global and Local requests only at inference. The gap between ReMAP and w/o Memory therefore measures the contribution of reasoning-time memory access on top of the full SFT and RL training with parameters held fixed; it is an inference-time ablation, not a model trained without memory. 
+
+Invocation controls. Fixed, Random, and Entropy use the complete ReMAP weights and change only when requests are issued at inference. Fixed requests Global at positions 0 and ⌊0.7B⌋ and Local at ⌊0.3B⌋ and ⌊0.5B⌋ of the text budget B = 768 , that is, at positions 0, 230, 384, and 537. Random and Entropy consider a request after each generated delimiter, excluding position 0. Random issues a request with a fixed probability, following the random insertion of MemGen and VisMem (Zhang et al., 2026b; Yu et al., 2026); as in VisMem, it samples requests at delimiters. Entropy issues a request when the entropy of the next-token distribution over ordinary text tokens exceeds a fixed threshold. Memory tokens are excluded from this distribution, and EOS is retained. A triggered request chooses Global or Local with equal probability, as in VisMem. In all three con-trols, committing an answer or emitting EOS cancels later requests, and the five-request cap applies. Because each policy decides its own requests, the number of requests differs across policies. A.10 BRANCH -P OINT SELECTION DIAGNOSTIC 
+
+This diagnostic compares four rules for choosing the state at which a root trajectory branches, with the policy frozen. The rules are the score u(st, a t) in Equation 3, labeled CRD in Figure 12; the route entropy H pt(N) , p t(G) , p t(L) ; uniform random selection among eligible states; and the entropy-change signal of ARPO (Dong et al., 2026a). The ARPO-style signal is the mean entropy of the last four ordinary tokens minus the mean entropy of the first four generated tokens. We branch at its maximum under the shared budget instead of using ARPO’s stochastic branching gate. Unlike the route entropy, u(st, a t) conditions on the realized route and measures how likely a sibling is to depart from it. All rules receive the same root trajectories and eligible candidate states. The cohort contains 192 training prompts, 32 from each of six ability categories: attribute, counting, existence, local detail, relation, and spatial reasoning. The prompts are selected without using rewards or correctness. Each prompt has four root trajectories, and each root yields a family of the original continuation and two siblings resampled from the selected state, giving 12 trajectories per rule and prompt. Routing Yield@H16 is the fraction of families whose trajectories produce different sets of Global and Local requests within the first 16 generated positions after the branch. Joint EAY multiplies this diversity indicator by the mean absolute deviation of the family’s final-answer rewards, so it is positive only when routing diversity comes with different rewards. Both metrics are averaged 29 Preprint. Under review. 0 25 50 75 100      
+
+> (a) Routing Yield@H16 (%) ↑ CRD
+> Route Entropy Random ARPO-style ΔH
+> 0.0 0.1 0.2 0.3 0.4
+> (b) Joint EAY ↑
+
+Figure 12: Branch-point selection with a fixed trajectory budget. (a) Routing Yield@H16, the fraction of branch families whose trajectories make different Global and Local requests within 16 positions after the branch. (b) Joint EAY, the reward variation that co-occurs with this routing diversity. Each point averages four root families of one prompt; diamonds and bars mark the mean and 95% bootstrap interval. All rules use the same roots, candidate states, and 12 trajectories per prompt on 192 prompts, with the policy frozen. ARPO-style ∆H is the fixed-budget adaptation of ARPO’s entropy-change signal. over the four families of a prompt, and we report prompt means. Confidence intervals use 10,000 prompt-level bootstrap resamples stratified by ability category, with seed 26090601 and the same resamples for all rules. The score u(st, a t) gives the highest routing yield, 75.91% (95% CI [72 .92 , 78 .78] ), compared with 68.36% [65 .23 , 71 .48] for the route entropy, 38.54% [35 .03 , 41 .93] for random selection, and 32.16% [28 .65 , 35 .68] for the ARPO-style signal. Its Joint EAY of 0.144 [0 .131 , 0.159] is close to that of the route entropy, 0.143 [0 .129 , 0.157] , and above those of random selection, 0.084, and the ARPO-style signal, 0.067. Route-based selection therefore exposes more alternative memory deci-sions at the branch, and these alternatives come with larger reward differences than those found by random or entropy-change selection. A.11 COMPLETE QUALITATIVE CASE TRACES 
+
+Figure 13 shows the complete reasoning of the two main-text cases, with and without memory. A.12 VISUAL -C ONTEXT ACCOUNTING 
+
+Figure 6(a) compares the visual tokens that enter the decoder sequence with the performance in Table 1. For each question, we count the initial image tokens and every crop token or memory latent returned during reasoning. A repeated Global request inserts the cached block again, and its latents are counted again. Ordinary text tokens, request and end markers, and representations used only inside the vision encoder or the memory weavers are excluded. The count therefore measures the visual context of the decoder, not total inference compute. The comparison uses the questions measured for all five methods: 78 V*Bench, 60 CV-Bench-2D, and 107 MuirBench questions. Means are unweighted over these questions and include questions without memory requests. The performance lines use the full-benchmark scores of the main table. ReMAP starts from at most 1,024 visual tokens per image and returns 32 latents per Local request and 4N + 4 latents per Global request. Its counts come from the recorded memory insertions of its evaluation run. For Q-Zoom and DeepEyes on MuirBench, the counts sum the passes over each input image. 30 Preprint. Under review. Question & options  Image 
+
+No memory 
+
+With memory 
+
+Question & options  Image 
+
+Case 1 : HR-Bench-4K #0347  
+
+> A. 20 km/h B. 40 km/h
+
+C. 60 km/h D. 30 km/h 
+
+No request 
+
+Answer B 
+
+Memory calls: local → local → local 
+
+Case 2 : MMSI #0377   
+
+> What is the position of the potted
+> plant relative to the longest sofa
+> (given that the statue on thetable
+> is to the north of the longest
+> sofa)?
+> A. Due south B. Northeast
+> C. Due east D. Southwest
+
+No request 
+
+To determine the position of the potted plant relative to 
+
+the longest sofa, we need to analyze the positioning of 
+
+the sofa and the potted plant in the image. 
+
+Identify the longest sofa: The longest sofa is the one on 
+
+the far right of the image, which extends the entire length 
+
+Identify the statue on the table: The statue is located on 
+
+a small table to the left of the sofa. 
+
+Determine the direction of the potted plant: The potted 
+
+plant is located to the right and slightly ahead of the sofa, 
+
+Given these observations: 
+
+- The potted plant is to the east of the sofa. 
+
+Therefore, the correct answer is C. 
+
+Answer: C 
+
+Memory calls: local → local → global 
+
+> What is the speed limit indicat-
+> ed on the sign in the image?
+
+To determine the speed limit indicated on the sign in the 
+
+image, let's follow these steps: 
+
+<mem_l> … <mem_l_end> 
+
+The sign is a standard German speed limit sign, circular 
+
+with a white background and black border, 
+
+<mem_l> … <mem_l_end>  indicating a speed limit. 
+
+<mem_l> … <mem_l_end> 
+
+The sign shows a number in the center, which is the 
+
+speed limit in kilometers per hour. 
+
+The number on the sign is "30". 
+
+Given these observations, the speed limit indicated on 
+
+Answer: D 
+
+the sign is 30 km/h. 
+
+No memory  Answer C 
+
+per hour. 
+
+To determine the speed limit indicated on the sign 
+
+in the image, let's follow these steps: 
+
+Identify the sign: The sign in question appears to be a 
+
+circular sign with a red border, which is typically used 
+
+for speed limit signs in many countries. 
+
+Read the numbers: The numbers on the sign are 
+
+"40 km/h". This indicates the speed limit in kilometers 
+
+Match with the options: The options provided are: 
+
+- A. 20 km/h 
+
+- B. 40 km/h 
+
+- C. 60 km/h 
+
+- D. 30 km/h 
+
+Compare the sign with the options: The number "40" 
+
+matches exactly with option B. 
+
+Therefore, the speed limit indicated on the sign is 
+
+Answer: B 
+
+40 km/h. 
+
+of the wall. 
+
+relative to the statue. 
+
+Answer D  With memory  Answer B 
+
+of the image. 
+
+To determine the position of the potted plant relative to 
+
+the longest sofa, let's analyze the image step by step: 
+
+Identify the longest sofa: It is the couch on the right side 
+
+<mem_l> … <mem_l_end> 
+
+Find the statue: It is on the table located on the left side 
+
+<mem_l> … <mem_l_end> 
+
+Draw a line from the statue towards the potted plant and 
+
+deduce the direction it points: it points towards the north-
+
+<mem_g> … <mem_g_end> 
+
+Identify the position of the potted plant: It is located to 
+
+the northeast of the longest sofa. 
+
+Answer: B 
+
+of the image. 
+
+east 
+
+Figure 13: Complete paired reasoning traces. Cases 1 and 2 expand panels (a) and (b) of Figure 5 with the full recorded reasoning of the paired no-call and memory-enabled trajectories. Each mem-ory return is marked by its request and end tokens. Case 1 (HR-Bench-4K #0347): without memory, the model reads 40 km/h and answers B; after three Local calls, it reads 30 km/h and answers D. Case 2 (MMSI #0377): without memory, the model answers due east (C); after two Local calls and one Global call, it answers northeast (B). 31 Preprint. Under review. Table 12 lists the per-question means. ReMAP adds 16.0, 18.7, and 29.3 tokens per question through memory returns, and it uses 76.8%, 51.0%, and 52.3% fewer visual tokens than Native on V*Bench, CV-Bench-2D, and MuirBench, respectively. Table 12: Visual tokens entering the decoder sequence per question. Means over the questions shared by all five methods, with the question count given for each benchmark. Added counts crop tokens and memory latents returned during reasoning. Totals are computed before rounding.                                                        
+
+> Benchmark Method Initial Added Total V*Bench ( n= 78 )Native 4,417.9 0.0 4,417.9 Q-Zoom 1,008.0 331.8 1,339.8 DeepEyes 4,417.9 35.9 4,453.8 VisMem 4,417.9 0.0 4,417.9 ReMAP 1,008.0 16.0 1,024.0 CV-Bench-2D ( n= 60 )Native 906.0 0.0 906.0 Q-Zoom 450.6 175.3 625.9 DeepEyes 906.0 208.1 1,114.1 VisMem 906.0 0.0 906.0 ReMAP 425.3 18.7 444.0 MuirBench ( n= 107 )Native 7,099.5 0.0 7,099.5 Q-Zoom 3,515.4 500.8 4,016.2 DeepEyes 7,099.5 2,097.6 9,197.0 VisMem 7,099.5 0.0 7,099.5 ReMAP 3,359.9 29.3 3,389.2
+
+32
