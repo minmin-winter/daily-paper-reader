@@ -1,0 +1,1274 @@
+Title: Omni-Embed-Mini: Binding Modalities Without Forgetting via Dense Distillation
+
+URL Source: https://arxiv.org/pdf/2610.02148v1
+
+Published Time: Fri, 02 Oct 2026 02:20:12 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+> arXiv:2610.02148v1 [cs.CV] 1 Oct 2026
+
+## Omni-Embed-Mini: Binding Modalities Without Forgetting via Dense Distillation 
+
+Mohammed Irfan Kurpath, Jaseel Muhammad Kaithakkodan, Sahal Shaji Mullappilly Ivan Laptev , Hisham Cholakkal 
+
+Mohamed Bin Zayed University of Artificial Intelligence (MBZUAI) Sphere  Nebula Cloud  Constellation  UMAP Scatter  Orbital Rings 
+
+S P E E C H 
+
+> "Welcome everyone, today we will
+> discuss the quarterly …"
+
+A U D I O 
+
+> "Birds chirping over a flowing
+> stream with distant thunder"
+
+I M AG E 
+
+> "Golden retriever playing fetch
+> on a sandy beach at sunset"
+
+V I D E O 
+
+> "Chef slicing vegetables in a
+> busy restaurant kitchen"
+
+V I S U A L D O C 
+
+> "Invoice #4821 — Total: $2,340.00
+> — Due: March 15"
+
+T E X T  
+
+> ❄Frozen anchor
+
+O N E C O S I N E S P A C E · S I X M O D A L I T I E S 
+
+> clusters form by meaning, not by modality
+
+S H A R E D E M B E D D I N G S PAC E 
+
+> Text path (frozen)
+> Distillation via dense captions
+
+Figure 1: Omni-Embed-Mini overview. Omni-Embed-Mini maps speech, audio, image, video, visual-document, and text inputs into a single cosine embedding space, where semantically related examples cluster together regardless of modality. The model keeps the text encoder as a frozen anchor and aligns non-text modalities to this shared space through distillation from dense captions. 
+
+Abstract 
+
+Extending a text embedding model to new modalities typically degrades text retrieval quality, and existing omni-modal embedders compensate with multi-billion parameters. We present Omni-Embed-Mini , a 0.9B-parameter model that maps text, speech, audio, images, video, and visually-rich documents into a sin-gle shared cosine space without updating any text-side parameter. Our key insight is that the teacher signal requires no separate embedding model: each media sample is paired with a dense cascaded caption, and the teacher target is simply the frozen backbone’s own embed-ding of that caption. Because teacher and stu-dent share the same backbone weights, they in-habit byte-identical geometry, and lightweight projectors plus phased LoRA adapters on the modality encoders suffice for alignment. Train-ing combines a Matryoshka SigLIP contrastive loss with an online hybrid hard-negative miner whose negatives sharpen as the encoder im-proves. The recipe carries over to a 2.3B vari-ant by swapping in a native vision-language backbone. Omni-Embed-Mini-0.9B keeps its text weights bit-identical to the backbone, so training cannot regress text retrieval (49.57 nDCG@10 on MTEB-v2 BEIR-8), while ex-tending it to five additional modalities, and is ∼2.7 × to 9.5 × smaller than every open omni embedder we compare against. The 2.3B variant is competitive with the closed gemini-embedding-2, edging ahead of it on the overall-modality average. Models, code, data and eval-uation harness are on our project page. 
+
+11 Introduction 
+
+A central goal of recent representation learning is a unified embedding space that binds diverse modal-ities (Girdhar et al., 2023; Zhu et al., 2024). In practice, most attempts to jointly contrastive-train text with vision and audio face two coupled fail-ure modes. ( i) Catastrophic forgetting on the text side (McCloskey and Cohen, 1989): fine-tuning a strong text embedder against media inputs shifts the text geometry and degrades MTEB performance. Text is still the most critical modality for real-world search, making this degradation highly undesir-able. ( ii ) Modality bloat : existing omni embed-ders such as LCO-Embedding-Omni-3B/7B (Xiao et al., 2026), BidirLM-Omni-2.5B (Boizard et al., 2026), NVIDIA’s omni-embed-nemotron-3B (Xu et al., 2025), and e5-omni-3B/7B (Chen et al., 2026) have scaled to 2.5B to 8.9B parameters in search of enough capacity to absorb every modal-ity, making them less suited to edge-deployed dynamic retrieval at scale. We term these two coupled failure modes the multimodal expansion dilemma : under current recipes, every additional modality forces a trade-off, because mitigating text-side catastrophic forgetting has typically come with much larger models. We argue that text should not be a co-learner; it should be an immovable anchor . BLIP-2 (Li et al., 2023) bridges a frozen image encoder and a frozen LLM with a small Q-Former, and the first stage of LLaVA (Liu et al., 2023) aligns vision to a frozen LLM through a lightweight projector alone. We translate this principle to retrieval, drawing on the same logic Reimers and Gurevych (2020) used to align a new language to a frozen English teacher’s sentence space: each media sample’s teacher target is the EOS-pooled embedding of a dense cascaded caption, computed by the identical frozen backbone 
+
+that processes the student. Both targets and text queries are therefore produced by byte-identical weights; a modest projector and phased LoRA on the encoders close the modality gap. We call the resulting recipe Omni-Embed-Mini .As a result, Omni-Embed-Mini offers afavourable size-vs-performance trade-off. De-spite being ∼2.7 × to 9.5 × smaller than the open omni-modal embedders listed above, our 0.9Bmodel leaves its foundational text retrieval path untrained and covers five additional modalities in a single sub-billion-parameter model; on me-dia retrieval it trails these larger baselines, as ex-pected at its size. Our 2.3B variant is ahead of the closed gemini-embedding-2 on the overall-modality average ( 51 .39 against 49 .51 ), leading on image, video and visual documents while trailing on text, speech and audio. Our contribution is not a new alignment prim-itive. We combine dense captioning, frozen-backbone self-distillation, parameter-efficient modality adaptation, Matryoshka training and on-line mining into an omni-modal retrieval recipe with one specific invariant: the deployed text in-ference path is unchanged. Concretely: ( i) Zero-regression omni embedding: a 0.9B model (Ta-ble 1) scores 49.57 nDCG@10 on MTEB-v2 BEIR-8 while adding five modalities; the text branch’s weights are bit-identical to the stock 0.6B back-bone, so training cannot regress it. ( ii ) Cascaded-caption self-distillation through a shared back-bone: teacher and student share weights, so cosine alignment in the native pooled hidden space suf-fices: no projection head, no separate embedding teacher, fully cacheable targets. ( iii ) Matryoshka SigLIP + online hybrid hard-negative mining + phased LoRA: a parameter-efficient recipe that carries over to a 2.3B variant by swapping the back-bone for a native vision-language model. ( iv ) To our knowledge, this is the smallest open omni em-bedder at the time of writing, covering text, speech, audio, image, video, and visually-rich documents in one cosine space. 
+
+2 Related Work 
+
+Per-modality embedders. Text. The MTEB benchmark family (Muennighoff et al., 2023; Thakur et al., 2021) has strong text encoders such as Qwen3-Embedding (Zhang et al., 2025b), voyage-3-m-exp (Voyage AI, 2025), Conan-embedding-v2 (TencentBAC, 2025), GritLM (Muennighoff et al., 2025), inf-retriever (Yang et al., 2025), and LENS (Lei et al., 2025); we treat these as text-side reference points, while our zero-regression claim is measured against our own frozen backbones: Qwen3-Embedding-0.6B for the 0.9B, and Qwen3-VL-Embedding-2B, including its vision paths, for the 2.3B. Vision–language. VLM2Vec-V2 (Meng et al., 2025), Qwen3-VL-Embedding (Li et al., 2026), RzenEmbed (Jian et al., 2025), Ops-MM-embedding (OpenSearch-AI Team, Alibaba Cloud, 2025), and seed-1.6 (ByteDance Seed, 2025) adapt pretrained vision-language models for retrieval, usually with contrastive training, but do not handle 2Model Backbone Inference Frozen Trained Trained % Omni-Embed-Mini-0.9B Qwen3-Embedding-0.6B 935.35 M 869.98 M 68.32 M 7.3%                                      
+
+> Omni-Embed-Mini-2.3B Qwen3-VL-Embedding-2B 2.44 B 2.30 B 141.68 M 5.8% BidirLM-Omni-2.5B Qwen3-1.7B ×3merged 2.45 B 724 M 1.72 B 70.4% omni-embed-nemotron-3B Qwen2.5-Omni-3B Thinker 4.70 B 4.67 to 4.70 B 7 to 30 M 0.2 to 0.6% e5-omni-3B Qwen2.5-Omni-3B Thinker 4.70 B 4.58 to 4.70 B 7 to 120 M 0.2 to 2.5% LCO-Embedding-Omni-3B Qwen2.5-Omni-3B Thinker 4.70 B 4.58 B 120 M 2.5% e5-omni-7B Qwen2.5-Omni-7B Thinker 8.93 B 8.77 to 8.92 B 10 to 161 M 0.1 to 1.8% LCO-Embedding-Omni-7B Qwen2.5-Omni-7B Thinker 8.93 B 8.77 B 161 M 1.8%
+
+Table 1: Inference, frozen and trained parameters across open omni embedders. Inference is the full parameter count at inference time; Trained is what training updates, and Trained % is trained over inference. For our 0.9B, the 68.32 M trained parameters are 65.37 M of projectors and pooler plus 2.95 M of r=16 LoRA adapters on the media encoders’ attention blocks; the adapters are merged into the encoder weights at export, so they add nothing at inference and the total stays at 935.35 M; Table 13 gives the per-component breakdown. The text backbone is never updated. gemini-embedding-2 is omitted because its parameter count is not disclosed. 
+
+audio. Audio. MS-CLAP (Elizalde et al., 2023) introduced contrastive language-audio pretraining and LAION-CLAP (Wu et al., 2023b) scaled it with feature fusion and keyword-to-caption aug-mentation; Whisper (Radford et al., 2023) (weakly supervised) and Dasheng (Dinkel et al., 2024) (self-supervised) are strong audio encoders without an aligned text tower. 
+
+Omni-modal embedders. LCO-Embedding-Omni-3B/7B (Xiao et al., 2026), BidirLM-Omni-2.5B (Boizard et al., 2026), NVIDIA’s omni-embed-nemotron-3B (Xu et al., 2025), and e5-omni-3B/7B (Chen et al., 2026) target a single space across text, image, audio and, apart from BidirLM-Omni, video, but are substantially larger than Omni-Embed-Mini-0.9B. Gemini Embedding 2 (Shanbhogue et al., 2026) is a closed, API-only native multimodal embedder whose parameter count is not disclosed; we report it for reference and exclude it from size-matched comparisons. The closest methodological contrast is e5-omni, which calibrates a LoRA-tuned shared space: modality-aware temperatures, a debiased negative curriculum, and batch whitening with a covariance-alignment loss together reduce mismatches between modalities. We instead anchor to a space that is already calibrated and never updated, so no calibration machinery is needed; our hybrid miner shares only their focus on hard negatives and false-negative suppression. e5-omni-7B leads us on the overall average (52.93 against 51.39), while our 2.3B edges ahead of e5-omni-3B (51.39 against 49.28). We lead on video (55.18 against 32.92 and 44.73) at a half to a quarter of their parameters, and hold a strong text score at 0.9B. Notably, in our text suite e5-omni 
+
+falls from 47.80 to 45.34 from 3B to 7B, which is consistent with the cost that a frozen anchor is designed to avoid. Crucially, absorbing every modality through joint contrastive updating puts the backbone’s native retrieval behaviour at risk, a critical concern for real-world deployment. Among the open omni embedders compared here, ours is the only one that leaves the backbone entirely frozen, text for the 0.9B variant and text plus vision for the 2.3B, adding new modalities through external modality encoders and projectors alone, so as to preserve the backbone’s native capability rather than degrade it (see Fig. 5). 
+
+Anchored vs. contrastive joint alignment. Im-ageBind (Girdhar et al., 2023) uses images as a binding modality: a frozen OpenCLIP ViT-H im-age encoder serves as anchor, and per-modality encoders are trained with symmetric InfoNCE to match the image embedding of naturally co-occurring pairs (image-audio from video, image-depth from RGB-D, etc.). Cross-modal alignment emerges because each modality is independently pulled toward the shared image space. Language-Bind (Zhu et al., 2024) adopts the same anchored-alignment structure but substitutes language for images as the binding modality, freezing a text en-coder and LoRA-adapting per-modality encoders against it. AudioCLIP (Guzhov et al., 2022) takes a different joint-training approach, extending CLIP with a three-way contrastive loss across image, text, and audio. Omni-Embed-Mini shares Lan-guageBind’s choice of text as anchor but departs from both ImageBind and LanguageBind in four ways: ( i) alignment adds asymmetric distillation 
+
+(the frozen backbone embeds a dense caption as the teacher target) to the contrastive objective, so 3each modality is also fitted to a fixed per-sample tar-get vector rather than to batch-level contrast alone; (ii ) pairing data is manufactured via dense caption-ing rather than requiring natural co-occurrence, re-moving ImageBind’s reliance on modality-specific paired corpora; LanguageBind also uses generated captions as contrastive text, whereas we addition-ally use them as a distillation target; ( iii ) the text encoder is not a separate frozen tower but the iden-tical backbone that serves both teacher and student, so both are produced by the same untrained weights and text retrieval cannot regress; ( iv ) because that backbone is a single causal transformer, multiple modalities can be interleaved into one token se-quence and encoded in a single pass, rather than each modality passing through its own tower before a late fusion step. Interleaved multi-modal queries are therefore native to the architecture rather than an added capability; we do not isolate their contri-bution experimentally, and leave a controlled study to future work. Conceptually, this is the cross-modal analogue of Reimers and Gurevych (2020), who aligned a new language to a frozen English teacher’s sentence space via distillation against translated sentences; we substitute “language” with “modality” and “translation” with “dense caption-ing.” Unlike their separately trained student, our text tower is frozen outright. Our recipe builds on several established tech-niques. ANCE (Xiong et al., 2020) shows that periodically refreshing the hard-negative pool against the current encoder substantially improves Sample counts by modality 
+
+> Speech
+> 46.7k · 21%
+> Audio
+> 45.2k · 20%
+> Image
+> 86.1k · 38%
+> Video
+> 21.3k · 9%
+> Visual-doc
+> 28.3k · 12%
+
+# 227.7k training samples (post-filter) 
+
+Figure 2: Training data composition. Sample-count distribution across the five non-text modalities in the caption-only slice of our omni-modal corpus, covering 227k effective rows after caption and duration filtering. Mean caption length 
+
+> 01000 2000 3000 4000
+> Mean caption length (chars)
+> 694
+> 106 words
+> Speech
+> 582
+> 87 words
+> Audio
+> 745
+> 126 words
+> Image
+> 732
+> 127 words
+> Video
+> 4157
+> 654 words
+> Visual-doc
+
+Figure 3: Cascaded-caption length by modality. Mean caption length per modality in the caption-only slice of our omni-modal corpus. Visual documents are ∼6×
+
+longer because the expert-analyst captioner enumerates layout, headings, tables, and charts. 
+
+dense retrievers; our online hybrid miner is the multimodal-Matryoshka generalisation, with a text index and per-modality media FAISS-CPU (John-son et al., 2019) indices refreshed on indepen-dent cadences. Matryoshka representation learn-ing (Kusupati et al., 2022; OpenAI, 2024) enables a single trained embedding to be truncated post-hoc; we inherit MRL from the backbone and propa-gate it to all modalities through the distillation loss. SigLIP (Zhai et al., 2023) provides the pair-wise sigmoid contrastive loss, which scores each pair independently of the batch-level softmax normal-isation and so performs well at small batch size, and LoRA (Hu et al., 2021) provides parameter-efficient adapters on the modality encoders. 
+
+3 Method 
+
+3.1 Asymmetric modality alignment 
+
+Two design principles and one training rule gov-ern Omni-Embed-Mini. (P1) Backbone invari-ance. The backbone is never updated: no full fine-tuning, no LoRA on the backbone. This cov-ers the text path for the 0.9B variant, and the text and vision paths for the 2.3B, which is built on a vision-language backbone. Those paths carry no projector and their weights are bit-identical to the stock backbone, so its calibrated retrieval quality is preserved by construction. (P2) Cascaded-caption self-distillation. Each media sample is paired with a dense caption; the embedding of that caption, ob-tained via the same frozen backbone, is the teacher target. Teacher and student share weights, so a cosine alignment loss in the native pooled hidden space suffices. (T1) Alignment-first, then adapta-tion. Phase 1 trains projectors only; Phase 2 (after 4Omni-Embed: Architecture and Training Pipeline   
+
+> Student branches fl ow left to right; the cascaded-caption teacher fl ows right to left; both meet at the central training objective.
+
+tied weights: 
+
+identical backbone for student & teacher 
+
+INPUTS ENCODER PROJECTION TOKENS STUDENT OBJECTIVE TEACHER TOKENS CASCADE CAPTIONS 
+
+trainable: LoRA adapters + projectors 
+
+Text 
+
+query / doc 
+
+⋮
+
+t₁ tₖ
+
+Speech 
+
+waveform 16 kHz 
+
+Whisper-small 
+
+LoRA 
+
+ConvDownProj 
+
+128 tokens ⋮
+
+s₁ sₙ
+
+Audio 
+
+non-speech / music 
+
+Dasheng-base 
+
+LoRA 
+
+ConvDownProj 
+
+128 tokens ⋮
+
+a₁ aₙ
+
+interleaved 
+
+⋮
+
+s₁ a₁ s₂ a₂ s₃ a₃ sₙ
+
+aₙ
+
+Image 
+
+H × W × 3 
+
+Qwen3.5 ViT 
+
+LoRA 
+
+DimProjector 
+
+1024 to H 
+
+⋮
+
+i₁ iₙ
+
+Document 
+
+rendered PDF 
+
+Qwen3.5 ViT 
+
+LoRA 
+
+DimProjector 
+
+shared w/ image 
+
+⋮
+
+d₁ dₘ
+
+Video 
+
+T frames 
+
+Qwen3.5 ViT 
+
+LoRA 
+
+Pooler + DimProj 
+
+196 q, 1024 →H
+
+⋮
+
+v₁ v₁₉₆ EOS 
+
+> Frozen backbone
+> Qwen3-Emb-0.6B / VL-2B decoder, causal
+
+EOS 
+
+> shared representation space
+> xyz
+
+LOSS 
+
+L = Lcontr + λ · Ldist 
+
+SigLIP contrastive 
+
+(in-batch + hard negs) 
+
+Cosine self-distillation 
+
+1 − ŝ ·  t̂ 
+
+MRL [128, 256, 512, 1024] 
+
+> Frozen backbone
+> same weights as student decoder, causal
+
+EOS 
+
+caption tokens 
+
+⋮
+
+EOS t₁ tₖ
+
+Cascade 
+
+compose dense caption 
+
+text desc. speech desc. audio desc. image desc. document desc. video desc. 
+
+dense caption 
+
+ci
+
+cached per stable key text desc. speech desc. audio desc. image desc. document desc. video desc. 
+
+TRAINING SCHEDULE 
+
+P1 (0 to 20%) P2 (20 to 100%): + LoRA, miner on 
+
+P1: projectors only P2: projectors + LoRA on Whisper, Dasheng, ViT 
+
+ONLINE HARD-NEGATIVE MINER 
+
+text FAISS (frequent) + per-modality media FAISS 
+
+false-neg cutoff 0.92 
+
+hard negs hard negs re-index re-index 
+
+∇L  fl ows only into projectors and LoRA; backbones never update 
+
+LEGEND frozen trainable Blocks frozen module LoRA adapter projector teacher / cache loss online miner Tokens text (t) speech (s) audio (a) image (i) document (d) video (v) Flows forward gradient (∇L) miner / re-index tied weights                                
+
+> Figure 1. Omni-Embed architecture. Six student inputs (text, speech, audio, image, document, video) fl ow left to right; a cascaded-caption teacher mirrors the student from right to left; both meet at a central training objective. Plain text fl ows straight to the backbone, unchanged, guaranteeing text-retrieval parity with the pretrained backbone.
+> Speech is encoded by Whisper (mel features) and audio (non-speech / music / environmental) by Dasheng (raw 16 kHz waveform); each produces 128 projected tokens that are temporally interleaved into a single 256-token column aligned with every other modality's token column. Image ,document (rendered PDF) and video share a Qwen3.5 ViT; video additionally passes through a spatial pooler that collapses to a fi xed 196-token budget. A single dark EOS token is appended at the very end of the combined sequence (after video) before entering the backbone (Qwen3-Emb-0.6B, H=1024 , or Qwen3-VL-Emb-2B, H=2048 ; drawn twice with tied weights). The EOS hidden state is pooled and fed straight to the objective; no intermediate projection head. The teacher path mirrors the student: six per-modality captions are composed by a cascade into a single dense caption ci, then tokenised into the caption-token column that feeds the same backbone. Its EOS is likewise pooled and cached to disk under a stable key. The objective combines a pair-wise SigLIP contrastive term (in-batch positives plus mined hard negatives, learned τ, b) with a cosine self-distillation term, summed across Matryoshka dimensions with weights wd∝1/√d . The online hard-negative miner re-embeds the corpus with the current model throughout training; a 0.92 cosine cuto ff fi lters likely false negatives. Training is phased: projector-only for the fi rst 20% of steps, then LoRA adapters ( r=16, α=32 ) switch on in Whisper, Dasheng and the ViT and the miner activates; backbones never update at any phase.
+
+Figure 4: Omni-Embed-Mini architecture. Six student inputs flow through a single frozen causal text backbone; a cascaded-caption teacher mirrors them through the same backbone. Text passes through unmodified weights, so no text-side parameter is trained. Speech (Whisper) and audio (Dasheng) each emit 128 projected tokens, temporally interleaved into a 256-token column; image, document and video share a Qwen3.5 ViT, with video additionally spatially pooled to 196 tokens. The EOS-pooled hidden state is the embedding. 
+
+20% of steps) injects encoder LoRA. The moti-vation is that, before the projectors have aligned, encoder LoRA would adapt to noisy upstream pro-jections; we adopt this schedule as a design choice and do not ablate the switch point. 
+
+3.2 Architecture 
+
+Fig. 4 gives the full data flow for both the student and the teacher path. 
+
+Backbone and pooling. A decoder-only trans-former with causal attention; an EOS-pooling head extracts the last non-padding hidden state and L2-normalises it (no projection head). The 0.9B variant uses Qwen3-Embedding-0.6B (Zhang et al., 2025b) (hidden 1024) with a ViT extracted from Qwen3.5-0.8B (Qwen Team, 2026); the 2.3B variant uses Qwen3-VL-Embedding-2B (Li et al., 2026) (hidden 2048) with native vision. 
+
+Audio path: dual encoder, temporally inter-leaved. Whisper (Radford et al., 2023) (mel) and Dasheng (Dinkel et al., 2024) (raw waveform) run in parallel; each emits 128 projected tokens per 30 s chunk via a 1-D temporal down-projector with SwiGLU residual. The two streams are interleaved in time , (w1, d 1, w 2, d 2, . . . ), yielding 256 tokens per chunk. Rather than a learned cross-attention bottleneck, temporal interleaving is intended as a structural inductive bias that encourages the back-bone’s causal attention to attend jointly to semantic speech content and acoustic texture within local context windows, at zero extra parameter cost. 
+
+Vision path. Custom (0.9B): ViT → 2×2 spa-tial merger → dimension projector → backbone hidden size; for video, a spatial pooler applies cross-attention against a learnable 196-query bud-get so video sequence length is independent of frame count. Native (2.3B): the backbone’s own visual module handles image and video; audio is injected via a forward hook on the embedding layer. Image and video tokens carry multimodal RoPE; audio tokens are spliced as a contiguous temporal span and reuse text RoPE. Media embeddings are spliced into modality-tagged placeholder positions via a one-hot matmul so gradients flow through the projectors and (Phase 2) encoder LoRA. 
+
+3.3 Cascaded-caption self-distillation 
+
+Each training sample i is paired with a dense caption ci generated by Qwen3-Omni-30B-A3B-Instruct, with the source dataset’s ground-truth cap-tion pinned in the system prompt as a grounding prior (§B). The teacher embedding ti is the L2-normalised EOS-pooled output of the frozen back-bone applied to ci; because the backbone is frozen, 
+
+ti is constant across training and is computed once and cached on disk under a stable sample id. The student embedding si is the same EOS-pool ap-plied to the token sequence with media spliced in. Because si and ti share the backbone and pool-5ing, they live in identical geometry; no auxiliary projection head is required. 
+
+3.4 Hybrid Matryoshka contrastive learning 
+
+Let D = {128 , 256 , 512 , 1024 ( , 2048) } denote the set of Matryoshka dimensions. For each d ∈ D,we truncate the embeddings to their first d coordi-nates and re-normalise them. We compute a SigLIP pair-wise sig-moid loss (Zhai et al., 2023) over in-batch and hard-negative pairs, using a learned temperature τ and bias b:
+
+L(d)siglip = Lsiglip 
+
+ ˆs(d), ˆt(d); τ, b 
+
+The Matryoshka contrastive loss aggregates the per-dimension losses with weights proportional to 
+
+1/√d, thereby favouring aggressive truncations: 
+
+wd = d−1/2
+
+P 
+
+> d′∈D
+
+d′− 1/2 , Lcontr = X
+
+> d∈D
+
+wd L(d)siglip 
+
+We further use cosine self-distillation to align the student and teacher representations across Ma-tryoshka dimensions: 
+
+Ldist = X
+
+> d∈D
+
+wd Ei
+
+h
+
+1 − ˆs(d) 
+
+> i
+
+· ˆt(d)
+
+> i
+
+i
+
+The final training objective is 
+
+L = Lcontr + λLdist , λ = 1 
+
+Full equations are given in §G and implementa-tion details in §H. 
+
+3.5 Online hybrid hard-negative mining 
+
+Hard negatives are supplied by a background subsystem maintaining FAISS-CPU (Johnson et al., 2019) inner-product indices (one for text, one per media modality), in the spirit of ANCE (Xiong et al., 2020). A lightweight text 
+
+cycle ( ∼10 ×/epoch) re-embeds captions via the text-only path and retains the top-k neighbours per query. A more compute-intensive media cy-cle ( ∼5×/epoch) re-embeds samples per modality through the full model into per-modality indices. The miner shares the live model with the train-ing loop, so each cycle returns negatives from the 
+
+current representation: as the encoder improves, mined negatives become harder. Crucially, because the text branch never receives gradient, the text-side index is perfectly stable; only the media-side index drifts, and it is refreshed so as to supply harder negatives as the encoder improves. This sta-bility is intended to guard against modality collapse 
+
+without ever destabilising text geometry. Con-currency, cache semantics, and failure handling are detailed in §D. 
+
+4 Training Data: Dense Caption Grounding 
+
+A central claim of this paper is that the success of frozen-backbone distillation depends critically on the density of the captioning signal. We therefore treat data preparation as a first-class methodologi-cal contribution rather than a logistical detail. 
+
+Source corpus. We train on the caption slice of our omni-modal caption corpus. From 590,858 total rows, filtering to caption-category rows across the speech, audio, image, video, and visual-doc configurations yields 242,080 single-turn samples; a subsequent duration filter (removing audio/video clips outside the supported length range) reduces this to 227,704 effective training rows (Fig. 2); caption length varies sharply by modality (Fig. 3). The omni split (cross-modal multi-turn chat) and chat samples are excluded; their narrow answers are unsuitable distillation targets. 
+
+Cascaded caption pipeline. Every row is the output of a single low-temperature ( T =0 .7) call to Qwen3-Omni-30B-A3B-Instruct, with the source dataset’s ground-truth caption interpolated as a “Reference caption” inside a modality-specific sys-tem prompt. This grounds the cascaded cap-tion against the source, which may reduce un-constrained hallucination but does not preclude it. Visual-doc rows use an “expert document an-alyst” prompt with no reference caption (none exists). Full prompts and worked examples are in Appendix §B. Dense captions are the single most important data-side ingredient of the recipe (as we demon-strate in §6.2): they expose more facets of each sample (objects, attributes, layout, temporal events, acoustic environment, OCR text) than short crowd-sourced captions, which provide a weaker, bag-of-words-like signal. We ablate this in Table 2, and worked qualitative examples per modality are in Appendix Table 10. Because every teacher target is machine-generated, caption noise is a direct risk to the learned geometry. Four properties of the recipe 6limit how far it can propagate: a grounded caption-ing prompt, a pooled-embedding target rather than token-level supervision, a 0.92 cosine cutoff in min-ing, and a frozen text path that no captioner bias can reach. These contain noise rather than verify its absence; we do not filter captions for factuality. §E gives the full argument and its limits. 
+
+5 Experiments 
+
+5.1 Benchmarks                          
+
+> Style Sp. Aud. Img. Vid. Overall
+> Original Captions 41.75 31.02 17.63 4.74 23.78
+> Dense Captions 44.43 33.72 26.23 18.80 30.79
+> ∆+2 .68 +2 .70 +8 .60 +14 .06 +7 .01
+> Table 2: Dense vs. original captions on the 0.9B mining-ablation checkpoint (not the final checkpoint, whose scores appear in Fig. 5). Original denotes source-shipped captions, Dense our cascaded captions. Speech/audio are MAEB task means, image/video MMEB-V2 AvgImg/AvgVid, Overall their mean.
+
+We evaluate on four community benchmarks; full schemas in Appendix §A. MTEB-v2 (Muen-nighoff et al., 2023; Thakur et al., 2021): text re-trieval, the 8-task BEIR English subset (ArguAna, CQA-E/P/Pr, FiQA, NFCorpus, SCIDOCS, Sci-Fact); metric nDCG@10. Role: text-side regres-sion test . MAEB (El Assadi et al., 2026): 22 En-glish audio tasks (retrieval, classification, cluster-ing, multi-label, pair, reranking, zero-shot); mixed metrics. Role: cross-modal audio-to-text alignment plus audio coverage. MMEB-V2 (Meng et al., 2025): 16 English tasks (10 image, 6 video); met-ric hit@1. ViDoRe-V3 (Loison et al., 2026): 7 English visually-rich domains; metric nDCG@10. 
+
+English-only protocol. MMEB, MAEB, and Vi-DoRe are taken almost in full (16/18, 22/22, 7/7 supported English tasks); MTEB is reduced to BEIR-8 because the full v2 catalog has 1000+ task-language pairs. Each benchmark is re-validated by re-running its published anchor in our harness; full protocols are in §A. Three training sources share a parent corpus with MMEB-V2 tasks; an identifier-level overlap audit finds zero shared items in every case (§C.1). 
+
+5.2 Setup Hardware. 8× AMD Instinct MI210 (64 GB HBM2e each), bf16, DDP. 
+
+Hyperparameters and cost. AdamW (wd 0.01, clip 1.0); 2% linear warm-up → cosine; LR 
+
+2×10 −4 for audio projectors, 1×10 −4 for vision projectors and encoder LoRA (Phase 2 only); LoRA r=16 , α=32 ; phase switch at 20%; MRL dims {128 , 256 , 512 , 1024 } (+2048 for 2.3B); 
+
+λdist = 1 . Mining ablations are run in a two-epoch setting. Full table in §H. For video eval-uation on MMEB-V2, all omni-style models em-bed 8 frames as images and mean-pool. The 8 frames are the benchmark’s own pre-extracted frames rather than a sampling choice of ours, so this keeps comparisons uniform, but it caps achievable video performance (§I). 
+
+5.3 Main results 
+
+Fig. 5 summarises the headline result restricted to the omni class. At 0.9B , our model is the smallest open omni embedder by ∼2.7 × relative to the next entry (BidirLM-Omni-2.5B) and ∼9.5 × relative to LCO-Embedding-Omni-7B, and it is the only one among the compared omni embedders whose text branch is untrained (§6.1). At 49.57 on Text it is second among open omni embedders only to omni-embed-nemotron-3B (50.48), which is five times larger. On Speech and Audio the 0.9B trails the larger omni baselines, the expected cost of adding these modalities through small projectors rather than by retraining the backbone. The 2.3B vari-ant, built on a frozen Qwen3-VL-Embedding-2B, reaches an overall-modality average of 51.39: it leads the omni block on Video (55.18) and is com-petitive on Image (64.80) and Visual-Doc (58.10), where e5-omni-7B, at 3.7 × its size, is the strongest open omni model. Against gemini-embedding-2, which is closed and of undisclosed size, our 2.3B leads on the overall-modality average (51.39 to 49.51). The all-class version of these panels (text-only, VL, audio/CLAP, and omni baselines together) is in Appendix Fig. 7; per-task tables are in Appendix §A. The 0.9B variant scores lower on Image (26.29) and Video (18.48) because its vision encoder is extracted from a 0.8B backbone with a compar-atively small ViT, trained on only ∼86K image and ∼36K video rows. The 2.3B variant, with the native Qwen3-VL vision encoder, closes this gap (64.80 image, 55.18 video), which is consistent with vision-encoder capacity, rather than the align-ment recipe, limiting the 0.9B. Routing every modality through a shared space also retains within-modality retrieval without a 70 20 40 60 
+
+> Omni-Embed-Mini-0.9B Omni-Embed-Mini-2.3B
+> BidirLM-Omni-2.5B (2.5B) omni-embed-nemotron-3b (4.7B) e5-omni-3B (4.7B) LCO-Embedding-Omni-3B (4.7B) e5-omni-7B (8.9B) LCO-Embedding-Omni-7B (8.9B) gemini-embedding-2 (size undisclosed)
+
+Text (MTEB-v2 BEIR-8, nDCG@10 ×100)    
+
+> 49.6 47.9
+> 48.6 50.5 47.8 39.4 45.3 42.5 56.2
+> 020 40 60
+> Omni-Embed-Mini-0.9B Omni-Embed-Mini-2.3B
+> BidirLM-Omni-2.5B (2.5B) omni-embed-nemotron-3b (4.7B) e5-omni-3B (4.7B) LCO-Embedding-Omni-3B (4.7B) e5-omni-7B (8.9B) LCO-Embedding-Omni-7B (8.9B) gemini-embedding-2 (size undisclosed)
+
+Speech (MAEB speech, task-mean ×100)   
+
+> 43.3 48.9
+> 55.8 52.9 52.0 53.0 54.9 54.6 51.5
+> 020 40
+> Omni-Embed-Mini-0.9B Omni-Embed-Mini-2.3B
+> BidirLM-Omni-2.5B (2.5B) omni-embed-nemotron-3b (4.7B) e5-omni-3B (4.7B) LCO-Embedding-Omni-3B (4.7B) e5-omni-7B (8.9B) LCO-Embedding-Omni-7B (8.9B) gemini-embedding-2 (size undisclosed)
+
+Audio (MAEB general-audio, task-mean ×100)     
+
+> 33.4 33.4
+> 39.0 44.0 40.3 43.9 43.3 45.9 36.8
+> 020 40 60 80
+> Omni-Embed-Mini-0.9B Omni-Embed-Mini-2.3B
+> BidirLM-Omni-2.5B (2.5B) omni-embed-nemotron-3b (4.7B) e5-omni-3B (4.7B) LCO-Embedding-Omni-3B (4.7B) e5-omni-7B (8.9B) LCO-Embedding-Omni-7B (8.9B) gemini-embedding-2 (size undisclosed)
+
+Image (MMEB-V2 AvgImg, hit@1 ×100)    
+
+> 26.3 64.8
+> 46.0 48.2 63.9 52.0 68.4 54.9 47.3
+> 020 40 60
+> Omni-Embed-Mini-0.9B Omni-Embed-Mini-2.3B
+> BidirLM-Omni-2.5B (2.5B) omni-embed-nemotron-3b (4.7B) e5-omni-3B (4.7B) LCO-Embedding-Omni-3B (4.7B) e5-omni-7B (8.9B) LCO-Embedding-Omni-7B (8.9B) gemini-embedding-2 (size undisclosed)
+
+Video (MMEB-V2 AvgVid, hit@1 ×100)    
+
+> 18.5 55.2
+> 41.2 34.9 32.9 43.9 44.7 43.3 48.1
+> 020 40 60
+> Omni-Embed-Mini-0.9B Omni-Embed-Mini-2.3B
+> BidirLM-Omni-2.5B (2.5B) omni-embed-nemotron-3b (4.7B) e5-omni-3B (4.7B) LCO-Embedding-Omni-3B (4.7B) e5-omni-7B (8.9B) LCO-Embedding-Omni-7B (8.9B) gemini-embedding-2 (size undisclosed)
+
+Visual Doc (ViDoRe-V3, nDCG@10 ×100) 
+
+> 46.9 58.1
+> 53.1 59.6 58.7 52.9 61.0 54.7 57.1
+
+Open omni embedders Closed, size undisclosed Ours Figure 5: Per-modality rankings, omni-only. Same panels as Appendix Fig. 7, restricted to omni embedders. The 2.3B variant leads the omni block on video and is competitive on image and visual documents; speech and audio remain our weakest modalities. gemini-embedding-2 is closed and shown for reference only. 
+
+dedicated training signal. On the image-to-image tasks NIGHTS and FashionIQ (Table 7), the 2.3B scores 68.00 and 34.50, in line with its frozen Qwen3-VL-Embedding-2B backbone (67.80 and 37.50), and the 0.9B, which is never trained on an image-to-image objective, keeps much of its raw vision encoder’s behaviour (53.90 against 59.30 on NIGHTS, 7.40 against 3.80 on FashionIQ). See Appendix §F. 
+
+6 Ablations and Analysis 
+
+Targeted ablations isolate four design choices: frozen backbone, dense captions, hybrid mining, and Matryoshka propagation. 
+
+6.1 Backbone invariance 
+
+On MTEB-v2 BEIR-8, Omni-Embed-Mini-0.9B scores 49.57 . This is not a tuning artefact: the text-only inference path touches only the unchanged backbone weights, never the trained projectors or LoRA adapters, and those weights are bit-identical to the pretrained Qwen3-Embedding-0.6B. Train-ing consequently cannot move this score, and in-dependently trained checkpoints agree on all eight tasks to four decimal places. Per-task numbers are in Appendix Table 4. The 2.3B variant inherits 
+
+0.9B 2.3B Modality Frozen +LoRA ∆ Frozen +LoRA ∆
+
+Text 49.57 46.44 −3.13 47.94 47.29 −0.65 
+
+Speech 44.43 47.09 +2 .67 41.55 31.02 −10 .53 
+
+Audio 33.72 34.83 +1 .10 33.97 25.57 −8.40 
+
+Image 26.23 30.04 +3 .81 64.80 64.34 −0.46 
+
+Video 18.80 24.46 +5 .66 55.18 54.60 −0.58 
+
+Vis-Doc 46.98 51.04 +4 .06 58.10 58.02 −0.08 
+
+Table 3: Frozen backbone against backbone LoRA. 
+
+Both columns are ablation checkpoints, not the released ones. At 0.9B, unfreezing the backbone improves ev-ery media modality and costs text; at 2.3B it degrades every modality, and far more on the speech and audio paths that Phase 2 trains than on the untrained text, image and video paths. 
+
+the same guarantee over a wider surface: both its text and its vision paths are left untrained, so its image and video behaviour is inherited from the vision-language backbone. 
+
+Unfreezing the backbone. Adding LoRA to the backbone itself behaves differently at the two scales (Table 3). At 0.9B it is a genuine trade-off: ev-ery media modality improves, by +1 .10 to +5 .66 ,while text drops by 3.13 points, which is exactly the regression the frozen anchor exists to prevent. At 8Speech Audio Image Video Vis-Doc Overall    
+
+> 010 20 30 40 50 60
+> Per-modality mean score
+> 44.4 34.7 26.2 18.8 47.0 34.0
+> no-mining tm mm tm+mm
+
+Figure 6: Mining ablation. Per-modality means on the 0.9B recipe across no-mining (in-batch only), text-only, media-only and combined mining; text is invariant by construction. Combined mining gives the best overall average and the largest image and video gains; visual documents are near-insensitive (all checkpoints within 0.6 nDCG@10). 
+
+2.3B the same intervention degrades every modal-ity, most sharply the two the adapters were trained for (speech −10 .53 , audio −8.40 ), while text, im-age and video shift by under a point; here backbone updates appear to disturb the alignment that Phase 2 establishes rather than add capacity. Text improved at neither scale. We therefore keep the backbone frozen, which preserves text retrieval at both scales and gives the new modalities a stable target space. 
+
+6.2 Dense vs. original captions 
+
+Table 2 shows the smallest gap is on speech (+2.68), where source transcripts already carry most of the content; the largest is on video (+14.06), where short clip captions miss nearly every temporal event. The same effect motivated the dense re-captioning pipeline of Li et al. (2024) for VLM pre-training; it is equally decisive for retrieval. 
+
+6.3 Hybrid mining 
+
+Fig. 6 shows that only combined mining separates clearly from no mining ( +2 .6 on the mean over the five media modalities); the gaps among the other three configurations are comparable to the seed spread reported below. Text-only mining alone slightly hurts on several modalities (the student sees harder text negatives but no harder media ones, biasing the projector); media-only gives a small improvement on most modalities; combin-ing both yields the best overall score, though per-modality rankings swap on video and on visual documents, where media-only falls marginally be-low no-mining. Visual-document retrieval is in fact the modality least sensitive to mining: the four configurations agree to within 0.6 nDCG@10 on ViDoRe-V3 (46.42 to 46.98). What moves that modality is caption quality rather than neg-ative sampling, as replacing the dense cascaded captions with the datasets’ original captions costs 4.8 nDCG@10 (46.98 to 42.21). The two miners contribute complementary pressure: text-mining sharpens the caption-text geometry the teacher signal targets, while media-mining sharpens the modality-specific student geometry; dropping ei-ther leaves a slack axis along which the projector can drift. The main recipe uses both miners. 
+
+Seed sensitivity. Across three random seeds (42, 71 and 1234) of the 10-epoch no-mining con-figuration, the model is stable across all five trained modalities: image scores 27 .48 ± 0.43 ,general audio 33 .96 ± 0.59 , video 19 .82 ± 0.95 ,speech 43 .10 ± 1.03 , and visual-document retrieval 
+
+45 .48 ± 1.76 (mean ± standard deviation over the three seeds). Text is identical across all three at 49.57: the text branch carries no trainable param-eters, so every 0.9B checkpoint returns the same value. Per-seed numbers are in §F. 
+
+6.4 Matryoshka behaviour 
+
+Because MRL slicing acts on the backbone’s pooled hidden state with no learned head, Ma-tryoshka behaviour at every dimension is inherited from the backbone (Kusupati et al., 2022; OpenAI, 2024). Averaged-probe AVG falls only slightly from 1024 to 128 for both variants, whereas the omni-specific baselines fall away far more steeply (Fig. 8). For the 0.9B, a 128-dim truncation reduces on-disk footprint 8 ×: a 10M-item omni index in float32 fits in ∼5 GB rather than ∼41 GB, at mod-est cost in quality. Further analyses are in §F. 
+
+7 Conclusion 
+
+We introduced Omni-Embed-Mini , a 0.9B omni-modal retrieval model that binds text, speech, au-dio, images, video, and visually-rich documents into a unified space by recasting cross-modal align-ment as self-distillation through a shared, frozen 
+
+text backbone. By keeping the text encoder fixed and aligning every other modality to its represen-tation, we sidestep the catastrophic forgetting that typically plagues multi-modal fine-tuning and turn omni-modal training into a lightweight projector-plus-LoRA exercise. The model preserves its back-bone’s text retrieval quality while remaining com-petitive with open omni embedders ∼2.7 × to 9.5 ×
+
+larger, and carries over to a 2.3B variant competi-9tive with baselines 2 × to 4 × its size. Because the backbone is frozen, future text-embedder improve-ments can in principle be adopted by re-running only the projector and LoRA training, as our back-bone swap from the 0.6B text encoder to Qwen3-VL-Embedding-2B illustrates. Open threads in-clude learned mixing of the dual audio-encoder tokens, a Mixture-of-Encoders variant that routes inputs to specialist branches, and replacing per-frame mean-pooling for video (§I) with a native spatial pooler that better preserves temporal and spatial structure. Beyond architecture, the most pressing community gap is evaluation: existing benchmarks each probe a single modality slice, and none evaluate cross-modal retrieval in arbitrary query →corpus combinations across all six modali-ties simultaneously. 
+
+Limitations 
+
+Omni-Embed-Mini is a research prototype for omni-modal retrieval and is not validated for high-stakes deployment. Although the model provides efficient alignment across text, speech, audio, im-age, video, and visually-rich documents, it may still retrieve incorrect, biased, private, or misleading items when used in downstream systems. There-fore, it should not be used as a standalone decision system in sensitive domains without task-specific validation and human oversight. The model’s shared embedding space is con-strained by the frozen text backbone used to pre-serve text-side retrieval performance. As a result, modality-specific phenomena that are difficult to verbalise, such as complex acoustic textures, ab-stract visual patterns, or fine-grained temporal cues, may not be fully represented. The cascaded-caption self-distillation pipeline also depends on teacher-generated captions, which may contain hallucina-tions, omissions, or biases that are inherited by the student model. We do not filter captions for factual-ity, and we do not verify them against their source media; the only automatic check in the pipeline is a 0.92 cosine threshold used to discard likely false negatives during mining. We also did not run a controlled caption-perturbation study, so we can-not quantify how far retrieval quality degrades as caption quality falls. What we can report is that caption quality matters a great deal in aggregate: replacing our dense cascaded captions with the datasets’ original captions costs 7.01 points on the mean of speech, audio, image and video (Table 2) and 4.8 nDCG@10 on visual documents. Because a single captioner produces every target, any sys-tematic bias it carries is applied uniformly across the corpus rather than averaged out, which is the failure mode we would most want to measure. Plau-sible mitigations we have not implemented include cross-checking captions against a second captioner, filtering on caption-to-media agreement scored by an independent model, and sampling captions for human verification; we regard a caption-robustness study along these lines as the most useful next step for this recipe. The audio pathway currently uses a fixed tempo-ral interleaving of speech and environmental-audio tokens, which may be suboptimal for inputs dom-inated by only one audio type. In addition, the compact 0.9B and 2.3B model scales are optimised for efficiency, but may limit performance on com-plex reasoning-heavy multimodal retrieval tasks. Finally, the evaluation is limited by the coverage of available benchmarks. Existing datasets do not yet provide a unified any-to-any retrieval bench-mark across all six supported modalities, so our results may not generalise to all query-corpus com-binations, languages, domains, data qualities, or real-world retrieval workflows. 
+
+Ethical Considerations 
+
+This work is intended for research and educational use in omni-modal representation learning and re-trieval. Omni-Embed-Mini should not be used for autonomous decision-making in high-stakes do-mains such as medicine, law, finance, hiring, edu-cation, security, or public-sector services without appropriate validation and human supervision. The main ethical risks include inaccurate re-trieval, bias amplification, privacy leakage, and misuse. Since the model aligns multiple modal-ities into a shared embedding space, errors or biases from training data, teacher-generated cap-tions, and pre-trained encoders may affect retrieval quality across languages, accents, visual appear-ances, environments, document types, and cul-tural contexts. Downstream users should conduct safety, fairness, privacy, robustness, and human-in-the-loop evaluations before applying the model in sensitive settings. We also disclose our use of generative AI tools. Writing-support models were used for grammar, style, and clarity improvements. All technical claims, experimental results, analyses, and con-10 clusions were authored, checked, and verified by the authors; any coding assistance was limited to boilerplate scaffolding, minor refactoring, or for-matting support. 
+
+Acknowledgments 
+
+This project is partially supported by research grants from Gates Foundation (IAAI), and Khalifa bin Zayed Al Awal School, UAE. 
+
+References 
+
+athrael soju. 2026. Colqwen3.5-v3: Visual document retrieval with evolutionary model soups. Nicolas Boizard, Théo Deschamps-Berger, Hippolyte Gisserot-Boukhlef, Céline Hudelot, and Pierre Colombo. 2026. Bidirlm: From text to omnimodal bidirectional encoders by adapting and composing causal llms. arXiv preprint arXiv:2604.02045 .ByteDance Seed. 2025. seed1.6-embedding / seed-1.6-embedding-1215. https://seed1-6-embedding. github.io .Haonan Chen, Sicheng Gao, Radu Timofte, Tetsuya Sakai, and Zhicheng Dou. 2026. e5-omni: Explicit cross-modal alignment for omni-modal embeddings. In Findings of the Association for Computational Linguistics: ACL 2026 , pages 19430–19443. Zhe Chen, Weiyun Wang, Hao Tian, Shenglong Ye, Zhangwei Gao, Erfei Cui, Wenwen Tong, Kongzhi Hu, Jiapeng Luo, Zheng Ma, Ji Ma, Jiaqi Wang, Xi-aoyi Dong, Hang Yan, Hewei Guo, Conghui He, Bo-tian Shi, Zhenjiang Jin, Chao Xu, and 16 others. 2024. How far are we to GPT-4v? closing the gap to com-mercial multimodal models with open-source suites. 
+
+Science China Information Sciences , 67(12):220101. Yunfei Chu, Jin Xu, Qian Yang, Haojie Wei, Xipin Wei, Zhifang Guo, Yichong Leng, Yuanjun Lv, Jinzheng He, Junyang Lin, Chang Zhou, and Jingren Zhou. 2024. Qwen2-audio technical report. arXiv preprint arXiv:2407.10759 .Xuanming Cui, Jianpeng Cheng, Hong you Chen, Satya Narayan Shukla, Abhijeet Awasthi, Xi-chen Pan, Chaitanya Ahuja, Shlok Kumar Mishra, Yonghuan Yang, Jun Xiao, Qi Guo, Ser-Nam Lim, Aashu Singh, and Xiangjun Fan. 2026. Think then embed: Generative context improves multimodal em-bedding. Preprint , arXiv:2510.05014. Heinrich Dinkel, Zhiyong Yan, Yongqing Wang, Junbo Zhang, Yujun Wang, and Bin Wang. 2024. Scaling up masked audio encoder learning for general audio classification. arXiv preprint arXiv:2406.06992 .Konstantinos Drossos, Samuel Lipping, and Tuomas Virtanen. 2020. Clotho: An audio captioning dataset. In ICASSP 2020-2020 IEEE International Confer-ence on Acoustics, Speech and Signal Processing (ICASSP) , pages 736–740. IEEE. Adnan El Assadi, Isaac Chung, Chenghao Xiao, Roman Solomatin, Animesh Jha, Rahul Chand, Silky Singh, Kaitlyn Wang, Ali Sartaz Khan, Marc Moussa Nasser, Sufen Fong, Pengfei He, Alan Xiao, Ayush Sunil Munot, Aditya Shrivastava, Artem Gazizov, Niklas Muennighoff, and Kenneth Enevoldsen. 2026. Maeb: Massive audio embedding benchmark. arXiv preprint arXiv:2602.16008 .Benjamin Elizalde, Soham Deshmukh, Mahmoud Al Is-mail, and Huaming Wang. 2023. CLAP learning audio concepts from natural language supervision. In ICASSP 2023-2023 IEEE International Confer-ence on Acoustics, Speech and Signal Processing (ICASSP) , pages 1–5. IEEE. Benjamin Elizalde, Soham Deshmukh, and Huam-ing Wang. 2024. Natural language supervision for general-purpose audio representations. Preprint ,arXiv:2309.05767. Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, Céline Hudelot, and Pierre Colombo. 2025. ColPali: Efficient document retrieval with vision language models. In International Conference on Learning Representations , volume 2025, pages 61424–61449. Rohit Girdhar, Alaaeldin El-Nouby, Zhuang Liu, Man-nat Singh, Kalyan Vasudev Alwala, Armand Joulin, and Ishan Misra. 2023. Imagebind: One embed-ding space to bind them all. In Proceedings of the IEEE/CVF conference on computer vision and pat-tern recognition , pages 15180–15190. Andrey Guzhov, Federico Raue, Jörn Hees, and An-dreas Dengel. 2022. AudioCLIP: Extending clip to image, text and audio. In ICASSP 2022-2022 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 976–980. IEEE. François Hernandez, Vincent Nguyen, Sahar Ghannay, Natalia Tomashenko, and Yannick Esteve. 2018. Ted-lium 3: Twice as much data and corpus repartition for experiments on speaker adaptation. In International conference on speech and computer , pages 198–208. Springer. Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2021. Lora: Low-rank adaptation of large language models. Preprint , arXiv:2106.09685. Weijian Jian, Yajun Zhang, Dawei Liang, Chunyu Xie, Yixiao He, Dawei Leng, and Yuhui Yin. 2025. RzenEmbed: Towards comprehensive multimodal retrieval. arXiv preprint arXiv:2510.27350 .Jeff Johnson, Matthijs Douze, and Hervé Jégou. 2019. Billion-scale similarity search with gpus. IEEE trans-actions on big data , 7(3):535–547. 
+
+11 Chris Dongjoo Kim, Byeongchang Kim, Hyunmin Lee, and Gunhee Kim. 2019. AudioCaps: Generating cap-tions for audios in the wild. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Hu-man Language Technologies, Volume 1 (Long and Short Papers) , pages 119–132. Ranjay Krishna, Kenji Hata, Frederic Ren, Li Fei-Fei, and Juan Carlos Niebles. 2017. Dense-captioning events in videos. In Proceedings of the IEEE in-ternational conference on computer vision , pages 706–715. Aditya Kusupati, Gantavya Bhatt, Aniket Rege, Matthew Wallingford, Aditya Sinha, Vivek Ramanu-jan, William Howard-Snyder, Kaifeng Chen, Sham Kakade, Prateek Jain, and Ali Farhadi. 2022. Ma-tryoshka representation learning. Advances in Neural Information Processing Systems , 35:30233–30249. Yibin Lei, Tao Shen, Yu Cao, and Andrew Yates. 2025. Enhancing lexicon-based text embeddings with large language models. In Proceedings of the 63rd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 18986– 19001. Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. 2023. BLIP-2: Bootstrapping language-image pre-training with frozen image encoders and large lan-guage models. In International conference on ma-chine learning , pages 19730–19742. PMLR. Mingxin Li, Yanzhao Zhang, Dingkun Long, Keqin Chen, Sibo Song, Shuai Bai, Zhibo Yang, Pengjun Xie, An Yang, Dayiheng Liu, Jingren Zhou, and Jun-yang Lin. 2026. Qwen3-vl-embedding and qwen3-vl-reranker: A unified framework for state-of-the-art multimodal retrieval and ranking. arXiv preprint arXiv:2601.04720 .Xianhang Li, Haoqin Tu, Mude Hui, Zeyu Wang, Bingchen Zhao, Junfei Xiao, Sucheng Ren, Jieru Mei, Qing Liu, Huangjie Zheng, and 1 others. 2024. What if we recaption billions of web images with LLaMA-3? arXiv preprint arXiv:2406.08478 .Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual instruction tuning. Advances in neural information processing systems , 36:34892– 34916. António Loison, Quentin Macé, Antoine Edy, Victor Xing, Tom Balough, Gabriel de Souza P Moreira, Bo Liu, Manuel Faysse, Céline Hudelot, and Gautier Viaud. 2026. ViDoRe v3: A comprehensive evalu-ation of retrieval augmented generation in complex real-world scenarios. In Proceedings of the 64th An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 16570– 16600. Michael McCloskey and Neal J Cohen. 1989. Catas-trophic interference in connectionist networks: The sequential learning problem. In Psychology of learn-ing and motivation , volume 24, pages 109–165. Else-vier. Xinhao Mei, Chutong Meng, Haohe Liu, Qiuqiang Kong, Tom Ko, Chengqi Zhao, Mark D Plumbley, Yuexian Zou, and Wenwu Wang. 2024. WavCaps: A ChatGPT-assisted weakly-labelled audio caption-ing dataset for audio-language multimodal research. 
+
+IEEE/ACM Transactions on Audio, Speech, and Lan-guage Processing , 32:3339–3354. Rui Meng, Ziyan Jiang, Ye Liu, Mingyi Su, Xinyi Yang, Yuepeng Fu, Can Qin, Zeyuan Chen, Ran Xu, Caiming Xiong, and 1 others. 2025. VLM2Vec-v2: Advancing multimodal embedding for videos, images, and visual documents. arXiv preprint arXiv:2507.04590 .Niklas Muennighoff, Hongjin Su, Liang Wang, Nan Yang, Furu Wei, Tao Yu, Amanpreet Singh, and Douwe Kiela. 2025. Generative representational instruction tuning. In International Conference on Learning Representations , volume 2025, pages 45544–45613. Niklas Muennighoff, Nouamane Tazi, Loïc Magne, and Nils Reimers. 2023. MTEB: Massive text embedding benchmark. In Proceedings of the 17th Conference of the European Chapter of the Association for Com-putational Linguistics , pages 2014–2037. NVIDIA. 2025. llama-nemotron-embed-vl-1b-v2. Hug-ging Face model card. Accessed 2026-10-01. OpenAI. 2024. New embedding models and API up-dates (text-embedding-3 with matryoshka representa-tion). OpenAI Blog. Accessed 2026-08-31. OpenSearch-AI Team, Alibaba Cloud. 2025. Ops-MM-embedding-v1-7B. Hugging Face model card. Ac-cessed 2026-08-31. Vassil Panayotov, Guoguo Chen, Daniel Povey, and Sanjeev Khudanpur. 2015. LibriSpeech: an ASR corpus based on public domain audio books. In 2015 IEEE international conference on acoustics, speech and signal processing (ICASSP) , pages 5206–5210. IEEE. Qwen Team. 2026. Qwen3.5: Towards native multi-modal agents. Alec Radford, Jong Wook Kim, Tao Xu, Greg Brock-man, Christine McLeavey, and Ilya Sutskever. 2023. Robust speech recognition via large-scale weak su-pervision. In International conference on machine learning , pages 28492–28518. PMLR. Nils Reimers and Iryna Gurevych. 2020. Making monolingual sentence embeddings multilingual using knowledge distillation. In Proceedings of the 2020 conference on empirical methods in natural language processing (EMNLP) , pages 4512–4525. SB. 2025. gemini-flash-2.0-speech. 
+
+12 Madhuri Shanbhogue, Zhe Li, Shanfeng Zhang, Gus-tavo Hernández Ábrego, Shih-Cheng Huang, Aashi Jain, Daniel Salz, Sonam Goenka, Chaitra Hegde, Ji Ma, and 1 others. 2026. Gemini embedding 2: A native multimodal embedding model from gemini. 
+
+arXiv preprint arXiv:2605.27295 .Min-Han Shih, Ho-Lam Chung, Yu-Chi Pai, Ming-Hao Hsu, Guan-Ting Lin, Shang-Wen Li, and Hung-yi Lee. 2023. GSQA: An end-to-end model for gen-erative spoken question answering. arXiv preprint arXiv:2312.09781 .Nomic Team. 2025. Nomic embed multimodal: Inter-leaved text, image, and screenshots for visual docu-ment retrieval. TencentBAC. 2025. Conan-embedding-v2. 
+
+https://huggingface.co/TencentBAC/ Conan-embedding-v2 .Nandan Thakur, Nils Reimers, Andreas Rücklé, Ab-hishek Srivastava, and Iryna Gurevych. 2021. BEIR: A heterogenous benchmark for zero-shot evalua-tion of information retrieval models. arXiv preprint arXiv:2104.08663 .Henrique Schechter Vera, Sahil Dua, Biao Zhang, Daniel Salz, Ryan Mullins, Sindhu Raghuram Pa-nyam, Sara Smoot, Iftekhar Naim, Joe Zou, Feiyang Chen, and 1 others. 2025. EmbeddingGemma: Pow-erful and lightweight text representations. arXiv preprint arXiv:2509.20354 .Voyage AI. 2025. voyage-3-m-exp. https:// huggingface.co/voyageai/voyage-3-m-exp .Yijing Wu, SaiKrishna Rallabandi, Ravisutha Srini-vasamurthy, Parag Pravin Dakle, Alolika Gon, and Preethi Raghavan. 2023a. HeySQuAD: A spo-ken question answering dataset. arXiv preprint arXiv:2304.13689 .Yusong Wu, Ke Chen, Tianyu Zhang, Yuchen Hui, Tay-lor Berg-Kirkpatrick, and Shlomo Dubnov. 2023b. Large-scale contrastive language-audio pretraining with feature fusion and keyword-to-caption augmen-tation. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Process-ing (ICASSP) , pages 1–5. IEEE. Chenghao Xiao, Hou Pong Ken Chan, Hao Zhang, Wei-wen Xu, Mahani Aljunied, and Yu Rong. 2026. Scal-ing language-centric omnimodal representation learn-ing. Advances in Neural Information Processing Systems , 38:158370–158401. Shitao Xiao, Zheng Liu, Peitian Zhang, Niklas Muen-nighoff, Defu Lian, and Jian-Yun Nie. 2024. C-pack: Packed resources for general chinese embeddings. 
+
+Preprint , arXiv:2309.07597. Lee Xiong, Chenyan Xiong, Ye Li, Kwok-Fung Tang, Jialin Liu, Paul Bennett, Junaid Ahmed, and Arnold Overwijk. 2020. Approximate nearest neighbor neg-ative contrastive learning for dense text retrieval. 
+
+arXiv preprint arXiv:2007.00808 .Jun Xu, Tao Mei, Ting Yao, and Yong Rui. 2016. MSR-VTT: A large video description dataset for bridging video and language. In Proceedings of the IEEE con-ference on computer vision and pattern recognition ,pages 5288–5296. Mengyao Xu, Wenfei Zhou, Yauhen Babakhin, Gabriel Moreira, Ronay Ak, Radek Osmulski, Bo Liu, Even Oldridge, and Benedikt Schifferer. 2025. Omni-embed-nemotron: A unified multimodal retrieval model for text, image, audio, and video. arXiv preprint arXiv:2510.03458 .Junhan Yang, Jiahe Wan, Yichen Yao, Wei Chu, Yinghui Xu, Emma Wang, and Yuan Qi. 2025. inf-retriever-v1 (revision 5f469d7). Peter Young, Alice Lai, Micah Hodosh, and Julia Hock-enmaier. 2014. From image descriptions to visual denotations: New similarity metrics for semantic in-ference over event descriptions. Transactions of the association for computational linguistics , 2:67–78. Shi Yu, Chaoyue Tang, Bokai Xu, Junbo Cui, Jun-hao Ran, Yukun Yan, Zhenghao Liu, Shuo Wang, Xu Han, Zhiyuan Liu, and 1 others. 2025. Vis-rag: Vision-based retrieval-augmented generation on multi-modality documents. In International Con-ference on Learning Representations , volume 2025, pages 21074–21098. Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. 2023. Sigmoid loss for language image pre-training. In 2023 IEEE/CVF Interna-tional Conference on Computer Vision (ICCV) , pages 11941–11952. IEEE. Dun Zhang, Jiacheng Li, Ziyang Zeng, and Fulong Wang. 2025a. Jasper and stella: distillation of sota embedding models. Preprint , arXiv:2412.19048. Yanzhao Zhang, Mingxin Li, Dingkun Long, Xin Zhang, Huan Lin, Baosong Yang, Pengjun Xie, An Yang, Dayiheng Liu, Junyang Lin, Fei Huang, and Jingren Zhou. 2025b. Qwen3 embedding: Advancing text embedding and reranking through foundation models. 
+
+arXiv preprint arXiv:2506.05176 .Junjie Zhou, Ke Mei, Lei Li, Tianyi Wang, Fengyun Rao, and Jing Lyu. 2026. Wemm-embedding: Wechat multi-modal embedding technical report. 
+
+Preprint , arXiv:2608.24053. Bin Zhu, Bin Lin, Munan Ning, Yang Yan, Jiaxi Cui, WANG HongFa, Yatian Pang, Wenhao Jiang, Junwu Zhang, Zongwei Li, and 1 others. 2024. Language-bind: Extending video-language pretraining to n-modality by language-based semantic alignment. In 
+
+International Conference on Learning Representa-tions , volume 2024, pages 9588–9608. 
+
+13 Appendix 
+
+This Appendix section expands on the main paper with full benchmark protocols and per-task results for all four benchmarks (§A), the cascaded-caption data-generation pipeline with system prompts and one qualitative example per modality (§B), per-source dataset attributions and licenses to-gether with the train/test overlap audit (§C), the mining subsystem (§D), caption grounding and noise safeguards (§E), additional ablations cover-ing Matryoshka truncation, per-seed results and emergent media-to-media alignment (§F), the full loss equations (§G), hyperparameters and the per-component parameter breakdown (§H), and additional limitations (§I). 
+
+A Detailed benchmark protocols 
+
+For each benchmark we briefly describe the source benchmark, the exact subset of tasks we evaluate, and the metric. We then report per-task numbers for the established public baselines and our Omni-Embed-Mini variants. Parameter counts in the left-most numeric column are taken from each model’s published card; closed-source models with undis-closed sizes are marked “?”. 
+
+Baselines. We compare against the following public models. Text: Qwen3-Embedding (Zhang et al., 2025b), voyage-3-m-exp (Voyage AI, 2025), Conan-embedding-v2 (TencentBAC, 2025), inf-retriever (Yang et al., 2025), LENS (Lei et al., 2025), GritLM (Muen-nighoff et al., 2025), Jasper (Zhang et al., 2025a), embeddinggemma (Vera et al., 2025) and bge-large-en (Xiao et al., 2024). Vision-language: Qwen3-VL-Embedding (Li et al., 2026), VLM2Vec-V2 (Meng et al., 2025), RzenEmbed (Jian et al., 2025), Ops-MM-embedding (OpenSearch-AI Team, Alibaba Cloud, 2025), seed-1.6-embedding (ByteDance Seed, 2025), WeMM-Embedding (Zhou et al., 2026), IFM-TTE (Cui et al., 2026), colqwen3.5 (athrael soju, 2026), nomic-embed-multimodal (Team, 2025), llama-nemotron-embed-vl (NVIDIA, 2025), SigLIP (Zhai et al., 2023) and the vi-sion encoder of Qwen3.5-0.8B (Qwen Team, 2026). Audio: MS-CLAP 2022 (Elizalde et al., 2023) and 2023 (Elizalde et al., 2024), LAION-CLAP (Wu et al., 2023b), Qwen2-Audio (Chu et al., 2024), and the Whisper (Radford et al., 2023) and Dasheng (Dinkel et al., 2024) encoders. 
+
+Omni-modal: LCO-Embedding-Omni (Xiao et al., 2026), BidirLM-Omni (Boizard et al., 2026), omni-embed-nemotron (Xu et al., 2025), e5-omni (Chen et al., 2026) and the closed gemini-embedding-2 (Shanbhogue et al., 2026). 
+
+Table conventions. In the per-benchmark tables below, the omni block marks open omni embed-ders. Within it, per-column best is in bold and second best underlined, computed over the open omni embedders and our two final checkpoints ; the closed gemini-embedding-2, marked ‡, and the mining ablation checkpoints are excluded from that comparison. gemini-embedding-2 is API-only with an undisclosed parameter count, so it is reported for reference and excluded from size-matched comparisons. Indented rows are the hard-negative-mining ablation checkpoints; the two highlighted rows are our final checkpoints, trained for longer under the best ablation config-uration (text and media mining with dense cap-tions), and are the models reported in the main text and in Fig. 5. 
+
+A.1 MTEB-v2 (8-task English BEIR subset) What it is. MTEB-v2 (Muennighoff et al., 2023) is the second release of the Massive Text Embedding Benchmark; it modernises the evaluation API and unifies multilingual (MMTEB) and image (MIEB) extensions, with the full v2 catalog spanning 1000+ task-language pairs across 250+ languages. 
+
+Subset evaluated. Even at sub-billion pa-rameters, evaluating the full MTEB-v2 cata-log requires days of GPU time, and many em-bedding papers report on a curated BEIR sub-set for the same reason. We use an 8-task English BEIR subset spanning short and long queries against short and long corpora: Ar-guAna, CQADupstack-English, CQADupstack-Physics, CQADupstack-Programmers, FiQA-2018, NFCorpus, SCIDOCS, SciFact. 
+
+Metric. nDCG@10 ( ×100 ) per task; Avg is the mean across the 8 tasks. Per-task results are reported in Table 4. 
+
+A.2 MAEB (22-task English subset) What it is. MAEB (El Assadi et al., 2026) is a uni-fied MTEB-ecosystem benchmark for audio embed-dings that covers speech, environmental sound, and music with both audio-only and text-query tasks. 
+
+Subset evaluated. We evaluate a 22-task sub-set comprising the 15 native-English tasks plus 7 14 0 20 40 60 80 
+
+Qwen3-Embedding-0.6B 
+
+Omni-Embed-Mini-0.9B 
+
+inf-retriever-v1-1.5B Jasper-EN-VL-v1 Qwen3-VL-Embedding-2B 
+
+Omni-Embed-Mini-2.3B 
+
+BidirLM-Omni-2.5B Qwen3-Embedding-4B LCO-Embedding-Omni-3B omni-embed-nemotron-3b e5-omni-3B voyage-3-m-exp inf-retriever-v1 LENS-d8000 LENS-d4000 GritLM-7B Qwen3-Embedding-8B Qwen3-VL-Embedding-8B LCO-Embedding-Omni-7B e5-omni-7B Conan-embedding-v2 gemini-embedding-2 
+
+Text (MTEB-v2 BEIR-8, nDCG@10 ×100) 
+
+49.5 
+
+49.6 
+
+54.0 54.2 47.1 
+
+47.9 
+
+48.6 56.5 39.4 50.5 47.8 68.0 57.8 55.9 55.7 52.6 57.9 50.7 42.5 45.3 62.5 56.2 0 20 40 60 
+
+Dasheng-base CLAP-HTSAT (unfused) CLAP-HTSAT (fused) MS-CLAP 2023 CLAP-LAION (general) CLAP-LAION (music+speech) MS-CLAP 2022 Whisper-small Dasheng-0.6B 
+
+Omni-Embed-Mini-0.9B 
+
+Whisper-large-v3 
+
+Omni-Embed-Mini-2.3B 
+
+BidirLM-Omni-2.5B LCO-Embedding-Omni-3B omni-embed-nemotron-3b e5-omni-3B Qwen2-Audio-7B LCO-Embedding-Omni-7B e5-omni-7B gemini-embedding-2 
+
+Speech (MAEB speech, task-mean ×100) 
+
+37.8 31.2 31.0 30.1 31.7 31.9 28.7 36.1 36.9 
+
+43.3 
+
+36.7 
+
+48.9 
+
+55.8 53.0 52.9 52.0 36.9 54.6 54.9 51.5 0 20 40 
+
+Dasheng-base CLAP-HTSAT (unfused) CLAP-HTSAT (fused) MS-CLAP 2023 CLAP-LAION (general) CLAP-LAION (music+speech) MS-CLAP 2022 Whisper-small Dasheng-0.6B 
+
+Omni-Embed-Mini-0.9B 
+
+Whisper-large-v3 
+
+Omni-Embed-Mini-2.3B 
+
+BidirLM-Omni-2.5B LCO-Embedding-Omni-3B omni-embed-nemotron-3b e5-omni-3B Qwen2-Audio-7B LCO-Embedding-Omni-7B e5-omni-7B gemini-embedding-2 
+
+Audio (MAEB general-audio, task-mean ×100) 
+
+33.9 44.6 43.6 46.7 46.3 45.5 43.7 31.9 43.7 
+
+33.4 
+
+31.5 
+
+33.4 
+
+39.0 43.9 44.0 40.3 41.0 45.9 43.3 36.8 0 20 40 60 80 
+
+Omni-Embed-Mini-0.9B 
+
+Qwen3-VL-Embedding-2B WeMM-Embedding-2B 
+
+Omni-Embed-Mini-2.3B 
+
+BidirLM-Omni-2.5B LCO-Embedding-Omni-3B omni-embed-nemotron-3b e5-omni-3B Qwen3-VL-Embedding-8B IFM-TTE-7B RzenEmbed-v2-7B RzenEmbed-v1-7B Ops-MM-embedding-v1-7B WeMM-Embedding-8B LCO-Embedding-Omni-7B e5-omni-7B seed1.6-embedding-1215 seed-1.6-embedding VLM2Vec-V2.0 qwen3.5-0.8b-vision gemini-embedding-2 
+
+Image (MMEB-V2 AvgImg, hit@1 ×100) 
+
+26.3 
+
+65.7 70.7 
+
+64.8 
+
+46.0 52.0 48.2 63.9 73.9 73.7 72.9 71.7 68.5 73.4 54.9 68.4 75.5 75.0 59.5 31.6 47.3 0 20 40 60 80 
+
+Omni-Embed-Mini-0.9B 
+
+Qwen3-VL-Embedding-2B WeMM-Embedding-2B 
+
+Omni-Embed-Mini-2.3B 
+
+BidirLM-Omni-2.5B LCO-Embedding-Omni-3B omni-embed-nemotron-3b e5-omni-3B Qwen3-VL-Embedding-8B IFM-TTE-7B RzenEmbed-v2-7B RzenEmbed-v1-7B Ops-MM-embedding-v1-7B WeMM-Embedding-8B LCO-Embedding-Omni-7B e5-omni-7B seed1.6-embedding-1215 seed-1.6-embedding VLM2Vec-V2.0 gemini-embedding-2 
+
+Video (MMEB-V2 AvgVid, hit@1 ×100) 
+
+18.5 
+
+55.7 62.9 
+
+55.2 
+
+41.2 43.9 34.9 32.9 72.2 62.0 61.1 53.3 57.5 66.5 43.3 44.7 74.7 61.7 36.5 48.1 0 20 40 60 
+
+embeddinggemma-300m 
+
+bge-large-en 
+
+siglip-so400m-p14-384 
+
+Omni-Embed-Mini-0.9B 
+
+llama-nemotron-embed-vl-1b-v2 Qwen3-VL-Embedding-2B 
+
+Omni-Embed-Mini-2.3B 
+
+BidirLM-Omni-2.5B nomic-embed-multimodal-3b colqwen3.5-4.5B-v3 LCO-Embedding-Omni-3B omni-embed-nemotron-3b e5-omni-3B nomic-embed-multimodal-7b Qwen3-VL-Embedding-8B LCO-Embedding-Omni-7B e5-omni-7B gemini-embedding-2 
+
+Visual Doc (ViDoRe-V3, nDCG@10 ×100) 
+
+52.7 43.9 13.0 
+
+46.9 
+
+58.8 58.3 
+
+58.1 
+
+53.1 55.7 65.4 52.9 59.6 58.7 57.5 61.5 54.7 61.0 57.1 
+
+Text-only encoders Vision / VL embedders Audio / CLAP encoders Omni embedders Closed, size undisclosed Ours Figure 7: Per-modality rankings, all classes. Each panel shows every model with a score for that modality, ordered by inference parameter count, smallest first; bars are coloured by class (text-only, VL/vision, audio/CLAP, omni, ours). gemini-embedding-2 is closed and of undisclosed size, so it is drawn in its own colour, placed last, and shown for reference only. †In the Visual Doc panel, embeddinggemma-300m and bge-large-en are text retrievers scored on the OCR’d page text alone; every other model there is scored under the image+text protocol and sees the page image, so those two bars are not a like-for-like comparison. Text is MTEB-v2 BEIR-8 Avg; Speech/Audio are mean across the 12 speech and 10 general-audio MAEB tasks; Image/Video are MMEB-V2 AvgImg/AvgVid; Visual Doc is ViDoRe-V3 Avg nDCG@10. Omni-Embed-Mini-0.9B reaches 49.57 MTEB nDCG@10 with text weights bit-identical to the backbone, so training cannot regress text retrieval, while extending to five additional modalities at ∼2.7 × to 9.5 × fewer parameters than every open omni baseline. The 2.3B variant additionally inherits Qwen3-VL-Embedding-2B image/video/visual-doc strengths. 
+
+15 Model Params ArgA CQA-E CQA-P CQA-Pr FiQA NFC SCID SciF Avg 
+
+Text embedders 
+
+voyage-3-m-exp 6.9B 89.79 69.98 73.71 65.87 78.01 46.99 34.53 85.09 68.00 
+
+Conan-embedding-v2 1.5B 77.79 57.50 60.58 60.66 71.86 55.74 31.63 84.27 62.50 Qwen3-Embedding-8B 7.6B 76.85 57.44 58.31 53.49 64.57 41.45 32.74 78.46 57.91 inf-retriever-v1 7.1B 84.86 55.96 52.35 46.64 62.35 43.66 30.78 85.40 57.75 Qwen3-Embedding-4B 4.0B 75.64 55.00 56.58 51.17 62.65 41.10 31.44 78.33 56.49 LENS-d8000 7.1B 76.02 55.47 53.89 51.15 61.57 40.61 28.54 79.75 55.87 LENS-d4000 7.1B 77.32 55.62 52.87 51.53 60.43 41.64 27.51 78.39 55.66 inf-retriever-v1-1.5B 1.5B 81.50 52.16 49.68 45.19 56.09 38.55 26.34 82.84 54.04 GritLM-7B 7.2B 63.17 52.10 52.85 48.29 59.91 40.86 24.41 79.13 52.59 Qwen3-Embedding-0.6B 596M 69.45 51.46 50.69 46.28 47.32 36.35 24.29 69.76 49.45 
+
+Vision–language embedders 
+
+Jasper-EN-VL-v1 1.6B 65.20 54.27 55.00 50.45 60.12 43.31 24.64 80.37 54.17 Qwen3-VL-Embedding-8B 8.1B 62.77 52.88 52.13 46.50 47.62 39.75 24.72 79.19 50.70 Qwen3-VL-Embedding-2B 2.1B 58.46 48.27 50.66 43.44 42.30 37.05 21.79 74.73 47.09 
+
+Omni / audio–language embedders 
+
+BidirLM-Omni-2.5B 2.5B 57.04 49.91 51.67 45.93 45.60 38.67 23.32 76.31 48.56 LCO-Embedding-Omni-7B 8.9B 39.09 44.47 50.59 43.18 39.21 36.35 19.97 67.42 42.54 LCO-Embedding-Omni-3B 4.7B 41.39 39.51 45.67 40.14 35.47 31.86 18.21 63.13 39.42 omni-embed-nemotron-3B 4.7B 59.00 55.45 54.64 49.57 53.16 36.31 21.70 74.01 50.48 
+
+e5-omni-3B 4.7B 52.60 46.29 50.15 41.90 51.24 37.92 24.46 77.88 47.80 e5-omni-7B 8.9B 40.17 43.20 47.81 39.91 51.29 40.44 22.74 77.13 45.34 gemini-embedding-2 ‡ ? 71.61 58.16 56.47 51.62 53.44 43.74 24.82 90.10 56.24 
+
+Omni-Embed-Mini-0.9B 935M 69.54 51.62 50.77 46.17 47.47 36.83 24.38 69.80 49.57 
+
+Omni-Embed-Mini-2.3B 2.3B 59.72 48.98 52.74 44.98 43.79 37.00 22.04 74.26 47.94     
+
+> Table 4: MTEB-v2 BEIR-8 per-task scores. All eight tasks measure text retrieval ranking quality, scored by nDCG@10 ( ×100 ). Task abbreviations: ArguAna (ArgA), CQADupstack-English (CQA-E), CQADupstack-Physics (CQA-P), CQADupstack-Programmers (CQA-Pr), FiQA-2018 (FiQA), NFCorpus (NFC), SCIDOCS (SCID), SciFact (SciF). Bolding, colour and footnote conventions follow §A. Omni-Embed-Mini-0.9B applies no LoRA or projector to its text branch, whose weights are bit-identical to the frozen Qwen3-Embedding-0.6B backbone, so training cannot regress text retrieval.
+
+language-independent music/environmental-sound tasks; multilingual source tasks are restricted to their English split. Tasks split naturally into a 10-task audio subset and a 12-task speech subset, each reported in a separate table below. The benchmark task families, following (El Assadi et al., 2026), are: text-to-audio retrieval (T2A), classification (Cls), clustering (Clu), multi-label tagging (Mlt), pair-classification (Pair), reranking (Rank) and zero-shot classification (ZSh). 
+
+Metrics. T2A reports HitRate@5; Cls and ZSh report accuracy; Clu reports V-measure; Mlt reports LRAP; Pair reports max average preci-sion; Rank reports MAP@1000. Avg is the mean across each model’s scored tasks within the rele-vant modality subset. Per-task results are reported in Table 5 (audio) and Table 6 (speech). 
+
+A.3 MMEB-V2 (16-task English subset) What it is. MMEB-V2 (Meng et al., 2025) is a multimodal embedding benchmark combining im-age and video tasks under a unified hit@1 retrieval and classification protocol. 
+
+Subset evaluated. We use the 16 English tasks: 10 image tasks (VOC2007, Country211, OK-VQA, EDIS, MSCOCO-T2I, VisualNews-T2I, MSCOCO-I2T, VisualNews-I2T, NIGHTS, Fash-ionIQ) and 6 video tasks (HMDB51, UCF101, MSR-VTT, MSVD, DiDeMo, VATEX). Following the benchmark task taxonomy, image tasks span zero-shot image classification (CLS), visual ques-tion answering (VQA), text-to-image (T2I), image-to-text (I2T) and image-to-image (I2I) retrieval; video tasks span zero-shot action classification (V-CLS) and text-to-video (V-T2V) retrieval. The 16 Model Params Clotho 
+
+> HR@5
+
+MACS 
+
+> HR@5
+
+US8K 
+
+> HR@5
+
+BjOp. 
+
+> Acc
+
+Bird 
+
+> Acc
+
+GTZAN 
+
+> Acc
+
+Mrd. 
+
+> Acc
+
+Veh. 
+
+> V-meas.
+
+FSD19 
+
+> LRAP
+
+GTZ-R  
+
+> MAP@1k
+
+Avg 
+
+Audio–language models 
+
+Qwen2-Audio-7B 7.0B 0.45 1.53 0.22 97.45 37.10 93.10 61.17 5.52 32.64 80.85 41.00 
+
+CLAP-style dual encoders 
+
+CLAP-LAION (general) 194M 33.72 33.08 0.96 93.62 17.00 84.50 49.45 3.37 80.63 66.78 46.31 CLAP-LAION (music+speech) 194M 32.39 30.53 0.94 91.52 16.40 83.50 48.99 4.72 80.62 65.65 45.53 MS-CLAP 2023 160M 41.93 27.23 0.94 91.11 17.30 78.10 52.09 2.86 79.73 75.43 46.67 MS-CLAP 2022 196M 58.73 41.73 0.88 93.20 13.20 58.70 29.14 7.98 70.86 62.91 43.73 CLAP-HTSAT (unfused) 153M 34.18 27.99 0.98 91.96 16.40 74.90 49.52 2.66 80.84 66.45 44.59 CLAP-HTSAT (fused) 154M 33.57 29.26 0.94 92.77 18.00 67.90 47.00 4.71 81.09 61.30 43.65 
+
+Speech encoders (no text tower; avg over 7 non-retrieval columns †)Dasheng-0.6B 630M – – – 84.33 8.50 76.20 53.83 5.76 7.09 69.98 43.67 †
+
+Dasheng-base 86M – – – 76.73 5.10 65.40 44.50 3.22 7.08 35.56 33.94 †
+
+Whisper-large-v3 1.5B – – – 64.80 5.50 45.90 30.80 1.49 7.99 63.77 31.46 †
+
+Whisper-small 244M – – – 67.38 7.30 47.40 27.20 0.98 9.05 64.16 31.92 †
+
+Omni embedders 
+
+LCO-Embedding-Omni-7B 8.9B 33.89 29.77 0.92 92.79 34.10 82.30 42.07 3.63 60.96 78.71 45.91 
+
+LCO-Embedding-Omni-3B 4.7B 32.70 22.65 0.88 93.22 31.60 81.00 39.54 2.18 59.67 75.37 43.88 BidirLM-Omni-2.5B 2.5B 12.05 8.40 0.65 90.25 33.10 74.10 45.35 5.11 46.52 74.76 39.03 omni-embed-nemotron-3B 4.7B 33.25 25.19 0.88 88.60 28.60 82.50 32.69 4.56 61.60 82.12 44.00 e5-omni-3B 4.7B 39.48 27.48 0.84 76.71 24.00 78.30 30.17 3.71 37.76 84.97 40.34 e5-omni-7B 8.9B 42.08 26.72 0.96 81.81 24.50 84.60 30.66 2.48 53.14 85.67 43.26 gemini-embedding-2 ‡ ? 15.36 6.62 0.67 84.35 24.10 76.80 36.76 6.32 36.91 80.07 36.80 
+
+Ours: Omni-Embed-Mini 
+
+0.9B, no mining 935M 13.38 6.87 0.75 79.66 15.70 66.50 28.15 2.90 39.41 75.75 32.91 0.9B, text mining 935M 8.16 3.82 0.67 85.60 18.40 66.10 37.22 8.19 35.30 71.56 33.50 0.9B, media mining 935M 13.29 6.87 0.65 83.46 18.40 69.00 35.26 3.82 39.18 76.66 34.66 0.9B, text + media 935M 12.62 7.89 0.16 81.37 14.30 66.80 30.50 8.80 39.03 75.77 33.72 0.9B, t+m, orig. captions 935M 18.89 10.69 0.69 74.57 12.90 50.30 37.15 6.24 34.13 64.60 31.02 2.3B, text + media 2.3B 26.57 9.16 0.86 77.54 16.50 66.80 26.17 1.86 39.11 75.13 33.97 
+
+Omni-Embed-Mini-0.9B 935M 9.24 6.11 0.65 83.88 16.20 66.30 34.40 2.58 38.22 76.72 33.43 
+
+Omni-Embed-Mini-2.3B 2.3B 17.12 8.91 0.41 84.29 18.70 65.30 32.59 0.75 34.77 71.57 33.44 
+
+Table 5: MAEB-Audio per-task scores across 10 tasks. Task abbreviations: Clotho-T2A (Clotho), MACS-T2A (MACS), UrbanSound8K-T2A (US8K), BeijingOpera (BjOp.), BirdCLEF (Bird), GTZAN-Genre (GTZAN), MridinghamTonic (Mrd.), VehicleSoundClustering (Veh.), FSD2019Kaggle (FSD19), GTZAN-AudioReranking (GTZ-R). Metrics appear below each task name: HR@5 = HitRate@5, Acc = accuracy, V-meas. = V-measure, LRAP = label ranking avg. precision, MAP@1k = mean avg. precision at 1000. Bolding, colour and footnote conventions follow §A. †Speech-only encoders lack a text tower and are not scored on the three retrieval tasks; their average is over the remaining seven columns. 
+
+MMEB-V2 NExTQA and EgoSchema video-QA tasks are not included in this subset. 
+
+Metric. hit@1 ( ×100 ) per task; AvgImg, AvgVid and AvgAll are means across the image, video, and combined task sets respectively. Per-task results are reported in Table 7 (image tasks) and Table 8 (video tasks). 
+
+A.4 ViDoRe-V3 (7 English domains) What it is. ViDoRe-V3 (Loison et al., 2026) is a visual-document retrieval benchmark over visu-ally rich enterprise documents (financial reports, HR handbooks, scientific papers, regulatory filings, pharmaceutical and industrial manuals): given a text query, retrieve the relevant page-image. 
+
+Subset evaluated. We evaluate the 7 English-source domains (Finance, HR, Industrial, Pharma-ceuticals, Computer Science, Energy, Physics); the French-only Finance task is excluded. 
+
+Metric. nDCG@10 per task; Avg is the mean across the 7 domains. The public Vi-DoRe leaderboard headline reports nDCG@5; we report nDCG@10 to match the convention used elsewhere in this paper. Per-domain results are reported in Table 9. 
+
+B Cascaded-caption data generation 
+
+The caption slice of our omni-modal corpus is the sole training corpus for the contrastive objective. Every row is the output of a single multimodal 17 Model Params GigaSp 
+
+> HR@5
+
+SpSQuAD 
+
+> HR@5
+
+CREMA 
+
+> Acc
+
+AgeDet 
+
+> Acc
+
+IEMOCAP 
+
+> Acc
+
+VoxCel 
+
+> Acc
+
+CREMA-C 
+
+> V-meas.
+
+CREMA-P 
+
+> max-AP
+
+NMSQA 
+
+> max-AP
+
+VoxPop 
+
+> max-AP
+
+Ravd 
+
+> ZS Acc
+
+SpCmd  
+
+> ZS Acc
+
+Avg 
+
+Audio–language models 
+
+Qwen2-Audio-7B 7.0B 0.09 1.00 73.99 17.59 92.96 29.54 32.37 68.87 48.85 52.93 14.37 10.38 36.91 
+
+CLAP-style dual encoders 
+
+CLAP-LAION (general) 194M 0.16 2.00 39.83 20.51 89.28 30.47 13.17 54.71 47.42 53.55 17.29 12.44 31.74 CLAP-LAION (music+speech) 194M 0.21 2.00 40.18 16.59 93.12 33.78 14.43 56.66 46.14 53.49 17.29 9.03 31.91 MS-CLAP 2023 160M 0.10 0.00 37.06 15.35 85.86 26.18 10.73 57.65 51.09 52.05 15.21 10.01 30.11 MS-CLAP 2022 196M 0.16 2.33 27.94 14.27 89.35 25.54 5.36 53.06 50.09 52.08 13.61 10.51 28.69 CLAP-HTSAT (unfused) 153M 0.36 1.33 37.56 15.98 92.58 33.72 12.78 56.91 46.98 53.96 13.26 9.35 31.23 CLAP-HTSAT (fused) 154M 0.18 2.00 38.75 15.27 93.62 29.29 10.82 54.95 47.85 53.18 14.65 11.76 31.03 
+
+Speech encoders (no text tower; avg over the 8 non-retrieval / non-zero-shot columns †)Dasheng-0.6B 630M – – 39.76 20.09 57.73 16.24 8.65 55.92 46.29 50.70 – – 36.92 †
+
+Dasheng-base 86M – – 39.04 17.22 53.91 24.10 9.13 55.94 52.38 50.70 – – 37.80 †
+
+Whisper-large-v3 1.5B – – 41.31 17.22 50.85 16.64 9.68 57.83 48.49 51.71 – – 36.72 †
+
+Whisper-small 244M – – 37.23 19.53 52.18 13.19 10.30 58.40 45.61 52.37 – – 36.10 †
+
+Omni embedders 
+
+LCO-Embedding-Omni-7B 8.9B 83.29 74.00 36.05 16.16 70.75 43.40 0.62 53.56 97.60 50.82 31.67 97.42 54.61 LCO-Embedding-Omni-3B 4.7B 83.13 72.00 31.03 16.87 59.42 48.97 0.62 52.40 96.92 50.58 26.94 97.40 53.02 BidirLM-Omni-2.5B 2.5B 83.05 74.33 29.92 15.04 85.38 49.49 0.60 53.20 95.99 51.02 34.24 97.30 55.80 
+
+omni-embed-nemotron-3B 4.7B 83.21 81.33 21.35 17.12 60.45 33.05 0.66 53.68 98.48 51.87 35.35 97.64 52.85 e5-omni-3B 4.7B 79.69 74.67 28.93 17.00 79.82 37.72 0.66 54.49 73.19 51.00 33.33 93.99 52.04 e5-omni-7B 8.9B 82.80 79.67 30.69 14.85 81.26 35.89 0.87 55.40 90.30 52.13 37.43 97.03 54.86 gemini-embedding-2 ‡ ? 82.34 83.33 21.74 16.84 79.25 31.92 0.55 53.40 98.05 61.56 9.65 79.82 51.54 
+
+Ours: Omni-Embed-Mini 
+
+0.9B, no mining 935M 68.84 65.00 18.91 17.05 63.03 39.87 0.63 51.66 68.37 50.57 17.99 60.97 43.57 0.9B, text mining 935M 66.84 58.67 19.77 14.61 58.76 38.01 0.63 52.03 69.26 50.26 18.61 67.97 42.95 0.9B, media mining 935M 70.19 66.00 19.35 15.91 63.74 37.26 0.58 52.02 69.66 49.79 18.68 69.83 44.42 0.9B, text + media 935M 67.67 66.00 17.99 16.67 63.77 42.16 0.64 51.73 70.56 49.94 20.97 65.02 44.43 0.9B, t+m, orig. captions 935M 57.24 63.67 18.79 17.70 56.68 40.77 0.54 51.33 73.63 50.15 13.96 56.53 41.75 2.3B, text + media 2.3B 63.90 52.67 20.20 16.93 64.87 36.79 0.88 52.43 60.49 51.47 17.36 60.68 41.56 
+
+Omni-Embed-Mini-0.9B 935M 70.42 66.33 19.30 15.07 59.10 40.71 0.57 52.22 69.13 50.41 15.56 60.53 43.28 
+
+Omni-Embed-Mini-2.3B 2.3B 81.26 68.33 18.38 15.53 63.23 43.46 0.55 51.66 87.74 49.73 14.44 92.05 48.86 
+
+Table 6: MAEB Speech per-task scores across 12 tasks. Task abbreviations: GigaSpeechT2A (GigaSp), Spoken-SQuADT2A (SpSQuAD), CREMA-D (CREMA), CommonLanguageAgeDetection (AgeDet), IEMOCAPGender (IEMOCAP), VoxCelebSA (VoxCel), CREMA-D-Clustering (CREMA-C), CREMA-D-PairClassification (CREMA-P), NMSQA-PairClassification (NMSQA), VoxPopuli-AccentPairClassification (VoxPop), Ravdess-Zeroshot (Ravd), SpeechCommands-Zeroshot-v0.02 (SpCmd). Metrics appear below each task name: HR@5 = HitRate@5, Acc = accuracy, V-meas. = V-measure, max-AP = pair-classification max average precision, ZS Acc = zero-shot accuracy. Bolding, colour and footnote conventions follow §A. †Speech-only encoders lack a text tower and are not scored on the two retrieval tasks or the two zero-shot tasks; their average is over the remaining eight columns. 
+
+call to Qwen3-Omni-30B-A3B-Instruct at temper-ature 0.7 with a 2048-token output budget. The model receives the raw media plus a modality-specific system prompt that interpolates the source dataset’s ground-truth caption as a “Reference cap-tion” grounding prior; a short user-facing prompt is drawn at random from a per-modality bank and concatenated with the appropriate media tag. 
+
+B.1 Modality system prompts System prompt: Audio 
+
+Describe only what you hear; no opinions, speculation, or filler. Be precise and factual. Do not hallucinate sounds not present. Listen to this audio. Reference caption: “{orig-inal_text}”. Write a dense, semantically rich description. Cover: each distinct sound and its characteristics (pitch, volume, texture); temporal order (what happens first, next, last); acoustic environment (indoor/outdoor, reverb, back-ground); patterns or repetitions. Be concise; every word should convey information about the audio. One paragraph. 
+
+System prompt: Music (audio music subsets) 
+
+Describe only what you hear. Listen to this music. Refer-ence caption: “{original_text}”. Write a dense description covering: instruments and timbres; melody, harmony, key, chord progressions; rhythm, tempo (BPM estimate), time signature; genre, energy, dynamics; structure; vocals if present (gender, style, lyrics gist). One paragraph. 
+
+System prompt: Speech 
+
+Listen to this speech audio. Write a single flowing para-graph covering: (1) the speaker (age group, gender, voice pitch/tone, clarity, accent); (2) speaking style (pace, loud-ness, emotion); (3) a transition into the transcription using a casual phrase followed by the marker [TRAN-SCRIPTION]; (4) audio quality, recording environment, background sounds. Use the literal text [TRANSCRIP-TION]; do not write out the actual words spoken. The placeholder is post-processed into a transcription span around the source transcript. 
+
+18 Model Params VOC07 
+
+> CLS
+
+Ctry211 
+
+> CLS
+
+OKVQA 
+
+> VQA
+
+EDIS 
+
+> T2I
+
+COCO-T2I 
+
+> T2I
+
+VN-T2I 
+
+> T2I
+
+COCO-I2T 
+
+> I2T
+
+VN-I2T 
+
+> I2T
+
+NIGHTS 
+
+> I2I
+
+FashIQ  
+
+> I2I
+
+Avg 
+
+Vision–language embedders 
+
+seed1.6-embedding-1215 ? 89.30 46.90 74.90 96.70 81.30 83.80 77.80 83.70 70.70 50.40 75.55 seed-1.6-embedding ? 91.90 47.70 74.20 91.50 78.80 83.40 77.40 84.50 72.10 49.00 75.05 Qwen3-VL-Embedding-8B 8.1B 93.40 27.30 77.80 96.30 81.10 81.10 79.10 85.70 72.70 44.50 73.90 IFM-TTE-7B 8.3B 83.40 60.50 83.40 95.50 77.70 79.20 72.60 82.50 69.40 32.40 73.66 WeMM-Embedding-8B 8.8B 94.50 32.20 73.40 94.90 81.20 81.70 78.20 84.90 69.00 43.80 73.38 RzenEmbed-v2-7B 8.3B 91.40 29.70 73.10 97.20 81.10 82.60 78.00 85.80 69.00 41.50 72.94 RzenEmbed-v1-7B 8.3B 91.60 29.00 69.60 96.50 78.60 82.60 76.00 85.80 68.60 38.70 71.70 WeMM-Embedding-2B 2.1B 93.70 28.90 66.40 93.30 77.60 76.90 77.00 80.30 69.60 43.20 70.69 Ops-MM-embedding-v1-7B 8.3B 84.80 28.50 70.60 94.40 79.30 80.10 72.10 84.30 66.20 24.30 68.46 Qwen3-VL-Embedding-2B 2.1B 84.70 20.90 65.60 88.30 75.40 70.40 71.90 74.20 67.80 37.50 65.67 VLM2Vec-V2.0 2.2B 76.80 19.50 44.00 82.90 73.80 72.30 66.40 73.70 66.20 19.30 59.49 qwen3.5-0.8b-vision (I2I only) 100M – – – – – – – – 59.30 3.80 31.55 †
+
+Omni embedders 
+
+LCO-Embedding-Omni-7B 8.9B 56.40 33.20 59.90 66.70 64.60 62.40 61.20 61.20 62.90 20.70 54.92 LCO-Embedding-Omni-3B 4.7B 71.20 28.90 58.20 56.50 59.50 55.20 59.40 59.20 56.20 15.90 52.02 omni-embed-nemotron-3B 4.7B 53.40 23.20 16.10 82.60 60.50 61.10 52.50 59.50 64.10 8.60 48.16 BidirLM-Omni-2.5B 2.5B 68.10 8.00 20.30 72.90 72.10 48.50 63.60 30.60 62.60 13.10 45.98 e5-omni-3B 4.7B 76.80 28.30 63.20 86.10 74.90 73.00 71.60 78.60 67.10 19.40 63.90 e5-omni-7B 8.9B 84.80 32.60 71.00 91.80 76.90 77.30 74.90 81.70 67.60 25.00 68.36 
+
+gemini-embedding-2 ‡ ? 67.40 13.80 17.50 87.90 74.60 82.30 2.80 45.60 64.10 16.70 47.27 
+
+Ours: Omni-Embed-Mini 
+
+0.9B, no mining 935M 71.30 1.50 7.00 42.00 25.60 7.60 21.10 4.70 41.50 2.50 22.48 0.9B, text mining 935M 68.40 1.50 4.50 42.50 15.10 4.40 13.40 5.00 40.10 1.90 19.68 0.9B, media mining 935M 61.50 1.60 4.00 40.60 22.90 8.30 23.10 8.10 55.40 4.70 23.02 0.9B, text + media 935M 61.40 1.00 9.60 47.70 34.40 9.60 28.90 11.50 51.00 7.20 26.23 0.9B, t+m, orig. captions 935M 69.20 1.40 1.00 33.60 7.50 3.20 8.70 3.90 45.30 2.50 17.63 2.3B, text + media 2.3B 83.80 20.90 65.00 86.70 72.70 70.90 72.30 73.20 68.00 34.50 64.80 
+
+Omni-Embed-Mini-0.9B 935M 60.60 1.60 8.80 46.00 29.40 8.70 35.40 11.10 53.90 7.40 26.29 
+
+Omni-Embed-Mini-2.3B 2.3B 83.80 20.90 65.00 86.70 72.70 70.90 72.30 73.20 68.00 34.50 64.80 
+
+Table 7: MMEB-V2 image per-task hit@1 ( ×100 ). Task abbreviations: VOC2007 (VOC07), Country211 (Ctry211), OK-VQA (OKVQA), EDIS, MSCOCO-T2I (COCO-T2I), VisualNews-T2I (VN-T2I), MSCOCO-I2T (COCO-I2T), VisualNews-I2T (VN-I2T), NIGHTS, FashionIQ (FashIQ). Task families appear below each task name: CLS = zero-shot classification accuracy; VQA = knowledge retrieval hit@1; T2I = text-to-image retrieval hit@1; I2T = image-to-text retrieval hit@1; I2I = image-to-image retrieval hit@1. Bolding, colour and footnote conventions follow §A. †qwen3.5-0.8b-vision supports only the two I2I tasks; its average is over those two columns and is not directly comparable to the others. 
+
+System prompt: Image 
+
+Look at this image. Reference caption: “{original_text}”. Write a dense, factual description covering: subjects and objects (what, how many, attributes); spatial lay-out and composition; colors, lighting, and style; any actions or interactions; any text visible in the image (OCR). Be concrete; avoid speculation about meaning or backstory. One paragraph. 
+
+System prompt: Video 
+
+Watch this video. Reference caption: “{original_text}”. Write a dense description covering: subjects and setting; spatial layout; the temporal sequence of events (what happens first, next, last); camera motion or shot tran-sitions; on-screen actions; any text or captions visible on screen. One paragraph. 
+
+System prompt: Visual document 
+
+You are an expert document analyst. Examine this docu-ment image and provide a comprehensive description cov-ering: document type and purpose; overall layout and structure; all text content (headings, body, labels); ta-bles (column headers, row structure, key data); charts and graphs (type, axes, trends); figures and diagrams; vi-sual formatting (colors, fonts, emphasis). Be thorough, precise, and well-organised. 
+
+B.2 User-prompt banks 
+
+For each modality the user-side message is sampled from a small bank of natural-language requests: e.g. “what do you hear”, “describe this audio”, “cap-tion this” for audio; “what did they say”, “tran-scribe this” for speech; “what do you see”, “de-scribe this image” for image; and “what do you see”, “describe this video”, “what is happening in this video” for video. Visual-document rows use a single short user prompt; the grounding work is carried by the system prompt. 19 Model Params HMDB 
+
+> V-CLS
+
+UCF 
+
+> V-CLS
+
+MSRVTT 
+
+> V-T2V
+
+MSVD 
+
+> V-T2V
+
+DiDeMo 
+
+> V-T2V
+
+VATEX  
+
+> V-T2V
+
+Avg 
+
+Vision–language embedders 
+
+seed1.6-embedding-1215 ? 93.50 98.70 60.20 74.48 66.43 54.87 74.70 Qwen3-VL-Embedding-8B 8.1B 83.40 95.10 58.20 75.67 66.04 54.87 72.21 WeMM-Embedding-8B 8.8B 61.50 84.20 55.30 73.43 69.22 55.05 66.45 WeMM-Embedding-2B 2.1B 57.70 75.10 53.10 73.43 65.24 52.52 62.85 IFM-TTE-7B 8.3B 65.40 79.60 52.70 73.13 49.70 51.45 62.00 seed-1.6-embedding ? 63.90 74.20 55.30 71.34 56.67 48.77 61.70 RzenEmbed-v2-7B 8.3B 63.40 75.70 50.60 72.09 57.27 47.57 61.10 Ops-MM-embedding-v1-7B 8.3B 59.30 78.80 49.40 67.16 46.12 43.95 57.45 Qwen3-VL-Embedding-2B 2.1B 63.60 83.50 42.50 65.67 41.33 37.74 55.72 RzenEmbed-v1-7B 8.3B 56.70 73.10 45.10 64.93 41.24 38.57 53.27 VLM2Vec-V2.0 2.2B 35.20 57.30 28.80 43.73 29.98 23.83 36.47 
+
+Omni embedders 
+
+LCO-Embedding-Omni-3B 4.7B 39.00 65.10 38.40 58.06 31.47 31.13 43.86 LCO-Embedding-Omni-7B 8.9B 30.50 64.50 41.50 59.10 32.37 32.05 43.34 omni-embed-nemotron-3B 4.7B 22.40 36.60 35.70 55.22 32.37 27.09 34.90 BidirLM-Omni-2.5B † 2.5B 34.10 55.70 36.10 58.96 34.06 28.43 41.23 e5-omni-3B 4.7B 19.60 19.50 36.10 58.21 36.35 27.76 32.92 e5-omni-7B 8.9B 44.80 58.30 38.60 59.25 35.16 32.29 44.73 gemini-embedding-2 ‡ ? 32.20 56.30 47.50 66.12 45.82 40.89 48.14 
+
+Ours: Omni-Embed-Mini 
+
+0.9B, no mining 935M 10.90 14.50 9.70 19.10 9.26 7.73 11.87 0.9B, text mining 935M 10.80 13.60 9.10 7.76 4.28 2.23 7.96 0.9B, media mining 935M 13.20 15.10 11.60 18.51 7.57 4.91 11.81 0.9B, text + media 935M 16.70 27.40 18.50 27.61 12.75 9.83 18.80 0.9B, t+m, orig. captions 935M 9.00 7.40 5.30 3.88 1.69 1.18 4.74 2.3B, text + media 2.3B 62.40 83.40 42.20 65.52 40.84 36.74 55.18 
+
+Omni-Embed-Mini-0.9B 935M 16.20 29.30 15.80 26.42 12.55 10.63 18.48 
+
+Omni-Embed-Mini-2.3B 2.3B 62.40 83.40 42.20 65.52 40.84 36.74 55.18      
+
+> Table 8: MMEB-V2 video per-task hit@1 ( ×100 ). Task abbreviations: HMDB51 (HMDB), UCF101 (UCF), MSR-VTT (MSRVTT), MSVD, DiDeMo, VATEX. Task families appear below each task name: V-CLS = zero-shot action classification accuracy; V-T2V = text-to-video retrieval hit@1. Across all omni-style models, the benchmark’s own 8 pre-extracted frames per video are embedded as images and mean-pooled, so every model receives identical inputs under identical frame-level aggregation; the protocol may nevertheless understate a model’s native temporal capability. Bolding, colour and footnote conventions follow §A. †BidirLM-Omni-2.5B does not declare a video modality, but it accepts up to 8 image frames, so we evaluate it under the same 8-frame protocol.
+
+B.3 Sample schema 
+
+Each row of the caption slice carries a unique row identifier, the media, a chat-style messages field holding the user request and the model’s dense caption, the modality label (audio, speech, image, video, or visual-doc), the caption cate-gory (always “caption” for this slice), the source dataset’s original short caption (used as the ground-ing prior), and metadata fields for the source dataset name, sampling rate (16,000 for audio/speech) and frame rate (for video). 
+
+B.4 Qualitative dense-caption examples 
+
+Table 10 shows one representative example per modality from the caption slice. The middle col-umn is a brief written gloss of the underlying media (a one-line description sitting between the original short caption and the dense caption); the third col-20 Model Params Fin HR Ind Phr CS En Phy Avg 
+
+Visual-document retrievers 
+
+colqwen3.5-4.5B-v3 4.6B 68.69 66.09 59.35 67.31 79.87 66.16 50.08 65.36 nomic-embed-multimodal-7b 7.8B 59.43 58.27 48.60 63.44 71.47 56.96 44.70 57.55 nomic-embed-multimodal-3b 3.8B 57.84 54.88 46.63 60.35 70.29 54.96 45.17 55.73 
+
+Vision–language embedders 
+
+llama-nemotron-embed-vl-1b-v2 1.7B 64.53 60.59 47.85 63.52 74.01 57.72 43.65 58.84 Qwen3-VL-Embedding-2B 2.1B 62.23 58.45 47.93 62.51 73.48 56.81 46.64 58.29 google/siglip-so400m-p14-384 878M 11.04 11.22 8.91 22.14 19.58 7.57 10.25 12.96 
+
+Text retrievers (operate on OCR’d page text) embeddinggemma-300m 308M 51.03 49.06 42.44 60.28 67.07 55.74 43.21 52.69 BAAI/bge-large-en 335M 38.71 45.71 39.39 55.81 64.44 30.48 32.58 43.87 
+
+Omni embedders 
+
+LCO-Embedding-Omni-7B 8.9B 55.13 55.31 41.94 61.14 69.43 55.44 44.64 54.72 BidirLM-Omni-2.5B 2.5B 58.87 51.58 41.17 56.23 68.85 51.92 42.77 53.06 LCO-Embedding-Omni-3B 4.7B 54.40 52.06 39.37 58.99 67.38 53.86 44.31 52.91 omni-embed-nemotron-3B 4.7B 63.98 58.69 49.80 64.07 73.57 59.71 47.59 59.63 e5-omni-3B 4.7B 60.41 59.91 49.76 63.36 71.91 59.29 46.01 58.66 e5-omni-7B 8.9B 65.41 61.27 49.83 66.48 73.84 63.29 46.86 61.00 
+
+gemini-embedding-2 ‡ ? 63.12 57.88 46.91 63.52 72.04 51.06 45.13 57.09 
+
+Ours: Omni-Embed-Mini 
+
+0.9B, no mining 935M 45.97 40.54 36.87 51.67 62.35 47.67 40.62 46.53 0.9B, text mining 935M 45.43 41.77 37.86 52.25 62.24 48.41 40.44 46.91 0.9B, media mining 935M 46.85 44.57 36.01 52.56 61.98 46.61 36.36 46.42 0.9B, text + media 935M 46.76 41.04 37.35 52.58 62.00 48.11 41.03 46.98 0.9B, t+m, orig. captions 935M 38.24 39.56 32.47 48.84 57.75 42.80 35.82 42.21 2.3B, text + media 2.3B 62.64 57.61 47.89 62.01 74.43 56.11 46.00 58.10 
+
+Omni-Embed-Mini-0.9B 935M 44.69 41.22 37.94 53.17 61.69 49.19 40.57 46.92 
+
+Omni-Embed-Mini-2.3B 2.3B 62.64 57.61 47.89 62.01 74.43 56.11 46.00 58.10     
+
+> Table 9: ViDoRe-V3 per-domain scores. All seven tasks are text-to-page retrieval (T2Pg) over visual-document page images, scored by nDCG@10 ( ×100 ). Domain abbreviations: Finance (Fin), HR, Industrial (Ind), Pharmaceuticals (Phr), Computer Science (CS), Energy (En), Physics (Phy). Bolding, colour and footnote conventions follow §A. The mining ablation rows show that visual-document retrieval is largely insensitive to which side hard negatives are drawn from: the four 0.9B mining configurations agree to within 0.6 nDCG@10 (46.42 to 46.98). What does move this modality is caption quality: replacing the dense cascaded captions with the datasets’ original captions costs 4.8 nDCG@10 (46.98 →42.21).
+
+umn is the original short caption from the source dataset (the grounding prior); the fourth column is the dense caption produced by the cascaded cap-tioner and used as the contrastive teacher target. 
+
+C Per-source datasets, licenses, citations 
+
+The caption slice draws from 16 unique source datasets across 5 modalities, totalling 242,080 cap-tion rows and 54.9 days of media. Our generated dense captions are released under CC BY-SA 4.0; the source media and their original annotations re-main under the licenses of their respective datasets, summarised in Table 11. 
+
+C.1 Train/test overlap audit 
+
+Three of our training sources share a parent cor-pus with MMEB-V2 evaluation tasks, so we ran an identifier-level audit rather than relying on split names. For each training sample we recovered the original source identifier and compared it one 21 Modality Media (described) Original caption Dense caption 
+
+Audio A woman speaks in a public space while a slow heartbeat-like thump and faint ticking play in the background. A woman talks while a heartbeat and ticking play in the background. A woman’s voice, speaking in a mid-to-low pitch, is present at the beginning of the clip, accompanied by faint, indis-tinct conversation from other people. Simultaneously, a deep, rhythmic thumping with a slow, steady tempo, re-sembling a heartbeat, begins and continues throughout. The background includes a persistent, low-level ambient hum and the general murmur of a public indoor space with some reverberation. Speech A young woman with aclear, neutral accent reads a short factual question in a calm, measured voice in a quiet indoor setting. What are organic plants understood to be? A young adult female with a high-pitched, clear, and artic-ulate voice delivers the line in a standard, neutral accent. Her speaking style is measured and calm, with a moderate pace and consistent volume, conveying a neutral, infor-mative affect. She says, “What are organic plants under-stood to be?” The audio is clean and crisp, likely recorded in a quiet indoor space with no discernible background noise or reverberation. Image Two women going down a conveyor belt with a cart full of groceries. The image, taken from a high-angle perspective, shows two women on a descending escalator. The woman in the fore-ground, wearing a floral-patterned short-sleeved shirt, leans forward, gripping the handle of a metal shopping cart. Be-hind her, another woman with brown hair, wearing a white top over a dark shirt, also holds the cart’s handle. The cart is filled with various items, including a visible bag of potato chips and other grocery products. The setting appears to be indoors, with a neutral-toned, geometric-patterned wall in the background; lighting is even and diffuse, characteristic of an indoor public space. Video There is a girl gymnast who is performing on the bars. A gymnast, Cienna Samiley, performs on the uneven bars during the 2014 US Challenge warm-up. The scene is a large, indoor arena with sparse audience seating. The cam-era cuts to a podium where seven young female gymnasts stand, wearing leotards and medals, in front of a banner reading “2014 SECRET U.S. CLASSIC”. A scoreboard graphic is superimposed, displaying the top six scores. The gymnasts on the podium then raise their arms and cheer. Visual doc 
+
+(not available) A detailed analysis of an infographic titled “Facts About Gender Inequality,” which uses a combination of text, icons, and data visualizations to present information on gender disparities. The infographic is set against a light teal background, structured into several sections, with a bold sans-serif title at the top . . . Icons use simple black silhouettes (gender symbols, a wheelbar-row for the workplace, a house for home, books for school); the colour scheme is teal/red/black; data is pre-sented via a pie chart and a bar chart with a consistent red-for-women, blue-for-men encoding. 
+
+Table 10: One sample per modality from the caption slice. Visual documents in the source corpus carry no human-written original caption; the cascaded captioner generates the dense description directly from the page image, and we mark such cells “(not available)”. Visual-document dense captions are themselves substantially longer and richer than the other modalities; the example shown here is truncated for layout (indicated by “. . . ”). In the video example, the gymnast’s name and the event are read from on-screen text in the video itself, not inferred by the captioner. 
+
+22 to one against the identifiers of the benchmark test samples. The audit finds zero shared items in all three cases. MSR-VTT. Evaluation uses the benchmark’s 
+
+test_1k split. Training and evaluation identifiers are disjoint and their union is exactly the 10,000 videos of the corpus, so the two sides are the com-plementary 9k/1k halves. 
+
+ActivityNet. Evaluation uses the test split, 614 unique videos after normalising YouTube identi-fiers; the training side contributes 10,009 videos, of which 9,793 carry dense captions. The inter-section is empty on both the full training set and the captioned subset. ActivityNet is present in training but is not among the MMEB-V2 tasks we report; we audit it so that it is confirmed clean for future evaluation. 
+
+MSCOCO, via Recap-COCO-30K. Matching is on the COCO image_id parsed from the im-age filenames, with the evaluation images drawn from val2014 . No training image identifier ap-pears among the MSCOCO-I2T or MSCOCO-T2I test identifiers. We state this at the identifier level because that is what we verified; we make no claim about how the upstream Recap-COCO-30K release partitions the original COCO splits. Because no overlapping items exist, no rows were removed and the reported cross-modal num-bers stand unchanged. 
+
+D Mining subsystem 
+
+The miner runs as a single background thread that shares the live training model with the main loop, avoiding the roughly 16 GB extra HBM cost of a separate model copy. Within-cycle weight drift between miner and main thread is empirically neg-ligible because the LoRA delta per optimiser step is small and the embedding geometry is dominated by the frozen backbone. 
+
+Cadence. Every modality receives mined hard negatives. The miner alternates between two cy-cle types, gated on the training step counter. A
+
+text cycle re-embeds the captions of all five media modalities, builds a CPU FAISS index, and writes hard-negative ids into the negative cache; it fires roughly ten times per epoch and finishes in about thirty seconds. A media cycle re-embeds the sam-ples of each media modality (speech, audio, image, video and visual document) through the full model into per-modality indices; it fires roughly five times per epoch and takes 12 to 20 minutes. Triggers are coalesced, so multiple firings during a long cycle collapse to a single follow-up. 
+
+Concurrency and cache semantics. A single forward-lock serialises miner and main-thread for-ward passes at batch granularity: the main thread holds the lock for the entire forward, backward and optimiser step, and the miner acquires it per encode-batch, yielding fine-grained alternation rather than overlap. The negative cache is keyed by sample id and overwrites on write, so media-mined en-tries supersede earlier text-mined ones for the same sample. If the cache is empty for a given sample at batch time the collator falls back to in-batch neg-atives plus distillation, recovering the no-mining ablation behaviour with no special-case code. 
+
+E Caption grounding and noise safeguards 
+
+Because every teacher target is machine-generated, caption noise is a direct risk to the learned geom-etry. Four properties of the recipe limit how far that noise can propagate. First, the captioner is 
+
+grounded : the source dataset’s own caption is in-terpolated into the prompt, so the model elaborates on a human-written anchor rather than describing the media unconstrained. Second, the target is a 
+
+pooled embedding , not the caption tokens; the stu-dent fits a single vector, so local errors in wording are attenuated by pooling rather than supervised token by token. Compression is not correction, however: systematic hallucinations, omissions and semantic biases can still propagate into the student through the pooled target. Third, hard-negative mining applies a 0.92 cosine cutoff, which discards candidates too close to the anchor to be genuine negatives and so removes the mining pairs most likely to be caption artefacts. Fourth, the text path is frozen, so no amount of captioner bias can reach text retrieval: whatever the captions contain, the text branch is the stock backbone. Visual documents are the informative case: they are the one modality captioned with no reference caption to ground against, and they still reach strong retrieval, which shows that fully generated captions can provide effective supervision in this setting. It does not measure robustness to halluci-nated or systematically biased captions. These are containment properties, not verification; we do not filter captions for factuality, and the Limitations section states what that leaves unmeasured. 23 Source Modality Samples License 
+
+TED-LIUM 3 (Hernandez et al., 2018) speech 26,826 CC BY-NC-ND 3.0 HeySQuAD (Wu et al., 2023a) speech 7,199 CC BY 4.0 (HF declared); SQuAD text CC BY-SA 4.0 Spoken Alpaca (Shih et al., 2023) speech 5,135 CC BY-NC 4.0 Gemini Speech (SB, 2025) speech 4,726 Apache 2.0 LibriSpeech (Panayotov et al., 2015) speech 2,854 CC BY 4.0 WavCaps (FreeSound) (Mei et al., 2024) audio 26,217 Academic / research only WavCaps (AudioSet-SL) (Mei et al., 2024) audio 10,831 Academic / research only AudioCaps (Kim et al., 2019) audio 4,518 MIT (academic only) WavCaps (BBC) (Mei et al., 2024) audio 3,115 Academic / research only Clotho (Drossos et al., 2020) audio 394 Tampere Univ. (non-commercial); audio: per-clip Freesound CC WavCaps (SoundBible) (Mei et al., 2024) audio 118 Academic / research only ShareGPT-4o (image) (Chen et al., 2024) image 42,271 MIT (academic only) Recap-COCO-30K (Li et al., 2024) image 22,474 CC BY 4.0 Flickr30k (Young et al., 2014) image 21,398 Research-only (Flickr ToU) ActivityNet (Krishna et al., 2017) video 27,526 No explicit license (devkit MIT); YouTube ToS MSR-VTT (Xu et al., 2016) video 6,612 Research-only (Microsoft) ShareGPT-4o (video) (Chen et al., 2024) video 1,555 MIT (academic only) VisRAG (Yu et al., 2025) visual doc 14,995 Mixed (per sub-source) ColPali (Faysse et al., 2025) visual doc 13,316 Mixed (per sub-source) 
+
+Table 11: Per-source breakdown of the caption slice of our omni-modal corpus, with citations and source licenses. Our generated captions are released under CC BY-SA 4.0; source media keep the licenses listed here. 
+
+F Additional ablations 128 256 512 1024 MRL truncation dim     
+
+> 38.0
+> 35.8 29.5 28.3
+> 21.5
+> 16.9 45.4 45.1
+> 44.0
+> 43.4 27.1
+> 25.4
+> nemotron-3b LCO-Omni-3B LCO-Omni-7B BidirLM-2.5B Ours 0.9B Ours 2.3B
+
+Figure 8: MRL truncation behaviour. AVG over per-modality probes (two retrieval tasks each from MTEB-v2, MAEB, MMEB-V2, ViDoRe-V3) against truncation dimension d ∈ { 128 , 256 , 512 , 1024 }. Both 
+
+Ours curves are near-monotone and stay close to full-dimension performance even at the most aggressive 128-dim slice, whereas the omni-specific baselines fall away far more steeply and their per-modality curves are not monotone. Vision-language embedders that ship their own Matryoshka training degrade comparably gently. 
+
+Matryoshka truncation. Fig. 8 plots the trunca-tion curves summarised in §6.4. The additional analyses reported below are a SciFact text-vs-speech NDCG@10 convergence probe, emergent media-to-media alignment via the shared text axis, and the single-stage data-loader with its phased optimiser schedule. 
+
+Seed sensitivity, per seed. Table 12 gives the per-seed scores behind the summary in §6.3. All three runs use the 10-epoch no-mining configuration of the 0.9B variant and differ only in the random seed. 
+
+Modality s42 s71 s1234 Mean SD 
+
+Text 49.57 49.57 49.57 49.57 0.00 Speech 43.93 41.95 43.41 43.10 1.03 Audio 33.28 34.22 34.37 33.96 0.59 Image 27.96 27.35 27.13 27.48 0.43 Video 20.86 19.61 18.99 19.82 0.95 Visual Doc 46.76 46.21 43.47 45.48 1.76 
+
+Table 12: Seed sensitivity of the 0.9B variant across seeds 42, 71 and 1234, on the 10-epoch no-mining con-figuration. Metrics match the main tables. SD is the sample standard deviation over the three seeds; the text row is identical by construction. 
+
+Cross-modal alignment probe. During training we monitor a SciFact text-vs-speech NDCG@10 convergence probe every 10% of an epoch. The synthesised speech version of each claim is en-coded through the full multimodal path (Whisper + Dasheng → projectors → backbone) while the corpus remains text. The two NDCG@10 curves converging is the headline indicator that the audio path has reached the backbone’s text geometry. 
+
+Media-to-media alignment. Routing every modality through the same shared backbone and aligning each one to the caption text places all media in one geometry after training. We never train a media-to-media objective, but because every modality shares the text axis as a common reference frame, pairings such as image ↔audio, audio ↔video and image ↔document can in 24 principle be compared directly. This mirrors the emergent alignment reported by Image-Bind (Girdhar et al., 2023), here induced by a text anchor rather than by contrasting modalities pair-wise, with the frozen text-embedding backbone supplying the shared metric. 
+
+Single-stage training. LLaVA (Liu et al., 2023) and most VL models train in two distinct stages with two distinct datasets. Omni-Embed-Mini runs as a single-stage pipeline: the dataset is loaded once and the only “phasing” is internal to the opti-misation schedule (projectors only, then projectors plus encoder LoRA; §3.1). The two phases share the same data-loader, the same dense cascaded cap-tions, and the same loss, with no hand-off. This is possible because dense cascaded captions carry both alignment signal and task signal in one row. 
+
+G Loss equations 
+
+We give the full form of the Matryoshka SigLIP contrastive loss summarised in Sec. 3.4. Let ˆa(d) 
+
+> i
+
+,
+
+ˆp(d) 
+
+> j
+
+, ˆh(d) 
+
+> ik
+
+denote the L2-normalised, d-truncated student, in-batch positive, and hard-negative em-beddings, the last being the k-th negative mined for anchor i. The in-batch positive is the teacher em-bedding, so ˆai ≡ ˆsi and ˆpi ≡ ˆti. With learned tem-perature τ = exp(log τ ) (clamped to [0 .01 , 0.3] )and learned bias b initialised to −10 , both shared across d,                        
+
+> z(d)
+> ij =1
+> τˆa(d)
+> i·ˆp(d)
+> j+b, yij =
+> (
+> +1 i=j
+> −1i̸=j,(1)
+> ζ(d)
+> ik =1
+> τˆa(d)
+> i·ˆh(d)
+> ik +b, (2)
+
+and the per-dim SigLIP loss is the mean over all concatenated pairs:          
+
+> L(d)
+> siglip =−1
+> B(B+K)
+> X
+> i,j
+> log σ(yij z(d)
+> ij ) + X
+> i,k
+> log σ(−ζ(d)
+> ik )
+> 
+> (3)
+
+The Matryoshka aggregation uses 1/√d weight-ing, wd = (1 /√d)/ P 
+
+> d′
+
+(1 /√d′), upweighting aggressive truncations to reflect their higher per-coordinate retrieval cost. The cosine distillation term is Ldist = P 
+
+> d
+
+wdEi[1 − ˆs(d) 
+
+> i
+
+· ˆt(d) 
+
+> i
+
+], and the total loss is L = Lcontr + λ Ldist with λ = 1 .
+
+H Hyperparameters and training schedule 
+
+Table 14 lists the hyperparameters of the smallest variant, Omni-Embed-Mini-0.9B. Training runs on 8 GPUs with DDP, BF16 mixed precision, AdamW, and a single cosine schedule with warmup. Batch size is held near-uniform across modalities (image, visual document, audio and speech at 32; video at 8 due to its patch-token footprint). Every number we report for a given variant comes from a single checkpoint of that variant, evaluated across all six modalities. 
+
+I Additional Limitations 
+
+• Vision modes diverge between the 0.9B and 2.3B variants. The 0.9B variant uses a ViT extracted from the vision-native Qwen3.5-0.8B model because the 0.6B text backbone has no vision module; the 2.3B variant reuses its backbone’s native vision module. The train-ing configuration accommodates both, but cross-variant ablations of the two vision strategies are left to future work. • Visual-document captions are roughly six times longer than other modalities. Visual-document dense captions average about 4,157 characters versus about 582 for audio. The frozen backbone’s 2,048-token context truncates the long tail of visual-document captions; trunca-tion is consistent between teacher and student paths so cosine alignment is unaffected, but the upper end of visual-doc detail is lost from the contrastive signal. • Video uses per-frame mean-pooled embed-dings on MMEB-V2. For all omni-style models, the benchmark’s own 8 frames per video are embedded as images and mean-pooled. This keeps results directly comparable but caps video performance below what a native temporal encoder could reach.        
+
+> Component Params
+> Frozen text backbone (Qwen3-Embedding-0.6B) 595.78 M Vision encoder (ViT from Qwen3.5-0.8B) 100.59 M Whisper-small encoder 88.15 M Dasheng-base encoder 85.46 M Projectors and pooler 65.37 M
+> Total at inference 935.35 M
+
+Table 13: Per-component parameter breakdown 
+
+of Omni-Embed-Mini-0.9B, expanding its total in Ta-ble 1. Training updates the projectors and pooler plus 2.95 M of media-encoder LoRA, 68.32 M in total. The 2.3B variant replaces the backbone and its separate vi-sion encoder with Qwen3-VL-Embedding-2B and its native vision path (2126.99 M), keeps the same au-dio encoders, and uses larger projectors (139.61 M), giving 2440.21 M at inference. 
+
+25 Component Setting 
+
+Architecture 
+
+Backbone, frozen Qwen3-Embedding-0.6B Hidden size 1024 MRL dimensions {128 , 256 , 512 , 1024 }
+
+Vision encoder ViT extracted from Qwen3.5-0.8B Image resolution 224 × 224 
+
+Video tokens / max frames 196 / 96 Audio encoders, both variants Whisper-small encoder + Dasheng-base Tokens per audio encoder 128 Max audio duration 60 s 
+
+Optimisation 
+
+LoRA rank / α / dropout 16 / 32 / 0.0 LR, audio adapters 2 × 10 −4
+
+LR, vision adapters 1 × 10 −4
+
+LR, encoder LoRA 1 × 10 −4
+
+Optimizer AdamW, weight decay 0.01 Warmup 2% of total steps Max gradient norm 1.0 Max sequence length 2048 Batch size per GPU, image / visual-doc / audio / speech / video 32 / 32 / 32 / 32 / 8 Epochs 2, for the reported ablation runs Mixed precision BF16 GPUs 8, DDP 
+
+Loss and schedule 
+
+Distillation loss weight 1.0, cosine Initial temperature 0.07, learnable Phase-2 switch 20% of total steps 
+
+Hard-negative mining 
+
+Text-mining refresh 10 × per epoch Media-mining refresh 5× per epoch Text index size 50,000 captions Media index size 10,000 per modality Hard negatives per sample 5False-negative threshold 0.92, cosine 
+
+Table 14: Hyperparameters for the Omni-Embed-Mini-0.9B variant. The 2.3B variant differs in backbone, using Qwen3-VL-Embedding-2B with native vision, and keeps the same Whisper-small and Dasheng-base audio encoders. Proportional batch sizes are adjusted, while optimisation settings remain unchanged. 
+
+26

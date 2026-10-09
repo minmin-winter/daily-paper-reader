@@ -1,0 +1,434 @@
+Title: EMODE: Dynamic Para-Semantic Experts for Emotion-Aware Speech Language Modeling
+
+URL Source: https://arxiv.org/pdf/2610.06956v1
+
+Published Time: Wed, 07 Oct 2026 00:03:58 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# EMODE: Dynamic Para-Semantic Experts for Emotion-Aware Speech Language Modeling ∗
+
+# Jianan Pan 
+
+Zhejiang University Hangzhou, China jonathan_pan@zju.edu.cn 
+
+# Yiwen Gu 
+
+Zhejiang University Hangzhou, China yiwen_gu@zju.edu.cn 
+
+# Xinze Li 
+
+Zhejiang University Hangzhou, China xinze.li.lab@zju.edu.cn 
+
+# Rui Wang 
+
+Zhejiang University Hangzhou, China 22531069@zju.edu.cn 
+
+# Kejie Huang ✉
+
+Zhejiang University Hangzhou, China huangkejie@zju.edu.cn 
+
+## Abstract 
+
+Large speech language models have demonstrated strong capa-bilities in unified cross-modal understanding and generation, yet paralinguistic cues, especially emotion, remain difficult to preserve. Existing systems typically rely on entangled acoustic represen-tations, which allow the underlying language model to depend excessively on recovered lexical content instead of grounding its behavior in acoustic-prosodic evidence. We address this limita-tion with EMODE, an emotion-aware speech language model built around Dynamic Para-Semantic Experts (DPSE) . DPSE decom-poses continuous speech features into semantic and paralinguistic pathways, routes them dynamically, and fuses them before integra-tion into the language model. To turn this structural decomposition into functional specialization, EMODE is trained with a three-stage curriculum consisting of semantic warm-up, paralinguistic activa-tion, and joint refinement, guided by Orthogonal Expert Guidance (OEG), Semantic-to-Acoustic Alignment (SAA), and Gating Diver-sity Regularization (GDR). Experiments on SER test, empathetic response evaluation, and the newly constructed bilingual MEPA benchmark show that EMODE improves the balance between lexical fidelity and emotional sensitivity, strengthens affect-grounded re-sponse generation, and exposes the value of explicit para-semantic factorization for robust cross-corpus emotion understanding. 
+
+## CCS Concepts 
+
+• Computing methodologies → Natural language generation ;
+
+Speech recognition ; Discourse, dialogue and pragmatics. 
+
+## Keywords 
+
+Emotion-Aware Speech Language Modeling, Dynamic Expert Rout-ing, Speech Emotion Recognition, Empathetic Response Generation 
+
+## 1 Introduction 
+
+Speech-language models are rapidly expanding the interface be-tween audio and large language models. Whisper provides a strong foundation for robust large-scale speech encoding [38]. SpeechT5 
+
+> ∗Accepted for ACM Multimedia 2026 (MM ’26). DOI: https://doi.org/10.1145/3767308. 3836392.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+
+extends this direction to unified speech and text pretraining [4]. SpeechGPT shows that spoken interaction can be embedded directly into a conversational language-model pipeline [52]. More recent systems such as Qwen-Audio [15], Qwen2-Audio [14], SALMONN [41], GLM-4-Voice [50], Kimi-Audio [25], and Qwen2.5-Omni [48] further strengthen the case for unified spoken interaction. This trend is especially promising for human-centered applications be-cause speech conveys not only lexical content but also timing, prosody, speaking style, and emotion. Yet most speech-to-language-model connectors are still opti-mized primarily for semantic transduction. They are designed to preserve what was said, while affective information is expected to survive implicitly inside a single acoustic representation. That bias is poorly matched to emotion-aware spoken interaction. Classical speech emotion research has long shown that emotion is distributed across prosody, voice quality, and temporal dynamics [1, 17]. Mod-ern self-supervised encoders such as wav2vec 2.0 [6], HuBERT [23], WavLM [12], BEATs [13], and emotion2vec [29] show that such cues can be learned at scale. Lightweight speech emotion recognition sys-tems built on frozen speech encoders already perform competitively [30, 34]. An emotion-aware speech connector therefore faces two coupled but non-identical requirements: it must preserve lexical alignment for language modeling, and it must retain paralinguistic evidence for emotion understanding. Recent empathetic speech-language systems begin to address this gap by introducing emotion-aware supervision or empathy-oriented response objectives [19, 44, 45]. At the same time, recent speech emotion systems increasingly move beyond closed-set clas-sification toward explanation or free-form description, as illustrated by SECap [49] and EmotionThinker [46]. Even so, most existing systems still rely on a single speech pathway, which leaves the model free to solve emotion-sensitive tasks through entangled rep-resentations or lexical shortcuts. This work posits that emotion-aware speech-language modeling benefits from an explicit inductive bias that separates semantic and paralinguistic processing prior to generation. We instantiate this principle in EMODE , driven by its core module: Dynamic Para-Semantic Experts (DPSE) . DPSE routes acoustic features from a Whisper encoder into specialized semantic and paralinguistic experts, dynamically fusing their representations before feeding them to a Qwen language model. To alleviate the scarcity of natu-ral, affect-sensitive dialog data, EMODE uses a frozen text teacher         
+
+> 1arXiv:2610.06956v1 [cs.CL] 3 Oct 2026 Jianan Pan, Yiwen Gu, Xinze Li, Rui Wang, & Kejie Huang He just sent me a really long text message. He just sent me a really long text message.
+> That is wonderful! You sound absolutely thrilled. I take it this is the
+> message you have been hoping for all week? Tell me everything, what
+> exactly did he say to make you smile like that?
+> That is wonderful! You sound absolutely thrilled. I take it this is the
+> message you have been hoping for all week? Tell me everything, what
+> exactly did he say to make you smile like that?
+> He just sent me a really long text message. He just sent me a really long text message.
+> I can hear the absolute frustration in your voice. It is infuriating when
+> someone disrupts your peace like that. You don't owe him an
+> immediate reply if you are too angry. Just put the phone down for now.
+> I can hear the absolute frustration in your voice. It is infuriating when
+> someone disrupts your peace like that. You don't owe him an
+> immediate reply if you are too angry. Just put the phone down for now.
+> Happy
+> Angr y
+
+Figure 1: Semantic-acoustic variation in human-machine in-teraction. Identical textual utterances can convey different intents depending on acoustic prosody. This example illus-trates why end-to-end speech models should preserve and condition on paralinguistic evidence when generating empa-thetic responses. 
+
+pathway alongside emotion-aware continuation targets, drawing supervision from transcript-aligned and emotion-labeled resources. This architecture is optimized via a three-stage curriculum incorpo-rating Orthogonal Expert Guidance (OEG), Semantic-to-Acoustic Alignment (SAA), and Gating Diversity Regularization (GDR), cul-minating in joint refinement of affective specialization and response generation. We conduct a comprehensive evaluation of EMODE across stan-dard in-domain speech emotion recognition (SER) benchmarks (IEMO-CAP and MELD) and diverse zero-shot datasets spanning five lan-guages (RAVDESS, SAVEE, AESDD, MERBench, RESD, and CaFE). To test acoustic grounding while controlling lexical content, we introduce the Multi-Emotion Parallel Audio (MEPA) bench-mark. Unlike conventional corpora that may contain transcript-level emotional regularities, MEPA groups diverse emotional speak-ing styles around fixed lexical statements across two languages, making acoustic-prosodic evidence necessary for distinguishing the variants within each group. Our core contributions are threefold: 
+
+• We propose EMODE , an emotion-aware speech-language model featuring DPSE , which separates and dynamically recombines semantic and paralinguistic processing streams. 
+
+• We introduce a coordinated three-stage training curriculum that translates structural decomposition into functional spe-cialization through semantic and paralinguistic guidance, teacher-based alignment, and routing regularization. 
+
+• We evaluate EMODE on in-domain and cross-lingual zero-shot SER, SpeechAlpaca empathetic response generation, and the new MEPA benchmark, covering both task-level performance and controlled lexical grounding. 
+
+## 2 Related Work 2.1 Speech-Language and Audio-Language Modeling 
+
+Research on speech-conditioned language modeling has predomi-nantly evolved along two parallel trajectories. The first focuses on developing robust speech representations and tighter speech-text interfaces. Foundational works such as Whisper [38] provide robust large-scale speech encoding, while SpeechT5 [4] and SpeechGPT [52] pioneer unified speech-text pre-training and the direct inte-gration of spoken interaction into conversational language models, respectively. Collectively, these systems establish the architectural backbone for practical, speech-native interactions. The second trajectory broadens this interface to encompass gen-eral audio understanding and end-to-end multimodal dialogue. Mod-els like Qwen-Audio and Qwen2-Audio [14, 15] unify audio instruc-tion following, whereas SALMONN [41] and Pengi [16] extend ca-pabilities to generic hearing and text-centric audio task formulation. Recent “omni” systems, including GLM-4-Voice [50], Kimi-Audio [25], Phi-4-Multimodal [2], Megrez-3B-Omni [26], MiniCPM-O [32], and Qwen2.5-Omni [48], further push the boundaries of unified multimodal dialogue. 
+
+## 2.2 Speech Emotion Recognition and Emotion-Aware Spoken Interaction 
+
+The field of Speech Emotion Recognition (SER) provides both the foundational acoustic cues and the rigorous evaluation paradigms relevant to our objective. Extensive surveys consistently identify prosody, timing, and voice quality as the primary carriers of affec-tive information [1, 17]. Consequently, widely adopted corpora cap-ture varied communicative contexts: IEMOCAP covers dyadic inter-actions [8], MELD introduces multi-party dialogue [35], RAVDESS and SAVEE offer controlled, acted speech [24, 28], and MSP-Podcast scales to naturalistic, in-the-wild conversational audio [9]. Concur-rently, the advent of self-supervised speech encoders—including wav2vec 2.0, HuBERT, WavLM, BEATs, and emotion2vec [6, 12, 13, 23, 29]—has demonstrated that large-scale representations transfer effectively to downstream emotion understanding tasks. Recent advancements increasingly integrate SER into broader conversational frameworks. Systems such as BLSP-Emo, OpenS2S, and OSUM-EChat inject explicit emotion-aware supervision into spoken dialogue agents [19, 44, 45]. Furthermore, SECap [49] and EmotionThinker [46] move beyond closed-set classification by gen-erating descriptive captions and reasoning over emotional speech. EMODE complements these efforts. In addition to emotion-aware supervision and generation objectives, it addresses the preceding representation bottleneck by organizing semantic and paralinguis-tic evidence before integration into the language model. 
+
+## 2.3 Expert Routing and Disentangled Speech Representations 
+
+Sparse expert routing provides a robust mechanism for conditional computation. Sparsely gated Mixture-of-Experts (MoE) layers pio-neered the dynamic activation of specialized subnetworks based on input characteristics [40]. Subsequent innovations, such as Switch Transformers [18] and expert-choice routing [54], refined large-scale allocation and capacity balancing. While DPSE adopts this principle of conditional specialization, it diverges significantly from traditional MoE applications: it employs precisely two experts and routes continuous speech features under explicit emotion-aware supervision, prioritizing feature disentanglement over language model capacity expansion. 
+
+> 2EMODE: Dynamic Para-Semantic Experts for Emotion-Aware Speech Language Modeling
+
+This architectural choice fundamentally aligns DPSE with the literature on speech disentanglement. Prior works such as AutoVC [37] factorize speaker identity from linguistic content, Triple In-formation Bottleneck models [36] decompose speech into multiple latent variables, and SpeechSplit2.0 [10] leverages unsupervised disentanglement for controllable synthesis. EMODE adapts this intuition for speech-language modeling. However, our primary ob-jective is not synthesis control; rather, we aim to construct a speech representation that independently preserves semantic fidelity and affective faithfulness, ensuring both remain highly accessible for downstream language generation tasks. 
+
+## 3 Approach 
+
+Developing emotion-aware spoken interaction systems necessitates speech representations capable of capturing both lexical content (what was said) and paralinguistic delivery ( how it was said). Ful-filling this dual objective is challenging when utilizing a single, entangled speech connector, particularly given the scarcity of natu-rally occurring speech-response data with explicit affective annota-tions. Building upon the teacher-guided alignment and emotion-aware continuation paradigms established in BLSP and BLSP-Emo [43, 44], EMODE leverages a frozen text teacher to supply response-side semantic targets and reformulates emotion-labeled speech into continuation-style supervision. These complementary tech-niques mitigate the data bottleneck by reducing reliance on massive datasets of directly annotated, affect-sensitive dialog pairs. Beyond this supervision paradigm, EMODE incorporates Dynamic Para-Semantic Experts (DPSE) , an architectural module that explicitly decouples semantic and paralinguistic processing pathways prior to representation fusion. 
+
+## 3.1 Task Setup and Dual-Path Supervision 
+
+Let 𝑠 denote a speech waveform, accompanied by an optional tran-script 𝑥 = (𝑥 1, . . . , 𝑥 𝑁 ), a target text response 𝑦 = (𝑦 1, . . . , 𝑦 𝑀 ),and an emotion label 𝑒 (when available). The primary objective is to train a speech-language model that maintains strict lexical fidelity while preserving emotion-salient prosodic, temporal, and voice-quality cues. The Whisper encoder first extracts frame-level acoustic features, 
+
+A = 𝑓 enc (𝑠 ) ∈ R𝑇 ×𝑑 𝑎 . (1) DPSE then projects A into a downsampled sequence 
+
+H = (h1, . . . , h𝑇 ′ ) ∈ R𝑇 ′ ×𝑑 , (2) which serves as the input to the language model backbone. Training proceeds via two synchronized pathways processing the same sample. Let 𝑐 sp and 𝑐 txt represent the prompt tokens for the speech and text teacher pathways, respectively, and let 𝑦 <𝑡 =
+
+(𝑦 1, . . . , 𝑦 𝑡 −1) denote the teacher-forced response prefix at time step 
+
+𝑡 . The speech pathway receives 
+
+Isp  
+
+> 𝑡
+
+= [ 𝑐 sp ; H; 𝑦 <𝑡 ], (3) while the text teacher pathway receives 
+
+Itxt  
+
+> 𝑡
+
+= [ 𝑐 txt ; 𝑥 ; 𝑦 <𝑡 ]. (4) The text teacher pathway operates in inference mode (without gra-dient updates) to generate reference token distributions and hidden states. When training on emotion-aware continuation data, the speech pathway receives no explicit text-based emotion marker. The target affect is therefore not disclosed through the prompt, encouraging the speech pathway to use acoustic evidence rather than a supplied emotion label. By combining transcript-aligned teacher targets with emotion-aware continuation supervision, this dual-path approach increases the usable supervision from paired speech-transcript and isolated emotion-labeled speech corpora de-spite the scarcity of natural, affect-grounded dialog data. 
+
+## 3.2 Dynamic Para-Semantic Experts 
+
+The DPSE module comprises three core components: a dynamic router, a semantic expert, and a paralinguistic expert. The router first contextualizes A with self-attention before predicting a frame-level, two-way routing distribution: 
+
+R = Softmax (𝑓 router (A)) ∈ [ 0, 1]𝑇 ×2, (5) The two columns of R represent the routing weights for the seman-tic and paralinguistic pathways, respectively. Both experts apply convolutional subsampling followed by light-weight residual processing to generate sequence representations: 
+
+S = 𝑓 sem (A) ∈ R𝑇 ′ ×𝑑 , P = 𝑓 para (A) ∈ R𝑇 ′ ×𝑑 . (6) To match the downsampled temporal resolution of the experts, the frame-level routing matrix R undergoes average pooling along the time axis to yield ¯ R ∈ [ 0, 1]𝑇 ′ ×2. Letting g ∈ R𝑇 ′ ×1 denote the paralinguistic gating vector (extracted from the second column of ¯ R), the sequences are fused. The semantic stream serves as the backbone while the paralinguistic stream acts as a gated residual correction. The final fused representation is stabilized via layer normalization, 
+
+H = LayerNorm  S + g ⊙ P, (7) where ⊙ denotes element-wise multiplication along the temporal dimension. Additionally, the paralinguistic expert aggregates frame-level features via attention pooling to formulate an utterance-level sum-mary, 
+
+u(𝑝 ) = 
+
+> 𝑇 ′
+
+∑︁ 
+
+> 𝑡 =1
+
+𝛼 𝑡 p𝑡 , 𝛼 𝑡 = exp (𝑏 𝑡 )
+
+Í𝑇 ′ 
+
+> 𝑢 =1
+
+exp (𝑏 𝑢 ) , (8) which subsequently feeds into an auxiliary emotion classifier. Fi-nally, the paralinguistic sequence is transformed via a linear pro-jection 𝑊 𝑝 to produce ˜P = 𝑊 𝑝 P, (9) providing the requisite representation for the semantic-to-acoustic alignment objective. 
+
+## 3.3 Orthogonal Expert Guidance 
+
+Introducing dual experts does not inherently guarantee functional specialization. Optimized solely under a response objective, both branches may converge toward identical lexical solutions, poten-tially causing router collapse before distinct roles emerge. EMODE mitigates this via Orthogonal Expert Guidance (OEG) , which imposes distinct supervisory signals on each expert. 
+
+> 3Jianan Pan, Yiwen Gu, Xinze Li, Rui Wang, & Kejie Huang Raw Speech Waveform
+> Speech Encoder
+> Frame Router
+> Para-Expert
+> Sem-Expert
+> Qwen LLM
+
+DPSE 
+
+> Multi-Head Self-Attention
+> Linear
+> GELU
+> Dropout
+> Linear
+> Layer Norm
+> Softmax
+
+Frame Router  
+
+> Lora
+> Qwen LLM
+> Transcription Emotion-Aware Continuation
+
+Text Branch 
+
+Speech Branch 
+
+𝒓 𝒕 𝒔 𝒓 𝒕 𝒑 
+
+> G2P
+> Stage3-only
+> Speech Features
+> LLM Tokenizer
+
+Stage1|Stage2|Stage3 | |
+
+| |
+
+| |   
+
+> Emotion-Token Mask
+> 𝓛 𝒔𝒂𝒂
+> 00010
+> Avg Pool
+> Avg Pool
+> Phoneme Cosine Similarity Alignment
+> CTC-Head
+> Emo-Head
+> 𝓛 𝒐𝒆𝒈&𝒑𝒂𝒓𝒂
+> 𝓛 𝒐𝒆𝒈&𝒔𝒆𝒎
+> 𝓛 𝒓𝒆𝒔𝒑&𝒌𝒍
+> 𝓛 𝒓𝒆𝒔𝒑&𝒄𝒆
+
+## EMODE: Dynamic Para-Semantic Experts for Emotion-Aware Speech Language Modeling 
+
+Figure 2: Overview of EMODE. Whisper encodes the speech signal into frame-level acoustic features. DPSE routes these features into semantic and paralinguistic experts, fuses the two streams into a shared speech representation, and passes the result to the language model. A frozen text teacher pathway supplies response distributions and hidden states for teacher distillation and semantic-to-acoustic alignment during training. Grapheme-to-phoneme conversion produces phoneme targets for semantic CTC supervision, whereas the language model tokenizer produces the teacher-side token sequence used for response distillation and emotion-token masking. 
+
+Given transcript 𝑥 , the proposed framework uses two parallel symbolic views. A grapheme-to-phoneme module 𝛾 (·) maps the transcript to a phoneme sequence 
+
+𝛾 (𝑥 ) = 𝑢 = (𝑢 1, . . . , 𝑢 𝐾 ), 𝑢 𝑘 ∈ V ph , (10) where Vph denotes the phoneme vocabulary. In parallel, the lan-guage model tokenizer 𝜏 (·) maps textual context to the teacher-side token sequence used by the frozen text pathway. These two views serve different objectives: 𝑢 supervises the semantic branch through phoneme-level CTC, whereas 𝜏 (·) indexes teacher hidden states and token masks for response distillation and semantic-to-acoustic alignment. No positionwise correspondence between phoneme sym-bols and language model tokens is assumed. For the semantic expert, OEG employs a phoneme-level Connec-tionist Temporal Classification (CTC) loss, 
+
+Loeg-sem = CTC  𝑊 ctc S, 𝑢 , (11) where 𝑊 ctc S ∈ R𝑇 ′ × | V ph | is the frame-level phoneme distribution produced by the CTC prediction head, 𝑢 = 𝛾 (𝑥 ) is the phoneme tar-get sequence, and CTC (·) is the standard Connectionist Temporal Classification loss [21]. This phoneme-level targeting aligns with our final experimental training configuration. Conversely, OEG regulates the paralinguistic expert using emo-tion supervision at the utterance level: ˆ𝑒 (𝑝 ) = 𝑔 emo 
+
+ u(𝑝 ) , Loeg-para = CrossEntropy   ˆ𝑒 (𝑝 ) , 𝑒 , (12) where 𝑔 emo (·) denotes the emotion classifier and CrossEntropy (·) 
+
+represents the standard categorical cross-entropy function. Col-lectively, these orthogonal losses encourage lexical consistency in the semantic branch and affective sensitivity in the paralinguistic branch. 
+
+## 3.4 Semantic-to-Acoustic Alignment 
+
+Despite OEG, the paralinguistic representations may remain weakly grounded in the task-relevant semantic context required by the language model. To bridge this gap, we introduce Semantic-to-Acoustic Alignment (SAA) . Let 
+
+Z = (z1, . . . , z𝐿 ) ∈ R𝐿 ×𝑑 (13) denote the hidden states extracted from the frozen text teacher path-way. We compute mask-aware, mean-pooled contextual summaries for both the speech and teacher modalities: 
+
+q =
+
+Í𝑇 ′  
+
+> 𝑡 =1
+
+𝑚 sp  
+
+> 𝑡
+
+˜p𝑡 
+
+Í𝑇 ′ 
+
+> 𝑡 =1
+
+𝑚 sp 
+
+> 𝑡
+
+, v =
+
+Í𝐿 ℓ=1 𝑚 txt  
+
+> ℓ
+
+zℓ
+
+Í𝐿 ℓ=1 𝑚 txt 
+
+> ℓ
+
+, (14) where 𝑚 sp represents the valid speech-frame mask, 𝑚 txt is the teacher-side token mask, and ˜ p𝑡 denotes the projected paralin-guistic feature at time step 𝑡 . The alignment loss is formulated as: 
+
+Lsaa = 1 − cosine  q, v, (15) where cosine (· , ·) denotes cosine similarity. Let 
+
+𝜏 ([ 𝑐 txt ; 𝑥 ; 𝑦 ]) = (𝑤 1, . . . , 𝑤 𝐿 ) (16) 
+
+> 4EMODE: Dynamic Para-Semantic Experts for Emotion-Aware Speech Language Modeling
+
+denote the teacher-side token sequence. For a label-supervised SER sample with emotion label 𝑒 , let 𝑣 (𝑒 ) denote the associated textual verbalizer and let E denote the set of token positions occupied by that verbalizer within 𝜏 ([ 𝑐 txt ; 𝑥 ; 𝑦 ]) . The emotion-token mask is then defined as 
+
+𝑚 txt  
+
+> ℓ
+
+= 1[ℓ ∈ E] . (17) 
+
+## 3.5 Gating Diversity Regularization 
+
+Without intervention, the router may prematurely overcommit to the faster-learning semantic pathway and hinder subsequent spe-cialization. We therefore apply Gating Diversity Regularization (GDR) to the initial frame-level routing probabilities: 
+
+Lgdr = − 1
+
+Í𝑇 𝑡 =1 𝑚 𝑡 𝑇 ∑︁ 
+
+> 𝑡 =1
+
+𝑚 𝑡 H ( r𝑡 ), (18) where H (·) computes the entropy, 𝑚 𝑡 is the valid-frame mask, and 
+
+r𝑡 represents the router distribution at frame 𝑡 . Minimizing negative entropy promotes broad routing exploration early in training, while decay of its coefficient later permits more selective routing. 
+
+## 3.6 Stage-Wise Optimization 
+
+The initial training stages leverage teacher distillation to stabilize speech-text alignment, whereas the final stage transitions to autore-gressive response generation. Let Lresp-kl denote the response-level Kullback-Leibler (KL) divergence loss employed for teacher distilla-tion: 
+
+Lresp-kl = KL  𝑝 txt resp ∥ 𝑝 sp resp 
+
+, (19) where 𝑝 txt resp and 𝑝 sp resp represent the next-token probability distribu-tions at the response positions for the teacher and speech pathways, respectively. Furthermore, let Lresp-ce represent the standard au-toregressive cross-entropy loss over response tokens. 
+
+Stage I: semantic warm-up. The paralinguistic expert remains frozen, dynamic routing is disabled (biasing the network entirely toward the semantic pathway), and optimization strictly prioritizes lexical faithfulness: 
+
+LI = Lresp-kl + 𝜆 sem Loeg-sem . (20) This phase establishes a stable semantic interface between the acoustic encoder and the language model. 
+
+Stage II: paralinguistic activation. The paralinguistic expert is unfrozen, routing becomes fully dynamic, and the language model remains frozen. Under our standard training configuration, this stage minimizes: 
+
+LII = 𝜆 sem Loeg-sem + 𝜆 para Loeg-para + 𝜆 gdr Lgdr . (21) Stage II marks the critical juncture where the dual experts acquire their distinct functional roles, safeguarded by GDR against prema-ture routing collapse. 
+
+Stage III: joint refinement. The culminating stage trains on a mixture of speech continuation, emotion-aware continuation, and label-supervised SER data. It introduces low-rank adaptations to the language model and optimizes the joint objective: 
+
+LIII = Lresp-ce + 𝜆 para Loeg-para + 𝜆 saa (𝑡 )L saa + 𝜆 gdr (𝑡 )L gdr . (22) Under the final configuration, the paralinguistic OEG loss weight is fixed at 0 .02, the SAA weight scales linearly from 0 to 0 .1, and the GDR coefficient decays from 0 .03 to 0 .01, accommodating in-creasingly selective routing as training progresses. In summary, EMODE synthesizes structured para-semantic fac-torization with robust teacher-guided and emotion-aware super-vision. DPSE provides the foundational architectural bias, while the synergistic application of OEG, SAA, and GDR ensures this decomposition remains functionally meaningful throughout the training lifecycle. 
+
+## 4 Experiments 4.1 Experimental Setup 
+
+Training corpora. Stage I uses speech continuation data from LibriSpeech [33], Common Voice [5], GigaSpeech [11], and Wenet-Speech [51]. These corpora provide diverse speech-transcript pairs to stabilize semantic alignment prior to introducing emotion su-pervision. To overcome the scarcity of natural, affect-grounded speech-response data, Stages II and III incorporate emotion super-vision from IEMOCAP [8], MELD [35], ESD [53], CMU-MOSEI [7], MEAD [47], EARS [39], EXPRESSO [31], and MSP-Podcast [9]. All emotion datasets are mapped into a unified five-way label space: 
+
+neutral , happy , angry , sad , and surprised .
+
+Evaluation corpora. Our primary evaluation suite comprises two in-domain corpora (IEMOCAP and MELD) and seven zero-shot test sets: RAVDESS [28], SAVEE [24], MERBench Test1 and Test2 [27], RESD [3], AESDD [42], and CaFE [20]. This diverse selection ex-tends our evaluation beyond English to encompass Greek, Chinese, Russian, and French conditions. For spoken empathetic interac-tion, we evaluate on SpeechAlpaca using the speech-only protocol established by BLSP-Emo [44]. We also introduce MEPA, a bilin-gual synthetic benchmark built from lexically shared first-person statements and emotion-specific empathetic responses rendered by expressive speech models. Within each group, the statement remains fixed while the speaking style varies across emotions. This controlled structure reduces transcript-level shortcuts and comple-ments conventional corpora by testing whether predictions remain sensitive to acoustic-prosodic variation. 
+
+Model and training overview. EMODE employs Whisper-base as the speech encoder, DPSE as the bridging connector, and Qwen2.5-7B-Instruct as the language model backbone. The semantic branch receives phoneme-level CTC supervision, while the paralinguistic branch is guided by utterance-level emotion labels. Their fused rep-resentation is subsequently refined via routed para-semantic resid-ual fusion. Unless otherwise specified, all reported results reflect the default three-stage training curriculum detailed in Section 3: semantic warm-up, paralinguistic activation, and joint refinement. 
+
+## 4.2 Tasks and Metrics 
+
+Speech Emotion Recognition (SER). We formulate SER as a closed-set, audio-conditioned classification task executed via text genera-tion. Given an input utterance and a dataset-specific label inven-tory (a subset of the unified five-way training space), EMODE is prompted to generate a single emotion label. The generated outputs 
+
+> 5Jianan Pan, Yiwen Gu, Xinze Li, Rui Wang, & Kejie Huang
+
+Table 1: Speech emotion recognition accuracy (%) on the main evaluation suite. IEMOCAP and MELD are in-domain. RAVDESS, SAVEE, MERBench Test1, MERBench Test2, RESD (Ru.), AESDD (Gr.), and CaFE (Fr.) are zero-shot evaluation sets; Ru., Gr., and Fr. denote Russian, Greek, and French test conditions. MERBench Test1 and Test2 are two evaluation splits from the Chinese MER2023 benchmark. The best and second-best entries in each column are marked in bold and underline, respectively.                                                                                                                                                        
+
+> Model In-domain Zero-shot Avg IEMOCAP MELD RAVDESS SAVEE MERBench Test1 MERBench Test2 RESD (Ru.) AESDD (Gr.) CaFE (Fr.)
+> General Speech LLMs
+> GLM-4-Voice [50] 22.38 21.43 19.67 20.84 17.91 16.48 19.05 18.52 18.73 19.45 BLSP [43] 41.24 50.47 11.10 10.77 18.24 17.02 16.41 15.36 19.18 22.20 DiVA [22] 40.15 35.19 18.28 20.14 22.35 21.08 20.41 19.66 22.17 24.38 SALMONN [41] 23.82 31.32 20.38 17.86 20.53 19.86 18.92 18.74 19.44 21.21 Qwen2-Audio [14] 37.71 51.23 64.98 65.13 61.75 59.42 58.31 57.84 62.48 57.65 Kimi-Audio [25] 57.72 59.13 61.07 55.21 56.92 55.38 54.76 53.84 58.43 56.94
+> Emotion-Focused Speech LLMs
+> SECap [49] 36.29 34.20 28.34 21.93 26.88 25.47 23.95 24.16 26.14 27.48 OSUM-EChat [19] 41.49 53.38 37.34 24.27 35.67 33.92 31.58 31.84 34.41 35.99 BLSP-Emo [44] 76.00 57.30 72.00 63.73 58.76 55.28 66.88 61.60 75.31 65.21
+> Omni LLMs
+> Phi-4-Multimodal [2] 36.62 39.81 17.63 15.55 20.11 19.37 18.64 18.92 19.82 22.94 MiniCPM-O [32] 35.54 52.78 40.93 35.47 37.84 35.68 34.12 33.56 36.27 38.02 Qwen2.5-Omni [48] 45.70 54.64 64.77 52.49 53.61 51.24 48.93 49.83 52.17 52.60 EmotionThinker [46] 77.68 59.71 71.56 73.96 69.18 62.47 65.42 63.42 72.74 68.46
+> EMODE 76.68 64.23 75.58 85.76 75.14 66.94 64.56 66.57 73.46 72.10
+
+are normalized to canonical labels via alias matching and evaluated using standard classification accuracy. 
+
+Empathetic Response. The SpeechAlpaca benchmark evaluates a model’s ability to generate helpful and affectively appropriate responses from speech input. The primary metrics are quality , re-flecting helpfulness and coherence, and empathy , measuring how well a response acknowledges the speaker’s emotional state. Both metrics are scored on a [0, 10 ] scale by a unified DeepSeek-based evaluator across all methods. SpeechAlpaca also includes a four-way speech-only SER protocol over neutral , happy , angry , and sad ;we report this score as an auxiliary measure rather than the primary response criterion. These single-judge scores are not a substitute for human evaluation. 
+
+MEPA benchmark. While MEPA shares the audio-only label-generation protocol of standard SER tasks, its structural design exposes models that still rely on lexical shortcuts. Each evalua-tion group contains one lexical statement rendered in five distinct emotional styles, so accurate prediction must depend on acous-tic evidence rather than transcript priors. We therefore report sample-level accuracy, macro-F1, and Group-Level Complete Ac-curacy (GLCA), GLCA = 1
+
+|G| ∑︁ 𝑔 ∈ G 
+
+1[∀( 𝑥 𝑖 , 𝑦 𝑖 ) ∈ 𝑔, ˆ𝑦 𝑖 = 𝑦 𝑖 ] , (23) where G denotes the set of lexical groups, each containing all five emotional realizations of one shared statement. Because every eval-uated group is complete, GLCA measures the fraction of statements for which the model correctly identifies all five realizations, making it a stricter complement to sample-level accuracy and macro-F1. 
+
+## 4.3 Main Results 
+
+SER Comparison. We first ask whether explicit para-semantic factorization improves standard SER not only on familiar corpora but also under cross-corpus and cross-lingual shift. Table 1 shows that EMODE attains the highest average accuracy across the full nine-dataset suite, reaching 72.10%. The improvement is not con-centrated on a single benchmark. Instead, EMODE ranks first on MELD, RAVDESS, SAVEE, MERBench Test1, MERBench Test2, and AESDD, indicating that the same representation strategy remains effective across conversational, acted, and multilingual zero-shot settings. This comparison also clarifies the complementary strengths of the strongest baselines. EmotionThinker remains strongest on IEMOCAP, while BLSP-Emo performs best on RESD and CaFE. EMODE does not dominate every corpus individually, yet it ex-hibits the most favorable aggregate profile. This pattern matters because the central goal is not to overfit one dataset family, but to maintain emotion sensitivity without sacrificing the lexical stabil-ity required for speech-conditioned language modeling. The gains therefore support the claim that a dedicated paralinguistic pathway improves robustness when prosody, recording style, and language vary simultaneously. 
+
+Empathetic Response. We next evaluate whether improved affec-tive representations translate into better response behavior. Table 2 reports performance on SpeechAlpaca, where the main objective  
+
+> 6EMODE: Dynamic Para-Semantic Experts for Emotion-Aware Speech Language Modeling
+> (a) English subset. (b) Chinese subset.
+
+Figure 3: Row-normalized confusion matrices on the English and Chinese subsets of MEPA. Because each lexical group shares the same statement across five emotional realizations, off-diagonal mass directly reflects failures of acoustic grounding under controlled lexical content. Table 2: SER accuracy and empathetic response results on SpeechAlpaca.                         
+
+> Method SER ↑Quality ↑Empathy ↑
+> BLSP [43] 36.8 5.41 4.72 Qwen2-Audio [14] 52.6 5.88 5.03 MiniCPM-O [32] 46.2 6.02 5.16 OSUM-EChat [19] 56.7 6.67 5.74 BLSP-Emo [44] 83.8 6.90 5.91
+> EMODE 88.75 7.12 6.14
+
+is to produce a helpful and emotionally appropriate reply from speech alone. Under this protocol, quality and empathy are the primary metrics, whereas the auxiliary SER score serves only as a supporting reference. This distinction is important: a model may recover the correct emotion label yet still generate a reply that is generic, unhelpful, or poorly aligned with the speaker’s affective state. This contrast is visible in the comparison with BLSP-Emo. Al-though BLSP-Emo remains competitive on the auxiliary SER mea-sure, EMODE achieves better results on both judge-based empa-thetic metrics. The result is consistent with the intended use of para-semantic factorization: emotion understanding is most valu-able when it improves downstream response generation rather than remaining an isolated recognition capability. 
+
+Controlled Lexical Grounding. We then isolate a different ques-tion from the main SER comparison: does the model still rely on the correct acoustic evidence once lexical shortcuts are removed? MEPA is designed specifically for this purpose. Within each eval-uation group, the lexical statement is fixed and only the speaking style changes across the five emotions. Standard sample-level accu-racy and macro-F1 therefore remain useful, but GLCA is especially informative because it counts a group as correct only when all five 
+
+Table 3: MEPA benchmark results under controlled lexi-cal content. GLCA denotes Group-Level Complete Accuracy, which requires all five emotional realizations of the same lexical statement to be predicted correctly.                           
+
+> Model English Chinese Acc. Macro-F1 GLCA Acc. Macro-F1 GLCA
+> Qwen2-Audio [14] 44.6 42.1 2.7 35.9 33.4 1.0 BLSP-Emo [44] 50.4 48.3 6.8 40.7 38.5 3.1 EmotionThinker [46] 52.1 50.2 8.1 43.0 40.7 4.9
+> EMODE 56.4 54.7 12.1 47.8 45.3 8.6
+
+emotional realizations are predicted correctly. The sizable gap be-tween sample-level metrics and GLCA is therefore expected rather than anomalous; it reflects the difficulty of sustaining consistent acoustic grounding across a complete lexically controlled set. Table 3 shows that EMODE ranks first on both English and Chinese across all three metrics. The advantage is most pronounced on GLCA, where EMODE exceeds EmotionThinker by 4.0 points on English and 3.7 points on Chinese. This pattern indicates that the gain is not limited to single-utterance recognition. Once lexical content is controlled, EMODE also yields more stable group-level discrimination across the full five-emotion inventory, consistent with the intended functional separation of lexical and paralinguistic evidence. Figure 3 makes the same pattern visible at the error-distribution level. The English subset retains a clearer diagonal structure, par-ticularly for happy , angry , and surprised . By contrast, the Chinese subset exhibits a stronger drift toward neutral and a broader spread of off-diagonal confusion. This error profile is consistent with the lower Chinese accuracy, macro-F1, and GLCA values in Table 3, in-dicating that acoustic grounding under fixed lexical content remains less stable in Chinese than in English. 
+
+> 7Jianan Pan, Yiwen Gu, Xinze Li, Rui Wang, & Kejie Huang
+
+The confusion structure also clarifies the role of MEPA alongside conventional SER benchmarks. On standard corpora, models may exploit lexical regularities correlated with emotion labels. MEPA reduces this cue by construction, so its results more directly test sensitivity to acoustic-prosodic variation. The stronger neutral at-traction and wider off-diagonal dispersion in Chinese suggest less stable affective grounding than in English, rather than failure on only one emotion class. Because MEPA is synthetic, these results should be interpreted as a controlled stress test rather than a sub-stitute for spontaneous speech evaluation. 
+
+## 4.4 Ablation and Mechanistic Analysis 
+
+The following analyses address three questions: how much each training objective contributes to the final SER profile, whether GDR stabilizes routing and paralinguistic specialization, and which fusion rule best recombines the semantic and paralinguistic streams. 
+
+Table 4: Objective ablation on four representative SER bench-marks. Results are accuracy (%).                               
+
+> Variant IEMOCAP MELD RAVDESS SAVEE Avg
+> EMODE 76.68 64.23 75.58 85.76 75.56
+> w/o oeg-sem 74.52 62.31 72.94 82.18 72.99 w/o oeg-para 71.84 59.37 68.12 79.24 69.64 w/o SAA 74.86 62.88 71.95 82.94 73.16 w/o GDR 74.23 62.57 70.64 81.86 72.33
+
+Table 4 shows that the full objective set yields the strongest average SER accuracy. The largest degradation occurs without oeg-para , indicating that explicit affective supervision makes the largest contribution among the tested objectives. Removing oeg-sem also weakens performance, especially on RAVDESS and SAVEE, sug-gesting that lexical anchoring remains important even when the final task is emotion recognition. Removing SAA or GDR produces smaller but consistent declines across the four datasets. The pattern is therefore not attributable to a single auxiliary term: OEG pro-vides branch-specific supervision, while SAA and GDR contribute complementary cross-modal alignment and routing regularization to the final objective set. 
+
+Table 5: Fusion design comparison on four representative SER benchmarks. Results are accuracy (%).                          
+
+> Fusion design IEMOCAP MELD RAVDESS SAVEE Avg
+> Residual para 76.68 64.23 75.58 85.76 75.56
+> Scaled residual 76.11 63.92 75.71 85.34 75.27 Weighted sum 75.47 62.94 74.62 84.48 74.38 Concat MLP 75.92 63.41 75.05 84.91 74.82
+
+Table 5 compares several fusion rules under the same training recipe. Residual para-semantic fusion performs best on average, although its advantage is modest: scaled residual fusion is close and slightly better on RAVDESS. The two residual variants preserve the semantic stream while adding a routed paralinguistic correction, matching the intended asymmetry between lexical anchoring and affective modulation. Weighted summation and concatenation re-main competitive but are weaker on average. These results favor the residual design in this controlled comparison without showing that it must dominate on every corpus. 
+
+## 4.5 Connector Comparison 
+
+Table 6: Connector comparison on four SER benchmarks. Results are accuracy (%).                     
+
+> Connector IEMOCAP MELD RAVDESS SAVEE Avg
+> Subsampler 71.04 60.58 69.17 78.96 69.94 CFormer 74.32 62.45 72.88 82.61 73.07 DPSE 76.68 64.23 75.58 85.76 75.56
+
+Table 6 compares DPSE with alternative speech-language connec-tors under the same training and evaluation protocol. The subsam-pler is weakest, CFormer narrows the gap, and DPSE remains best on all four benchmarks. The subsampler provides no explicit mecha-nism for separating lexical and affective evidence, whereas CFormer offers a stronger learned connector without branch-specific super-vision. Within this controlled comparison, DPSE’s consistent advan-tage supports structured para-semantic factorization rather than connector capacity alone. 
+
+## 5 Conclusion 
+
+In this paper, we introduced EMODE , an emotion-aware speech-language model designed to address the limitations of entangled acoustic representations. Its DPSE module organizes semantic and paralinguistic processing into dedicated pathways and recombines them through residual fusion. The coordinated three-stage curricu-lum uses Orthogonal Expert Guidance (OEG), Semantic-to-Acoustic Alignment (SAA), and Gating Diversity Regularization (GDR) to establish complementary supervision, align affective context, and discourage premature routing collapse. EMODE obtains the highest average accuracy among the com-pared systems across a nine-dataset SER suite and the highest model-judged quality and empathy scores on SpeechAlpaca. Results on the controlled MEPA benchmark provide further evidence that EMODE uses acoustic-prosodic information when lexical content is held fixed. The objective and connector ablations further asso-ciate the gains with complementary expert supervision and struc-tured fusion. Together, these results support explicit para-semantic factorization for affect-sensitive spoken dialogue systems. Future work will examine human evaluation, spontaneous affective speech, synthesis-robust evaluation, and broader multilingual interactions. 
+
+> 8
+
+EMODE: Dynamic Para-Semantic Experts for Emotion-Aware Speech Language Modeling 
+
+## Acknowledgments 
+
+This work was supported by the Mobile Information Networks National Science and Technology Major Project (2026ZD1305800), Zhejiang Province’s Leading Talent Project in Science and Technol-ogy Innovation (2023R5204), and Ningbo Key Research and Devel-opment Program (2025Z082). 
+
+## References 
+
+[1] Babak Joze Abbaschian, Daniel Sierra-Sosa, and Adel Elmaghraby. 2021. Deep Learning Techniques for Speech Emotion Recognition, from Databases to Models. 
+
+Sensors 21, 4 (2021), 1249. doi:10.3390/s21041249 [2] Abdelrahman Abouelenin, Atabak Ashfaq, Adam Atkinson, Hany Awadalla, Nguyen Bach, Jianmin Bao, et al. 2025. Phi-4-Mini Technical Report: Compact yet Powerful Multimodal Language Models via Mixture-of-LoRAs. arXiv preprint arXiv:2503.01743 (2025). https://arxiv.org/abs/2503.01743 [3] Aniemore. 2022. Dataset Card for resd. Hugging Face Hub. Russian emotional speech dialogue dataset. doi:10.57967/hf/1273 [4] Junyi Ao, Rui Wang, Long Zhou, Chengyi Wang, Shuo Ren, Yu Wu, Shujie Liu, Tom Ko, Qing Li, Yu Zhang, Zhihua Wei, Yao Qian, Jinyu Li, and Furu Wei. 2022. SpeechT5: Unified-Modal Encoder-Decoder Pre-Training for Spoken Language Processing. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . Association for Computational Linguistics, 5723–5738. doi:10.18653/v1/2022.acl-long.393 [5] Rosana Ardila, Megan Branson, Kelly Davis, Michael Kohler, Josh Meyer, Michael Henretty, Reuben Morais, Lindsay Saunders, Francis Tyers, and Gregor Weber. 2020. Common Voice: A Massively-Multilingual Speech Corpus. In Proceedings of the Twelfth Language Resources and Evaluation Conference . European Language Resources Association, Marseille, France, 4218–4222. https://aclanthology.org/ 2020.lrec-1.520/ [6] Alexei Baevski, Henry Zhou, Abdelrahman Mohamed, and Michael Auli. 2020. wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations. In Advances in Neural Information Processing Sys-tems 33 . 12449–12460. https://papers.nips.cc/paper_files/paper/2020/hash/ 92d1e1eb1cd6f9fba3227870bb6d7f07-Abstract.html [7] AmirAli Bagher Zadeh, Paul Pu Liang, Soujanya Poria, Erik Cambria, and Louis-Philippe Morency. 2018. Multimodal Language Analysis in the Wild: CMU-MOSEI Dataset and Interpretable Dynamic Fusion Graph. In Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . Association for Computational Linguistics, Melbourne, Australia, 2236–2246. doi:10.18653/v1/P18-1208 [8] Carlos Busso, Murtaza Bulut, Chi-Chun Lee, Abe Kazemzadeh, Emily Mower, Samuel Kim, Jeannette N. Chang, Sungbok Lee, and Shrikanth S. Narayanan. 2008. IEMOCAP: Interactive Emotional Dyadic Motion Capture Database. Language Resources and Evaluation 42, 4 (2008), 335–359. doi:10.1007/s10579-008-9076-6 [9] Carlos Busso, Reza Lotfian, Kusha Sridhar, Ali N. Salman, Wei-Cheng Lin, Lucas Goncalves, Srinivas Parthasarathy, Abinay Reddy Naini, Seong-Gyun Leem, Luz Martinez-Lucas, Huang-Cheng Chou, and Pravin Mote. 2025. The MSP-Podcast Corpus. arXiv preprint arXiv:2509.09791 (2025). https://arxiv.org/abs/2509.09791 [10] Chak Ho Chan, Kaizhi Qian, Yang Zhang, and Mark Hasegawa-Johnson. 2022. SpeechSplit2.0: Unsupervised Speech Disentanglement for Voice Conversion without Tuning Autoencoder Bottlenecks. In ICASSP 2022 - 2022 IEEE In-ternational Conference on Acoustics, Speech and Signal Processing . 6332–6336. doi:10.1109/ICASSP43922.2022.9747763 [11] Guoguo Chen, Shuzhou Chai, Guanbo Wang, Jiayu Du, Wei-Qiang Zhang, Chao Weng, Dan Su, Daniel Povey, Jan Trmal, Junbo Zhang, et al. 2021. GigaSpeech: An Evolving, Multi-Domain ASR Corpus with 10,000 Hours of Transcribed Audio. In 
+
+Proceedings of Interspeech 2021 . 3670–3674. doi:10.21437/Interspeech.2021-1965 [12] Sanyuan Chen, Chengyi Wang, Zhengyang Chen, Yu Wu, Shujie Liu, Zhuo Chen, Jinyu Li, Naoyuki Kanda, Takuya Yoshioka, Xiong Xiao, et al. 2022. WavLM: Large-Scale Self-Supervised Pre-Training for Full Stack Speech Processing. IEEE Journal of Selected Topics in Signal Processing 16, 6 (2022), 1505–1518. doi:10. 1109/JSTSP.2022.3188113 [13] Sanyuan Chen, Yu Wu, Chengyi Wang, Shujie Liu, Daniel Tompkins, Zhuo Chen, and Furu Wei. 2023. BEATs: Audio Pre-Training with Acoustic Tokenizers. In 
+
+Proceedings of the 40th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 202) . PMLR, 5178–5193. https://proceedings. mlr.press/v202/chen23ag.html [14] Yunfei Chu, Jin Xu, Qian Yang, Haojie Wei, Xipin Wei, Zhifang Guo, Yichong Leng, Yuanjun Lv, Jinzheng He, Junyang Lin, Chang Zhou, and Jingren Zhou. 2024. Qwen2-Audio Technical Report. arXiv preprint arXiv:2407.10759 (2024). [15] Yunfei Chu, Jin Xu, Xiaohuan Zhou, Qian Yang, Shiliang Zhang, Zhijie Yan, Chang Zhou, and Jingren Zhou. 2023. Qwen-Audio: Advancing Universal Audio Understanding via Unified Large-Scale Audio-Language Models. arXiv preprint arXiv:2311.07919 (2023). [16] Soham Deshmukh, Benjamin Elizalde, Rita Singh, and Huaming Wang. 2023. Pengi: An Audio Language Model for Audio Tasks. In Advances in Neural In-formation Processing Systems , Vol. 36. Curran Associates, Inc., 18090–18108. doi:10.52202/075280-0795 [17] Moataz M. H. El Ayadi, Mohamed S. Kamel, and Fakhri Karray. 2011. Survey on Speech Emotion Recognition: Features, Classification Schemes, and Databases. 
+
+Pattern Recognition 44, 3 (2011), 572–587. doi:10.1016/j.patcog.2010.09.020 [18] William Fedus, Barret Zoph, and Noam Shazeer. 2022. Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity. Journal of Machine Learning Research 23, 120 (2022), 1–39. https://www.jmlr.org/papers/ v23/21-0998.html [19] Xuelong Geng, Qijie Shao, Hongfei Xue, Shuiyuan Wang, Hanke Xie, Zhao Guo, Yi Zhao, Guojian Li, Wenjie Tian, Chengyou Wang, Zhixian Zhao, Kangxiang Xia, Ziyu Zhang, Zhennan Lin, Tianlun Zuo, Mingchen Shao, Yuang Cao, Guobin Ma, Longhao Li, Yuhang Dai, Dehui Gao, Dake Guo, and Lei Xie. 2025. OSUM-EChat: Enhancing End-to-End Empathetic Spoken Chatbot via Understanding-Driven Spoken Dialogue. arXiv:2508.09600 [cs.SD] https://arxiv.org/abs/2508.09600 [20] Philippe Gournay, Olivier Lahaie, and Roch Lefebvre. 2018. A Canadian French Emotional Speech Dataset. In Proceedings of the 9th ACM Multimedia Systems Conference . 399–402. doi:10.1145/3204949.3208121 [21] Alex Graves, Santiago Fernández, Faustino Gomez, and Jürgen Schmidhuber. 2006. Connectionist Temporal Classification: Labelling Unsegmented Sequence Data with Recurrent Neural Networks. In Proceedings of the 23rd International Conference on Machine Learning . 369–376. doi:10.1145/1143844.1143891 [22] William Held, Ella Li, Michael Ryan, Weiyan Shi, Yanzhe Zhang, and Diyi Yang. 2024. Distilling an End-to-End Voice Assistant Without Instruction Training Data. arXiv:2410.02678 [cs.CL] https://arxiv.org/abs/2410.02678 [23] Wei-Ning Hsu, Benjamin Bolte, Yao-Hung Hubert Tsai, Kushal Lakhotia, Ruslan Salakhutdinov, and Abdelrahman Mohamed. 2021. HuBERT: Self-Supervised Speech Representation Learning by Masked Prediction of Hidden Units. IEEE/ACM Transactions on Audio, Speech, and Language Processing 29 (2021), 3451–3460. doi:10.1109/TASLP.2021.3122291 [24] Philip Jackson and Sanaul Haq. 2014. Surrey Audiovisual Ex-pressed Emotion (SAVEE) Database. University of Surrey. https: //openresearch.surrey.ac.uk/esploro/outputs/journalArticle/Surrey-audio-visual-expressed-emotion-savee-database/99635364402346 [25] KimiTeam, Ding Ding, Zeqian Ju, Yichong Leng, Songxiang Liu, Tong Liu, Zeyu Shang, Kai Shen, Wei Song, Xu Tan, et al. 2025. Kimi-Audio Technical Report. arXiv:2504.18425 [cs.SD] https://arxiv.org/abs/2504.18425 [26] Boxun Li, Yadong Li, Zhiyuan Li, Congyi Liu, Weilin Liu, Guowei Niu, Zheyue Tan, Haiyang Xu, Zhuyu Yao, Tao Yuan, Dong Zhou, Yueqing Zhuang, Shen-gen Yan, Guohao Dai, and Yu Wang. 2025. Megrez-Omni Technical Report. arXiv:2502.15803 [cs.LG] https://arxiv.org/abs/2502.15803 [27] Zheng Lian, Licai Sun, Yong Ren, Hao Gu, Haiyang Sun, Lan Chen, Bin Liu, and Jianhua Tao. 2026. MERBench: A Unified Evaluation Benchmark for Multi-modal Emotion Recognition. IEEE Transactions on Pattern Analysis and Machine Intelligence 48, 5 (2026), 5793–5810. doi:10.1109/TPAMI.2026.3653457 [28] Steven R. Livingstone and Frank A. Russo. 2018. The Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS): A Dynamic, Multimodal Set of Facial and Vocal Expressions in North American English. PLOS ONE 13, 5 (2018), e0196391. doi:10.1371/journal.pone.0196391 [29] Ziyang Ma, Zhisheng Zheng, Jiaxin Ye, Jinchao Li, Zhifu Gao, Shiliang Zhang, and Xie Chen. 2024. emotion2vec: Self-Supervised Pre-Training for Speech Emotion Representation. In Findings of the Association for Computational Linguistics: ACL 2024 . Association for Computational Linguistics, 15747–15760. doi:10.18653/v1/ 2024.findings-acl.931 [30] Edmilson Morais, Ron Hoory, Weizhong Zhu, Itai Gat, Matheus Damasceno, and Hagai Aronowitz. 2022. Speech Emotion Recognition Using Self-Supervised Features. In ICASSP 2022 - 2022 IEEE International Conference on Acoustics, Speech and Signal Processing . 6922–6926. doi:10.1109/ICASSP43922.2022.9747870 [31] Tu Anh Nguyen, Wei-Ning Hsu, Antony D’Avirro, Bowen Shi, Itai Gat, Maryam Fazel-Zarandi, Tal Remez, Jade Copet, Gabriel Synnaeve, Michael Hassid, Felix Kreuk, Yossi Adi, and Emmanuel Dupoux. 2023. EXPRESSO: A Benchmark and Analysis of Discrete Expressive Speech Resynthesis. In Proceedings of Interspeech 2023 . 4823–4827. doi:10.21437/Interspeech.2023-1905 [32] OpenBMB. 2025. MiniCPM-o 2.6. Hugging Face model card. Accessed: 2026-08-08. https://huggingface.co/openbmb/MiniCPM-o-2_6 [33] Vassil Panayotov, Guoguo Chen, Daniel Povey, and Sanjeev Khudanpur. 2015. Lib-riSpeech: An ASR Corpus Based on Public Domain Audio Books. In ICASSP 2015 - 2015 IEEE International Conference on Acoustics, Speech and Signal Processing .5206–5210. doi:10.1109/ICASSP.2015.7178964 [34] Leonardo Pepino, Pablo Riera, and Luciana Ferrer. 2021. Emotion Recognition from Speech Using wav2vec 2.0 Embeddings. In Proceedings of Interspeech 2021 .3400–3404. doi:10.21437/Interspeech.2021-703 [35] Soujanya Poria, Devamanyu Hazarika, Navonil Majumder, Gautam Naik, Erik Cambria, and Rada Mihalcea. 2019. MELD: A Multimodal Multi-Party Dataset for Emotion Recognition in Conversations. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics . Association for Computational Linguistics, Florence, Italy, 527–536. doi:10.18653/v1/P19-1050 9Jianan Pan, Yiwen Gu, Xinze Li, Rui Wang, & Kejie Huang 
+
+[36] Kaizhi Qian, Yang Zhang, Shiyu Chang, Mark Hasegawa-Johnson, and David Cox. 2020. Unsupervised Speech Decomposition via Triple Information Bottleneck. In 
+
+Proceedings of the 37th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 119) . PMLR, 7836–7846. https://proceedings. mlr.press/v119/qian20a.html [37] Kaizhi Qian, Yang Zhang, Shiyu Chang, Xuesong Yang, and Mark Hasegawa-Johnson. 2019. AutoVC: Zero-Shot Voice Style Transfer with Only Autoencoder Loss. In Proceedings of the 36th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 97) . PMLR, 5210–5219. https: //proceedings.mlr.press/v97/qian19c.html [38] Alec Radford, Jong Wook Kim, Tao Xu, Greg Brockman, Christine McLeavey, and Ilya Sutskever. 2023. Robust Speech Recognition via Large-Scale Weak Supervision. In Proceedings of the 40th International Conference on Machine Learn-ing (Proceedings of Machine Learning Research, Vol. 202) . PMLR, 28492–28518. https://proceedings.mlr.press/v202/radford23a.html [39] Julius Richter, Yi-Chiao Wu, Steven Krenn, Simon Welker, Bunlong Lay, Shinji Watanabe, Alexander Richard, and Timo Gerkmann. 2024. EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Derever-beration. In Proceedings of Interspeech 2024 . 4873–4877. doi:10.21437/Interspeech. 2024-153 [40] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff Dean. 2017. Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. In International Conference on Learning Representations . https://openreview.net/forum?id=B1ckMDqlg [41] Changli Tang, Wenyi Yu, Guangzhi Sun, Xianzhao Chen, Tian Tan, Wei Li, Lu Lu, Zejun Ma, and Chao Zhang. 2024. SALMONN: Towards Generic Hearing Abilities for Large Language Models. In The Twelfth International Conference on Learning Representations . https://openreview.net/forum?id=14rn7HpKVk [42] Nikolaos Vryzas, Rigas Kotsakis, Aikaterini Liatsou, Charalampos A. Dimoulas, and George Kalliris. 2018. Speech Emotion Recognition for Performance In-teraction. Journal of the Audio Engineering Society 66, 6 (2018), 457–467. doi:10.17743/jaes.2018.0036 [43] Chen Wang, Minpeng Liao, Zhongqiang Huang, Jinliang Lu, Junhong Wu, Yuchen Liu, Chengqing Zong, and Jiajun Zhang. 2023. BLSP: Bootstrapping Language-Speech Pre-training via Behavior Alignment of Continuation Writing. arXiv:2309.00916 [cs.CL] https://arxiv.org/abs/2309.00916 [44] Chen Wang, Minpeng Liao, Zhongqiang Huang, Junhong Wu, Chengqing Zong, and Jiajun Zhang. 2024. BLSP-Emo: Towards Empathetic Large Speech-Language Models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing . Association for Computational Linguistics, Miami, Florida, USA, 19186–19199. doi:10.18653/v1/2024.emnlp-main.1070 [45] Chen Wang, Tianyu Peng, Wen Yang, Yinan Bai, Guangfu Wang, Jun Lin, Lan-peng Jia, Lingxiang Wu, Jinqiao Wang, Chengqing Zong, and Jiajun Zhang. 2025. OpenS2S: Advancing Fully Open-Source End-to-End Empathetic Large Speech Language Model. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing: System Demonstrations . Association for Com-putational Linguistics, Suzhou, China, 906–917. doi:10.18653/v1/2025.emnlp-demos.70 [46] Dingdong Wang, Shujie Liu, Tianhua Zhang, Youjun Chen, Jinyu Li, and He-len M. Meng. 2026. EmotionThinker: Prosody-Aware Reinforcement Learning for Explainable Speech Emotion Reasoning. In International Conference on Learning Representations . https://openreview.net/forum?id=wbttgzp7MT [47] Kaisiyuan Wang, Qianyi Wu, Linsen Song, Zhuoqian Yang, Wayne Wu, Chen Qian, Ran He, Yu Qiao, and Chen Change Loy. 2020. MEAD: A Large-Scale Audio-Visual Dataset for Emotional Talking-Face Generation. In Computer Vision – ECCV 2020 . Springer, 700–717. doi:10.1007/978-3-030-58589-1_42 [48] Jin Xu, Zhifang Guo, Jinzheng He, Hangrui Hu, Ting He, Shuai Bai, Keqin Chen, Jialin Wang, Yang Fan, Kai Dang, Bin Zhang, Xiong Wang, Yunfei Chu, and Junyang Lin. 2025. Qwen2.5-Omni Technical Report. arXiv:2503.20215 [cs.CL] https://arxiv.org/abs/2503.20215 [49] Yaoxun Xu, Hangting Chen, Jianwei Yu, Qiaochu Huang, Zhiyong Wu, Shi-Xiong Zhang, Guangzhi Li, Yi Luo, and Rongzhi Gu. 2024. SECap: Speech Emotion Captioning with Large Language Model. Proceedings of the AAAI Conference on Artificial Intelligence 38, 17 (2024), 19323–19331. doi:10.1609/aaai.v38i17.29902 [50] Aohan Zeng, Zhengxiao Du, Mingdao Liu, Kedong Wang, Shengmin Jiang, Lei Zhao, Yuxiao Dong, and Jie Tang. 2024. GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot. arXiv:2412.02612 [cs.SD] https: //arxiv.org/abs/2412.02612 [51] Binbin Zhang, Hang Lv, Pengcheng Guo, Qijie Shao, Chao Yang, Lei Xie, Xin Xu, Hui Bu, Xiaoyu Chen, Chenchen Zeng, Di Wu, and Zhendong Peng. 2022. WenetSpeech: A 10000+ Hours Multi-Domain Mandarin Corpus for Speech Recognition. In ICASSP 2022 - 2022 IEEE International Conference on Acoustics, Speech and Signal Processing . 6182–6186. doi:10.1109/ICASSP43922.2022.9746682 [52] Dong Zhang, Shimin Li, Xin Zhang, Jun Zhan, Pengyu Wang, Yaqian Zhou, and Xipeng Qiu. 2023. SpeechGPT: Empowering Large Language Models with Intrinsic Cross-Modal Conversational Abilities. In Findings of the Association for Computational Linguistics: EMNLP 2023 . Association for Computational Linguis-tics, Singapore, 15757–15773. doi:10.18653/v1/2023.findings-emnlp.1055 [53] Kun Zhou, Berrak Sisman, Rui Liu, and Haizhou Li. 2022. Emotional Voice Conversion: Theory, Databases and ESD. Speech Communication 137 (2022), 1–18. doi:10.1016/j.specom.2021.11.006 [54] Yanqi Zhou, Tao Lei, Hanxiao Liu, Nan Du, Yanping Huang, Vincent Zhao, Andrew M. Dai, Zhifeng Chen, Quoc V. Le, and James Laudon. 2022. Mixture-of-Experts with Expert Choice Routing. In Advances in Neural Information Processing Systems , Vol. 35. 7103–7114. doi:10.52202/068431-0515 10
